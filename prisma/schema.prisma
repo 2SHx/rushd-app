@@ -1,0 +1,114 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARENT
+  CHILD
+}
+
+enum Tier {
+  BASIC
+  PREMIUM
+  ULTRA
+}
+
+enum Market {
+  TASI
+  NASDAQ
+}
+
+enum Currency {
+  SAR
+  USD
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRADE
+  QUEST_REWARD
+  ALLOWANCE
+}
+
+model User {
+  id                   String               @id @default(uuid())
+  email                String?              @unique
+  name                 String
+  role                 Role                 @default(CHILD)
+  tier                 Tier                 @default(BASIC)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  parentId             String?
+  parent               User?                @relation("FamilyMembers", fields: [parentId], references: [id])
+  children             User[]               @relation("FamilyMembers")
+
+  gamificationProfile  GamificationProfile?
+  portfolioItems       PortfolioItem[]
+  transactions         Transaction[]
+  savingsJar           SavingsJar?
+  quizAttempts         QuizAttempt[]
+}
+
+model GamificationProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp        Int      @default(0)
+  level     Int      @default(1)
+  badges    String[] 
+  updatedAt DateTime @updatedAt
+}
+
+model PortfolioItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  shares    Float
+  market    Market
+  currency  Currency
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, symbol])
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  currency        Currency        @default(SAR)
+  type            TransactionType
+  mcc             String?         
+  description     String?
+  createdAt       DateTime        @default(now())
+}
+
+model SavingsJar {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float    @default(0.0)
+  currency  Currency @default(SAR)
+  updatedAt DateTime @updatedAt
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic     String   // e.g., "Stock Market Basics"
+  score     Int
+  passed    Boolean
+  createdAt DateTime @default(now())
+}

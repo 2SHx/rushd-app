@@ -1,0 +1,9 @@
+{
+  "Dashboard": {
+    "title": "Rushd Financial",
+    "portfolioHealth": "Portfolio Health",
+    "market": "Market",
+    "tasi": "TASI",
+    "nasdaq": "NASDAQ"
+  }
+}
