@@ -37,6 +37,7 @@ export default async function DashboardPage({ params }: { params: { locale: stri
           parentName={parentUser?.name || ''}
           familyCode={parentUser?.familyCode || ''}
           childrenList={children}
+          locale={locale}
         />
       );
     } catch {
@@ -74,6 +75,7 @@ export default async function DashboardPage({ params }: { params: { locale: stri
       nasdaqData={nasdaqData} 
       initialXp={xp}
       initialLevel={level}
+      locale={locale}
     />
   );
 }

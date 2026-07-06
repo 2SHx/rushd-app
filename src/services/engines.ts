@@ -75,7 +75,7 @@ export async function processCashSweeps(customYieldRate?: Prisma.Decimal) {
           amount: userProfit,
           currency: jar.currency,
           type: 'PROFIT_SHARE',
-          description: `Mudarabah profit split (${(jar.profitShareRatioBps / 100).toFixed(1)}% split)`
+          description: `Mudarabah profit split (${(jar.profitShareRatioBps / 100).toFixed(2)}% split)`
         }
       });
 

@@ -4,9 +4,10 @@ import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
+import { TICKERS } from './MarketsClient';
 import { Bot, Trophy, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 
-export default function DashboardClient({ tasiData, nasdaqData, initialXp, initialLevel }: any) {
+export default function DashboardClient({ tasiData, nasdaqData, initialXp, initialLevel, locale }: any) {
   const t = useTranslations('Dashboard');
   const [market, setMarket] = useState<'TASI' | 'NASDAQ'>('TASI');
   const [isQuizOpen, setIsQuizOpen] = useState(false);
@@ -14,6 +15,11 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
   const [level, setLevel] = useState<number>(initialLevel ?? 1);
   
   const currentData = market === 'TASI' ? tasiData : nasdaqData;
+
+  const isAr = locale === 'ar';
+  const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
+  const activeTicker = listTickers.find(t => t.symbol === currentData.symbol);
+  const displayName = activeTicker ? (isAr ? activeTicker.arName : activeTicker.name) : currentData.symbol;
 
   const handleQuizComplete = async (passed: boolean, topic: string) => {
     try {
@@ -114,8 +120,11 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
           <div className="glass-panel p-6">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-xl font-bold">{currentData.symbol}</h3>
-                <p className="text-3xl font-medium mt-2">{currentData.price.toFixed(2)}</p>
+                <h3 className="text-xl font-bold">{displayName}</h3>
+                <span className="text-xs text-gray-400 font-mono font-bold tracking-wider block mt-0.5">{currentData.symbol}</span>
+                <p className="text-3xl font-medium mt-2">
+                  {market === 'TASI' ? '' : '$'}{currentData.price.toFixed(2)} <span className="text-xs font-semibold text-gray-400">{market === 'TASI' ? 'SAR' : 'USD'}</span>
+                </p>
               </div>
               <div className="flex items-center space-x-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full">
                 <Activity className="w-4 h-4" />

@@ -3,14 +3,16 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { User, Users, Plus, Award, Wallet, Briefcase, Key } from 'lucide-react';
+import { TICKERS } from './MarketsClient';
 
 interface ParentDashboardClientProps {
   parentName: string;
   familyCode: string;
   childrenList: any[];
+  locale?: string;
 }
 
-export default function ParentDashboardClient({ parentName, familyCode, childrenList }: ParentDashboardClientProps) {
+export default function ParentDashboardClient({ parentName, familyCode, childrenList, locale }: ParentDashboardClientProps) {
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Welcome Header */}
@@ -128,14 +130,21 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                       <p className="text-sm text-gray-500">No assets owned.</p>
                     ) : (
                       <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                        {holdings.map((item: any) => (
-                          <div key={item.id} className="flex justify-between items-center text-sm">
-                            <span className="font-semibold text-gray-300">{item.symbol}</span>
-                            <span className="text-gray-400">
-                              {Number(item.shares).toFixed(4)} share{Number(item.shares) !== 1 ? 's' : ''} ({item.market})
-                            </span>
-                          </div>
-                        ))}
+                        {holdings.map((item: any) => {
+                          const isAr = locale === 'ar';
+                          const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
+                          const activeTicker = listTickers.find(t => t.symbol === item.symbol);
+                          const displayName = activeTicker ? (isAr ? activeTicker.arName : activeTicker.name) : item.symbol;
+                          
+                          return (
+                            <div key={item.id} className="flex justify-between items-center text-sm">
+                              <span className="font-semibold text-gray-300">{displayName}</span>
+                              <span className="text-gray-400">
+                                {Number(item.shares).toFixed(2)} {isAr ? 'حصة' : `share${Number(item.shares) !== 1 ? 's' : ''}`} ({item.market})
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

@@ -26,6 +26,7 @@ export default async function MarketsPage({ searchParams, params }: MarketsPageP
       currentData={currentData}
       locale={params.locale}
       isParent={isParent}
+      initialActiveSymbol={searchParams.symbol || null}
     />
   );
 }

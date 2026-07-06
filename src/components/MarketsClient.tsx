@@ -8,13 +8,14 @@ import {
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
 
-interface MarketsClientProps {
+export interface MarketsClientProps {
   currentData: any;
   locale: string;
   isParent: boolean;
+  initialActiveSymbol?: string | null;
 }
 
-const TICKERS = {
+export const TICKERS = {
   TASI: [
     { symbol: '2222.SR', name: 'Saudi Aramco', arName: 'أرامكو السعودية', price: 26.1, change: -0.08, pct: -0.02 },
     { symbol: '1120.SR', name: 'Al Rajhi Bank', arName: 'الراجحي', price: 66.0, change: 0.0, pct: 0.0 },
@@ -82,14 +83,16 @@ function formatNumber(val: number, type: 'volume' | 'mcap', isAr: boolean) {
   }
 }
 
-export default function MarketsClient({ currentData, locale, isParent }: MarketsClientProps) {
+export default function MarketsClient({ currentData, locale, isParent, initialActiveSymbol }: MarketsClientProps) {
   const isAr = locale === 'ar';
   const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentData.market);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'sharia' | 'etfs'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Detail sheet state
-  const [activeSymbol, setActiveSymbol] = useState<string | null>(currentData.symbol);
+  const [activeSymbol, setActiveSymbol] = useState<string | null>(
+    initialActiveSymbol !== undefined ? initialActiveSymbol : currentData.symbol
+  );
   
   // Drawer states
   const [purificationDrawerOpen, setPurificationDrawerOpen] = useState(false);
@@ -235,7 +238,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                       </div>
                       <p className="text-xs font-bold text-gray-300 truncate">{isAr ? t.arName : t.name}</p>
                       <p className="text-sm font-mono font-bold">{t.price.toFixed(2)}</p>
-                      <p className="text-[10px] font-semibold text-emerald-400">+{t.pct}%</p>
+                      <p className="text-[10px] font-semibold text-emerald-400">+{t.pct.toFixed(2)}%</p>
                     </div>
                   ))}
                 </div>
@@ -301,7 +304,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                     <div className="text-right">
                       <p className="font-mono font-bold text-sm text-white">{t.price.toFixed(2)}</p>
                       <p className={`text-xs font-semibold ${t.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {t.pct >= 0 ? '+' : ''}{t.pct}%
+                        {t.pct >= 0 ? '+' : ''}{t.pct.toFixed(2)}%
                       </p>
                     </div>
                   </div>
@@ -364,7 +367,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                 </span>
               </div>
               <p className={`text-sm font-semibold font-mono ${activeTicker.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {activeTicker.change > 0 ? '+' : ''}{activeTicker.change.toFixed(2)} ({activeTicker.pct}%)
+                {activeTicker.change > 0 ? '+' : ''}{activeTicker.change.toFixed(2)} ({activeTicker.pct.toFixed(2)}%)
               </p>
             </div>
 
@@ -412,7 +415,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                     onClick={() => setPurificationDrawerOpen(true)}
                     className="flex items-center space-x-1 rtl:space-x-reverse bg-white/5 border border-white/10 text-gray-300 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
                   >
-                    <span>{isAr ? 'نسبة التطهير' : 'Purification'} {currentData.purificationRatioBps / 100}%</span>
+                    <span>{isAr ? 'نسبة التطهير' : 'Purification'} {(currentData.purificationRatioBps / 100).toFixed(2)}%</span>
                     <Info className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -539,7 +542,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'الديون الربوية إلى القيمة السوقية (<30%)' : 'Interest-bearing Debt / MCap (<30%)'}</span>
                         <span className="font-mono font-bold text-emerald-400">
-                          {currentData.financials.complianceRatios.debtToMcap}%
+                          {Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}%
                         </span>
                       </div>
                       <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -555,7 +558,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'الإيرادات غير المتوافقة (<5%)' : 'Non-compliant Revenue / Total (<5%)'}</span>
                         <span className="font-mono font-bold text-emerald-400">
-                          {currentData.financials.complianceRatios.interestIncomeToRevenue}%
+                          {Number(currentData.financials.complianceRatios.interestIncomeToRevenue).toFixed(2)}%
                         </span>
                       </div>
                       <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -575,8 +578,8 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                     </div>
                     <p className="text-[10px] text-gray-400 leading-relaxed">
                       {isAr 
-                        ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker.arName : activeTicker.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${currentData.financials.complianceRatios.debtToMcap}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
-                        : `Based on the latest reports for ${activeTicker.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${currentData.financials.complianceRatios.debtToMcap}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
+                        ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker.arName : activeTicker.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
+                        : `Based on the latest reports for ${activeTicker.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
                       }
                     </p>
                   </div>
