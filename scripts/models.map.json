@@ -1,0 +1,20 @@
+{
+  "_edit_me": "Per-agent routing: set runner + model for each agent. Env DISPATCH_RUNNER / DISPATCH_MODEL override everything for one run. Suggested models per runner are in docs/MODELS.md.",
+  "runners": {
+    "claude":   { "cmd": ["claude", "--model", "{model}", "--permission-mode", "acceptEdits", "-p", "{prompt}"] },
+    "gemini":   { "cmd": ["gemini", "-m", "{model}", "--yolo", "-p", "{prompt}"] },
+    "opencode": { "cmd": ["opencode", "run", "-m", "{model}", "{prompt}"] },
+    "codex":    { "cmd": ["codex", "exec", "--full-auto", "-m", "{model}", "{prompt}"] }
+  },
+  "agents": {
+    "explorer":           { "runner": "claude", "model": "haiku"  },
+    "frontend-expert":    { "runner": "claude", "model": "sonnet" },
+    "backend-expert":     { "runner": "claude", "model": "sonnet" },
+    "ai-features-expert": { "runner": "claude", "model": "sonnet" },
+    "i18n-fintech-expert":{ "runner": "claude", "model": "sonnet" },
+    "test-engineer":      { "runner": "claude", "model": "sonnet" },
+    "security-auditor":   { "runner": "claude", "model": "opus"   },
+    "qa-reviewer":        { "runner": "claude", "model": "opus"   },
+    "architect":          { "runner": "claude", "model": "opus"   }
+  }
+}
