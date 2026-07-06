@@ -1,7 +1,6 @@
 // src/services/engines.ts
 
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * Gamification Engine: Add XP and calculate level ups
