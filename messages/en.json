@@ -8,5 +8,51 @@
     "market": "Market",
     "tasi": "TASI",
     "nasdaq": "NASDAQ"
+  },
+  "Auth": {
+    "login": {
+      "title": "Log In",
+      "parentTab": "Parent",
+      "childTab": "Child",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "familyCodeLabel": "Family Code",
+      "usernameLabel": "Username",
+      "pinLabel": "PIN",
+      "submit": "Log In",
+      "submitting": "Logging in…",
+      "error": "Invalid credentials. Please check your details and try again.",
+      "noAccount": "Don't have an account?",
+      "registerLink": "Register as a parent"
+    },
+    "register": {
+      "title": "Parent Registration",
+      "subtitle": "Create a parent account to start your family.",
+      "nameLabel": "Full Name",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "submit": "Create Account",
+      "submitting": "Creating account…",
+      "error": "Could not create your account. Please check your details and try again.",
+      "successTitle": "Account Created",
+      "familyCodeLabel": "Your Family Code",
+      "saveCodeNote": "Save this code — your children will need it to log in.",
+      "addChildLink": "Add Your First Child",
+      "haveAccount": "Already have an account?",
+      "loginLink": "Log in"
+    },
+    "newChild": {
+      "title": "Add a Child",
+      "subtitle": "Create a login for your child.",
+      "nameLabel": "Child's Name",
+      "usernameLabel": "Username",
+      "pinLabel": "PIN",
+      "submit": "Create Child Account",
+      "submitting": "Creating…",
+      "error": "Could not create the child account. Please check your details and try again.",
+      "successTitle": "Child Account Created",
+      "usernameCreatedLabel": "Username",
+      "doneNote": "Your child can now log in using the family code, this username, and the PIN."
+    }
   }
 }
