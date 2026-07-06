@@ -38,9 +38,9 @@ export interface MarketData {
     yearRange: [number, number];
     open: number;
     prevClose: number;
-    volume: string;
-    avgVolume: string;
-    marketCap: string;
+    volume: number;
+    avgVolume: number;
+    marketCap: number;
     peRatio: number;
   };
 }
@@ -372,9 +372,9 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
         yearRange: [75.5, 236.26] as [number, number],
         open: 197.14,
         prevClose: 197.58,
-        volume: "142.38 مليون",
-        avgVolume: "309.2 مليون",
-        marketCap: "2.73 تريليون",
+        volume: 142380000,
+        avgVolume: 309200000,
+        marketCap: 2730000000000,
         peRatio: 38.16
       }
     };
@@ -405,9 +405,9 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
       yearRange: [basePrice * 0.7, basePrice * 1.4] as [number, number],
       open: basePrice * 0.99,
       prevClose: basePrice * 1.01,
-      volume: "2.4 مليون",
-      avgVolume: "3.1 مليون",
-      marketCap: isTasi ? "45 مليار" : "120B",
+      volume: 2400000,
+      avgVolume: 3100000,
+      marketCap: isTasi ? 45000000000 : 120000000000,
       peRatio: 18.5
     }
   };

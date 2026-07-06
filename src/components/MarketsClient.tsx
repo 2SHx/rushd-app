@@ -65,6 +65,23 @@ function getRecommendedQuiz(symbol: string) {
   }
 }
 
+function formatNumber(val: number, type: 'volume' | 'mcap', isAr: boolean) {
+  if (type === 'mcap') {
+    const trils = val / 1e12;
+    if (trils >= 1) {
+      return isAr ? `${trils.toFixed(2)} تريليون` : `$${trils.toFixed(2)}T`;
+    }
+    const billions = val / 1e9;
+    return isAr ? `${billions.toFixed(2)} مليار` : `$${billions.toFixed(2)}B`;
+  } else {
+    const millions = val / 1e6;
+    if (millions >= 1) {
+      return isAr ? `${millions.toFixed(2)} مليون` : `${millions.toFixed(2)}M`;
+    }
+    return val.toLocaleString();
+  }
+}
+
 export default function MarketsClient({ currentData, locale, isParent }: MarketsClientProps) {
   const isAr = locale === 'ar';
   const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentData.market);
@@ -356,7 +373,10 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                 
                 {/* Time range selector */}
                 <div className="flex justify-between bg-black/40 p-1 rounded-xl text-xs font-semibold text-gray-400">
-                  {['يوم', 'أسبوع', 'شهر', '3 أشهر', 'عام', '5 أعوام', 'الكل'].map((lbl, idx) => (
+                  {(isAr
+                    ? ['يوم', 'أسبوع', 'شهر', '3 أشهر', 'عام', '5 أعوام', 'الكل']
+                    : ['1D', '1W', '1M', '3M', '1Y', '5Y', 'All']
+                  ).map((lbl, idx) => (
                     <button
                       key={idx}
                       className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -642,17 +662,17 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
 
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'الحجم' : 'Volume'}</span>
-                      <span className="font-bold">{currentData.statistics.volume}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.volume, 'volume', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'متوسط الحجم' : 'Avg Volume'}</span>
-                      <span className="font-bold">{currentData.statistics.avgVolume}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.avgVolume, 'volume', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between">
                       <span className="text-gray-400">{isAr ? 'القيمة السوقية' : 'Market Cap'}</span>
-                      <span className="font-bold">{currentData.statistics.marketCap}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.marketCap, 'mcap', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between">
