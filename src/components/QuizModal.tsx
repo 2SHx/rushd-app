@@ -1,17 +1,21 @@
+// src/components/QuizModal.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
+export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }: any) {
   const [quiz, setQuiz] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const isAr = locale === 'ar';
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      const url = topic ? `/api/quiz?topic=${encodeURIComponent(topic)}` : '/api/quiz';
+      const url = topic 
+        ? `/api/quiz?topic=${encodeURIComponent(topic)}&locale=${locale || 'en'}` 
+        : `/api/quiz?locale=${locale || 'en'}`;
       fetch(url)
         .then(res => res.json())
         .then(data => {
@@ -21,7 +25,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
           setShowResult(false);
         });
     }
-  }, [isOpen, topic]);
+  }, [isOpen, topic, locale]);
 
   if (!isOpen) return null;
 
@@ -36,12 +40,14 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400">Generating Financial Quiz...</p>
+            <p className="text-gray-400">{isAr ? 'جاري إنشاء الاختبار المالي...' : 'Generating Financial Quiz...'}</p>
           </div>
         ) : quiz ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">{quiz.topic}</h2>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
+                {isAr && quiz.topicAr ? quiz.topicAr : quiz.topic}
+              </h2>
               <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
             </div>
             
@@ -82,7 +88,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20"
                 >
-                  Continue
+                  {isAr ? 'متابعة' : 'Continue'}
                 </button>
               </div>
             ) : (
@@ -91,7 +97,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
                 disabled={selected === null}
                 className="w-full py-3 rounded-xl bg-emerald-500 disabled:opacity-50 font-bold text-white"
               >
-                Submit Answer
+                {isAr ? 'إرسال الإجابة' : 'Submit Answer'}
               </button>
             )}
           </div>

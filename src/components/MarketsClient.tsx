@@ -954,6 +954,7 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
         onClose={() => setIsQuizOpen(false)} 
         topic={recommendedQuiz.topic} 
         onComplete={handleQuizComplete} 
+        locale={locale}
       />
     </div>
   );

@@ -13,25 +13,29 @@ interface ParentDashboardClientProps {
 }
 
 export default function ParentDashboardClient({ parentName, familyCode, childrenList, locale }: ParentDashboardClientProps) {
+  const isAr = locale === 'ar';
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
-            Parent Dashboard
+            {isAr ? 'لوحة تحكم ولي الأمر' : 'Parent Dashboard'}
           </h1>
-          <p className="text-gray-400 mt-1">Welcome back, {parentName}</p>
+          <p className="text-gray-400 mt-1">
+            {isAr ? `مرحباً بك مجدداً، ${parentName}` : `Welcome back, ${parentName}`}
+          </p>
         </div>
 
-        <Link href="/family/new-child">
+        <Link href={`/${locale}/family/new-child`}>
           <motion.div 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="flex items-center space-x-2 rtl:space-x-reverse glass-panel px-6 py-3 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
           >
             <Plus className="w-5 h-5" />
-            <span className="font-semibold">Add Child Account</span>
+            <span className="font-semibold">{isAr ? 'إضافة حساب ابن' : 'Add Child Account'}</span>
           </motion.div>
         </Link>
       </div>
@@ -45,8 +49,14 @@ export default function ParentDashboardClient({ parentName, familyCode, children
               <Key className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-lg">Your Family Invitation Code</h3>
-              <p className="text-sm text-gray-400">Share this code with your children to let them log into their accounts.</p>
+              <h3 className="font-bold text-lg">
+                {isAr ? 'رمز دعوة العائلة الخاص بك' : 'Your Family Invitation Code'}
+              </h3>
+              <p className="text-sm text-gray-400">
+                {isAr 
+                  ? 'شارك هذا الرمز مع أبنائك ليتمكنوا من تسجيل الدخول إلى حساباتهم.' 
+                  : 'Share this code with your children to let them log into their accounts.'}
+              </p>
             </div>
           </div>
           <div className="bg-black/50 border border-white/10 px-6 py-3 rounded-2xl text-center">
@@ -61,14 +71,18 @@ export default function ParentDashboardClient({ parentName, familyCode, children
       <div>
         <h2 className="text-xl font-bold mb-6 flex items-center space-x-2 rtl:space-x-reverse">
           <Users className="w-5 h-5 text-emerald-400" />
-          <span>Supervised Child Accounts ({childrenList.length})</span>
+          <span>
+            {isAr 
+              ? `الحسابات الخاضعة للرقابة (${childrenList.length})` 
+              : `Supervised Child Accounts (${childrenList.length})`}
+          </span>
         </h2>
 
         {childrenList.length === 0 ? (
           <div className="glass-panel p-12 text-center text-gray-400 space-y-4">
-            <p>No child accounts created yet.</p>
-            <Link href="/family/new-child" className="text-emerald-400 font-semibold hover:underline">
-              Add your first child account to get started &rarr;
+            <p>{isAr ? 'لم يتم إنشاء أي حسابات أبناء بعد.' : 'No child accounts created yet.'}</p>
+            <Link href={`/${locale}/family/new-child`} className="text-emerald-400 font-semibold hover:underline">
+              {isAr ? 'أضف حساب الابن الأول للبدء ←' : 'Add your first child account to get started →'}
             </Link>
           </div>
         ) : (
@@ -92,7 +106,7 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                       </div>
                     </div>
                     <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-gray-400">
-                      Tier: {child.tier}
+                      {isAr ? `الفئة: ${child.tier}` : `Tier: ${child.tier}`}
                     </span>
                   </div>
 
@@ -103,7 +117,9 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
                       <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
                         <Award className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Level {profile?.level ?? 1}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {isAr ? `المستوى ${profile?.level ?? 1}` : `Level ${profile?.level ?? 1}`}
+                        </span>
                       </div>
                       <p className="text-2xl font-bold">{profile?.xp ?? 0} <span className="text-xs text-gray-400 font-normal">XP</span></p>
                     </div>
@@ -111,7 +127,9 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
                       <div className="flex items-center space-x-2 rtl:space-x-reverse text-neonBlue">
                         <Wallet className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Savings Jar</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {isAr ? 'حصالة الادخار' : 'Savings Jar'}
+                        </span>
                       </div>
                       <p className="text-2xl font-bold">
                         {Number(jar?.balance ?? 0).toFixed(2)} <span className="text-xs text-gray-400 font-normal">{jar?.currency ?? 'SAR'}</span>
@@ -123,15 +141,16 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                   <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
                     <div className="flex items-center space-x-2 rtl:space-x-reverse text-gray-400">
                       <Briefcase className="w-4 h-4" />
-                      <span className="text-xs font-bold uppercase tracking-wider">Simulated Holdings</span>
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        {isAr ? 'الاستثمارات المحاكاة' : 'Simulated Holdings'}
+                      </span>
                     </div>
 
                     {holdings.length === 0 ? (
-                      <p className="text-sm text-gray-500">No assets owned.</p>
+                      <p className="text-sm text-gray-500">{isAr ? 'لا توجد أصول مملوكة.' : 'No assets owned.'}</p>
                     ) : (
                       <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
                         {holdings.map((item: any) => {
-                          const isAr = locale === 'ar';
                           const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
                           const activeTicker = listTickers.find(t => t.symbol === item.symbol);
                           const displayName = activeTicker ? (isAr ? activeTicker.arName : activeTicker.name) : item.symbol;

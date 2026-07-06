@@ -24,8 +24,21 @@ const TOPIC_ALLOWLIST = [
   'NASDAQ Markets'
 ];
 
+const TOPIC_AR_MAP: Record<string, string> = {
+  'Stock Market Basics': 'أساسيات سوق الأسهم',
+  'Savings & Jars': 'الادخار والحصالات',
+  'Compound Interest': 'الفائدة المركبة',
+  'Sharia Compliance': 'التوافق الشرعي',
+  'Risk Management': 'إدارة المخاطر',
+  'Value Investing': 'استثمار القيمة',
+  'Halal Mutual Funds': 'الصناديق الاستثمارية الحلال',
+  'TASI Markets': 'سوق تاسي المالي',
+  'NASDAQ Markets': 'سوق ناسداك المالي'
+};
+
 const QuizSchema = z.object({
   topic: z.string(),
+  topicAr: z.string().optional(),
   question: z.string(),
   options: z.array(z.string()).length(4),
   correctOptionIndex: z.number().min(0).max(3),

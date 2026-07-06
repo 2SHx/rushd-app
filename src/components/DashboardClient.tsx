@@ -69,7 +69,9 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
             {t('portfolioHealth')}
           </h1>
-          <p className="text-gray-400 mt-1">Level {level} Investor</p>
+          <p className="text-gray-400 mt-1">
+            {isAr ? `مستثمر مستوى ${level}` : `Level ${level} Investor`}
+          </p>
         </div>
 
         <motion.button 
@@ -79,14 +81,16 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
           className="flex items-center space-x-2 rtl:space-x-reverse glass-panel px-6 py-3 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors"
         >
           <Trophy className="w-5 h-5" />
-          <span className="font-semibold">Take Quiz (+50 XP)</span>
+          <span className="font-semibold">{isAr ? 'خض اختباراً (+50 XP)' : 'Take Quiz (+50 XP)'}</span>
         </motion.button>
       </div>
 
       {/* XP Progress Bar */}
       <div className="glass-panel p-4">
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-400">Level {level} Progress</span>
+          <span className="text-gray-400">
+            {isAr ? `تقدم المستوى ${level}` : `Level {level} Progress`.replace('{level}', String(level))}
+          </span>
           <span className="font-medium text-emerald-400">{xp} / {Math.pow(level, 2) * 100} XP</span>
         </div>
         <div className="h-3 bg-black/50 rounded-full overflow-hidden">
@@ -128,7 +132,7 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
               </div>
               <div className="flex items-center space-x-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full">
                 <Activity className="w-4 h-4" />
-                <span className="text-sm font-medium">Live</span>
+                <span className="text-sm font-medium">{isAr ? 'مباشر' : 'Live'}</span>
               </div>
             </div>
             <AdvancedTradingChart data={currentData.history} />
@@ -144,25 +148,35 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
                 <Bot className="w-6 h-6 text-emerald-400" />
               </div>
               <div>
-                <h3 className="font-bold">AI Trade Signal</h3>
-                <p className="text-sm text-gray-400">Powered by Qwen 2.5</p>
+                <h3 className="font-bold">{isAr ? 'إشارة تداول الذكاء الاصطناعي' : 'AI Trade Signal'}</h3>
+                <p className="text-sm text-gray-400">{isAr ? 'مدعوم بواسطة Qwen 2.5' : 'Powered by Qwen 2.5'}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-400">Recommendation</span>
+                  <span className="text-gray-400">{isAr ? 'التوصية' : 'Recommendation'}</span>
                   <span className="font-bold text-emerald-400 flex items-center">
-                    <ArrowUpRight className="w-4 h-4 mr-1" /> BUY
+                    <ArrowUpRight className="w-4 h-4 mr-1" /> {isAr ? 'شراء' : 'BUY'}
                   </span>
                 </div>
-                <p className="text-sm">The stock appears undervalued based on momentum indicators and provides a solid growth opportunity.</p>
+                <p className="text-sm">
+                  {isAr 
+                    ? 'يبدو السهم مقوماً بأقل من قيمته الحقيقية بناءً على مؤشرات الزخم ويقدم فرصة نمو قوية.'
+                    : 'The stock appears undervalued based on momentum indicators and provides a solid growth opportunity.'}
+                </p>
               </div>
 
               <div className="p-4 rounded-xl bg-neonBlue/5 border border-neonBlue/20">
-                <span className="text-xs font-bold text-neonBlue uppercase tracking-wider block mb-1">Concept Learned</span>
-                <p className="text-sm">Value Investing: Buying underpriced assets with strong fundamentals.</p>
+                <span className="text-xs font-bold text-neonBlue uppercase tracking-wider block mb-1">
+                  {isAr ? 'المفهوم المستفاد' : 'Concept Learned'}
+                </span>
+                <p className="text-sm">
+                  {isAr
+                    ? 'استثمار القيمة: شراء أصول مقومة بأقل من قيمتها مع أساسيات قوية.'
+                    : 'Value Investing: Buying underpriced assets with strong fundamentals.'}
+                </p>
               </div>
 
               <motion.button 
@@ -171,19 +185,25 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
                 disabled={!currentData.isShariaCompliant}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {currentData.isShariaCompliant ? "Execute Mock Trade" : "Trade Locked (Educational Only)"}
+                {currentData.isShariaCompliant 
+                  ? (isAr ? 'تنفيذ صفقة افتراضية' : 'Execute Mock Trade') 
+                  : (isAr ? 'التداول مغلق (تعليمي فقط)' : 'Trade Locked (Educational Only)')}
               </motion.button>
             </div>
           </div>
           
           <div className="glass-panel p-6">
-             <h3 className="font-bold mb-4">Sharia Compliance</h3>
+             <h3 className="font-bold mb-4">{isAr ? 'التوافق الشرعي' : 'Sharia Compliance'}</h3>
              <div className="flex items-center justify-between">
-               <span className="text-gray-400">AAOIFI Status</span>
+               <span className="text-gray-400">{isAr ? 'حالة معايير أيقوفي' : 'AAOIFI Status'}</span>
                {currentData.isShariaCompliant ? (
-                 <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm font-medium">Compliant</span>
+                 <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm font-medium">
+                   {isAr ? 'متوافق' : 'Compliant'}
+                 </span>
                ) : (
-                 <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">Non-Compliant</span>
+                 <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">
+                   {isAr ? 'غير متوافق' : 'Non-Compliant'}
+                 </span>
                )}
              </div>
              {!currentData.isShariaCompliant && (
@@ -195,7 +215,7 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
         </div>
       </div>
 
-      <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onComplete={handleQuizComplete} />
+      <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onComplete={handleQuizComplete} locale={locale} />
     </div>
   );
 }
