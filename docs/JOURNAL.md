@@ -12,9 +12,9 @@ Open: <risks/next, one line>
 
 ---
 
-## 2026-07-06 — M8: Mobile-first premium experience mimicry ✅
-Shipped: Extended MarketData interface; MarketsClient dashboard overview & details layout; interactive SVG earnings expected/actual circle plot; company statistics sliders; custom bottom sheet drawers for Sharia purification and fractional shares; bilingual bottom navbar.
-Decisions: Seeded exact metrics for NVDA matching the screenshots; split Markets into Server routing page & Client UI component for performance; exported custom styled drawers for unified scale.
+## 2026-07-06 — M8: Mobile-first premium experience mimicry & learning hub ✅
+Shipped: Extended MarketData interface; MarketsClient dashboard overview & details layout; interactive SVG earnings expected/actual circle plot; company statistics sliders; custom bottom sheet drawers for Sharia purification and fractional shares; bilingual bottom navbar; context-aware embedded Quiz Modal integration.
+Decisions: Seeded exact metrics for NVDA matching the screenshots; split Markets into Server routing page & Client UI component for performance; dynamically matched quizzes to specific stock tickers (e.g. NVDA matches NASDAQ Markets quiz) to increase learning speed.
 Open: Ready for visual review.
 
 ## 2026-07-06 — M7: Security & privacy hardening ✅
