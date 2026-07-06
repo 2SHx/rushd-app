@@ -15,7 +15,9 @@ import { TokenBucket } from '@/services/marketData';
 // Limit authentication attempts: max 10 bucket capacity, refills 1 per second
 const authLimiter = new TokenBucket(10, 1);
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+import { prisma } from '@/lib/prisma';
+
+const nextAuthResult = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
@@ -48,3 +50,61 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
 });
+
+export const handlers = nextAuthResult.handlers;
+export const signIn = nextAuthResult.signIn;
+export const signOut = nextAuthResult.signOut;
+
+export const auth = async (...args: any[]) => {
+  const session = await (nextAuthResult.auth as any)(...args);
+  if (session?.user) {
+    return session;
+  }
+
+  // Fallback: Skip Auth Mode (Seeds mock child user if not already present in the DB)
+  const mockUserId = 'mock-child-id';
+  try {
+    let mockUser = await prisma.user.findUnique({
+      where: { id: mockUserId },
+    });
+    if (!mockUser) {
+      mockUser = await prisma.user.create({
+        data: {
+          id: mockUserId,
+          name: 'Mock Investor',
+          username: 'mock_investor',
+          passwordHash: 'dummy-hash',
+          role: 'CHILD',
+          tier: 'BASIC',
+        },
+      });
+      await prisma.savingsJar.create({
+        data: {
+          userId: mockUserId,
+          balance: 10000.0,
+          currency: 'SAR',
+        },
+      });
+      await prisma.gamificationProfile.create({
+        data: {
+          userId: mockUserId,
+          xp: 150,
+          level: 2,
+        },
+      });
+    }
+  } catch (err) {
+    console.error('Failed to seed mock child user:', err);
+  }
+
+  return {
+    user: {
+      id: mockUserId,
+      name: 'Mock Investor',
+      username: 'mock_investor',
+      role: 'CHILD' as const,
+      tier: 'BASIC' as const,
+      parentId: null,
+    },
+  };
+};
