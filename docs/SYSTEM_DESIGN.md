@@ -226,6 +226,20 @@ Rationale: the user mandate is a simulation that convinces regulators; audit + d
 Consequences: every money-mutating path runs in `prisma.$transaction` and writes an audit row (closes `engines.ts:57`); an auth-event audit is added in M7; child data is minimized (below); this document itself is the sandbox-application artifact.
 Revisit when: SAMA sandbox admission or a real-deposit pilot — then real-money rails, KYC, and DB-session revocation land together (OQ-1, OQ-5).
 
+### DR-10: Rushd Quant — an AI analyst-committee trading module (see `docs/QUANT_DESIGN.md`)
+Decision: build a quantitative-trading product as a committee of 8 analyst agents in an extractable `src/quant/` module; a Portfolio-Manager LLM (temperature 0) decides action + size inside a deterministic envelope it cannot cross — the Sharia agent is an absolute veto and a Risk Manager clamps size/exposure/drawdown. Full design, data model, and Q0–Q7 roadmap live in `docs/QUANT_DESIGN.md` (QDR-1..5); this record links it to the parent contract.
+Options: LLM decides everything incl. gates (unauditable, unsafe with money) / fully deterministic ensemble (rigorous but forfeits the requested "AI agents") / LLM-decides-inside-deterministic-gates (chosen — latitude within a safe box, validated by virattt/ai-hedge-fund + TradingAgents).
+Rationale: money systems need hard, testable gates; the LLM adds reasoning/explanation (and pedagogy — the learner watches the committee) without ever breaching the Sharia veto or a risk cap.
+Consequences: new models (MarketBar/Fundamentals/NewsItem/Strategy/AnalystSignalRecord/Order/Decision/BacktestRun/PortfolioSnapshot) tagged to Q-migrations; backtests use a deterministic PM policy-surrogate (QDR-4); mock-first invariant preserved.
+Revisit when: the committee's live paper track diverges materially from its backtest, or a fifth analyst class is added.
+
+### DR-11: Paper-first quant execution; real brokerage stays dark behind a CMA-licensing gate
+Decision: execute only on paper now via a `BrokerAdapter` (Alpaca paper for NASDAQ, internal-sim for TASI + keyless mock). Alpaca paper and live are the same API, so going real is a keys/base-URL swap — hard-gated behind a feature flag + CMA/broker licensing + KYC/AML, isolated in `src/quant/execution/`, dark by default.
+Options: build live execution now (unlicensed real-money dealing — legally impermissible) / simulate internally only (loses real order-lifecycle fidelity) / Alpaca paper now + gated live later (chosen — real fills on virtual money, clean licensed path).
+Rationale: paper-only needs no license and gives realistic execution; isolating the live adapter keeps the regulated surface one flag away yet unreachable until licensed.
+Consequences: `src/quant/execution/` is the sole broker boundary; a test asserts no live path is reachable without the gate (Q6); TASI live needs a separate licensed Saudi broker.
+Revisit when: a CMA license/partner and KYC/AML are in place.
+
 **Authorization model (parent/child boundary).** The JWT session (`{userId, role, tier, parentId}`) feeds a single guard in `src/lib/authz.ts`. Rules, enforced in every query — not by UI branching:
 - CHILD → own rows only (`where userId = session.userId`).
 - PARENT → own rows + children's (`where userId IN (self ∪ {c : c.parentId = self})`).
