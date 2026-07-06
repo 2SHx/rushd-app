@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check 
+  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check, BookOpen, Trophy 
 } from 'lucide-react';
 import AdvancedTradingChart from './AdvancedTradingChart';
+import QuizModal from './QuizModal';
 
 interface MarketsClientProps {
   currentData: any;
@@ -29,6 +30,41 @@ const TICKERS = {
   ]
 };
 
+function getRecommendedQuiz(symbol: string) {
+  switch (symbol) {
+    case 'NVDA':
+      return { 
+        topic: 'NASDAQ Markets', 
+        descEnglish: 'Learn how NASDAQ technology markets work, trade times, and pricing in USD.',
+        descArabic: 'تعرّف على كيفية عمل أسواق ناسداك التقنية ومواعيد التداول والتسعير بالدولار الأمريكي.'
+      };
+    case '2222.SR':
+      return { 
+        topic: 'TASI Markets', 
+        descEnglish: 'Master Saudi Tadawul specific calendars, TASI indices, and SAR trading.',
+        descArabic: 'تعلم أساسيات مؤشر تاسي وتداول الأسهم بالريال السعودي وجداول عمل السوق المالية السعودية.'
+      };
+    case 'TSLA':
+      return { 
+        topic: 'Sharia Compliance', 
+        descEnglish: 'Learn why some companies fail Sharia financial ratios or business screening.',
+        descArabic: 'اكتشف معايير أيقوفي (AAOIFI) ولماذا لا تتوافق بعض الشركات مع ضوابط الاستثمار الإسلامي.'
+      };
+    case '1120.SR':
+      return { 
+        topic: 'Savings & Jars', 
+        descEnglish: 'Understand Mudarabah savings split models and sharia compliant yields.',
+        descArabic: 'افهم عقود المضاربة الشرعية وكيفية توزيع الأرباح بين المودعين والمنصة لتنمية مدخراتك.'
+      };
+    default:
+      return { 
+        topic: 'Stock Market Basics', 
+        descEnglish: 'Learn the fundamentals of stocks, shares, buy/sell spreads, and order books.',
+        descArabic: 'تعلم المبادئ الأساسية للأسهم، وكيفية بيع وشراء حصص الشركات وتوزيع الأرباح الافتراضية.'
+      };
+  }
+}
+
 export default function MarketsClient({ currentData, locale, isParent }: MarketsClientProps) {
   const isAr = locale === 'ar';
   const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentData.market);
@@ -44,6 +80,36 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
   const [tradeSuccessOpen, setTradeSuccessOpen] = useState(false);
   const [aboutReadMore, setAboutReadMore] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+
+  // Quiz states
+  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [quizResult, setQuizResult] = useState<{ passed: boolean; xp: number; level: number } | null>(null);
+
+  const recommendedQuiz = getRecommendedQuiz(currentData.symbol);
+
+  const handleQuizComplete = async (passed: boolean) => {
+    try {
+      const res = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: recommendedQuiz.topic,
+          score: passed ? 100 : 0,
+          passed
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setQuizResult({ passed, xp: data.xp, level: data.level });
+      } else {
+        setQuizResult({ passed, xp: 0, level: 0 });
+      }
+    } catch (err) {
+      console.error('Failed to submit quiz complete status:', err);
+      setQuizResult({ passed, xp: 0, level: 0 });
+    }
+  };
 
   // Find active ticker metadata
   const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
@@ -336,6 +402,54 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                 >
                   <span>{isAr ? 'سهم جزئي' : 'Fractional Share'}</span>
                   <Info className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Recommended Quiz Card */}
+            <div className="px-4">
+              <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
+                    <BookOpen className="w-5 h-5" />
+                    <h3 className="font-bold text-sm text-gray-200">{isAr ? 'اختبار تعليمي موصى به' : 'Recommended Quiz'}</h3>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                    {recommendedQuiz.topic}
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  {isAr ? recommendedQuiz.descArabic : recommendedQuiz.descEnglish}
+                </p>
+
+                {quizResult && (
+                  <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+                    quizResult.passed 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold' 
+                      : 'bg-red-500/10 border-red-500/20 text-red-400 font-semibold'
+                  }`}>
+                    <span>
+                      {quizResult.passed 
+                        ? (isAr ? 'تهانينا! نجحت في الاختبار (+50 XP)' : 'Congratulations! You passed (+50 XP)') 
+                        : (isAr ? 'لم تتجاوز الاختبار بنجاح، حاول مجدداً!' : 'Did not pass, try again!')
+                      }
+                    </span>
+                    <button onClick={() => setQuizResult(null)} className="underline hover:no-underline">
+                      {isAr ? 'إغلاق' : 'Dismiss'}
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setIsQuizOpen(true);
+                    setQuizResult(null);
+                  }}
+                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-2xl font-bold text-xs text-white transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>{isAr ? 'ابدأ التحدي واكسب XP' : 'Start Challenge & Earn XP'}</span>
                 </button>
               </div>
             </div>
@@ -701,6 +815,13 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
           </div>
         )}
       </AnimatePresence>
+
+      <QuizModal 
+        isOpen={isQuizOpen} 
+        onClose={() => setIsQuizOpen(false)} 
+        topic={recommendedQuiz.topic} 
+        onComplete={handleQuizComplete} 
+      />
     </div>
   );
 }
