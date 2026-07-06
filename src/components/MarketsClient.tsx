@@ -226,7 +226,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                     <div
                       key={t.symbol}
                       onClick={() => {
-                        window.location.href = `/markets?symbol=${t.symbol}&market=TASI`;
+                        window.location.href = `/${locale}/markets?symbol=${t.symbol}&market=TASI`;
                       }}
                       className="bg-[#121824] border border-white/5 min-w-[120px] p-4 rounded-2xl text-center space-y-2 cursor-pointer hover:bg-white/5 transition-all shrink-0"
                     >
@@ -285,7 +285,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                   <div
                     key={t.symbol}
                     onClick={() => {
-                      window.location.href = `/markets?symbol=${t.symbol}&market=${marketTab}`;
+                      window.location.href = `/${locale}/markets?symbol=${t.symbol}&market=${marketTab}`;
                     }}
                     className="bg-[#121824] border border-white/5 p-4 rounded-2xl flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
                   >
@@ -322,7 +322,7 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
             <div className="p-4 flex justify-between items-center sticky top-0 bg-[#080B11]/90 backdrop-blur-md z-30">
               <button
                 onClick={() => {
-                  window.location.href = `/markets`;
+                  window.location.href = `/${locale}/markets`;
                 }}
                 className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white"
               >

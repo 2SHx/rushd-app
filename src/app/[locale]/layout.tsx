@@ -32,7 +32,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} className="dark">
-      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:pl-64`}>
+      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:ps-64`}>
         <NextIntlClientProvider messages={messages}>
           <DisclaimerBanner />
           <LanguageSwitcher locale={locale} />
