@@ -1,8 +1,15 @@
-// Rushd Quant — point-in-time data access (Q0).
-// The ONLY way an analyst or the backtester reads history. Every accessor returns
-// records dated <= `asOf`, enforced twice: in the query (`… lte asOf`) and by a
-// runtime assertion (`assertNoLookahead`). No look-ahead is the cardinal rule
-// (skill: backtesting-rigor) — a leak here silently invalidates every backtest.
+// Rushd Quant — point-in-time data access (Q0). Contract: QUANT_DESIGN.md §2.2.
+//
+// Two layers:
+//   • PointInTimeStore — async, DB-facing; the no-look-ahead filter (`… lte asOf`)
+//     plus a runtime assertion. The only place that touches `prisma` for history.
+//   • PointInTimeContext — the sync, symbol-bound view analysts receive. Data is
+//     pre-loaded once by `loadPointInTimeContext`, so `bars(n)` etc. are synchronous
+//     and an analyst can never issue an unbounded/live query mid-decision.
+//
+// No look-ahead is the cardinal rule (skill: backtesting-rigor): nothing dated after
+// `asOf` is ever visible, enforced in the query AND asserted at runtime. Because every
+// filter lives here, analyst code is byte-identical between live and backtest.
 import { prisma } from '@/lib/prisma';
 import type { Market, BarInterval, MarketBar, Fundamentals, NewsItem } from '@prisma/client';
 
@@ -14,11 +21,7 @@ export class LookaheadError extends Error {
   }
 }
 
-/**
- * Last line of defense: throw if any item's timestamp is strictly after `asOf`.
- * Belt-and-suspenders behind the query filter — a query bug that leaks a future
- * row is caught here rather than corrupting a decision.
- */
+/** Last line of defense: throw if any item's timestamp is strictly after `asOf`. */
 export function assertNoLookahead<T>(items: readonly T[], asOf: Date, tsKey: keyof T): readonly T[] {
   const cutoff = asOf.getTime();
   for (const item of items) {
@@ -32,57 +35,100 @@ export function assertNoLookahead<T>(items: readonly T[], asOf: Date, tsKey: key
   return items;
 }
 
-export interface BarQuery {
-  /** Most recent N bars at or before asOf. Omit for all history. */
-  lookback?: number;
+const DAY_MS = 86_400_000;
+
+/** Low-level, no-look-ahead DB accessor. Async; used by the loader and by ingestion tests. */
+export class PointInTimeStore {
+  constructor(private readonly interval: BarInterval = 'DAY') {}
+
+  async bars(symbol: string, market: Market, asOf: Date, lookbackDays?: number): Promise<MarketBar[]> {
+    const from = lookbackDays ? new Date(asOf.getTime() - lookbackDays * DAY_MS) : undefined;
+    const rows = await prisma.marketBar.findMany({
+      where: {
+        symbol,
+        market,
+        interval: this.interval,
+        ts: { lte: asOf, ...(from ? { gt: from } : {}) },
+      },
+      orderBy: { ts: 'asc' },
+    });
+    return assertNoLookahead(rows, asOf, 'ts') as MarketBar[];
+  }
+
+  async fundamentals(symbol: string, market: Market, asOf: Date): Promise<Fundamentals | null> {
+    const f = await prisma.fundamentals.findFirst({
+      where: { symbol, market, releasedAt: { lte: asOf } },
+      orderBy: { releasedAt: 'desc' },
+    });
+    if (f) assertNoLookahead([f], asOf, 'releasedAt');
+    return f;
+  }
+
+  async news(symbol: string, market: Market, asOf: Date, sinceDays?: number): Promise<NewsItem[]> {
+    const from = sinceDays ? new Date(asOf.getTime() - sinceDays * DAY_MS) : undefined;
+    const rows = await prisma.newsItem.findMany({
+      where: {
+        symbol,
+        market,
+        publishedAt: { lte: asOf, ...(from ? { gt: from } : {}) },
+      },
+      orderBy: { publishedAt: 'desc' },
+    });
+    return assertNoLookahead(rows, asOf, 'publishedAt') as NewsItem[];
+  }
+}
+
+/**
+ * The sync, symbol-bound view an analyst reads through (QUANT_DESIGN.md §2.2).
+ * `shariaVerdict()` and `portfolio()` join in Q3 / Q1 respectively.
+ */
+export interface PointInTimeContext {
+  readonly symbol: string;
+  readonly market: Market;
+  readonly asOf: Date;
+  /** Bars within the last `lookbackDays` calendar days, chronological. */
+  bars(lookbackDays: number): MarketBar[];
+  /** Latest fundamentals public at or before asOf. */
+  fundamentals(): Fundamentals | null;
+  /** News published within the last `sinceDays` days, newest-first. */
+  news(sinceDays: number): NewsItem[];
+}
+
+export interface LoadContextArgs {
+  symbol: string;
+  market: Market;
+  asOf: Date;
+  /** Widest window any analyst will request (default 400d ≈ 252 trading days). */
+  maxLookbackDays?: number;
   interval?: BarInterval;
 }
 
 /**
- * A read window frozen at `asOf`. Analysts receive one of these and must read
- * market history exclusively through it — never `prisma` directly, never a
- * "latest quote" call. That constraint is what makes strategies backtestable.
+ * Pre-load a decision's data window once and hand back a sync context. All
+ * no-look-ahead filtering happens during the load; the returned accessors only
+ * slice already-vetted arrays, so an analyst cannot reach past `asOf`.
  */
-export class PointInTimeContext {
-  constructor(public readonly asOf: Date) {}
+export async function loadPointInTimeContext(args: LoadContextArgs): Promise<PointInTimeContext> {
+  const { symbol, market, asOf, maxLookbackDays = 400, interval = 'DAY' } = args;
+  const store = new PointInTimeStore(interval);
+  const [allBars, fund, allNews] = await Promise.all([
+    store.bars(symbol, market, asOf, maxLookbackDays),
+    store.fundamentals(symbol, market, asOf),
+    store.news(symbol, market, asOf, maxLookbackDays),
+  ]);
 
-  /** OHLCV bars at or before asOf, returned oldest-first (chronological). */
-  async getBars(symbol: string, market: Market, q: BarQuery = {}): Promise<MarketBar[]> {
-    const interval: BarInterval = q.interval ?? 'DAY';
-    const bars = await prisma.marketBar.findMany({
-      where: { symbol, market, interval, ts: { lte: this.asOf } },
-      orderBy: { ts: 'desc' },
-      ...(q.lookback ? { take: q.lookback } : {}),
-    });
-    bars.reverse(); // desc (for `take`) -> chronological for analysts
-    return assertNoLookahead(bars, this.asOf, 'ts') as MarketBar[];
-  }
-
-  /** Latest fundamentals whose data was public at or before asOf (by release date). */
-  async getFundamentals(symbol: string, market: Market): Promise<Fundamentals | null> {
-    const f = await prisma.fundamentals.findFirst({
-      where: { symbol, market, releasedAt: { lte: this.asOf } },
-      orderBy: { releasedAt: 'desc' },
-    });
-    if (f) assertNoLookahead([f], this.asOf, 'releasedAt');
-    return f;
-  }
-
-  /** News published at or before asOf (optionally since a floor), newest-first. */
-  async getNews(symbol: string, market: Market, since?: Date): Promise<NewsItem[]> {
-    const news = await prisma.newsItem.findMany({
-      where: {
-        symbol,
-        market,
-        publishedAt: { lte: this.asOf, ...(since ? { gte: since } : {}) },
-      },
-      orderBy: { publishedAt: 'desc' },
-    });
-    return assertNoLookahead(news, this.asOf, 'publishedAt') as NewsItem[];
-  }
-}
-
-/** Context for a live decision (asOf = now). Backtests construct their own per step. */
-export function liveContext(): PointInTimeContext {
-  return new PointInTimeContext(new Date());
+  return {
+    symbol,
+    market,
+    asOf,
+    bars(lookbackDays: number): MarketBar[] {
+      const from = asOf.getTime() - lookbackDays * DAY_MS;
+      return allBars.filter((b) => b.ts.getTime() > from); // chronological (store sorts asc)
+    },
+    fundamentals: () => fund,
+    news(sinceDays: number): NewsItem[] {
+      const from = asOf.getTime() - sinceDays * DAY_MS;
+      return allNews.filter((n) => n.publishedAt.getTime() > from); // newest-first (store sorts desc)
+    },
+  };
 }
