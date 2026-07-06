@@ -1,16 +1,21 @@
 // src/services/engines.ts
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 /**
  * Gamification Engine: Add XP and calculate level ups
  */
 export async function addXP(userId: string, amount: number) {
-  const profile = await prisma.gamificationProfile.findUnique({
+  let profile = await prisma.gamificationProfile.findUnique({
     where: { userId }
   });
 
-  if (!profile) return;
+  if (!profile) {
+    profile = await prisma.gamificationProfile.create({
+      data: { userId, xp: 0, level: 1 }
+    });
+  }
 
   const newXp = profile.xp + amount;
   // Level = floor(sqrt(totalXp / 100)) + 1
@@ -34,34 +39,35 @@ export async function processCashSweeps() {
   const jars = await prisma.savingsJar.findMany();
   
   // Daily interest rate for 2.0% APY
-  const userDailyRate = 0.02 / 365;
+  const userDailyRate = new Prisma.Decimal("0.02").div(365);
   
   // Platform keeps 2.5% margin (total sweep yield is 4.5%)
-  const platformDailyRate = 0.025 / 365;
+  const platformDailyRate = new Prisma.Decimal("0.025").div(365);
 
-  let totalPlatformRevenue = 0;
+  let totalPlatformRevenue = new Prisma.Decimal(0);
 
   for (const jar of jars) {
-    if (jar.balance > 0) {
-      const userInterest = jar.balance * userDailyRate;
-      const platformMargin = jar.balance * platformDailyRate;
+    const balance = new Prisma.Decimal(jar.balance.toString());
+    if (balance.gt(0)) {
+      const userInterest = balance.mul(userDailyRate);
+      const platformMargin = balance.mul(platformDailyRate);
 
       await prisma.savingsJar.update({
         where: { id: jar.id },
         data: {
-          balance: jar.balance + userInterest
+          balance: balance.add(userInterest)
         }
       });
 
       // In a real app, write userInterest to Transaction log
       // await prisma.transaction.create({...})
 
-      totalPlatformRevenue += platformMargin;
+      totalPlatformRevenue = totalPlatformRevenue.add(platformMargin);
     }
   }
 
   return {
     processedJars: jars.length,
-    platformRevenue: totalPlatformRevenue
+    platformRevenue: totalPlatformRevenue.toNumber()
   };
 }

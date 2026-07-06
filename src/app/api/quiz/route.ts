@@ -2,6 +2,9 @@ import { generateObject } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/authz';
+import { prisma } from '@/lib/prisma';
+import { addXP } from '@/services/engines';
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'mock-key',
@@ -49,5 +52,86 @@ export async function GET(req: Request) {
       correctOptionIndex: 0,
       explanation: 'The price-to-earnings ratio (P/E ratio) is the ratio for valuing a company that measures its current share price relative to its earnings per share.'
     });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const user = await requireSession();
+    let json: unknown;
+    try {
+      json = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+    }
+
+    const parsed = z
+      .object({
+        topic: z.string().min(1),
+        score: z.number().int().min(0).max(100),
+        passed: z.boolean(),
+      })
+      .safeParse(json);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'invalid_input', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const { topic, score, passed } = parsed.data;
+
+    // Save the attempt in the database
+    const attempt = await prisma.quizAttempt.create({
+      data: {
+        userId: user.id,
+        topic,
+        score,
+        passed,
+      },
+    });
+
+    let xp = 0;
+    let level = 1;
+    let leveledUp = false;
+
+    // Lazily get profile, or create it if missing
+    let profile = await prisma.gamificationProfile.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!profile) {
+      profile = await prisma.gamificationProfile.create({
+        data: { userId: user.id, xp: 0, level: 1 },
+      });
+    }
+
+    xp = profile.xp;
+    level = profile.level;
+
+    if (passed) {
+      const reward = 50; // XP reward for passing a quiz
+      const res = await addXP(user.id, reward);
+      if (res) {
+        xp = res.xp;
+        level = res.level;
+        leveledUp = res.leveledUp;
+      }
+    }
+
+    return NextResponse.json({
+      attemptId: attempt.id,
+      xp,
+      level,
+      leveledUp,
+    });
+  } catch (error) {
+    // Check if error is AuthzError
+    if (error && typeof error === 'object' && 'response' in error) {
+      return (error as any).response;
+    }
+    console.error('Quiz completion tracking failed:', error);
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
 }

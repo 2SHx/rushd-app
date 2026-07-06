@@ -82,7 +82,7 @@ model PortfolioItem {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   symbol    String
-  shares    Float
+  shares    Decimal  @db.Decimal(18, 6)
   market    Market
   currency  Currency
   createdAt DateTime @default(now())
@@ -95,19 +95,21 @@ model Transaction {
   id              String          @id @default(uuid())
   userId          String
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount          Float
+  amount          Decimal         @db.Decimal(18, 4)
   currency        Currency        @default(SAR)
   type            TransactionType
   mcc             String?         
   description     String?
   createdAt       DateTime        @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model SavingsJar {
   id        String   @id @default(uuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance   Float    @default(0.0)
+  balance   Decimal  @db.Decimal(18, 4) @default(0.0)
   currency  Currency @default(SAR)
   updatedAt DateTime @updatedAt
 }
@@ -120,4 +122,6 @@ model QuizAttempt {
   score     Int
   passed    Boolean
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

@@ -76,7 +76,7 @@ export default function QuizModal({ isOpen, onClose, onComplete }: any) {
                 <p className="text-sm text-gray-300 bg-white/5 p-4 rounded-lg">{quiz.explanation}</p>
                 <button 
                   onClick={() => {
-                    onComplete(selected === quiz.correctOptionIndex);
+                    onComplete(selected === quiz.correctOptionIndex, quiz.topic);
                     onClose();
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20"

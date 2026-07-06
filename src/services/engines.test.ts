@@ -1,8 +1,10 @@
 // src/services/engines.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 const findUnique = vi.fn();
 const profileUpdate = vi.fn();
+const profileCreate = vi.fn();
 const findMany = vi.fn();
 const jarUpdate = vi.fn();
 
@@ -11,6 +13,7 @@ vi.mock('@/lib/prisma', () => ({
     gamificationProfile: {
       findUnique: (...args: unknown[]) => findUnique(...args),
       update: (...args: unknown[]) => profileUpdate(...args),
+      create: (...args: unknown[]) => profileCreate(...args),
     },
     savingsJar: {
       findMany: (...args: unknown[]) => findMany(...args),
@@ -24,16 +27,25 @@ import { addXP, processCashSweeps } from './engines';
 beforeEach(() => {
   findUnique.mockReset();
   profileUpdate.mockReset();
+  profileCreate.mockReset();
   findMany.mockReset();
   jarUpdate.mockReset();
 });
 
 describe('addXP — level curve: floor(sqrt(xp/100))+1', () => {
-  it('does nothing when the profile is not found', async () => {
+  it('lazily creates the profile and awards XP when the profile is not found', async () => {
     findUnique.mockResolvedValue(null);
+    profileCreate.mockResolvedValue({ userId: 'missing-user', xp: 0, level: 1 });
     const result = await addXP('missing-user', 100);
-    expect(result).toBeUndefined();
-    expect(profileUpdate).not.toHaveBeenCalled();
+    
+    expect(profileCreate).toHaveBeenCalledWith({
+      data: { userId: 'missing-user', xp: 0, level: 1 }
+    });
+    expect(profileUpdate).toHaveBeenCalledWith({
+      where: { userId: 'missing-user' },
+      data: { xp: 100, level: 2 }
+    });
+    expect(result).toEqual({ xp: 100, level: 2, leveledUp: true });
   });
 
   it('reaches level 2 at exactly 100 xp and reports leveledUp', async () => {
@@ -79,10 +91,11 @@ describe('processCashSweeps — 2.0%/365 user rate, 2.5%/365 platform rate', () 
 
     // only the positive-balance jar is credited interest
     expect(jarUpdate).toHaveBeenCalledTimes(1);
-    expect(jarUpdate).toHaveBeenCalledWith({
-      where: { id: 'jar-positive' },
-      data: { balance: 1000 + 1000 * userDailyRate },
-    });
+    
+    const call = jarUpdate.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 'jar-positive' });
+    expect(call.data.balance).toBeInstanceOf(Prisma.Decimal);
+    expect(call.data.balance.toNumber()).toBeCloseTo(1000 + 1000 * userDailyRate);
   });
 
   it('returns zero revenue and no updates when every jar is empty', async () => {

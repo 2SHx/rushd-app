@@ -6,23 +6,52 @@ import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
 import { Bot, Trophy, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 
-export default function DashboardClient({ tasiData, nasdaqData }: any) {
+export default function DashboardClient({ tasiData, nasdaqData, initialXp, initialLevel }: any) {
   const t = useTranslations('Dashboard');
   const [market, setMarket] = useState<'TASI' | 'NASDAQ'>('TASI');
   const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [xp, setXp] = useState(450);
-  const [level, setLevel] = useState(3);
+  const [xp, setXp] = useState<number>(initialXp ?? 0);
+  const [level, setLevel] = useState<number>(initialLevel ?? 1);
   
   const currentData = market === 'TASI' ? tasiData : nasdaqData;
 
-  const handleQuizComplete = (passed: boolean) => {
-    if (passed) {
-      setXp(prev => {
-        const newXp = prev + 50;
-        const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
-        if (newLevel > level) setLevel(newLevel);
-        return newXp;
+  const handleQuizComplete = async (passed: boolean, topic: string) => {
+    try {
+      const res = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: topic || 'Stock Market Basics',
+          score: passed ? 100 : 0,
+          passed
+        })
       });
+
+      if (res.ok) {
+        const data = await res.json();
+        setXp(data.xp);
+        setLevel(data.level);
+      } else {
+        // Fallback local calculations
+        if (passed) {
+          setXp(prev => {
+            const newXp = prev + 50;
+            const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+            if (newLevel > level) setLevel(newLevel);
+            return newXp;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error submitting quiz results:', err);
+      if (passed) {
+        setXp(prev => {
+          const newXp = prev + 50;
+          const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+          if (newLevel > level) setLevel(newLevel);
+          return newXp;
+        });
+      }
     }
   };
 
