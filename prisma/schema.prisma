@@ -63,6 +63,8 @@ model User {
   transactions        Transaction[]
   savingsJar          SavingsJar?
   quizAttempts        QuizAttempt[]
+  strategies          Strategy[]
+  decisions           Decision[]
 
   @@unique([parentId, username])
   @@index([parentId])
@@ -193,4 +195,160 @@ model NewsItem {
   createdAt   DateTime   @default(now())
 
   @@index([symbol, market, publishedAt])
+}
+
+// ── Rushd Quant: committee, decisions & orders (Q1). QUANT_DESIGN.md §4.
+// Additive; money/qty Decimal. A paper fill also writes a Transaction(type=TRADE)
+// for audit continuity. AgentKind/Stance mirror the TS union in src/quant/types.ts.
+
+enum AgentKind {
+  QUANT_CORE
+  NEWS_CATALYST
+  TECHNICAL
+  PATTERN_ANALOG
+  SHARIA
+  FUNDAMENTAL
+  RESEARCH
+  PORTFOLIO_MANAGER
+}
+
+enum Stance {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+enum AutonomyTier {
+  HUMAN_APPROVE
+  AUTO_PAPER
+  AUTO_REAL
+}
+
+enum DecisionMode {
+  HUMAN_APPROVE
+  AUTO_PAPER
+  AUTO_REAL
+}
+
+enum DecisionStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXECUTED
+  VETOED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  NEW
+  PARTIAL
+  FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum BrokerKind {
+  ALPACA_PAPER
+  INTERNAL_SIM
+}
+
+model Strategy {
+  id           String       @id @default(uuid())
+  ownerUserId  String
+  owner        User         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name         String
+  market       Market
+  config       Json
+  autonomyTier AutonomyTier @default(HUMAN_APPROVE)
+  enabled      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  decisions    Decision[]
+
+  @@index([ownerUserId])
+}
+
+model Decision {
+  id               String                @id @default(uuid())
+  strategyId       String?
+  strategy         Strategy?             @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+  userId           String
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol           String
+  market           Market
+  asOf             DateTime
+  proposedAction   String // BUY | SELL | HOLD
+  proposedQty      Decimal               @db.Decimal(18, 6)
+  finalAction      String
+  finalQty         Decimal               @db.Decimal(18, 6)
+  shariaGate       Json
+  riskAdjustments  Json
+  debateTranscript Json
+  pmModelId        String?
+  temperature      Decimal               @db.Decimal(4, 3)
+  seed             Int
+  gitSha           String?
+  mode             DecisionMode
+  status           DecisionStatus        @default(PROPOSED)
+  costCents        Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  signals          AnalystSignalRecord[]
+  order            Order?
+
+  @@index([userId, createdAt])
+}
+
+model AnalystSignalRecord {
+  id          String    @id @default(uuid())
+  decisionId  String
+  decision    Decision  @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  agent       AgentKind
+  symbol      String
+  stance      Stance
+  conviction  Decimal   @db.Decimal(5, 4)
+  horizonDays Int
+  rationaleEn String
+  rationaleAr String
+  evidence    Json
+  determinism String // 'deterministic' | 'llm'
+  modelId     String?
+  failureMode String // 'ok' | 'degraded' | 'abstain'
+  costCents   Int       @default(0)
+
+  @@index([decisionId])
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  decisionId   String      @unique
+  decision     Decision    @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  brokerRef    String?
+  symbol       String
+  market       Market
+  side         OrderSide
+  qty          Decimal     @db.Decimal(18, 6)
+  limitPrice   Decimal?    @db.Decimal(18, 6)
+  filledQty    Decimal     @default(0) @db.Decimal(18, 6)
+  avgFillPrice Decimal     @default(0) @db.Decimal(18, 6)
+  status       OrderStatus @default(NEW)
+  broker       BrokerKind
+  createdAt    DateTime    @default(now())
+
+  @@index([status])
+}
+
+model PortfolioSnapshot {
+  id          String   @id @default(uuid())
+  strategyId  String
+  userId      String
+  asOf        DateTime
+  cashVirtual Decimal  @db.Decimal(18, 4)
+  currency    Currency @default(SAR)
+  positions   Json // symbol -> { qty, costBasis }
+  nav         Decimal  @db.Decimal(18, 4)
+
+  @@index([strategyId, asOf])
 }
