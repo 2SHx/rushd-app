@@ -21,6 +21,28 @@ export interface MarketData {
   price: number;
   history: Candle[];
   isShariaCompliant: boolean;
+  purificationRatioBps?: number;
+  analystRatings?: { buy: number; sell: number; hold: number };
+  earningsHistory?: { quarter: string; actual: number; expected: number }[];
+  aboutTextEnglish?: string;
+  aboutTextArabic?: string;
+  ceo?: string;
+  employees?: number;
+  headquarters?: string;
+  sectorArabic?: string;
+  sectorEnglish?: string;
+  movementReasonArabic?: string;
+  movementReasonEnglish?: string;
+  statistics?: {
+    dayRange: [number, number];
+    yearRange: [number, number];
+    open: number;
+    prevClose: number;
+    volume: string;
+    avgVolume: string;
+    marketCap: string;
+    peRatio: number;
+  };
 }
 
 export interface ShariaVerdict {
@@ -322,6 +344,75 @@ export async function getCachedShariaVerdict(screener: ShariaScreener, symbol: s
   }
 }
 
+function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) {
+  const isTasi = market === 'TASI';
+  
+  if (symbol === 'NVDA') {
+    return {
+      purificationRatioBps: 498, // 4.98%
+      analystRatings: { buy: 91.69, sell: 1.88, hold: 6.42 },
+      earningsHistory: [
+        { quarter: "Q2 '25", actual: 0.8, expected: 0.75 },
+        { quarter: "Q3 '25", actual: 1.1, expected: 1.05 },
+        { quarter: "Q4 '25", actual: 1.3, expected: 1.25 },
+        { quarter: "Q1 '26", actual: 1.7, expected: 1.6 },
+        { quarter: "Q2 '26", actual: 1.9, expected: 1.8 }
+      ],
+      aboutTextEnglish: "NVIDIA Corporation is a pioneer of GPU-accelerated computing. It focuses on products and platforms for the large, growing markets of gaming, professional visualization, data centers, and automotive.",
+      aboutTextArabic: "تُعد شركة NVIDIA Corporation مزودًا رائدًا لحلول الرسومات والحوسبة المتقدمة، وتعمل في الولايات المتحدة وتايوان والصين والعديد من الأسواق العالمية. يضم قسم الرسومات لديها وحدات معالجة الرسومات GeForce، التي تُعد أساسية لألعاب الكمبيوتر الشخصي وتجارب الحوسبة الشخصية، بالإضافة إلى خدمة الألعاب السحابية GeForce NOW وبنية...",
+      ceo: "جين هسون هوانغ (Jensen Huang)",
+      employees: 42000,
+      headquarters: "سانتا كلارا، كاليفورنيا (Santa Clara, CA)",
+      sectorArabic: "التقنية",
+      sectorEnglish: "Technology",
+      movementReasonArabic: "تتداول أسهم شركات أشباه الموصلات والرقائق الإلكترونية بانخفاض حيث يواجه القطاع رياحًا معاكسة في التقييمات، وقلة المحفزات بعد إعلان الأرباح، وخطر ارتفاع تكاليف الاقتراض لفترة طويلة.",
+      movementReasonEnglish: "Semiconductor stocks are trading lower as the sector faces valuation headwinds, lack of catalysts post-earnings, and persistent high borrowing costs.",
+      statistics: {
+        dayRange: [192.35, 200.06] as [number, number],
+        yearRange: [75.5, 236.26] as [number, number],
+        open: 197.14,
+        prevClose: 197.58,
+        volume: "142.38 مليون",
+        avgVolume: "309.2 مليون",
+        marketCap: "2.73 تريليون",
+        peRatio: 38.16
+      }
+    };
+  }
+
+  // Fallback defaults for other tickers
+  const basePrice = price || 150;
+  return {
+    purificationRatioBps: isTasi ? 150 : 0, // 1.5% for TASI fallback
+    analystRatings: { buy: 75, sell: 10, hold: 15 },
+    earningsHistory: [
+      { quarter: "Q2 '25", actual: basePrice * 0.005, expected: basePrice * 0.0048 },
+      { quarter: "Q3 '25", actual: basePrice * 0.006, expected: basePrice * 0.0058 },
+      { quarter: "Q4 '25", actual: basePrice * 0.007, expected: basePrice * 0.0068 },
+      { quarter: "Q1 '26", actual: basePrice * 0.008, expected: basePrice * 0.0078 }
+    ],
+    aboutTextEnglish: `${symbol} is a leading corporation listed on the ${market} exchange.`,
+    aboutTextArabic: `${symbol} هي شركة رائدة مدرجة في سوق ${isTasi ? 'تداول السعودي (تاسي)' : 'ناسداك الأمريكي'}.`,
+    ceo: isTasi ? "أحمد بن سليمان" : "John Doe",
+    employees: 12500,
+    headquarters: isTasi ? "الرياض، المملكة العربية السعودية" : "New York, USA",
+    sectorArabic: isTasi ? "الخدمات المالية" : "Financial Services",
+    sectorEnglish: "Financial Services",
+    movementReasonArabic: "تذبذب طبيعي في أسعار السوق مع تدفق الطلبات.",
+    movementReasonEnglish: "Normal market price fluctuations with order flows.",
+    statistics: {
+      dayRange: [basePrice * 0.98, basePrice * 1.02] as [number, number],
+      yearRange: [basePrice * 0.7, basePrice * 1.4] as [number, number],
+      open: basePrice * 0.99,
+      prevClose: basePrice * 1.01,
+      volume: "2.4 مليون",
+      avgVolume: "3.1 مليون",
+      marketCap: isTasi ? "45 مليار" : "120B",
+      peRatio: 18.5
+    }
+  };
+}
+
 // -------------------------------------------------------------
 // Façade entry point used by UI and MCP
 // -------------------------------------------------------------
@@ -332,6 +423,8 @@ export async function fetchMarketData(symbol: string, market: 'TASI' | 'NASDAQ')
   const quote = await getCachedQuote(provider, symbol, market);
   const history = await getCachedCandles(provider, symbol, market);
   const verdict = await getCachedShariaVerdict(screener, symbol, market);
+  
+  const stats = getMockStats(symbol, market, quote.price);
 
   return {
     symbol,
@@ -339,5 +432,6 @@ export async function fetchMarketData(symbol: string, market: 'TASI' | 'NASDAQ')
     price: quote.price,
     history,
     isShariaCompliant: verdict.compliant,
+    ...stats
   };
 }

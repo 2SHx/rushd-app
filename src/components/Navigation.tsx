@@ -1,19 +1,20 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Home, LineChart, BookOpen, User } from 'lucide-react';
+import { Wallet, LineChart, BookOpen, User } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 export default function Navigation({ locale }: { locale: string }) {
   const t = useTranslations('Dashboard');
   const pathname = usePathname();
+  const isAr = locale === 'ar';
 
   const links = [
-    { href: `/${locale}/dashboard`, icon: Home, label: 'Home' },
-    { href: `/${locale}/markets`, icon: LineChart, label: 'Markets' },
-    { href: `/${locale}/quiz`, icon: BookOpen, label: 'Quizzes' },
-    { href: `/${locale}/profile`, icon: User, label: 'Profile' }
+    { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },
+    { href: `/${locale}/markets`, icon: LineChart, label: isAr ? 'الأسهم' : 'Stocks' },
+    { href: `/${locale}/quiz`, icon: BookOpen, label: isAr ? 'التعليم' : 'Quizzes' },
+    { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' }
   ];
 
   return (
