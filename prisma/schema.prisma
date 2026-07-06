@@ -36,6 +36,7 @@ enum TransactionType {
   TRADE
   QUEST_REWARD
   ALLOWANCE
+  PROFIT_SHARE
 }
 
 model User {
@@ -106,12 +107,13 @@ model Transaction {
 }
 
 model SavingsJar {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance   Decimal  @db.Decimal(18, 4) @default(0.0)
-  currency  Currency @default(SAR)
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance             Decimal  @db.Decimal(18, 4) @default(0.0)
+  currency            Currency @default(SAR)
+  profitShareRatioBps Int      @default(7000)
+  updatedAt           DateTime @updatedAt
 }
 
 model QuizAttempt {

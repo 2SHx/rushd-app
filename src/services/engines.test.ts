@@ -7,6 +7,7 @@ const profileUpdate = vi.fn();
 const profileCreate = vi.fn();
 const findMany = vi.fn();
 const jarUpdate = vi.fn();
+const transactionCreate = vi.fn();
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -19,6 +20,9 @@ vi.mock('@/lib/prisma', () => ({
       findMany: (...args: unknown[]) => findMany(...args),
       update: (...args: unknown[]) => jarUpdate(...args),
     },
+    transaction: {
+      create: (...args: unknown[]) => transactionCreate(...args),
+    },
   },
 }));
 
@@ -30,6 +34,7 @@ beforeEach(() => {
   profileCreate.mockReset();
   findMany.mockReset();
   jarUpdate.mockReset();
+  transactionCreate.mockReset();
 });
 
 describe('addXP — level curve: floor(sqrt(xp/100))+1', () => {
@@ -74,32 +79,34 @@ describe('addXP — level curve: floor(sqrt(xp/100))+1', () => {
   });
 });
 
-describe('processCashSweeps — 2.0%/365 user rate, 2.5%/365 platform rate', () => {
-  it('applies user interest, accrues platform revenue, and skips balance<=0 jars', async () => {
+describe('processCashSweeps — Mudarabah savings distribution', () => {
+  it('applies user profit share, accrues platform revenue, and skips balance<=0 jars', async () => {
     findMany.mockResolvedValue([
-      { id: 'jar-positive', balance: 1000 },
-      { id: 'jar-zero', balance: 0 },
+      { id: 'jar-positive', balance: 1000, profitShareRatioBps: 7000 },
+      { id: 'jar-zero', balance: 0, profitShareRatioBps: 7000 },
     ]);
 
-    const result = await processCashSweeps();
+    const customYield = new Prisma.Decimal('0.045').div(365);
+    const result = await processCashSweeps(customYield);
 
-    const userDailyRate = 0.02 / 365;
-    const platformDailyRate = 0.025 / 365;
+    const totalProfit = 1000 * 0.045 / 365;
+    const expectedUserProfit = totalProfit * 0.70;
+    const expectedPlatformProfit = totalProfit * 0.30;
 
     expect(result.processedJars).toBe(2);
-    expect(result.platformRevenue).toBeCloseTo(1000 * platformDailyRate);
+    expect(result.platformRevenue).toBeCloseTo(expectedPlatformProfit);
 
-    // only the positive-balance jar is credited interest
+    // only the positive-balance jar is credited profit share
     expect(jarUpdate).toHaveBeenCalledTimes(1);
     
     const call = jarUpdate.mock.calls[0][0];
     expect(call.where).toEqual({ id: 'jar-positive' });
     expect(call.data.balance).toBeInstanceOf(Prisma.Decimal);
-    expect(call.data.balance.toNumber()).toBeCloseTo(1000 + 1000 * userDailyRate);
+    expect(call.data.balance.toNumber()).toBeCloseTo(1000 + expectedUserProfit);
   });
 
   it('returns zero revenue and no updates when every jar is empty', async () => {
-    findMany.mockResolvedValue([{ id: 'jar-a', balance: 0 }]);
+    findMany.mockResolvedValue([{ id: 'jar-a', balance: 0, profitShareRatioBps: 7000 }]);
     const result = await processCashSweeps();
     expect(result).toEqual({ processedJars: 1, platformRevenue: 0 });
     expect(jarUpdate).not.toHaveBeenCalled();

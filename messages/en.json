@@ -7,7 +7,8 @@
     "portfolioHealth": "Portfolio Health",
     "market": "Market",
     "tasi": "TASI",
-    "nasdaq": "NASDAQ"
+    "nasdaq": "NASDAQ",
+    "mudarabahDisclosure": "Simulated Mudarabah savings profit is shared: 70% to user, 30% to platform. Returns are variable and not guaranteed."
   },
   "Auth": {
     "login": {

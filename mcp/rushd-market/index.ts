@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { fetchMarketData } from '../../src/services/marketData';
+import { fetchMarketData, registry, getCachedShariaVerdict } from '../../src/services/marketData';
 
 const server = new McpServer({ name: 'rushd-market', version: '0.1.0' });
 
@@ -76,17 +76,18 @@ server.tool(
   marketSchema,
   async ({ symbol, market }) => {
     try {
-      const data = await fetchMarketData(symbol, market);
-      const note = process.env.ZOYA_API_KEY
+      const screener = registry.getScreener();
+      const verdict = await getCachedShariaVerdict(screener, symbol, market);
+      const note = verdict.source === 'zoya'
         ? 'Screened via live Zoya integration.'
-        : 'Mock screening only — Zoya integration pending until ZOYA_API_KEY is set.';
+        : 'AAOIFI screening — demo data / Zoya pending';
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            symbol: data.symbol,
-            compliant: data.isShariaCompliant,
-            standard: 'AAOIFI (mock screening)',
+            symbol: verdict.symbol,
+            compliant: verdict.compliant,
+            standard: 'AAOIFI',
             note,
           }),
         }],
