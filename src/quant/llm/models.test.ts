@@ -6,6 +6,7 @@ import {
   roleForAgent,
   MODEL_MATRIX,
   DEFAULT_LLM_BASE_URL,
+  OPUS_FALLBACK,
 } from './models';
 
 describe('per-agent model matrix', () => {
@@ -27,6 +28,14 @@ describe('per-agent model matrix', () => {
     const cfg = resolveModelConfig('FUNDAMENTAL', { QUANT_MODEL_FUNDAMENTAL: 'my/custom-model' } as any);
     expect(cfg.model).toBe('my/custom-model');
     expect(cfg.role).toBe('FUNDAMENTAL'); // rest of the config preserved
+  });
+
+  it('injects Opus as the default fallback, overridable globally and per-role', () => {
+    expect(resolveModelConfig('NEWS_CATALYST', {} as any).fallbackModel).toBe(OPUS_FALLBACK);
+    expect(resolveModelConfig('NEWS_CATALYST', { QUANT_FALLBACK_MODEL: 'x/y' } as any).fallbackModel).toBe('x/y');
+    expect(
+      resolveModelConfig('PORTFOLIO_MANAGER', { QUANT_FALLBACK_PORTFOLIO_MANAGER: 'p/m' } as any).fallbackModel,
+    ).toBe('p/m');
   });
 });
 

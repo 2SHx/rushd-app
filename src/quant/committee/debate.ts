@@ -4,7 +4,7 @@
 // which uses DEBATE_FINAL (strong) for the decisive close. temperature 0 for reproducibility.
 // Mock mode (no key) never calls out: it synthesizes one BULL + one BEAR turn directly from
 // the signals' stance distribution — schema-valid, deterministic, no throw.
-import { generateObject } from 'ai';
+import { generateObjectWithFallback } from '../llm/generate';
 import { z } from 'zod';
 import type { CommitteeResult } from './collect';
 import { agentModel } from '../llm/client';
@@ -85,7 +85,7 @@ export async function runDebate(result: CommitteeResult, opts?: { rounds?: numbe
 
   for (let round = 1; round <= rounds; round++) {
     const isFinal = round === rounds;
-    const { model, mock } = agentModel(isFinal ? 'DEBATE_FINAL' : 'DEBATE_ROUND');
+    const { model, fallback, mock } = agentModel(isFinal ? 'DEBATE_FINAL' : 'DEBATE_ROUND');
     if (mock || !model) {
       return turns.length ? turns : mockDebate(result);
     }
@@ -93,8 +93,9 @@ export async function runDebate(result: CommitteeResult, opts?: { rounds?: numbe
     try {
       for (const side of ['BULL', 'BEAR'] as const) {
         const ctxData = debateContext(result, turns);
-        const generated = await generateObject({
+        const generated = await generateObjectWithFallback({
           model,
+          fallback,
           schema: ArgumentSchema,
           temperature: 0,
           system:

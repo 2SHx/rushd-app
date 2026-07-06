@@ -9,6 +9,8 @@ export interface AgentModel {
   config: AgentModelConfig;
   /** The AI SDK model handle for `generateObject`/`generateText`. Undefined in mock mode. */
   model?: LanguageModel;
+  /** Opus safety net, tried once if `model` errors before the caller's mock. */
+  fallback?: LanguageModel;
   /** When true, the caller MUST return its deterministic mock (no key configured). */
   mock: boolean;
 }
@@ -31,5 +33,9 @@ export function agentModel(role: LlmRole, env: NodeJS.ProcessEnv = process.env):
       ? { headers: { 'HTTP-Referer': 'https://rushd.finance', 'X-Title': 'Rushd Quant' } }
       : {}),
   });
-  return { config, model: provider(config.model), mock: false };
+  const fallback =
+    config.fallbackModel && config.fallbackModel !== config.model
+      ? provider(config.fallbackModel)
+      : undefined;
+  return { config, model: provider(config.model), fallback, mock: false };
 }

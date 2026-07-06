@@ -6,7 +6,7 @@
 // upstream) so a BUY on a non-compliant symbol can never slip through regardless of what
 // the LLM proposed. Mock mode / any LLM error ⇒ deterministic fallback proposal = HOLD/0
 // (do nothing) — the mock-first invariant holds even if the model never runs.
-import { generateObject } from 'ai';
+import { generateObjectWithFallback } from '../llm/generate';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { CommitteeResult } from './collect';
@@ -92,12 +92,13 @@ function pmContext(result: CommitteeResult, debate: DebateTurn[]) {
 }
 
 async function proposeDefault(inp: PmInputs, debate: DebateTurn[]): Promise<PmProposal> {
-  const { config, model, mock } = agentModel('PORTFOLIO_MANAGER');
+  const { config, model, fallback, mock } = agentModel('PORTFOLIO_MANAGER');
   if (mock || !model) return mockProposal();
 
   try {
-    const generated = await generateObject({
+    const generated = await generateObjectWithFallback({
       model,
+      fallback,
       schema: PmDecisionSchema,
       temperature: 0,
       system:

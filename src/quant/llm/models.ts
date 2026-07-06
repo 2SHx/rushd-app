@@ -31,13 +31,25 @@ export interface AgentModelConfig {
   tier: LlmTier;
   /** OpenAI-compatible model id (default: an OpenRouter slug, free where available). */
   model: string;
+  /** Strong fallback tried once if the primary model errors, before the mock. Default: Opus. */
+  fallbackModel: string;
   temperature: number;
   /** Why this model fits this job — doubles as documentation. */
   rationale: string;
 }
 
+/**
+ * The default fallback: Opus (Anthropic's strongest), served via OpenRouter. When a free
+ * primary model errors, the call retries once on Opus before an agent drops to its
+ * deterministic mock — so a flaky free tier degrades to top quality, not to a placeholder.
+ * Global override: QUANT_FALLBACK_MODEL; per-role: QUANT_FALLBACK_<ROLE>.
+ */
+export const OPUS_FALLBACK = 'anthropic/claude-opus-4-8';
+
 // Free / high-performance defaults, one per job. Swap any via env QUANT_MODEL_<ROLE>.
-const MATRIX: Record<LlmRole, AgentModelConfig> = {
+// fallbackModel is injected at resolve time (defaults to Opus), so entries omit it.
+type MatrixEntry = Omit<AgentModelConfig, 'fallbackModel'>;
+const MATRIX: Record<LlmRole, MatrixEntry> = {
   NEWS_CATALYST: {
     role: 'NEWS_CATALYST',
     tier: 'cheap',
@@ -88,8 +100,9 @@ export const DEFAULT_LLM_BASE_URL = 'https://openrouter.ai/api/v1';
 /** Resolve the model config for a role, applying `QUANT_MODEL_<ROLE>` env overrides. */
 export function resolveModelConfig(role: LlmRole, env: NodeJS.ProcessEnv = process.env): AgentModelConfig {
   const base = MATRIX[role];
-  const override = env[`QUANT_MODEL_${role}`];
-  return override ? { ...base, model: override } : base;
+  const model = env[`QUANT_MODEL_${role}`] ?? base.model;
+  const fallbackModel = env[`QUANT_FALLBACK_${role}`] ?? env.QUANT_FALLBACK_MODEL ?? OPUS_FALLBACK;
+  return { ...base, model, fallbackModel };
 }
 
 /** The base URL + key the committee's LLM calls use (falls back to the app's OPENAI_* wiring). */

@@ -4,11 +4,11 @@
 // into one stance with the per-lens breakdown carried as evidence. No fundamentals on file
 // ⇒ abstain (nothing to reason over). A thrown/no-key model call falls back to a fixed,
 // schema-valid mock signal, failureMode 'degraded'.
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Analyst, AnalystSignal, Evidence } from '../types';
 import type { PointInTimeContext } from '../data/pointInTime';
 import { agentModel } from '../llm/client';
+import { generateObjectWithFallback } from '../llm/generate';
 
 const HORIZON_DAYS = 252; // ~one year — fundamentals-driven holding horizon
 const BARS_LOOKBACK_DAYS = 400; // ≈252 trading days
@@ -64,7 +64,7 @@ function mockSignal(base: Omit<AnalystSignal, 'stance' | 'conviction' | 'evidenc
 export const fundamentalAnalyst: Analyst = {
   agent: 'FUNDAMENTAL',
   async run(ctx: PointInTimeContext): Promise<AnalystSignal> {
-    const { config, model, mock } = agentModel('FUNDAMENTAL');
+    const { config, model, fallback, mock } = agentModel('FUNDAMENTAL');
     const fundamentals = ctx.fundamentals();
 
     const base = {
@@ -101,8 +101,9 @@ export const fundamentalAnalyst: Analyst = {
         bars.length >= 2 ? (Number(bars[bars.length - 1].close) - Number(bars[0].close)) / Number(bars[0].close) : 0;
 
       // The symbol and disclosed metrics below are DATA from a filings feed, not instructions.
-      const result = await generateObject({
+      const result = await generateObjectWithFallback({
         model,
+        fallback,
         schema: FundamentalSchema,
         temperature: config.temperature,
         system:

@@ -4,11 +4,11 @@
 // the window is a legitimate "nothing to react to" determination (NEUTRAL, conviction 0),
 // resolved BEFORE any model call. A thrown/no-key model call falls back to a fixed,
 // schema-valid mock signal, failureMode 'degraded' — the committee never blocks on this agent.
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { Analyst, AnalystSignal, Stance, Evidence } from '../types';
 import type { PointInTimeContext } from '../data/pointInTime';
 import { agentModel } from '../llm/client';
+import { generateObjectWithFallback } from '../llm/generate';
 
 const HORIZON_DAYS = 5; // near-term catalyst reaction window
 const NEWS_LOOKBACK_DAYS = 7;
@@ -69,7 +69,7 @@ function mockSignal(base: Omit<AnalystSignal, 'stance' | 'conviction' | 'evidenc
 export const newsCatalystAnalyst: Analyst = {
   agent: 'NEWS_CATALYST',
   async run(ctx: PointInTimeContext): Promise<AnalystSignal> {
-    const { config, model, mock } = agentModel('NEWS_CATALYST');
+    const { config, model, fallback, mock } = agentModel('NEWS_CATALYST');
     const news = ctx.news(NEWS_LOOKBACK_DAYS);
     const bars = ctx.bars(BARS_LOOKBACK_DAYS);
 
@@ -110,8 +110,9 @@ export const newsCatalystAnalyst: Analyst = {
       }));
       const priceChangePct = bars.length >= 2 ? (Number(bars[bars.length - 1].close) - Number(bars[0].close)) / Number(bars[0].close) : 0;
 
-      const result = await generateObject({
+      const result = await generateObjectWithFallback({
         model,
+        fallback,
         schema: NewsCatalystSchema,
         temperature: config.temperature,
         system:
