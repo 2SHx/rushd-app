@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function QuizModal({ isOpen, onClose, onComplete }: any) {
+export default function QuizModal({ isOpen, onClose, onComplete, topic }: any) {
   const [quiz, setQuiz] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
@@ -11,7 +11,8 @@ export default function QuizModal({ isOpen, onClose, onComplete }: any) {
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      fetch('/api/quiz')
+      const url = topic ? `/api/quiz?topic=${encodeURIComponent(topic)}` : '/api/quiz';
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           setQuiz(data);
@@ -20,7 +21,7 @@ export default function QuizModal({ isOpen, onClose, onComplete }: any) {
           setShowResult(false);
         });
     }
-  }, [isOpen]);
+  }, [isOpen, topic]);
 
   if (!isOpen) return null;
 

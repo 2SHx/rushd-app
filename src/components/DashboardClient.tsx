@@ -157,11 +157,12 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
               </div>
 
               <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20"
+                whileHover={currentData.isShariaCompliant ? { scale: 1.02 } : {}}
+                whileTap={currentData.isShariaCompliant ? { scale: 0.98 } : {}}
+                disabled={!currentData.isShariaCompliant}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
               >
-                Execute Mock Trade
+                {currentData.isShariaCompliant ? "Execute Mock Trade" : "Trade Locked (Educational Only)"}
               </motion.button>
             </div>
           </div>
@@ -176,6 +177,11 @@ export default function DashboardClient({ tasiData, nasdaqData, initialXp, initi
                  <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">Non-Compliant</span>
                )}
              </div>
+             {!currentData.isShariaCompliant && (
+               <p className="text-xs text-red-400 mt-3 font-semibold border border-red-500/20 bg-red-500/10 p-2.5 rounded-lg text-center">
+                 غير متوافق مع الشريعة — تعليمي فقط / Not Sharia-compliant — educational only
+               </p>
+             )}
           </div>
         </div>
       </div>

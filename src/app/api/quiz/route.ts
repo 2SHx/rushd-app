@@ -5,24 +5,51 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { addXP } from '@/services/engines';
+import { TokenBucket } from '@/services/marketData';
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'mock-key',
   baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
 });
 
+const TOPIC_ALLOWLIST = [
+  'Stock Market Basics',
+  'Savings & Jars',
+  'Compound Interest',
+  'Sharia Compliance',
+  'Risk Management',
+  'Value Investing',
+  'Halal Mutual Funds',
+  'TASI Markets',
+  'NASDAQ Markets'
+];
+
 const QuizSchema = z.object({
   topic: z.string(),
   question: z.string(),
   options: z.array(z.string()).length(4),
   correctOptionIndex: z.number().min(0).max(3),
-  explanation: z.string()
+  explanation: z.string(),
+  complianceTag: z.enum(['HALAL', 'HARAM', 'MASHBOOH', 'EDUCATIONAL_ONLY']),
 });
 
+// Limit LLM quiz calls: max 5, refills 0.1 per second (1 every 10s)
+const quizLimiter = new TokenBucket(5, 0.1);
+
 export async function GET(req: Request) {
+  if (!quizLimiter.tryAcquire()) {
+    return NextResponse.json(
+      { error: 'rate_limit_exceeded', message: 'Too many requests. Please try again later.' },
+      { status: 429 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
-    const topic = searchParams.get('topic') || 'Stock Market Basics';
+    const rawTopic = searchParams.get('topic') || 'Stock Market Basics';
+    
+    // Sanitize input using the allowlist
+    const topic = TOPIC_ALLOWLIST.includes(rawTopic) ? rawTopic : 'Stock Market Basics';
 
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("Missing API Key");
@@ -33,7 +60,11 @@ export async function GET(req: Request) {
     const result = await generateObject({
       model,
       schema: QuizSchema,
-      system: `You are an expert financial educator. Generate a multiple-choice quiz question about the given topic. The quiz is for a gamified financial platform.`,
+      system: `You are an expert financial educator for 'Rushd Financial'. Generate a multiple-choice quiz question about the given topic. The quiz is for a gamified family financial platform.
+      Constraints:
+      1. Content must be minor-appropriate (ages ~8-17) and educational. Never provide real investment advice.
+      2. Output must be Arabic-first (Modern Standard Arabic, clear financial literacy register). Do not use transliterated English jargon where proper Arabic terms exist (use محفظة, سهم, ربح).
+      3. Categorize the topic's compliance with Sharia/AAOIFI standards. Set complianceTag to: HALAL, HARAM, MASHBOOH, or EDUCATIONAL_ONLY.`,
       prompt: `Generate a quiz about: ${topic}`
     });
 
@@ -50,7 +81,8 @@ export async function GET(req: Request) {
         'Portfolio to Exchange Ratio'
       ],
       correctOptionIndex: 0,
-      explanation: 'The price-to-earnings ratio (P/E ratio) is the ratio for valuing a company that measures its current share price relative to its earnings per share.'
+      explanation: 'The price-to-earnings ratio (P/E ratio) is the ratio for valuing a company that measures its current share price relative to its earnings per share.',
+      complianceTag: 'EDUCATIONAL_ONLY'
     });
   }
 }

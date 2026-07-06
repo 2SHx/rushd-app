@@ -10,6 +10,10 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from '@/auth.config';
 import { authorizeParent, authorizeChild } from '@/lib/auth-credentials';
+import { TokenBucket } from '@/services/marketData';
+
+// Limit authentication attempts: max 10 bucket capacity, refills 1 per second
+const authLimiter = new TokenBucket(10, 1);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -17,13 +21,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       credentials: {},
       async authorize(raw) {
+        // Enforce rate limiting on login attempts
+        if (!authLimiter.tryAcquire()) {
+          console.warn('[AUTH_AUDIT] Rate limit hit for login attempts.');
+          return null;
+        }
+
         const input = raw as Record<string, unknown>;
-        // Branch on shape before touching the DB; unmatched shapes never
-        // reach a query. Failure paths are uniform ("invalid credentials")
-        // regardless of which factor was wrong.
-        if (typeof input.email === 'string') return authorizeParent(input);
-        if (typeof input.familyCode === 'string') return authorizeChild(input);
-        return null;
+        
+        const user = typeof input.email === 'string'
+          ? await authorizeParent(input)
+          : typeof input.familyCode === 'string'
+            ? await authorizeChild(input)
+            : null;
+
+        // Structured Audit Logging
+        if (user) {
+          console.log(`[AUTH_AUDIT] SUCCESS: User login successful. ID: ${user.id}, Role: ${user.role}`);
+        } else {
+          const keys = Object.keys(input).filter(k => k !== 'password' && k !== 'pin');
+          console.warn(`[AUTH_AUDIT] FAILURE: User login failed. Input attributes provided: ${keys.join(', ')}`);
+        }
+
+        return user;
       },
     }),
   ],

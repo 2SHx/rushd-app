@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import type { SessionUser } from '@/lib/auth-credentials';
+import { prisma } from '@/lib/prisma';
 
 export class AuthzError extends Error {
   constructor(public readonly response: NextResponse) {
@@ -28,4 +29,38 @@ export async function requireParent(): Promise<SessionUser> {
     throw new AuthzError(NextResponse.json({ error: 'forbidden' }, { status: 403 }));
   }
   return user;
+}
+
+/** Validates parent tier limits (BASIC=1 child, PREMIUM=3 children, ULTRA=unlimited). */
+export async function validateChildCreationLimit(parentId: string, parentTier: string): Promise<void> {
+  const count = await prisma.user.count({ where: { parentId } });
+  if (parentTier === 'BASIC' && count >= 1) {
+    throw new AuthzError(
+      NextResponse.json({ error: 'tier_limit_exceeded', message: 'BASIC tier accounts are limited to 1 child.' }, { status: 403 })
+    );
+  }
+  if (parentTier === 'PREMIUM' && count >= 3) {
+    throw new AuthzError(
+      NextResponse.json({ error: 'tier_limit_exceeded', message: 'PREMIUM tier accounts are limited to 3 children.' }, { status: 403 })
+    );
+  }
+}
+
+/** Authorizes access: child accessing self, or parent supervising their own child. */
+export async function authorizeAccess(sessionUser: SessionUser, targetUserId: string): Promise<void> {
+  if (sessionUser.id === targetUserId) {
+    return;
+  }
+  if (sessionUser.role === 'PARENT') {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { parentId: true }
+    });
+    if (targetUser && targetUser.parentId === sessionUser.id) {
+      return;
+    }
+  }
+  throw new AuthzError(
+    NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  );
 }

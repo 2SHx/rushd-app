@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { BCRYPT_COST } from '@/lib/auth-credentials';
-import { requireParent, AuthzError } from '@/lib/authz';
+import { requireParent, AuthzError, validateChildCreationLimit } from '@/lib/authz';
 
 const childSchema = z.object({
   name: z.string().min(1),
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
   let parent;
   try {
     parent = await requireParent();
+    await validateChildCreationLimit(parent.id, parent.tier);
   } catch (err) {
     if (err instanceof AuthzError) return err.response;
     throw err;
