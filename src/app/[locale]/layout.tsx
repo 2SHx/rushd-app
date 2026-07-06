@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import Navigation from '@/components/Navigation';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const SUPPORTED_LOCALES = ['en', 'ar'];
 
@@ -34,6 +35,7 @@ export default async function RootLayout({
       <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:pl-64`}>
         <NextIntlClientProvider messages={messages}>
           <DisclaimerBanner />
+          <LanguageSwitcher locale={locale} />
           <Navigation locale={locale} />
           <main className="flex-1 w-full p-4 md:p-8">
             {children}
