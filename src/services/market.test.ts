@@ -9,7 +9,8 @@ import {
   MockProvider,
   MockScreener,
   TokenBucket,
-  getCachedQuote
+  getCachedQuote,
+  YahooFinanceProvider
 } from './marketData';
 
 describe('Market Data Registry & Adapter Routing', () => {
@@ -101,7 +102,38 @@ describe('Fallback Behavior & Error/Rate-Limit Safety', () => {
 
     const quote = await getCachedQuote(limitedProvider, 'AAPL', 'NASDAQ');
     expect(quote.price).toBe(350.25); // MockProvider NASDAQ price
-
+ 
     mockAcquire.mockRestore();
+  });
+});
+
+describe('YahooFinanceProvider Parser Logic', () => {
+  it('correctly parses standard Yahoo Finance chart structure for quotes', async () => {
+    const provider = new YahooFinanceProvider();
+    
+    const mockResponse = {
+      chart: {
+        result: [
+          {
+            meta: {
+              regularMarketPrice: 182.52,
+              currency: 'USD',
+            }
+          }
+        ],
+        error: null
+      }
+    };
+    
+    const mockFetch = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as any);
+
+    const quote = await provider.getQuote('AAPL', 'NASDAQ');
+    expect(quote.price).toBe(182.52);
+    expect(quote.currency).toBe('USD');
+
+    mockFetch.mockRestore();
   });
 });

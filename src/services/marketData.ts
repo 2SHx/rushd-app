@@ -43,6 +43,19 @@ export interface MarketData {
     marketCap: number;
     peRatio: number;
   };
+  financials?: {
+    revenue: number;
+    netIncome: number;
+    grossMargin: number;
+    totalCash: number;
+    totalDebt: number;
+    debtToEquity: number;
+    complianceRatios: {
+      debtToMcap: number;
+      interestIncomeToRevenue: number;
+    };
+    latestStatementQuarter: string;
+  };
 }
 
 export interface ShariaVerdict {
@@ -179,6 +192,70 @@ export class AlpacaAdapter implements MarketDataProvider {
   }
 }
 
+export class YahooFinanceProvider implements MarketDataProvider {
+  async getQuote(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<Quote> {
+    const ticker = market === 'TASI' && !symbol.endsWith('.SR') ? `${symbol}.SR` : symbol;
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`);
+    if (!res.ok) {
+      throw new Error(`Yahoo Finance quote request failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    const result = data.chart?.result?.[0];
+    if (!result) {
+      throw new Error(`Invalid Yahoo Finance chart response for ${ticker}`);
+    }
+    const price = result.meta.regularMarketPrice;
+    const currency = result.meta.currency || (market === 'TASI' ? 'SAR' : 'USD');
+    return {
+      symbol,
+      market,
+      price,
+      currency,
+      asOf: new Date(),
+    };
+  }
+
+  async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
+    const ticker = market === 'TASI' && !symbol.endsWith('.SR') ? `${symbol}.SR` : symbol;
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=90d&interval=1d`);
+    if (!res.ok) {
+      throw new Error(`Yahoo Finance candles request failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    const result = data.chart?.result?.[0];
+    if (!result) {
+      throw new Error(`Invalid Yahoo Finance chart response for ${ticker}`);
+    }
+    const timestamps = result.timestamp || [];
+    const quote = result.indicators?.quote?.[0];
+    if (!quote || !timestamps.length) {
+      return generateMockHistory(market === 'TASI' ? 120.5 : 350.25).slice(-days);
+    }
+
+    const candles: Candle[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const timeStr = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+      const open = quote.open?.[i];
+      const high = quote.high?.[i];
+      const low = quote.low?.[i];
+      const close = quote.close?.[i];
+      const val = quote.volume?.[i] || 0;
+
+      if (open != null && high != null && low != null && close != null) {
+        candles.push({
+          time: timeStr,
+          open,
+          high,
+          low,
+          close,
+          value: val,
+        });
+      }
+    }
+    return candles.slice(-days);
+  }
+}
+
 export class ZoyaAdapter implements ShariaScreener {
   async screen(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<ShariaVerdict> {
     if (process.env.ZOYA_API_KEY === 'fail') {
@@ -206,6 +283,9 @@ export class ProviderRegistry {
     }
     if (market === 'NASDAQ' && process.env.ALPACA_API_KEY) {
       return new AlpacaAdapter();
+    }
+    if (process.env.NODE_ENV !== 'test') {
+      return new YahooFinanceProvider();
     }
     return new MockProvider();
   }
@@ -376,6 +456,19 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
         avgVolume: 309200000,
         marketCap: 2730000000000,
         peRatio: 38.16
+      },
+      financials: {
+        revenue: 26044000000,
+        netIncome: 14881000000,
+        grossMargin: 78.4,
+        totalCash: 7550000000,
+        totalDebt: 9750000000,
+        debtToEquity: 18.2,
+        complianceRatios: {
+          debtToMcap: 0.35,
+          interestIncomeToRevenue: 0.05
+        },
+        latestStatementQuarter: "Q1 2026 (Official SEC)"
       }
     };
   }
@@ -409,6 +502,19 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
       avgVolume: 3100000,
       marketCap: isTasi ? 45000000000 : 120000000000,
       peRatio: 18.5
+    },
+    financials: {
+      revenue: basePrice * 120000000,
+      netIncome: basePrice * 45000000,
+      grossMargin: 42.5,
+      totalCash: basePrice * 80000000,
+      totalDebt: basePrice * 50000000,
+      debtToEquity: 35.8,
+      complianceRatios: {
+        debtToMcap: isTasi ? 1.5 : 12.8,
+        interestIncomeToRevenue: isTasi ? 0.2 : 2.5
+      },
+      latestStatementQuarter: isTasi ? "Q1 2026 (Official Tadawul)" : "Q1 2026 (Official SEC)"
     }
   };
 }

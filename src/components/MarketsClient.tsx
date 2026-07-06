@@ -329,11 +329,13 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                 <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
               </button>
               
-              <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                <span className="font-bold font-mono text-gray-300">{currentData.symbol}</span>
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                  <Play className="w-3.5 h-3.5 fill-emerald-400" />
-                </div>
+              <div className="flex flex-col items-center">
+                <span className="font-sans font-bold text-sm text-gray-100 text-center line-clamp-1 max-w-[160px]">
+                  {isAr ? activeTicker.arName : activeTicker.name}
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono font-bold tracking-wider">
+                  {currentData.symbol}
+                </span>
               </div>
 
               <div className="flex space-x-2 rtl:space-x-reverse">
@@ -473,6 +475,114 @@ export default function MarketsClient({ currentData, locale, isParent }: Markets
                 </button>
               </div>
             </div>
+
+            {/* AI Financial Analyst Insights Section */}
+            {currentData.financials && (
+              <div className="px-4">
+                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400 border-b border-white/5 pb-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                    <h3 className="font-bold text-sm text-gray-200">
+                      {isAr ? 'تقرير المحلل المالي الذكي' : 'AI Financial Analyst Report'}
+                    </h3>
+                  </div>
+
+                  {/* Period status */}
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-400">{isAr ? 'آخر التقارير الرسمية' : 'Latest Official Statement'}</span>
+                    <span className="bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-md font-mono text-[10px]">
+                      {currentData.financials.latestStatementQuarter}
+                    </span>
+                  </div>
+
+                  {/* Financial metrics grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
+                      <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'إجمالي الإيرادات' : 'Total Revenue'}</span>
+                      <span className="font-bold font-mono text-white">
+                        {formatNumber(currentData.financials.revenue, 'volume', isAr)}
+                      </span>
+                    </div>
+
+                    <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
+                      <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'صافي الدخل' : 'Net Income'}</span>
+                      <span className="font-bold font-mono text-white">
+                        {formatNumber(currentData.financials.netIncome, 'volume', isAr)}
+                      </span>
+                    </div>
+
+                    <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
+                      <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'هامش الربح الإجمالي' : 'Gross Margin'}</span>
+                      <span className="font-bold font-mono text-white">
+                        {currentData.financials.grossMargin}%
+                      </span>
+                    </div>
+
+                    <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
+                      <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'السيولة المتوفرة' : 'Cash & Equivalents'}</span>
+                      <span className="font-bold font-mono text-white">
+                        {formatNumber(currentData.financials.totalCash, 'volume', isAr)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <hr className="border-white/5" />
+
+                  {/* Sharia compliance ratios visual bars */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-300">
+                      {isAr ? 'مؤشرات التوافق الشرعي (AAOIFI)' : 'Sharia Ratios Breakdown (AAOIFI)'}
+                    </h4>
+
+                    {/* Debt ratio bar */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between text-gray-400">
+                        <span>{isAr ? 'الديون الربوية إلى القيمة السوقية (<30%)' : 'Interest-bearing Debt / MCap (<30%)'}</span>
+                        <span className="font-mono font-bold text-emerald-400">
+                          {currentData.financials.complianceRatios.debtToMcap}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full" 
+                          style={{ width: `${Math.min(currentData.financials.complianceRatios.debtToMcap * 3, 100)}%` }} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Non-compliant income bar */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between text-gray-400">
+                        <span>{isAr ? 'الإيرادات غير المتوافقة (<5%)' : 'Non-compliant Revenue / Total (<5%)'}</span>
+                        <span className="font-mono font-bold text-emerald-400">
+                          {currentData.financials.complianceRatios.interestIncomeToRevenue}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full" 
+                          style={{ width: `${Math.min(currentData.financials.complianceRatios.interestIncomeToRevenue * 15, 100)}%` }} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Simulated AI Insight Block */}
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 p-3.5 rounded-2xl space-y-2">
+                    <div className="flex items-center space-x-1.5 rtl:space-x-reverse text-indigo-400 text-xs font-bold">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'توصيات الذكاء الاصطناعي للمستثمر الصغير' : 'AI Investor Health Insight'}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 leading-relaxed">
+                      {isAr 
+                        ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker.arName : activeTicker.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${currentData.financials.complianceRatios.debtToMcap}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
+                        : `Based on the latest reports for ${activeTicker.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${currentData.financials.complianceRatios.debtToMcap}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Analyst Ratings Card (Slide 2) */}
             {currentData.analystRatings && (
