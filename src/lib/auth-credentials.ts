@@ -72,7 +72,7 @@ export async function authorizeParent(input: unknown): Promise<SessionUser | nul
   const { email, password } = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || user.role !== 'PARENT' || !user.passwordHash) {
+  if (!user || !user.passwordHash) {
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     return null;
   }

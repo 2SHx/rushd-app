@@ -1,9 +1,9 @@
 import { fetchMarketData } from '@/services/marketData';
 import DashboardClient from '@/components/DashboardClient';
-import ParentDashboardClient from '@/components/ParentDashboardClient';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { TICKERS } from '@/components/MarketsClient';
 
 export default async function DashboardPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -13,41 +13,13 @@ export default async function DashboardPage({ params }: { params: { locale: stri
   }
 
   const userId = session.user.id;
-  const role = (session.user as any).role || 'CHILD';
 
-  // Route to Parent Dashboard if parent
-  if (role === 'PARENT') {
-    try {
-      const parentUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, familyCode: true }
-      });
-
-      const children = await prisma.user.findMany({
-        where: { parentId: userId },
-        include: {
-          gamificationProfile: true,
-          savingsJar: true,
-          portfolioItems: true
-        }
-      });
-
-      return (
-        <ParentDashboardClient 
-          parentName={parentUser?.name || ''}
-          familyCode={parentUser?.familyCode || ''}
-          childrenList={children}
-          locale={locale}
-        />
-      );
-    } catch {
-      // DB unavailable — fall through to child dashboard with mock data
-    }
-  }
-
-  // Child Dashboard (or fallback when DB is unavailable)
-  let xp = 150;
-  let level = 2;
+  // Fetch actual student/investor dashboard statistics
+  let xp = 0;
+  let level = 1;
+  let jarBalance = 100000.00;
+  let portfolioItems: any[] = [];
+  let transactions: any[] = [];
 
   try {
     let profile = await prisma.gamificationProfile.findUnique({
@@ -62,8 +34,74 @@ export default async function DashboardPage({ params }: { params: { locale: stri
 
     xp = profile.xp;
     level = profile.level;
-  } catch {
-    // DB unavailable — use mock defaults
+
+    let jar = await prisma.savingsJar.findUnique({
+      where: { userId }
+    });
+    if (!jar) {
+      jar = await prisma.savingsJar.create({
+        data: { userId, balance: 100000.00, currency: 'SAR' }
+      });
+    }
+    jarBalance = Number(jar.balance);
+
+    const items = await prisma.portfolioItem.findMany({
+      where: { userId }
+    });
+
+    // Populate current stock valuations dynamically
+    const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
+    for (const item of items) {
+      try {
+        const marketData = await fetchMarketData(item.symbol, item.market);
+        const currentPrice = marketData?.price ?? 0;
+        
+        const tickerInfo = listTickers.find(t => t.symbol === item.symbol);
+        const change = tickerInfo ? tickerInfo.change : 0;
+        const pct = tickerInfo ? tickerInfo.pct : 0;
+        const isCompliant = marketData?.isShariaCompliant ?? true;
+
+        portfolioItems.push({
+          id: item.id,
+          symbol: item.symbol,
+          shares: Number(item.shares),
+          market: item.market,
+          currency: item.currency,
+          price: currentPrice,
+          change,
+          pct,
+          isCompliant
+        });
+      } catch (err) {
+        portfolioItems.push({
+          id: item.id,
+          symbol: item.symbol,
+          shares: Number(item.shares),
+          market: item.market,
+          currency: item.currency,
+          price: 0,
+          change: 0,
+          pct: 0,
+          isCompliant: true
+        });
+      }
+    }
+
+    const txs = await prisma.transaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+    transactions = txs.map(t => ({
+      id: t.id,
+      amount: Number(t.amount),
+      currency: t.currency,
+      type: t.type,
+      description: t.description,
+      createdAt: t.createdAt.toISOString()
+    }));
+  } catch (err) {
+    console.error('Database loading failed on dashboard page:', err);
   }
 
   const tasiData = await fetchMarketData('1120.SR', 'TASI'); 
@@ -76,6 +114,9 @@ export default async function DashboardPage({ params }: { params: { locale: stri
       initialXp={xp}
       initialLevel={level}
       locale={locale}
+      initialJarBalance={jarBalance}
+      initialPortfolio={portfolioItems}
+      initialTransactions={transactions}
     />
   );
 }

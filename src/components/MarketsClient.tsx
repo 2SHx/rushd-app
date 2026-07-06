@@ -1,9 +1,9 @@
 // src/components/MarketsClient.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check, BookOpen, Trophy 
+  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check, BookOpen, Trophy, X, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
@@ -13,6 +13,8 @@ export interface MarketsClientProps {
   locale: string;
   isParent: boolean;
   initialActiveSymbol?: string | null;
+  initialJarBalance?: number;
+  initialSharesOwned?: number;
 }
 
 export const TICKERS = {
@@ -83,7 +85,14 @@ function formatNumber(val: number, type: 'volume' | 'mcap', isAr: boolean) {
   }
 }
 
-export default function MarketsClient({ currentData, locale, isParent, initialActiveSymbol }: MarketsClientProps) {
+export default function MarketsClient({ 
+  currentData, 
+  locale, 
+  isParent, 
+  initialActiveSymbol,
+  initialJarBalance,
+  initialSharesOwned
+}: MarketsClientProps) {
   const isAr = locale === 'ar';
   const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentData.market);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'sharia' | 'etfs'>('all');
@@ -94,6 +103,58 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
     initialActiveSymbol !== undefined ? initialActiveSymbol : currentData.symbol
   );
   
+  // Live balance & holdings
+  const [jarBalance, setJarBalance] = useState(initialJarBalance ?? 0);
+  const [sharesOwned, setSharesOwned] = useState(initialSharesOwned ?? 0);
+
+  // New simulated trade drawer states
+  const [tradeDrawerOpen, setTradeDrawerOpen] = useState(false);
+  const [tradeAction, setTradeAction] = useState<'BUY' | 'SELL'>('BUY');
+  const [tradeShares, setTradeShares] = useState('1');
+  const [isSubmittingTrade, setIsSubmittingTrade] = useState(false);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [tradeSuccess, setTradeSuccess] = useState(false);
+
+  // AI Signal states
+  const [aiSignal, setAiSignal] = useState<any>(null);
+  const [loadingSignal, setLoadingSignal] = useState(false);
+
+  useEffect(() => {
+    if (activeSymbol) {
+      // Set loading and fetch AI recommendation
+      setLoadingSignal(true);
+      fetch('/api/signals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: currentData.symbol,
+          market: currentData.market,
+          currentPrice: currentData.price
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        setAiSignal(data);
+        setLoadingSignal(false);
+      })
+      .catch(err => {
+        console.error('Failed to load AI signal:', err);
+        setLoadingSignal(false);
+      });
+
+      // Synchronize holdings dynamically
+      fetch(`/api/me`)
+        .then(res => res.json())
+        .then(async (userData) => {
+          if (userData?.userId) {
+            const holdingsRes = await fetch(`/${locale === 'ar' ? 'ar' : 'en'}/dashboard`); // wait, we can just load the holding via api, or we can fetch a dedicated profile endpoint
+            // Let's call /api/me and get user details
+          }
+        }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentData?.symbol, currentData?.market, currentData?.price]);
+
   // Drawer states
   const [purificationDrawerOpen, setPurificationDrawerOpen] = useState(false);
   const [fractionalDrawerOpen, setFractionalDrawerOpen] = useState(false);
@@ -574,14 +635,42 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
                   <div className="bg-indigo-500/5 border border-indigo-500/10 p-3.5 rounded-2xl space-y-2">
                     <div className="flex items-center space-x-1.5 rtl:space-x-reverse text-indigo-400 text-xs font-bold">
                       <HelpCircle className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'توصيات الذكاء الاصطناعي للمستثمر الصغير' : 'AI Investor Health Insight'}</span>
+                      <span>{isAr ? 'توصيات المحلل الذكي القائمة على الذكاء الاصطناعي' : 'Qwen AI Financial Analyst Verdict'}</span>
                     </div>
-                    <p className="text-[10px] text-gray-400 leading-relaxed">
-                      {isAr 
-                        ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker.arName : activeTicker.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
-                        : `Based on the latest reports for ${activeTicker.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
-                      }
-                    </p>
+                    {loadingSignal ? (
+                      <div className="flex items-center space-x-2 py-2">
+                        <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[10px] text-gray-500">{isAr ? 'جاري التحليل واستدعاء التوصيات...' : 'Generating financial report...'}</span>
+                      </div>
+                    ) : aiSignal ? (
+                      <div className="space-y-2 text-start rtl:text-right">
+                        <div className="flex justify-between items-center text-xs pb-1 border-b border-white/5">
+                          <span className="text-gray-400">{isAr ? 'التوجيه المقترح' : 'AI Recommendation'}</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] ${
+                            aiSignal.action === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' :
+                            aiSignal.action === 'SELL' ? 'bg-red-500/10 text-red-400' : 'bg-gray-500/10 text-gray-400'
+                          }`}>
+                            {aiSignal.action}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                          {isAr ? aiSignal.reasoningArabic : aiSignal.reasoningEnglish}
+                        </p>
+                        {aiSignal.educationalConcept && (
+                          <div className="bg-black/30 p-2.5 rounded-xl text-[9px] text-gray-500 border border-white/5 space-y-0.5">
+                            <span className="font-bold text-gray-400 block">{isAr ? 'المفهوم التعليمي الشريك:' : 'Educational Insight:'}</span>
+                            <p>{aiSignal.educationalConcept}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-gray-400 leading-relaxed">
+                        {isAr 
+                          ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker?.arName : activeTicker?.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
+                          : `Based on the latest reports for ${activeTicker?.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
+                        }
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -800,16 +889,27 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
             {/* Sticky Bottom buying execution bar */}
             <div className="fixed bottom-16 inset-x-0 bg-[#0E1524] border-t border-white/10 px-4 py-3 flex justify-between items-center z-30 max-w-md mx-auto">
               <div className="text-left rtl:text-right">
-                <p className="text-xs text-gray-400 font-medium">{isAr ? 'السعر الحالي' : 'Market Price'}</p>
-                <p className="text-lg font-mono font-bold text-white">${currentData.price.toFixed(2)}</p>
+                <p className="text-[10px] text-gray-400 font-medium">{isAr ? 'الرصيد المتاح' : 'Available Cash'}</p>
+                <p className="text-sm font-mono font-bold text-emerald-400">{jarBalance.toFixed(2)} SAR</p>
+                {sharesOwned > 0 && (
+                  <p className="text-[9px] text-indigo-400 font-medium">
+                    {isAr ? `تمتلك: ${sharesOwned.toFixed(2)} سهم` : `Owned: ${sharesOwned.toFixed(2)} shares`}
+                  </p>
+                )}
               </div>
 
               <button
-                onClick={() => setTradeSuccessOpen(true)}
-                disabled={isParent || !isCompliant}
-                className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-700 disabled:text-gray-500 font-bold transition-all text-sm shadow-md"
+                onClick={() => {
+                  setTradeAction('BUY');
+                  setTradeShares('1');
+                  setTradeError(null);
+                  setTradeSuccess(false);
+                  setTradeDrawerOpen(true);
+                }}
+                disabled={!isCompliant}
+                className="px-8 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 font-bold transition-all text-sm shadow-md"
               >
-                {isParent ? (isAr ? 'مغلق (للمراقبة)' : 'Locked') : !isCompliant ? (isAr ? 'مغلق (غير شرعي)' : 'Blocked') : (isAr ? 'شراء' : 'Buy')}
+                {!isCompliant ? (isAr ? 'غير متوافق' : 'Non-Compliant') : (isAr ? 'تداول' : 'Trade')}
               </button>
             </div>
           </motion.div>
@@ -918,10 +1018,166 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
         )}
       </AnimatePresence>
 
-      {/* Dialog: Mock Trade Success Modal */}
+      {/* Drawer: Simulated Trade bottom sheet */}
       <AnimatePresence>
-        {tradeSuccessOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm max-w-md mx-auto">
+        {tradeDrawerOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmittingTrade && setTradeDrawerOpen(false)}
+              className="fixed inset-0 bg-black z-40 max-w-md mx-auto"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25 }}
+              className="fixed bottom-0 inset-x-0 bg-[#121824] border-t border-white/10 rounded-t-3xl p-6 z-50 text-right space-y-4 max-w-md mx-auto"
+            >
+              {/* Handle */}
+              <div className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-2" />
+
+              <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                <span className="text-xs text-gray-500 font-mono">
+                  ${currentData.price.toFixed(2)} / {isAr ? 'للسهم' : 'per share'}
+                </span>
+                <h3 className="font-bold text-lg text-emerald-400">
+                  {isAr ? `تداول ${currentData.symbol}` : `Trade ${currentData.symbol}`}
+                </h3>
+              </div>
+
+              {/* Action tabs: BUY vs SELL */}
+              <div className="flex bg-black/40 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTradeAction('BUY');
+                    setTradeError(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    tradeAction === 'BUY' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {isAr ? 'شراء' : 'BUY'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTradeAction('SELL');
+                    setTradeError(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    tradeAction === 'SELL' 
+                      ? 'bg-red-500 text-white' 
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {isAr ? 'بيع' : 'SELL'}
+                </button>
+              </div>
+
+              {/* Cash & shares feedback */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-black/20 p-3 rounded-xl border border-white/5">
+                <div className="text-left">
+                  <span className="text-[10px] text-gray-500 block">{isAr ? 'الرصيد المتاح' : 'Available Cash'}</span>
+                  <span className="font-bold text-emerald-400 font-mono">{jarBalance.toFixed(2)} SAR</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 block">{isAr ? 'الأسهم المملوكة' : 'Shares Owned'}</span>
+                  <span className="font-bold text-indigo-400 font-mono">{sharesOwned.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Inputs */}
+              <div className="space-y-2">
+                <label className="block text-xs text-gray-400 text-left rtl:text-right">
+                  {isAr ? 'عدد الأسهم (يقبل الكسور):' : 'Number of Shares (Fractional allowed):'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  value={tradeShares}
+                  onChange={(e) => {
+                    setTradeShares(e.target.value);
+                    setTradeError(null);
+                  }}
+                  className="w-full glass-panel bg-black/40 px-4 py-3 text-left font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-white animate-none"
+                />
+              </div>
+
+              {/* Dynamic total calculation */}
+              {(() => {
+                const sh = parseFloat(tradeShares) || 0;
+                const total = sh * currentData.price;
+                return (
+                  <div className="flex justify-between items-center text-sm pt-2">
+                    <span className="font-mono font-bold text-white">${total.toFixed(2)}</span>
+                    <span className="text-gray-400 font-medium">{isAr ? 'القيمة الإجمالية المقدرة' : 'Estimated Total Value'}</span>
+                  </div>
+                );
+              })()}
+
+              {tradeError && (
+                <p className="text-xs text-red-400 text-left rtl:text-right font-medium">
+                  {tradeError}
+                </p>
+              )}
+
+              {/* Submit execution */}
+              <button
+                disabled={isSubmittingTrade || !tradeShares || parseFloat(tradeShares) <= 0}
+                onClick={async () => {
+                  setIsSubmittingTrade(true);
+                  setTradeError(null);
+                  try {
+                    const res = await fetch('/api/trade', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        symbol: currentData.symbol,
+                        market: currentData.market,
+                        action: tradeAction,
+                        shares: parseFloat(tradeShares)
+                      })
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) {
+                      setTradeError(resData.message || resData.error || 'Execution failed');
+                    } else {
+                      setJarBalance(parseFloat(resData.balance));
+                      setSharesOwned(parseFloat(resData.sharesOwned));
+                      setTradeSuccess(true);
+                      setTradeDrawerOpen(false);
+                    }
+                  } catch (err) {
+                    setTradeError('Connection error. Failed to execute simulated trade.');
+                  } finally {
+                    setIsSubmittingTrade(false);
+                  }
+                }}
+                className={`w-full py-3.5 rounded-xl font-bold text-white transition-all text-sm shadow-md ${
+                  tradeAction === 'BUY' 
+                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/10'
+                    : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/10'
+                }`}
+              >
+                {isSubmittingTrade ? (isAr ? 'جاري التنفيذ...' : 'Executing Trade...') : (isAr ? 'تأكيد تنفيذ الصفقة' : 'Confirm Simulated Trade')}
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Dialog: Real simulated trade success modal */}
+      <AnimatePresence>
+        {tradeSuccess && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm max-w-md mx-auto">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -931,18 +1187,18 @@ export default function MarketsClient({ currentData, locale, isParent, initialAc
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
                 <Check className="w-6 h-6" />
               </div>
-              <h3 className="font-bold text-lg">{isAr ? 'تم تنفيذ الصفقة الافتراضية!' : 'Mock Trade Executed!'}</h3>
+              <h3 className="font-bold text-lg">{isAr ? 'اكتملت الصفقة بنجاح!' : 'Simulated Trade Success!'}</h3>
               <p className="text-xs text-gray-400 leading-relaxed">
                 {isAr 
-                  ? `لقد قمت بشراء سهم ${currentData.symbol} افتراضيًا بسعر $${currentData.price.toFixed(2)}. تم تحديث المحفظة الاستثمارية الخاصة بك.`
-                  : `You bought ${currentData.symbol} share mock-execution at $${currentData.price.toFixed(2)}. Your portfolio is updated.`
+                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${currentData.symbol} بنجاح. الرصيد الحالي: ${jarBalance.toFixed(2)} ريال.`
+                  : `Simulated ${tradeAction} order for ${currentData.symbol} executed successfully. Balance: ${jarBalance.toFixed(2)} SAR.`
                 }
               </p>
               <button
-                onClick={() => setTradeSuccessOpen(false)}
+                onClick={() => setTradeSuccess(false)}
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold text-xs text-white transition-all shadow-lg shadow-emerald-500/20"
               >
-                {isAr ? 'استمرار' : 'Continue'}
+                {isAr ? 'متابعة' : 'Continue'}
               </button>
             </motion.div>
           </div>

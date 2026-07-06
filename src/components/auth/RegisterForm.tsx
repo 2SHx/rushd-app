@@ -14,7 +14,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [familyCode, setFamilyCode] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,8 +30,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
         setHasError(true);
         return;
       }
-      const data = await res.json();
-      setFamilyCode(data.familyCode);
+      setIsSuccess(true);
     } catch {
       setHasError(true);
     } finally {
@@ -39,24 +38,23 @@ export default function RegisterForm({ locale }: { locale: string }) {
     }
   }
 
-  if (familyCode) {
+  if (isSuccess) {
     return (
       <div className="glass-panel p-6 space-y-4 text-center">
-        <h2 className="text-xl font-bold text-emerald-400">{t('successTitle')}</h2>
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-          <p className="text-sm text-gray-400 mb-1">{t('familyCodeLabel')}</p>
-          <p className="text-2xl font-bold tracking-widest text-white">{familyCode}</p>
-        </div>
-        <p className="text-sm text-gray-400">{t('saveCodeNote')}</p>
-        <div className="flex flex-col gap-2 pt-2">
+        <h2 className="text-xl font-bold text-emerald-400">
+          {locale === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Account Created Successfully!'}
+        </h2>
+        <p className="text-sm text-gray-400">
+          {locale === 'ar' 
+            ? 'يمكنك الآن تسجيل الدخول باستخدام بريدك الإلكتروني وكلمة المرور لتجربة محاكاة التداول المتقدمة.' 
+            : 'You can now log in using your email and password to start your advanced trading simulator.'}
+        </p>
+        <div className="pt-4">
           <Link
-            href={`/${locale}/family/new-child`}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20"
+            href={`/${locale}/login`}
+            className="w-full block py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 text-center"
           >
-            {t('addChildLink')}
-          </Link>
-          <Link href={`/${locale}/login`} className="text-emerald-400 hover:underline text-sm">
-            {t('loginLink')}
+            {locale === 'ar' ? 'تسجيل الدخول' : 'Log In'}
           </Link>
         </div>
       </div>

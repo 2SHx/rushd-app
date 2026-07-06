@@ -55,9 +55,27 @@ export async function POST(req: Request) {
     const familyCode = generateFamilyCode();
     try {
       const user = await prisma.user.create({
-        data: { email, name, role: 'PARENT', passwordHash, familyCode },
+        data: { 
+          email, 
+          name, 
+          role: 'CHILD', 
+          passwordHash, 
+          familyCode,
+          savingsJar: {
+            create: {
+              balance: 100000.00,
+              currency: 'SAR',
+            }
+          },
+          gamificationProfile: {
+            create: {
+              xp: 0,
+              level: 1,
+            }
+          }
+        },
       });
-      return NextResponse.json({ userId: user.id, familyCode: user.familyCode }, { status: 201 });
+      return NextResponse.json({ userId: user.id }, { status: 201 });
     } catch (err) {
       if (isUniqueViolationOn(err, 'email')) {
         return NextResponse.json({ error: 'email_taken' }, { status: 409 });
