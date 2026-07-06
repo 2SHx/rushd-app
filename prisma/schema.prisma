@@ -40,29 +40,29 @@ enum TransactionType {
 }
 
 model User {
-  id                   String               @id @default(uuid())
-  email                String?              @unique
-  name                 String
-  role                 Role                 @default(CHILD)
-  tier                 Tier                 @default(BASIC)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  name      String
+  role      Role     @default(CHILD)
+  tier      Tier     @default(BASIC)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  passwordHash         String?
-  username             String?
-  familyCode           String?              @unique
-  failedLoginCount     Int                  @default(0)
-  lockedUntil          DateTime?
+  passwordHash     String?
+  username         String?
+  familyCode       String?   @unique
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
 
-  parentId             String?
-  parent               User?                @relation("FamilyMembers", fields: [parentId], references: [id])
-  children             User[]               @relation("FamilyMembers")
+  parentId String?
+  parent   User?   @relation("FamilyMembers", fields: [parentId], references: [id])
+  children User[]  @relation("FamilyMembers")
 
-  gamificationProfile  GamificationProfile?
-  portfolioItems       PortfolioItem[]
-  transactions         Transaction[]
-  savingsJar           SavingsJar?
-  quizAttempts         QuizAttempt[]
+  gamificationProfile GamificationProfile?
+  portfolioItems      PortfolioItem[]
+  transactions        Transaction[]
+  savingsJar          SavingsJar?
+  quizAttempts        QuizAttempt[]
 
   @@unique([parentId, username])
   @@index([parentId])
@@ -74,7 +74,7 @@ model GamificationProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   xp        Int      @default(0)
   level     Int      @default(1)
-  badges    String[] 
+  badges    String[]
   updatedAt DateTime @updatedAt
 }
 
@@ -93,15 +93,15 @@ model PortfolioItem {
 }
 
 model Transaction {
-  id              String          @id @default(uuid())
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount          Decimal         @db.Decimal(18, 4)
-  currency        Currency        @default(SAR)
-  type            TransactionType
-  mcc             String?         
-  description     String?
-  createdAt       DateTime        @default(now())
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Decimal         @db.Decimal(18, 4)
+  currency    Currency        @default(SAR)
+  type        TransactionType
+  mcc         String?
+  description String?
+  createdAt   DateTime        @default(now())
 
   @@index([userId, createdAt])
 }
@@ -110,7 +110,7 @@ model SavingsJar {
   id                  String   @id @default(uuid())
   userId              String   @unique
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance             Decimal  @db.Decimal(18, 4) @default(0.0)
+  balance             Decimal  @default(0.0) @db.Decimal(18, 4)
   currency            Currency @default(SAR)
   profitShareRatioBps Int      @default(7000)
   updatedAt           DateTime @updatedAt
@@ -120,10 +120,77 @@ model QuizAttempt {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic     String   // e.g., "Stock Market Basics"
+  topic     String // e.g., "Stock Market Basics"
   score     Int
   passed    Boolean
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ── Rushd Quant: data spine (Q0). All quantity/price fields Decimal.
+// Point-in-time keys: MarketBar.ts, Fundamentals.releasedAt, NewsItem.publishedAt
+// — nothing dated after a decision's `asOf` may ever reach an analyst (no look-ahead).
+
+enum BarInterval {
+  DAY
+  HOUR
+  MINUTE
+}
+
+enum DataSource {
+  MOCK
+  YAHOO
+  ALPACA
+  SAHMK
+  TWELVEDATA
+  ZOYA
+  FUNDAMENTALS
+}
+
+model MarketBar {
+  id        String      @id @default(uuid())
+  symbol    String
+  market    Market
+  interval  BarInterval @default(DAY)
+  ts        DateTime // bar close time (UTC) — the point-in-time key
+  open      Decimal     @db.Decimal(18, 6)
+  high      Decimal     @db.Decimal(18, 6)
+  low       Decimal     @db.Decimal(18, 6)
+  close     Decimal     @db.Decimal(18, 6)
+  volume    Decimal     @db.Decimal(24, 4)
+  source    DataSource
+  createdAt DateTime    @default(now())
+
+  @@unique([symbol, market, interval, ts])
+  @@index([symbol, market, interval, ts])
+}
+
+model Fundamentals {
+  id         String     @id @default(uuid())
+  symbol     String
+  market     Market
+  asOf       DateTime // the fiscal period the metrics describe
+  releasedAt DateTime // when the data became public — the point-in-time key
+  metrics    Json // { peRatio, debtToMarketCap, revenue, ... } — typed accessors in code
+  source     DataSource
+  createdAt  DateTime   @default(now())
+
+  @@unique([symbol, market, asOf])
+  @@index([symbol, market, releasedAt])
+}
+
+model NewsItem {
+  id          String     @id @default(uuid())
+  symbol      String
+  market      Market
+  publishedAt DateTime // the point-in-time key
+  headline    String
+  summary     String?
+  url         String?
+  sentiment   Decimal?   @db.Decimal(4, 3) // -1..1, optional
+  source      DataSource
+  createdAt   DateTime   @default(now())
+
+  @@index([symbol, market, publishedAt])
 }
