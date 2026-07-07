@@ -326,7 +326,12 @@ export default function MarketsClient({
                         {t.symbol.replace('.SR', '')}
                       </div>
                       <p className="text-xs font-bold text-gray-300 truncate">{isAr ? t.arName : t.name}</p>
-                      <p className="text-sm font-mono font-bold">{t.price.toFixed(2)}</p>
+                      <p className="text-sm font-mono font-bold">
+                        {marketTab === 'TASI' 
+                          ? (isAr ? `${t.price.toFixed(2)} ر.س` : `${t.price.toFixed(2)} SAR`)
+                          : `${t.price.toFixed(2)}`
+                        }
+                      </p>
                       <p className="text-[10px] font-semibold text-emerald-400">+{t.pct.toFixed(2)}%</p>
                     </div>
                   ))}
@@ -395,7 +400,12 @@ export default function MarketsClient({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono font-bold text-sm text-white">{t.price.toFixed(2)}</p>
+                      <p className="font-mono font-bold text-sm text-white">
+                        {marketTab === 'TASI' 
+                          ? (isAr ? `${t.price.toFixed(2)} ر.س` : `${t.price.toFixed(2)} SAR`)
+                          : `${t.price.toFixed(2)}`
+                        }
+                      </p>
                       <p className={`text-xs font-semibold ${t.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {t.pct >= 0 ? '+' : ''}{t.pct.toFixed(2)}%
                       </p>
@@ -458,11 +468,14 @@ export default function MarketsClient({
             {/* Price Headers */}
             <div className="px-4 md:px-0 space-y-1">
               <div className="flex justify-between items-end">
-                <h2 className="text-4xl font-mono font-bold tracking-tight text-white">
-                  ${currentStockData.price.toFixed(2)}
+                <h2 className="text-4xl font-sans font-bold tracking-tight text-white">
+                  {currentStockData.market === 'TASI' 
+                    ? (isAr ? `${currentStockData.price.toFixed(2)} ر.س` : `SAR ${currentStockData.price.toFixed(2)}`)
+                    : `${currentStockData.price.toFixed(2)}`
+                  }
                 </h2>
                 <span className="text-xs text-gray-400 font-medium font-sans">
-                  {currentStockData.market === 'TASI' ? 'SAR' : 'USD'}
+                  {currentStockData.market === 'TASI' ? (isAr ? 'ريال سعودي' : 'Riyals (SAR)') : (isAr ? 'دولار أمريكي' : 'USD')}
                 </span>
               </div>
               <p className={`text-sm font-semibold font-mono ${activeTicker.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -1157,7 +1170,10 @@ export default function MarketsClient({
 
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <span className="text-xs text-gray-500 font-mono">
-                  ${currentStockData.price.toFixed(2)} / {isAr ? 'للسهم' : 'per share'}
+                  {currentStockData.market === 'TASI' 
+                    ? (isAr ? `${currentStockData.price.toFixed(2)} ر.س` : `SAR ${currentStockData.price.toFixed(2)}`)
+                    : `${currentStockData.price.toFixed(2)}`
+                  } / {isAr ? 'للسهم' : 'per share'}
                 </span>
                 <h3 className="font-bold text-lg text-emerald-400">
                   {isAr ? `تداول ${currentStockData.symbol}` : `Trade ${currentStockData.symbol}`}
@@ -1233,7 +1249,12 @@ export default function MarketsClient({
                 const total = sh * currentStockData.price;
                 return (
                   <div className="flex justify-between items-center text-sm pt-2">
-                    <span className="font-mono font-bold text-white">${total.toFixed(2)}</span>
+                    <span className="font-mono font-bold text-white">
+                      {currentStockData.market === 'TASI' 
+                        ? (isAr ? `${total.toFixed(2)} ر.س` : `SAR ${total.toFixed(2)}`)
+                        : `${total.toFixed(2)}`
+                      }
+                    </span>
                     <span className="text-gray-400 font-medium">{isAr ? 'القيمة الإجمالية المقدرة' : 'Estimated Total Value'}</span>
                   </div>
                 );
