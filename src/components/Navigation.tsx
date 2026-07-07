@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Wallet, LineChart, BookOpen, User } from 'lucide-react';
+import { Wallet, LineChart, BookOpen, User, Briefcase } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -14,7 +14,8 @@ export default function Navigation({ locale }: { locale: string }) {
     { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },
     { href: `/${locale}/markets`, icon: LineChart, label: isAr ? 'الأسهم' : 'Stocks' },
     { href: `/${locale}/quiz`, icon: BookOpen, label: isAr ? 'التعليم' : 'Quizzes' },
-    { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' }
+    { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' },
+    { href: `/${locale}/investor`, icon: Briefcase, label: isAr ? 'المستثمرون' : 'Investors' }
   ];
 
   return (
