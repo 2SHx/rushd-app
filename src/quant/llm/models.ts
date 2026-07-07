@@ -60,14 +60,14 @@ const MATRIX: Record<LlmRole, MatrixEntry> = {
   FUNDAMENTAL: {
     role: 'FUNDAMENTAL',
     tier: 'strong',
-    model: 'qwen/qwen-2.5-72b-instruct',
+    model: 'qwen/qwen-2.5-72b-instruct:free',
     temperature: 0,
     rationale: 'Financial-statement reasoning + investor-persona lenses; strong bilingual, high-quality Arabic for learners.',
   },
   RESEARCH: {
     role: 'RESEARCH',
     tier: 'strong',
-    model: 'google/gemini-2.5-pro-exp',
+    model: 'google/gemini-2.0-flash-exp:free',
     temperature: 0,
     rationale: 'Long-context retrieval synthesis with citations; large window suits RAG grounding.',
   },
@@ -81,14 +81,14 @@ const MATRIX: Record<LlmRole, MatrixEntry> = {
   DEBATE_FINAL: {
     role: 'DEBATE_FINAL',
     tier: 'strong',
-    model: 'deepseek/deepseek-chat',
+    model: 'google/gemini-2.0-flash-exp:free',
     temperature: 0,
     rationale: 'Sharper reasoning for the decisive final round; very cheap, strong analysis.',
   },
   PORTFOLIO_MANAGER: {
     role: 'PORTFOLIO_MANAGER',
     tier: 'strong',
-    model: 'google/gemini-2.5-pro-exp',
+    model: 'google/gemini-2.0-flash-exp:free',
     temperature: 0,
     rationale: 'The final call: strongest multi-signal reasoning + reliable structured output + good Arabic narration.',
   },
