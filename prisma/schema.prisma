@@ -355,3 +355,23 @@ model PortfolioSnapshot {
 
   @@index([strategyId, asOf])
 }
+
+// Rushd Quant: reproducibility record for a backtest (QUANT_DESIGN §4, Q2).
+// metrics = { cagr, sharpe, deflatedSharpe, maxDrawdown, hitRate, trades, turnover }.
+model BacktestRun {
+  id            String   @id @default(uuid())
+  strategyId    String?
+  symbol        String
+  market        Market
+  fromDate      DateTime
+  toDate        DateTime
+  oosFraction   Decimal  @db.Decimal(4, 3)
+  metrics       Json
+  implausible   Boolean  @default(false)
+  pmSurrogateId String
+  seed          Int
+  gitSha        String?
+  createdAt     DateTime @default(now())
+
+  @@index([strategyId, createdAt])
+}
