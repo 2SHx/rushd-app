@@ -7,6 +7,7 @@ const runBacktest = vi.fn();
 
 vi.mock('@/lib/authz', () => ({
   requireSession: () => requireSession(),
+  requireUltraTier: () => requireSession(),
 }));
 
 vi.mock('@/quant/backtest/engine', () => ({

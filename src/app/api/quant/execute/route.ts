@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { requireSession } from '@/lib/authz';
+import { requireUltraTier } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { TokenBucket } from '@/services/marketData';
 import { executeDecision, ExecutionError } from '@/quant/execution/executeDecision';
@@ -23,7 +23,7 @@ const BodySchema = z.object({ decisionId: z.string().min(1) });
 
 export async function POST(req: Request) {
   try {
-    const user = await requireSession();
+    const user = await requireUltraTier();
 
     if (!limiterFor(user.id).tryAcquire()) {
       return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429 });

@@ -1,8 +1,17 @@
 import { getTranslations } from 'next-intl/server';
 import { GraduationCap } from 'lucide-react';
 import CommitteeClient from '@/components/quant/CommitteeClient';
+import { requireUltraTier } from '@/lib/authz';
+import { redirect } from 'next/navigation';
 
 export default async function QuantPage({ params }: { params: { locale: string } }) {
+  try {
+    await requireUltraTier();
+  } catch (err) {
+    // Redirect to profile page to encourage upgrading to the ULTRA tier
+    redirect(`/${params.locale}/profile?error=ultra_required`);
+  }
+
   const t = await getTranslations('Quant');
 
   return (

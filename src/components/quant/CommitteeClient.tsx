@@ -423,6 +423,14 @@ export default function CommitteeClient({ locale }: { locale: string }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Disclaimers & Not Financial Advice Banner */}
+      <div className="text-center text-[10px] text-gray-500 max-w-lg mx-auto pt-6 border-t border-white/5 space-y-1">
+        <p>⚠️ {t('disclaimer')}</p>
+        <p>
+          All simulated trades are executed under virtual, paper-trading conditions. Past performance does not guarantee future results.
+        </p>
+      </div>
     </div>
   );
 }

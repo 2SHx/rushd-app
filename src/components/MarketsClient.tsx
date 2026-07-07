@@ -8,6 +8,7 @@ import {
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
 import { TICKERS } from '@/lib/tickers';
+import Link from 'next/link';
 
 export interface MarketsClientProps {
   currentData: any;
@@ -422,6 +423,27 @@ export default function MarketsClient({
                 </div>
               </div>
             </div>
+
+            {/* AI Advisor Banner */}
+            <Link 
+              href={`/${locale}/quant`}
+              className="flex items-center justify-between p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all duration-300 transform hover:scale-[1.02]"
+            >
+              <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                  <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+                </div>
+                <div className="text-start">
+                  <p className="text-sm font-bold text-emerald-300">
+                    {isAr ? 'لجنة الاستثمار الذكية' : 'AI Investment Committee'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {isAr ? 'توصيات وتحليلات استثمارية متكاملة' : 'Sharia-vetted portfolio sizer & analyst'}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-emerald-400 shrink-0 rtl:rotate-180" />
+            </Link>
 
             {/* Smart Search */}
             <div className="relative">
