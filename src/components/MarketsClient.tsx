@@ -191,6 +191,38 @@ export default function MarketsClient({
     }, 750);
   };
 
+  // Online search state variables
+  const [searchingOnline, setSearchingOnline] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearchOnline = async () => {
+    if (!searchQuery) return;
+    setSearchingOnline(true);
+    setSearchError(null);
+    const cleanQuery = searchQuery.trim().toUpperCase();
+    const searchSymbol = marketTab === 'TASI' && !cleanQuery.endsWith('.SR') ? `${cleanQuery}.SR` : cleanQuery;
+    try {
+      const res = await fetch(`/api/market-data?symbol=${searchSymbol}&market=${marketTab}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Set as active stock
+        setCurrentStockData(data);
+        setActiveSymbol(searchSymbol);
+        // Clean search query
+        setSearchQuery('');
+        const newUrl = `/${locale}/markets?symbol=${searchSymbol}&market=${marketTab}`;
+        window.history.pushState(null, '', newUrl);
+      } else {
+        setSearchError(isAr ? 'عذراً، لم نتمكن من العثور على هذا الرمز.' : 'Sorry, could not find this symbol.');
+      }
+    } catch (err) {
+      console.error(err);
+      setSearchError(isAr ? 'فشل الاتصال بخادم البيانات.' : 'Failed to connect to data servers.');
+    } finally {
+      setSearchingOnline(false);
+    }
+  };
+
   const handleMarketTabChange = (tab: 'TASI' | 'NASDAQ') => {
     setMarketTab(tab);
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -350,7 +382,15 @@ export default function MarketsClient({
 
   // Find active ticker metadata
   const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
-  const activeTicker = listTickers.find(t => t.symbol === activeSymbol) || TICKERS.NASDAQ[0];
+  const foundTicker = listTickers.find(t => t.symbol === activeSymbol);
+  const activeTicker = foundTicker || {
+    symbol: activeSymbol || 'AAPL',
+    name: activeSymbol ? `${activeSymbol.replace('.SR', '')} Corp` : 'Apple Inc.',
+    arName: activeSymbol ? `شركة ${activeSymbol.replace('.SR', '')}` : 'أبل',
+    price: currentStockData.price || 0,
+    change: 0,
+    pct: 0
+  };
   const isCompliant = currentStockData.isShariaCompliant;
 
   // Filtered list based on search and category
@@ -390,7 +430,7 @@ export default function MarketsClient({
                 type="text"
                 placeholder={isAr ? 'جرب البحث الذكي' : 'Try smart search'}
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setSearchError(null); }}
                 className="w-full bg-[#121824] border border-transparent focus:border-emerald-500/30 rounded-2xl py-3 pl-12 pr-4 rtl:pl-4 rtl:pr-12 text-sm text-white placeholder-gray-500 outline-none transition-all"
               />
             </div>
@@ -532,6 +572,41 @@ export default function MarketsClient({
                     </div>
                   </div>
                 ))}
+
+                {/* If searching online loader */}
+                {searchingOnline && (
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center space-x-2">
+                    <div className="w-4 h-4 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+                    <span className="text-xs text-gray-400 font-semibold">{isAr ? 'جاري البحث في أسواق المال...' : 'Searching market...'}</span>
+                  </div>
+                )}
+
+                {/* Online Search Results Option */}
+                {!searchingOnline && searchQuery && !filteredList.some(t => t.symbol.toUpperCase() === searchQuery.toUpperCase().trim()) && (
+                  <div
+                    onClick={handleSearchOnline}
+                    className="p-4 rounded-2xl bg-[#0F1420]/50 border border-white/[0.03] hover:bg-[#0F1420]/80 hover:border-white/[0.08] cursor-pointer flex justify-between items-center transition-all duration-300 active:scale-[0.98] shadow-md group"
+                  >
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/20 flex items-center justify-center text-sm font-bold transition-all">
+                        <Search className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-gray-200">
+                          {isAr ? `البحث عن "${searchQuery.toUpperCase()}"` : `Search for "${searchQuery.toUpperCase()}"`}
+                        </h4>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                          {isAr ? 'انقر لجلب بيانات السهم المباشرة' : 'Click to fetch live market details'}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors rtl:rotate-180" />
+                  </div>
+                )}
+
+                {searchError && (
+                  <p className="text-xs text-red-400 px-1 font-semibold">{searchError}</p>
+                )}
               </div>
             </div>
       </div>
