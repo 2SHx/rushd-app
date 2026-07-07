@@ -6,7 +6,7 @@ import {
   roleForAgent,
   MODEL_MATRIX,
   DEFAULT_LLM_BASE_URL,
-  OPUS_FALLBACK,
+  FREE_FALLBACK,
 } from './models';
 
 describe('per-agent model matrix', () => {
@@ -30,8 +30,11 @@ describe('per-agent model matrix', () => {
     expect(cfg.role).toBe('FUNDAMENTAL'); // rest of the config preserved
   });
 
-  it('injects Opus as the default fallback, overridable globally and per-role', () => {
-    expect(resolveModelConfig('NEWS_CATALYST', {} as any).fallbackModel).toBe(OPUS_FALLBACK);
+  it('injects the free default fallback, overridable globally and per-role', () => {
+    // PM's primary != FREE_FALLBACK, so the default free fallback is used as-is.
+    expect(resolveModelConfig('PORTFOLIO_MANAGER', {} as any).fallbackModel).toBe(FREE_FALLBACK);
+    // A role whose primary IS the fallback gets swapped to the other free model (distinct retry).
+    expect(resolveModelConfig('NEWS_CATALYST', {} as any).fallbackModel).not.toBe(FREE_FALLBACK);
     expect(resolveModelConfig('NEWS_CATALYST', { QUANT_FALLBACK_MODEL: 'x/y' } as any).fallbackModel).toBe('x/y');
     expect(
       resolveModelConfig('PORTFOLIO_MANAGER', { QUANT_FALLBACK_PORTFOLIO_MANAGER: 'p/m' } as any).fallbackModel,

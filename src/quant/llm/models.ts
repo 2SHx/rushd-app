@@ -7,12 +7,11 @@
 // (project invariant). Deterministic agents (Quant Core, Technical, Pattern, Sharia)
 // use NO model and are absent from this matrix.
 //
-// Selection principles:
-//   • cheap+fast (Gemini Flash) for high-throughput classification (news).
-//   • strong+Arabic (Qwen 72B) where output is learner-facing Arabic analysis.
-//   • long-context (Gemini Pro) for RAG synthesis with citations.
-//   • strongest reasoning (Gemini Pro / DeepSeek) for the debate finale + the PM's call.
-//   • temperature 0 everywhere for reproducibility (skill: agent-committee).
+// Selection principles (FREE models only — verified live on OpenRouter 2026-07):
+//   • cheap+fast (gpt-oss-20b:free) for high-throughput classification (news, debate rounds).
+//   • strong reasoning (nemotron-3-super-120b:free) for fundamentals, research, debate final, PM.
+//   • fallback is the OTHER free model, so a 429 on one retries on another before the mock.
+//   • temperature 0 + capped max-tokens everywhere for reproducibility (skill: agent-committee).
 import type { AgentKind } from '../types';
 
 export type LlmTier = 'cheap' | 'strong';
@@ -39,12 +38,15 @@ export interface AgentModelConfig {
 }
 
 /**
- * The default fallback: Opus (Anthropic's strongest), served via OpenRouter. When a free
- * primary model errors, the call retries once on Opus before an agent drops to its
- * deterministic mock — so a flaky free tier degrades to top quality, not to a placeholder.
+ * The default fallback: a DIFFERENT free model (gpt-oss-20b). When a primary free model
+ * errors or is rate-limited (429), the call retries once on this other free model before
+ * an agent drops to its deterministic mock — free-only, no paid safety net.
  * Global override: QUANT_FALLBACK_MODEL; per-role: QUANT_FALLBACK_<ROLE>.
  */
-export const OPUS_FALLBACK = 'anthropic/claude-opus-4-8';
+export const FREE_FALLBACK = 'openai/gpt-oss-20b:free';
+/** The other verified free model — used when a role's fallback would equal its primary,
+ *  so every agent gets a second shot on a *different* free model under 429 rate limits. */
+const FREE_ALT = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 // Free / high-performance defaults, one per job. Swap any via env QUANT_MODEL_<ROLE>.
 // fallbackModel is injected at resolve time (defaults to Opus), so entries omit it.
@@ -53,44 +55,44 @@ const MATRIX: Record<LlmRole, MatrixEntry> = {
   NEWS_CATALYST: {
     role: 'NEWS_CATALYST',
     tier: 'cheap',
-    model: 'google/gemini-2.0-flash-exp:free',
+    model: 'openai/gpt-oss-20b:free',
     temperature: 0,
-    rationale: 'High-throughput headline classification + sentiment; fast and free, adequate Arabic.',
+    rationale: 'High-throughput headline classification + sentiment; free gpt-oss-20b, fast + clean structured output.',
   },
   FUNDAMENTAL: {
     role: 'FUNDAMENTAL',
     tier: 'strong',
-    model: 'qwen/qwen-2.5-72b-instruct:free',
+    model: 'nvidia/nemotron-3-super-120b-a12b:free',
     temperature: 0,
-    rationale: 'Financial-statement reasoning + investor-persona lenses; strong bilingual, high-quality Arabic for learners.',
+    rationale: 'Financial-statement reasoning + investor-persona lenses; free nemotron-120b, strong reasoning.',
   },
   RESEARCH: {
     role: 'RESEARCH',
     tier: 'strong',
-    model: 'google/gemini-2.0-flash-exp:free',
+    model: 'nvidia/nemotron-3-super-120b-a12b:free',
     temperature: 0,
-    rationale: 'Long-context retrieval synthesis with citations; large window suits RAG grounding.',
+    rationale: 'Retrieval synthesis with citations; free nemotron-120b, strong long-form reasoning.',
   },
   DEBATE_ROUND: {
     role: 'DEBATE_ROUND',
     tier: 'cheap',
-    model: 'google/gemini-2.0-flash-exp:free',
+    model: 'openai/gpt-oss-20b:free',
     temperature: 0,
-    rationale: 'Fast bull/bear argument generation for the non-final rounds; cost-capped.',
+    rationale: 'Fast bull/bear argument generation for the non-final rounds; free gpt-oss-20b.',
   },
   DEBATE_FINAL: {
     role: 'DEBATE_FINAL',
     tier: 'strong',
-    model: 'google/gemini-2.0-flash-exp:free',
+    model: 'nvidia/nemotron-3-super-120b-a12b:free',
     temperature: 0,
-    rationale: 'Sharper reasoning for the decisive final round; very cheap, strong analysis.',
+    rationale: 'Sharper reasoning for the decisive final round; free nemotron-120b.',
   },
   PORTFOLIO_MANAGER: {
     role: 'PORTFOLIO_MANAGER',
     tier: 'strong',
-    model: 'google/gemini-2.0-flash-exp:free',
+    model: 'nvidia/nemotron-3-super-120b-a12b:free',
     temperature: 0,
-    rationale: 'The final call: strongest multi-signal reasoning + reliable structured output + good Arabic narration.',
+    rationale: 'The final call: strongest free reasoning (nemotron-120b) + reliable structured output.',
   },
 };
 
@@ -101,7 +103,9 @@ export const DEFAULT_LLM_BASE_URL = 'https://openrouter.ai/api/v1';
 export function resolveModelConfig(role: LlmRole, env: NodeJS.ProcessEnv = process.env): AgentModelConfig {
   const base = MATRIX[role];
   const model = env[`QUANT_MODEL_${role}`] ?? base.model;
-  const fallbackModel = env[`QUANT_FALLBACK_${role}`] ?? env.QUANT_FALLBACK_MODEL ?? OPUS_FALLBACK;
+  let fallbackModel = env[`QUANT_FALLBACK_${role}`] ?? env.QUANT_FALLBACK_MODEL ?? FREE_FALLBACK;
+  // Ensure the fallback is a *different* free model than the primary (real second shot on 429).
+  if (fallbackModel === model) fallbackModel = model === FREE_FALLBACK ? FREE_ALT : FREE_FALLBACK;
   return { ...base, model, fallbackModel };
 }
 
