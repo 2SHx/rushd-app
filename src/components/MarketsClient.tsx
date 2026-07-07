@@ -94,13 +94,49 @@ export default function MarketsClient({
   initialSharesOwned
 }: MarketsClientProps) {
   const isAr = locale === 'ar';
-  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentData.market);
+  const [currentStockData, setCurrentStockData] = useState(currentData);
+  const [loadingStock, setLoadingStock] = useState(false);
+
+  useEffect(() => {
+    setCurrentStockData(currentData);
+  }, [currentData]);
+
+  const handleSelectSymbol = async (symbol: string, market: 'TASI' | 'NASDAQ') => {
+    setLoadingStock(true);
+    setActiveSymbol(symbol);
+    try {
+      const res = await fetch(`/api/market-data?symbol=${symbol}&market=${market}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentStockData(data);
+        if (data.sharesOwned !== undefined) {
+          setSharesOwned(data.sharesOwned);
+        }
+        const newUrl = `/${locale}/markets?symbol=${symbol}&market=${market}`;
+        window.history.pushState(null, '', newUrl);
+      }
+    } catch (err) {
+      console.error('Failed to fetch market data:', err);
+    } finally {
+      setLoadingStock(false);
+    }
+  };
+
+  const handleMarketTabChange = (tab: 'TASI' | 'NASDAQ') => {
+    setMarketTab(tab);
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      const firstSymbol = TICKERS[tab][0].symbol;
+      handleSelectSymbol(firstSymbol, tab);
+    }
+  };
+
+  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(currentStockData.market);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'sharia' | 'etfs'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Detail sheet state
   const [activeSymbol, setActiveSymbol] = useState<string | null>(
-    initialActiveSymbol !== undefined ? initialActiveSymbol : currentData.symbol
+    initialActiveSymbol !== undefined ? initialActiveSymbol : currentStockData.symbol
   );
   
   // Live balance & holdings
@@ -127,9 +163,9 @@ export default function MarketsClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          symbol: currentData.symbol,
-          market: currentData.market,
-          currentPrice: currentData.price
+          symbol: currentStockData.symbol,
+          market: currentStockData.market,
+          currentPrice: currentStockData.price
         })
       })
       .then(res => res.json())
@@ -166,7 +202,7 @@ export default function MarketsClient({
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [quizResult, setQuizResult] = useState<{ passed: boolean; xp: number; level: number } | null>(null);
 
-  const recommendedQuiz = getRecommendedQuiz(currentData.symbol);
+  const recommendedQuiz = getRecommendedQuiz(currentStockData.symbol);
 
   const handleQuizComplete = async (passed: boolean) => {
     try {
@@ -195,7 +231,7 @@ export default function MarketsClient({
   // Find active ticker metadata
   const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
   const activeTicker = listTickers.find(t => t.symbol === activeSymbol) || TICKERS.NASDAQ[0];
-  const isCompliant = currentData.isShariaCompliant;
+  const isCompliant = currentStockData.isShariaCompliant;
 
   // Filtered list based on search and category
   const activeList = marketTab === 'TASI' ? TICKERS.TASI : TICKERS.NASDAQ;
@@ -240,20 +276,20 @@ export default function MarketsClient({
             </div>
 
             {/* Markets Selector Tabs */}
-            <div className="grid grid-cols-2 bg-[#121824] p-1 rounded-2xl border border-white/5">
+            <div className="grid grid-cols-2 bg-white/[0.03] p-1 rounded-2xl border border-white/[0.06]">
               <button
-                onClick={() => setMarketTab('TASI')}
-                className={`py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center space-x-2 ${
-                  marketTab === 'TASI' ? 'bg-[#1D263B] text-white shadow-md' : 'text-gray-400'
+                onClick={() => handleMarketTabChange('TASI')}
+                className={`py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 active:scale-95 ${
+                  marketTab === 'TASI' ? 'bg-white/[0.08] text-white border border-white/[0.08] shadow-lg' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 <span>🇸🇦</span>
                 <span>{isAr ? 'السوق السعودي' : 'Saudi Market'}</span>
               </button>
               <button
-                onClick={() => setMarketTab('NASDAQ')}
-                className={`py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center space-x-2 ${
-                  marketTab === 'NASDAQ' ? 'bg-[#1D263B] text-white shadow-md' : 'text-gray-400'
+                onClick={() => handleMarketTabChange('NASDAQ')}
+                className={`py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 active:scale-95 ${
+                  marketTab === 'NASDAQ' ? 'bg-white/[0.08] text-white border border-white/[0.08] shadow-lg' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 <span>🇺🇸</span>
@@ -262,7 +298,7 @@ export default function MarketsClient({
             </div>
 
             {/* Status Banner */}
-            <div className="bg-[#121824] rounded-2xl p-3 border border-white/5 flex items-center justify-between text-xs text-gray-400">
+            <div className="bg-white/[0.02] rounded-2xl p-3 border border-white/[0.04] flex items-center justify-between text-xs text-gray-400 shadow-sm">
               <div className="flex items-center space-x-2 rtl:space-x-reverse">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                 <span>{isAr ? 'السوق مغلق. يبدأ التداول الأحد' : 'Market closed. Trading starts Sunday'}</span>
@@ -282,7 +318,7 @@ export default function MarketsClient({
                     <div
                       key={t.symbol}
                       onClick={() => {
-                        window.location.href = `/${locale}/markets?symbol=${t.symbol}&market=TASI`;
+                        handleSelectSymbol(t.symbol, 'TASI');
                       }}
                       className="bg-[#121824] border border-white/5 min-w-[120px] p-4 rounded-2xl text-center space-y-2 cursor-pointer hover:bg-white/5 transition-all shrink-0"
                     >
@@ -304,20 +340,20 @@ export default function MarketsClient({
               <div className="flex space-x-2 rtl:space-x-reverse text-xs overflow-x-auto no-scrollbar">
                 <button
                   onClick={() => setSelectedCategory('all')}
-                  className={`px-4 py-2 rounded-full border transition-all ${
+                  className={`px-4 py-2 rounded-full border text-xs transition-all duration-200 active:scale-95 ${
                     selectedCategory === 'all' 
-                      ? 'bg-white text-black font-semibold border-white' 
-                      : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                      ? 'bg-white text-black font-semibold border-white shadow-md' 
+                      : 'bg-white/[0.03] border-white/[0.08] text-gray-300 hover:bg-white/[0.08] hover:text-white'
                   }`}
                 >
                   {isAr ? 'الكل' : 'All'}
                 </button>
                 <button
                   onClick={() => setSelectedCategory('sharia')}
-                  className={`px-4 py-2 rounded-full border transition-all ${
+                  className={`px-4 py-2 rounded-full border text-xs transition-all duration-200 active:scale-95 ${
                     selectedCategory === 'sharia' 
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-semibold' 
-                      : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                      ? 'bg-emerald-500/[0.12] border-emerald-500/30 text-emerald-400 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.06)]' 
+                      : 'bg-white/[0.03] border-white/[0.08] text-gray-300 hover:bg-white/[0.08] hover:text-white'
                   }`}
                 >
                   {isAr ? 'الأسهم الشرعية' : 'Sharia-Compliant'}
@@ -341,9 +377,13 @@ export default function MarketsClient({
                   <div
                     key={t.symbol}
                     onClick={() => {
-                      window.location.href = `/${locale}/markets?symbol=${t.symbol}&market=${marketTab}`;
+                      handleSelectSymbol(t.symbol, marketTab);
                     }}
-                    className="bg-[#121824] border border-white/5 p-4 rounded-2xl flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
+                    className={`p-4 rounded-2xl flex justify-between items-center cursor-pointer transition-all duration-300 active:scale-[0.98] ${
+                      activeSymbol === t.symbol 
+                        ? 'bg-emerald-500/[0.08] border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.05)]' 
+                        : 'bg-[#0F1420]/50 border border-white/[0.03] hover:bg-[#0F1420]/80 hover:border-white/[0.08] shadow-md'
+                    }`}
                   >
                     <div className="flex items-center space-x-3 rtl:space-x-reverse">
                       <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-sm font-bold text-gray-400">
@@ -371,12 +411,20 @@ export default function MarketsClient({
 
   const renderStockDetails = () => {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 relative min-h-[400px]">
+        {loadingStock && (
+          <div className="absolute inset-0 bg-[#080B11]/60 backdrop-blur-sm flex items-center justify-center z-50 rounded-[24px]">
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+              <span className="text-xs text-gray-400 font-semibold">{isAr ? 'جاري التحميل...' : 'Updating details...'}</span>
+            </div>
+          </div>
+        )}
                     {/* Top Navigation Row */}
             <div className="p-4 md:p-0 flex justify-between items-center sticky md:relative top-0 bg-[#080B11]/90 md:bg-transparent backdrop-blur-md md:backdrop-blur-none z-30 pb-4 md:border-b md:border-white/5 md:mb-6">
               <button
                 onClick={() => {
-                  window.location.href = `/${locale}/markets`;
+                  setActiveSymbol(null); window.history.pushState(null, '', `/${locale}/markets`);
                 }}
                 className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white md:hidden"
               >
@@ -388,7 +436,7 @@ export default function MarketsClient({
                   {isAr ? activeTicker.arName : activeTicker.name}
                 </span>
                 <span className="text-[10px] text-gray-400 font-mono font-bold tracking-wider">
-                  {currentData.symbol}
+                  {currentStockData.symbol}
                 </span>
               </div>
 
@@ -411,10 +459,10 @@ export default function MarketsClient({
             <div className="px-4 md:px-0 space-y-1">
               <div className="flex justify-between items-end">
                 <h2 className="text-4xl font-mono font-bold tracking-tight text-white">
-                  ${currentData.price.toFixed(2)}
+                  ${currentStockData.price.toFixed(2)}
                 </h2>
                 <span className="text-xs text-gray-400 font-medium font-sans">
-                  {currentData.market === 'TASI' ? 'SAR' : 'USD'}
+                  {currentStockData.market === 'TASI' ? 'SAR' : 'USD'}
                 </span>
               </div>
               <p className={`text-sm font-semibold font-mono ${activeTicker.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -424,8 +472,8 @@ export default function MarketsClient({
 
             {/* SVG line chart mimicking Slide 4 */}
             <div className="px-4 md:px-0">
-              <div className="bg-[#121824] rounded-3xl p-4 border border-white/5 space-y-4">
-                <AdvancedTradingChart data={currentData.history} />
+              <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-4 border border-white/5 space-y-4">
+                <AdvancedTradingChart data={currentStockData.history} />
                 
                 {/* Time range selector */}
                 <div className="flex justify-between bg-black/40 p-1 rounded-xl text-xs font-semibold text-gray-400">
@@ -461,12 +509,12 @@ export default function MarketsClient({
                 )}
 
                 {/* Purification Tag */}
-                {isCompliant && currentData.purificationRatioBps && (
+                {isCompliant && currentStockData.purificationRatioBps && (
                   <button
                     onClick={() => setPurificationDrawerOpen(true)}
                     className="flex items-center space-x-1 rtl:space-x-reverse bg-white/5 border border-white/10 text-gray-300 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
                   >
-                    <span>{isAr ? 'نسبة التطهير' : 'Purification'} {(currentData.purificationRatioBps / 100).toFixed(2)}%</span>
+                    <span>{isAr ? 'نسبة التطهير' : 'Purification'} {(currentStockData.purificationRatioBps / 100).toFixed(2)}%</span>
                     <Info className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -484,7 +532,7 @@ export default function MarketsClient({
 
             {/* Recommended Quiz Card */}
             <div className="px-4 md:px-0">
-              <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+              <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
                     <BookOpen className="w-5 h-5" />
@@ -531,12 +579,15 @@ export default function MarketsClient({
             </div>
 
             {/* AI Financial Analyst Insights Section */}
-            {currentData.financials && (
+            {currentStockData.financials && (
               <div className="px-4 md:px-0">
-                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
-                  <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400 border-b border-white/5 pb-2">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                    <h3 className="font-bold text-sm text-gray-200">
+                <div className="bg-gradient-to-b from-[#15132A]/80 to-[#0F1420]/80 rounded-3xl p-5 border border-indigo-500/10 space-y-4 shadow-[0_12px_32px_rgba(99,102,241,0.03)] hover:border-indigo-500/20 transition-all duration-300">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400 border-b border-white/5 pb-3">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </span>
+                    <h3 className="font-bold text-sm text-gray-100 font-sans tracking-tight">
                       {isAr ? 'تقرير المحلل المالي الذكي' : 'AI Financial Analyst Report'}
                     </h3>
                   </div>
@@ -545,7 +596,7 @@ export default function MarketsClient({
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-400">{isAr ? 'آخر التقارير الرسمية' : 'Latest Official Statement'}</span>
                     <span className="bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-md font-mono text-[10px]">
-                      {currentData.financials.latestStatementQuarter}
+                      {currentStockData.financials.latestStatementQuarter}
                     </span>
                   </div>
 
@@ -554,28 +605,28 @@ export default function MarketsClient({
                     <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
                       <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'إجمالي الإيرادات' : 'Total Revenue'}</span>
                       <span className="font-bold font-mono text-white">
-                        {formatNumber(currentData.financials.revenue, 'volume', isAr)}
+                        {formatNumber(currentStockData.financials.revenue, 'volume', isAr)}
                       </span>
                     </div>
 
                     <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
                       <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'صافي الدخل' : 'Net Income'}</span>
                       <span className="font-bold font-mono text-white">
-                        {formatNumber(currentData.financials.netIncome, 'volume', isAr)}
+                        {formatNumber(currentStockData.financials.netIncome, 'volume', isAr)}
                       </span>
                     </div>
 
                     <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
                       <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'هامش الربح الإجمالي' : 'Gross Margin'}</span>
                       <span className="font-bold font-mono text-white">
-                        {currentData.financials.grossMargin}%
+                        {currentStockData.financials.grossMargin}%
                       </span>
                     </div>
 
                     <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1">
                       <span className="text-gray-500 text-[10px] uppercase block">{isAr ? 'السيولة المتوفرة' : 'Cash & Equivalents'}</span>
                       <span className="font-bold font-mono text-white">
-                        {formatNumber(currentData.financials.totalCash, 'volume', isAr)}
+                        {formatNumber(currentStockData.financials.totalCash, 'volume', isAr)}
                       </span>
                     </div>
                   </div>
@@ -593,13 +644,13 @@ export default function MarketsClient({
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'الديون الربوية إلى القيمة السوقية (<30%)' : 'Interest-bearing Debt / MCap (<30%)'}</span>
                         <span className="font-mono font-bold text-emerald-400">
-                          {Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}%
+                          {Number(currentStockData.financials.complianceRatios.debtToMcap).toFixed(2)}%
                         </span>
                       </div>
                       <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-emerald-500 rounded-full" 
-                          style={{ width: `${Math.min(currentData.financials.complianceRatios.debtToMcap * 3, 100)}%` }} 
+                          style={{ width: `${Math.min(currentStockData.financials.complianceRatios.debtToMcap * 3, 100)}%` }} 
                         />
                       </div>
                     </div>
@@ -609,13 +660,13 @@ export default function MarketsClient({
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'الإيرادات غير المتوافقة (<5%)' : 'Non-compliant Revenue / Total (<5%)'}</span>
                         <span className="font-mono font-bold text-emerald-400">
-                          {Number(currentData.financials.complianceRatios.interestIncomeToRevenue).toFixed(2)}%
+                          {Number(currentStockData.financials.complianceRatios.interestIncomeToRevenue).toFixed(2)}%
                         </span>
                       </div>
                       <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-emerald-500 rounded-full" 
-                          style={{ width: `${Math.min(currentData.financials.complianceRatios.interestIncomeToRevenue * 15, 100)}%` }} 
+                          style={{ width: `${Math.min(currentStockData.financials.complianceRatios.interestIncomeToRevenue * 15, 100)}%` }} 
                         />
                       </div>
                     </div>
@@ -656,8 +707,8 @@ export default function MarketsClient({
                     ) : (
                       <p className="text-[10px] text-gray-400 leading-relaxed">
                         {isAr 
-                          ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker?.arName : activeTicker?.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
-                          : `Based on the latest reports for ${activeTicker?.name}, the company maintains strong cash liquidity of ${formatNumber(currentData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${Number(currentData.financials.complianceRatios.debtToMcap).toFixed(2)}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
+                          ? `بناءً على التقارير المالية لـ ${isAr ? activeTicker?.arName : activeTicker?.name}، تُظهر الميزانية سيولة نقدية قوية تبلغ ${formatNumber(currentStockData.financials.totalCash, 'volume', isAr)} مع نسبة ديون منخفضة جداً تمثل ${Number(currentStockData.financials.complianceRatios.debtToMcap).toFixed(2)}% من القيمة السوقية، مما يعني مركزاً مالياً ممتازاً متوافقاً مع ضوابط أوفق الهيئات الشرعية.`
+                          : `Based on the latest reports for ${activeTicker?.name}, the company maintains strong cash liquidity of ${formatNumber(currentStockData.financials.totalCash, 'volume', isAr)} with low debt ratio representing ${Number(currentStockData.financials.complianceRatios.debtToMcap).toFixed(2)}% of market cap. This indicates excellent financial health compliant with AAOIFI standards.`
                         }
                       </p>
                     )}
@@ -667,16 +718,16 @@ export default function MarketsClient({
             )}
 
             {/* Analyst Ratings Card (Slide 2) */}
-            {currentData.analystRatings && (
+            {currentStockData.analystRatings && (
               <div className="px-4 md:px-0">
-                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'تحليل السهم' : 'Stock Analyst Rating'}</h3>
                   
                   {/* Rating description */}
                   <p className="text-xs text-gray-400 leading-relaxed">
                     {isAr 
-                      ? `بناءً على تقييم المحللين لسهم ${currentData.symbol} خلال الأشهر الثلاثة الماضية.`
-                      : `Based on analyst recommendations for ${currentData.symbol} over the last three months.`
+                      ? `بناءً على تقييم المحللين لسهم ${currentStockData.symbol} خلال الأشهر الثلاثة الماضية.`
+                      : `Based on analyst recommendations for ${currentStockData.symbol} over the last three months.`
                     }
                   </p>
 
@@ -684,17 +735,17 @@ export default function MarketsClient({
                   <div className="grid grid-cols-3 gap-3 text-center text-xs">
                     <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl space-y-1">
                       <span className="text-[10px] text-emerald-400 font-bold uppercase">{isAr ? 'شراء' : 'Buy'}</span>
-                      <p className="font-mono font-extrabold text-sm">{currentData.analystRatings.buy}%</p>
+                      <p className="font-mono font-extrabold text-sm">{currentStockData.analystRatings.buy}%</p>
                     </div>
 
                     <div className="bg-gray-500/10 border border-gray-500/20 p-2.5 rounded-xl space-y-1">
                       <span className="text-[10px] text-gray-400 font-bold uppercase">{isAr ? 'معلق' : 'Hold'}</span>
-                      <p className="font-mono font-extrabold text-sm">{currentData.analystRatings.hold}%</p>
+                      <p className="font-mono font-extrabold text-sm">{currentStockData.analystRatings.hold}%</p>
                     </div>
 
                     <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl space-y-1">
                       <span className="text-[10px] text-red-400 font-bold uppercase">{isAr ? 'بيع' : 'Sell'}</span>
-                      <p className="font-mono font-extrabold text-sm">{currentData.analystRatings.sell}%</p>
+                      <p className="font-mono font-extrabold text-sm">{currentStockData.analystRatings.sell}%</p>
                     </div>
                   </div>
                 </div>
@@ -702,44 +753,75 @@ export default function MarketsClient({
             )}
 
             {/* SVG Expected vs Actual Quarterly Earnings Chart (Slide 2) */}
-            {currentData.earningsHistory && (
+            {currentStockData.earningsHistory && (
               <div className="px-4 md:px-0">
-                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'الأرباح' : 'Earnings'}</h3>
 
                   {/* SVG earnings plot */}
                   <div className="h-44 w-full relative flex items-end">
-                    <svg className="w-full h-full" viewBox="0 0 320 160">
-                      {/* Grid Lines */}
-                      <line x1="20" y1="40" x2="310" y2="40" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
-                      <line x1="20" y1="80" x2="310" y2="80" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
-                      <line x1="20" y1="120" x2="310" y2="120" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                    {(() => {
+                      const actualPoints = currentStockData.earningsHistory.map((item: any, i: number) => ({
+                        x: 40 + i * 80,
+                        y: 130 - item.actual * 45
+                      }));
+                      const expectedPoints = currentStockData.earningsHistory.map((item: any, i: number) => ({
+                        x: 40 + i * 80,
+                        y: 130 - item.expected * 45
+                      }));
+                      
+                      const pathActual = actualPoints.map((p: any, i: number) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                      const pathExpected = expectedPoints.map((p: any, i: number) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                      
+                      return (
+                        <svg className="w-full h-full" viewBox="0 0 320 160">
+                          <defs>
+                            <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#10B981" stopOpacity="0.2"/>
+                              <stop offset="100%" stopColor="#10B981" stopOpacity="0.0"/>
+                            </linearGradient>
+                            <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#059669"/>
+                              <stop offset="100%" stopColor="#34D399"/>
+                            </linearGradient>
+                          </defs>
 
-                      {/* Connect Lines & Circles */}
-                      {currentData.earningsHistory.map((item: any, i: number) => {
-                        const x = 40 + i * 65;
-                        const yExpected = 130 - item.expected * 50;
-                        const yActual = 130 - item.actual * 50;
+                          {/* Grid Lines */}
+                          <line x1="20" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,0.03)" strokeDasharray="3,3" />
+                          <line x1="20" y1="85" x2="300" y2="85" stroke="rgba(255,255,255,0.03)" strokeDasharray="3,3" />
+                          <line x1="20" y1="130" x2="300" y2="130" stroke="rgba(255,255,255,0.05)" />
 
-                        return (
-                          <g key={i}>
-                            {/* Vertical Line Connector expected-actual */}
-                            <line x1={x} y1={yExpected} x2={x} y2={yActual} stroke="rgba(255,255,255,0.2)" />
-                            
-                            {/* Expected Circle (gray) */}
-                            <circle cx={x} cy={yExpected} r="5" fill="#121824" stroke="#4B5563" strokeWidth="2.5" />
-                            
-                            {/* Actual Circle (green/emerald) */}
-                            <circle cx={x} cy={yActual} r="5.5" fill="#121824" stroke="#34D399" strokeWidth="3" />
-                            
-                            {/* Text labels for Quarters */}
-                            <text x={x} y="150" fill="#9CA3AF" fontSize="9" textAnchor="middle" fontWeight="500">
-                              {item.quarter}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
+                          {/* Area Fill */}
+                          <path d={`${pathActual} L ${actualPoints[actualPoints.length - 1].x} 140 L ${actualPoints[0].x} 140 Z`} fill="url(#actualGrad)" className="transition-all duration-500" />
+
+                          {/* Connect Lines */}
+                          <path d={pathExpected} stroke="rgba(255, 255, 255, 0.15)" strokeWidth="1.5" strokeDasharray="4,4" fill="none" className="transition-all duration-500" />
+                          <path d={pathActual} stroke="url(#lineGrad)" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+
+                          {/* Points */}
+                          {currentStockData.earningsHistory.map((item: any, i: number) => {
+                            const x = 40 + i * 80;
+                            const yExpected = 130 - item.expected * 45;
+                            const yActual = 130 - item.actual * 45;
+
+                            return (
+                              <g key={i} className="group">
+                                {/* Expected Point */}
+                                <circle cx={x} cy={yExpected} r="3.5" fill="#121824" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                                
+                                {/* Actual Point */}
+                                <circle cx={x} cy={yActual} r="4.5" fill="#34d399" stroke="#121824" strokeWidth="1.5" className="filter drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]" />
+                                
+                                {/* Labels */}
+                                <text x={x} y="152" fill="#9CA3AF" fontSize="8.5" textAnchor="middle" fontWeight="600" className="font-sans">
+                                  {item.quarter}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()}
                   </div>
 
                   {/* Legends */}
@@ -759,11 +841,11 @@ export default function MarketsClient({
 
             {/* About Text Block (Slide 3) */}
             <div className="px-4 md:px-0">
-              <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+              <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
                 <h3 className="font-bold text-sm text-gray-200">{isAr ? 'عن الشركة' : 'About the Company'}</h3>
                 
                 <p className={`text-xs text-gray-400 leading-relaxed ${aboutReadMore ? '' : 'line-clamp-3'}`}>
-                  {isAr ? currentData.aboutTextArabic : currentData.aboutTextEnglish}
+                  {isAr ? currentStockData.aboutTextArabic : currentStockData.aboutTextEnglish}
                 </p>
 
                 <button
@@ -776,43 +858,43 @@ export default function MarketsClient({
                 <div className="grid grid-cols-2 gap-4 pt-2 text-xs">
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-gray-500 block uppercase">{isAr ? 'القطاع' : 'Sector'}</span>
-                    <span className="font-bold">{isAr ? currentData.sectorArabic : currentData.sectorEnglish}</span>
+                    <span className="font-bold">{isAr ? currentStockData.sectorArabic : currentStockData.sectorEnglish}</span>
                   </div>
 
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-gray-500 block uppercase">{isAr ? 'عدد الموظفين' : 'Employees'}</span>
-                    <span className="font-bold font-mono">{Number(currentData.employees).toLocaleString()}</span>
+                    <span className="font-bold font-mono">{Number(currentStockData.employees).toLocaleString()}</span>
                   </div>
 
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-gray-500 block uppercase">{isAr ? 'المدير التنفيزي' : 'CEO'}</span>
-                    <span className="font-bold">{currentData.ceo}</span>
+                    <span className="font-bold">{currentStockData.ceo}</span>
                   </div>
 
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-gray-500 block uppercase">{isAr ? 'المقر' : 'Headquarters'}</span>
-                    <span className="font-bold truncate block">{currentData.headquarters}</span>
+                    <span className="font-bold truncate block">{currentStockData.headquarters}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Movement reason (Slide 3) */}
-            {currentData.movementReasonArabic && (
+            {currentStockData.movementReasonArabic && (
               <div className="px-4 md:px-0">
-                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-2">
+                <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-2">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'سبب حركة السهم' : 'Stock Movement Reason'}</h3>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    {isAr ? currentData.movementReasonArabic : currentData.movementReasonEnglish}
+                    {isAr ? currentStockData.movementReasonArabic : currentStockData.movementReasonEnglish}
                   </p>
                 </div>
               </div>
             )}
 
             {/* Statistics Section Sliders (Slide 4) */}
-            {currentData.statistics && (
+            {currentStockData.statistics && (
               <div className="px-4 md:px-0">
-                <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'الإحصائيات' : 'Statistics'}</h3>
                   
                   {/* Ranges sliders mock rendering */}
@@ -820,7 +902,7 @@ export default function MarketsClient({
                     <div className="space-y-1">
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'نطاق اليوم' : "Day's Range"}</span>
-                        <span className="font-mono">${currentData.statistics.dayRange[0]} - ${currentData.statistics.dayRange[1]}</span>
+                        <span className="font-mono">${currentStockData.statistics.dayRange[0]} - ${currentStockData.statistics.dayRange[1]}</span>
                       </div>
                       <div className="h-1 bg-black/40 rounded-full relative">
                         <div className="absolute left-[35%] right-[25%] h-1 bg-emerald-400 rounded-full" />
@@ -830,7 +912,7 @@ export default function MarketsClient({
                     <div className="space-y-1">
                       <div className="flex justify-between text-gray-400">
                         <span>{isAr ? 'نطاق 52 أسبوع' : '52-Week Range'}</span>
-                        <span className="font-mono">${currentData.statistics.yearRange[0]} - ${currentData.statistics.yearRange[1]}</span>
+                        <span className="font-mono">${currentStockData.statistics.yearRange[0]} - ${currentStockData.statistics.yearRange[1]}</span>
                       </div>
                       <div className="h-1 bg-black/40 rounded-full relative">
                         <div className="absolute left-[50%] right-[10%] h-1 bg-emerald-400 rounded-full" />
@@ -844,32 +926,32 @@ export default function MarketsClient({
                   <div className="grid grid-cols-2 gap-4 text-xs">
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'سعر الافتتاح' : 'Open Price'}</span>
-                      <span className="font-bold font-mono">${currentData.statistics.open}</span>
+                      <span className="font-bold font-mono">${currentStockData.statistics.open}</span>
                     </div>
 
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'الإغلاق السابق' : 'Prev Close'}</span>
-                      <span className="font-bold font-mono">${currentData.statistics.prevClose}</span>
+                      <span className="font-bold font-mono">${currentStockData.statistics.prevClose}</span>
                     </div>
 
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'الحجم' : 'Volume'}</span>
-                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.volume, 'volume', isAr)}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentStockData.statistics.volume, 'volume', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-gray-400">{isAr ? 'متوسط الحجم' : 'Avg Volume'}</span>
-                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.avgVolume, 'volume', isAr)}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentStockData.statistics.avgVolume, 'volume', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between">
                       <span className="text-gray-400">{isAr ? 'القيمة السوقية' : 'Market Cap'}</span>
-                      <span className="font-bold font-mono">{formatNumber(currentData.statistics.marketCap, 'mcap', isAr)}</span>
+                      <span className="font-bold font-mono">{formatNumber(currentStockData.statistics.marketCap, 'mcap', isAr)}</span>
                     </div>
 
                     <div className="flex justify-between">
                       <span className="text-gray-400">{isAr ? 'مكرر الأرباح' : 'P/E Ratio'}</span>
-                      <span className="font-bold font-mono">{currentData.statistics.peRatio}</span>
+                      <span className="font-bold font-mono">{currentStockData.statistics.peRatio}</span>
                     </div>
                   </div>
                 </div>
@@ -1075,10 +1157,10 @@ export default function MarketsClient({
 
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <span className="text-xs text-gray-500 font-mono">
-                  ${currentData.price.toFixed(2)} / {isAr ? 'للسهم' : 'per share'}
+                  ${currentStockData.price.toFixed(2)} / {isAr ? 'للسهم' : 'per share'}
                 </span>
                 <h3 className="font-bold text-lg text-emerald-400">
-                  {isAr ? `تداول ${currentData.symbol}` : `Trade ${currentData.symbol}`}
+                  {isAr ? `تداول ${currentStockData.symbol}` : `Trade ${currentStockData.symbol}`}
                 </h3>
               </div>
 
@@ -1148,7 +1230,7 @@ export default function MarketsClient({
               {/* Dynamic total calculation */}
               {(() => {
                 const sh = parseFloat(tradeShares) || 0;
-                const total = sh * currentData.price;
+                const total = sh * currentStockData.price;
                 return (
                   <div className="flex justify-between items-center text-sm pt-2">
                     <span className="font-mono font-bold text-white">${total.toFixed(2)}</span>
@@ -1174,8 +1256,8 @@ export default function MarketsClient({
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        symbol: currentData.symbol,
-                        market: currentData.market,
+                        symbol: currentStockData.symbol,
+                        market: currentStockData.market,
                         action: tradeAction,
                         shares: parseFloat(tradeShares)
                       })
@@ -1224,8 +1306,8 @@ export default function MarketsClient({
               <h3 className="font-bold text-lg">{isAr ? 'اكتملت الصفقة بنجاح!' : 'Simulated Trade Success!'}</h3>
               <p className="text-xs text-gray-400 leading-relaxed">
                 {isAr 
-                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${currentData.symbol} بنجاح. الرصيد الحالي: ${jarBalance.toFixed(2)} ريال.`
-                  : `Simulated ${tradeAction} order for ${currentData.symbol} executed successfully. Balance: ${jarBalance.toFixed(2)} SAR.`
+                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${currentStockData.symbol} بنجاح. الرصيد الحالي: ${jarBalance.toFixed(2)} ريال.`
+                  : `Simulated ${tradeAction} order for ${currentStockData.symbol} executed successfully. Balance: ${jarBalance.toFixed(2)} SAR.`
                 }
               </p>
               <button
