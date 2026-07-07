@@ -393,3 +393,17 @@ model AutoRunClaim {
   key       String   @id
   createdAt DateTime @default(now())
 }
+
+// Rushd Quant: research/literature corpus for the RAG analyst (QUANT_DESIGN §4, Q4).
+// embedding is optional — MVP retrieval is keyword/tag based (no embedding API needed).
+model ResearchDoc {
+  id        String   @id @default(uuid())
+  title     String
+  sourceRef String
+  text      String
+  tags      String[]
+  embedding Float[]
+  createdAt DateTime @default(now())
+
+  @@index([tags])
+}

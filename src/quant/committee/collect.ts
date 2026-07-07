@@ -4,9 +4,8 @@
 // tradeability-annotated result. Dependency-injected so it's unit-testable
 // without a DB or LLM keys.
 //
-// RESEARCH (#7, RAG) ships Q4 — it is NOT one of DEFAULT_ANALYSTS. It will inform
-// the Portfolio Manager's rationale later without ever overriding this gate; the
-// extension point is simply appending it to the `analysts` list passed in `opts`.
+// RESEARCH (#7, RAG) grounds its stance in retrieved literature; it INFORMS the
+// committee's rationale and never overrides the Sharia gate below.
 import type { Analyst, AnalystSignal, AgentKind } from '../types';
 import type { PointInTimeContext } from '../data/pointInTime';
 import { evaluateShariaGate, type ShariaGate } from '../gates/sharia';
@@ -15,6 +14,7 @@ import { technicalAnalyst } from '../analysts/technical';
 import { newsCatalystAnalyst } from '../analysts/news';
 import { fundamentalAnalyst } from '../analysts/fundamental';
 import { patternAnalyst } from '../analysts/pattern';
+import { researchAnalyst } from '../analysts/research';
 
 export const DEFAULT_ANALYSTS: Analyst[] = [
   quantCoreAnalyst,
@@ -22,6 +22,7 @@ export const DEFAULT_ANALYSTS: Analyst[] = [
   newsCatalystAnalyst,
   fundamentalAnalyst,
   patternAnalyst,
+  researchAnalyst,
 ];
 
 export interface CommitteeResult {
