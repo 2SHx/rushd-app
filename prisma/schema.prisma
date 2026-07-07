@@ -68,6 +68,7 @@ model User {
   quizAttempts        QuizAttempt[]
   strategies          Strategy[]
   decisions           Decision[]
+  purificationEntries PurificationEntry[]
 
   @@unique([parentId, username])
   @@index([parentId])
@@ -91,6 +92,7 @@ model PortfolioItem {
   shares    Decimal  @db.Decimal(18, 6)
   market    Market
   currency  Currency
+  costBasis Decimal? @db.Decimal(18, 4)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -344,14 +346,16 @@ model Order {
 }
 
 model PortfolioSnapshot {
-  id          String   @id @default(uuid())
-  strategyId  String
-  userId      String
-  asOf        DateTime
-  cashVirtual Decimal  @db.Decimal(18, 4)
-  currency    Currency @default(SAR)
-  positions   Json // symbol -> { qty, costBasis }
-  nav         Decimal  @db.Decimal(18, 4)
+  id               String   @id @default(uuid())
+  strategyId       String
+  userId           String
+  asOf             DateTime
+  cashVirtual      Decimal  @db.Decimal(18, 4)
+  currency         Currency @default(SAR)
+  positions        Json // symbol -> { qty, costBasis }
+  nav              Decimal  @db.Decimal(18, 4)
+  benchmarkNavSpy  Decimal  @default(100.0) @db.Decimal(18, 4)
+  benchmarkNavSpus Decimal  @default(100.0) @db.Decimal(18, 4)
 
   @@index([strategyId, asOf])
 }
@@ -406,4 +410,17 @@ model ResearchDoc {
   createdAt DateTime @default(now())
 
   @@index([tags])
+}
+
+model PurificationEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  amount    Decimal  @db.Decimal(18, 4)
+  ratio     Decimal  @db.Decimal(6, 4)
+  profit    Decimal  @db.Decimal(18, 4)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

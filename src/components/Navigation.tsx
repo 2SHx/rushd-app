@@ -14,6 +14,7 @@ export default function Navigation({ locale }: { locale: string }) {
     { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },
     { href: `/${locale}/markets`, icon: LineChart, label: isAr ? 'الأسهم' : 'Stocks' },
     { href: `/${locale}/quant`, icon: Sparkles, label: isAr ? 'اللجنة الذكية' : 'Quant Advisor' },
+    { href: `/${locale}/quant/portfolio`, icon: Briefcase, label: isAr ? 'المحفظة الآلية' : 'Index Portfolio' },
     { href: `/${locale}/quiz`, icon: BookOpen, label: isAr ? 'التعليم' : 'Quizzes' },
     { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' },
     { href: `/${locale}/investor`, icon: Briefcase, label: isAr ? 'المستثمرون' : 'Investors' }
