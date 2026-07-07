@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { User as UserIcon, Shield, Trophy, Key, Star } from 'lucide-react';
+import TierSelector from '@/components/profile/TierSelector';
 
 export default async function ProfilePage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -89,6 +90,11 @@ export default async function ProfilePage({ params }: { params: { locale: string
                 <Star className="w-4 h-4 fill-neonBlue/10" />
                 <span className="font-semibold">{user.tier}</span>
               </div>
+            </div>
+
+            {/* Simulated Tier Upgrader widget */}
+            <div className="sm:col-span-2 mt-2">
+              <TierSelector currentTier={user.tier} locale={locale} />
             </div>
 
             {user.role === 'PARENT' && user.familyCode && (
