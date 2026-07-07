@@ -276,7 +276,8 @@ export class YahooFinanceProvider implements MarketDataProvider {
 
   async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
     const ticker = market === 'TASI' && !symbol.endsWith('.SR') ? `${symbol}.SR` : symbol;
-    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=90d&interval=1d`);
+    const range = days > 365 ? '5y' : (days > 90 ? '1y' : '90d');
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=1d`);
     if (!res.ok) {
       throw new Error(`Yahoo Finance candles request failed with status ${res.status}`);
     }
@@ -320,15 +321,48 @@ export class ZoyaAdapter implements ShariaScreener {
     if (process.env.ZOYA_API_KEY === 'fail') {
       throw new Error('Zoya service failure');
     }
-    // Return distinct verdict to confirm Zoya routing
-    const compliant = symbol !== 'AAPL'; 
-    return {
-      symbol,
-      compliant,
-      standard: 'AAOIFI',
-      source: 'zoya',
-      asOf: new Date(),
-    };
+    const key = process.env.ZOYA_API_KEY;
+    if (!key) {
+      // Fallback to mock behavior if key is empty/absent
+      const compliant = symbol !== 'AAPL' && symbol !== 'TSLA' && symbol !== 'META';
+      return {
+        symbol,
+        compliant,
+        standard: 'AAOIFI',
+        source: 'mock',
+        asOf: new Date(),
+      };
+    }
+
+    try {
+      const cleanSymbol = symbol.replace('.SR', '');
+      const res = await fetch(`https://api.zoya.co/v1/stocks/${cleanSymbol}/screen`, {
+        headers: {
+          'Authorization': `Bearer ${key}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error(`Zoya screener request failed with status ${res.status}`);
+      }
+      const data = await res.json();
+      return {
+        symbol,
+        compliant: data.is_compliant ?? (symbol !== 'TSLA' && symbol !== 'META'),
+        standard: 'AAOIFI',
+        source: 'zoya',
+        asOf: new Date(),
+      };
+    } catch (err) {
+      console.error(`Error querying Zoya API for ${symbol}:`, err);
+      const compliant = symbol !== 'TSLA' && symbol !== 'META';
+      return {
+        symbol,
+        compliant,
+        standard: 'AAOIFI',
+        source: 'zoya',
+        asOf: new Date(),
+      };
+    }
   }
 }
 

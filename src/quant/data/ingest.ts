@@ -27,7 +27,11 @@ export async function ingestBars(
   market: Market,
   opts?: { days?: number },
 ): Promise<{ upserted: number; source: string }> {
-  const provider = registry.getProvider(market);
+  let provider = registry.getProvider(market);
+  // Bypasses Alpaca free tier caps for deep historical NASDAQ runs
+  if (market === 'NASDAQ' && opts?.days && opts.days > 365) {
+    provider = new YahooFinanceProvider();
+  }
   const source = sourceFor(provider);
   const candles = await provider.getCandles(symbol, market, opts?.days ?? 90);
 
