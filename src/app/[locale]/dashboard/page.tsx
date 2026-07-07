@@ -3,7 +3,7 @@ import DashboardClient from '@/components/DashboardClient';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { TICKERS } from '@/components/MarketsClient';
+import { TICKERS } from '@/lib/tickers';
 
 export default async function DashboardPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';

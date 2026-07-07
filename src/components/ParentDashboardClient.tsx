@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { User, Users, Plus, Award, Wallet, Briefcase, Key } from 'lucide-react';
-import { TICKERS } from './MarketsClient';
+import { TICKERS } from '@/lib/tickers';
 
 interface ParentDashboardClientProps {
   parentName: string;

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
+import { TICKERS } from '@/lib/tickers';
 
 export interface MarketsClientProps {
   currentData: any;
@@ -17,28 +18,6 @@ export interface MarketsClientProps {
   initialSharesOwned?: number;
 }
 
-export const TICKERS = {
-  TASI: [
-    { symbol: '2222.SR', name: 'Saudi Aramco', arName: 'أرامكو السعودية', price: 27.20, change: 0.15, pct: 0.55 },
-    { symbol: '1120.SR', name: 'Al Rajhi Bank', arName: 'مصرف الراجحي', price: 82.50, change: -0.40, pct: -0.48 },
-    { symbol: '1180.SR', name: 'Saudi National Bank', arName: 'البنك الأهلي السعودي', price: 38.40, change: 0.25, pct: 0.66 },
-    { symbol: '7010.SR', name: 'stc', arName: 'اس تي سي', price: 41.15, change: 0.05, pct: 0.12 },
-    { symbol: '2010.SR', name: 'SABIC', arName: 'سابك', price: 73.80, change: -1.20, pct: -1.60 },
-    { symbol: '1150.SR', name: 'Alinma Bank', arName: 'مصرف الإنماء', price: 31.90, change: 0.35, pct: 1.11 },
-    { symbol: '1020.SR', name: 'Bank AlJazira', arName: 'بنك الجزيرة', price: 16.09, change: 0.11, pct: 0.69 },
-    { symbol: '8250.SR', name: 'Amana Insurance', arName: 'أمانة للتأمين', price: 8.25, change: 0.82, pct: 11.04 },
-    { symbol: '6060.SR', name: 'East Agriculture', arName: 'الشرقية للتنمية', price: 15.86, change: 1.44, pct: 9.99 }
-  ],
-  NASDAQ: [
-    { symbol: 'AAPL', name: 'Apple Inc.', arName: 'أبل', price: 180.25, change: 1.45, pct: 0.81 },
-    { symbol: 'NVDA', name: 'NVIDIA Corporation', arName: 'إنفيديا', price: 210.50, change: -2.75, pct: -1.29 },
-    { symbol: 'MSFT', name: 'Microsoft Corp.', arName: 'مايكروسوفت', price: 380.10, change: 2.10, pct: 0.55 },
-    { symbol: 'GOOGL', name: 'Alphabet Inc.', arName: 'ألفابت (جوجل)', price: 145.30, change: 0.95, pct: 0.66 },
-    { symbol: 'AMZN', name: 'Amazon.com Inc.', arName: 'أمازون', price: 160.40, change: -1.15, pct: -0.71 },
-    { symbol: 'META', name: 'Meta Platforms Inc.', arName: 'ميتا', price: 420.80, change: 4.50, pct: 1.08 },
-    { symbol: 'TSLA', name: 'Tesla Motors', arName: 'تسلا', price: 220.50, change: -4.80, pct: -2.13 }
-  ]
-};
 
 function getRecommendedQuiz(symbol: string) {
   switch (symbol) {
@@ -149,6 +128,43 @@ export default function MarketsClient({
   // Live balance & holdings
   const [jarBalance, setJarBalance] = useState(initialJarBalance ?? 0);
   const [sharesOwned, setSharesOwned] = useState(initialSharesOwned ?? 0);
+  const [tickerPrices, setTickerPrices] = useState<Record<string, { price: number; change: number; pct: number }>>({});
+
+  // Load real-time prices for the active watchlist in the background
+  useEffect(() => {
+    let active = true;
+    const fetchWatchlistPrices = async () => {
+      const list = marketTab === 'TASI' ? TICKERS.TASI : TICKERS.NASDAQ;
+      for (const t of list) {
+        if (!active) break;
+        try {
+          const res = await fetch(`/api/market-data?symbol=${t.symbol}&market=${marketTab}`);
+          if (res.ok && active) {
+            const data = await res.json();
+            const hist = data.history || [];
+            const prev = hist.length > 1 ? hist[hist.length - 2]?.close : (hist[0]?.close ?? data.price);
+            const change = data.price - prev;
+            const pct = prev > 0 ? (change / prev) : 0;
+
+            setTickerPrices(prevPrices => ({
+              ...prevPrices,
+              [t.symbol]: {
+                price: data.price,
+                change,
+                pct: pct * 100
+              }
+            }));
+          }
+          // Slight delay of 100ms to avoid rate limits
+          await new Promise(r => setTimeout(r, 100));
+        } catch (err) {
+          console.error(`Failed to fetch live quote for ${t.symbol}:`, err);
+        }
+      }
+    };
+    fetchWatchlistPrices();
+    return () => { active = false; };
+  }, [marketTab]);
 
   // New simulated trade drawer states
   const [tradeDrawerOpen, setTradeDrawerOpen] = useState(false);
@@ -409,12 +425,12 @@ export default function MarketsClient({
                     <div className="text-right">
                       <p className="font-mono font-bold text-sm text-white">
                         {marketTab === 'TASI' 
-                          ? (isAr ? `${t.price.toFixed(2)} ر.س` : `${t.price.toFixed(2)} SAR`)
-                          : `${t.price.toFixed(2)}`
+                          ? (isAr ? `${(tickerPrices[t.symbol]?.price ?? t.price).toFixed(2)} ر.س` : `${(tickerPrices[t.symbol]?.price ?? t.price).toFixed(2)} SAR`)
+                          : `${(tickerPrices[t.symbol]?.price ?? t.price).toFixed(2)}`
                         }
                       </p>
-                      <p className={`text-xs font-semibold ${t.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {t.pct >= 0 ? '+' : ''}{t.pct.toFixed(2)}%
+                      <p className={`text-xs font-semibold ${(tickerPrices[t.symbol]?.pct ?? t.pct) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(tickerPrices[t.symbol]?.pct ?? t.pct) >= 0 ? '+' : ''}{(tickerPrices[t.symbol]?.pct ?? t.pct).toFixed(2)}%
                       </p>
                     </div>
                   </div>
@@ -427,6 +443,12 @@ export default function MarketsClient({
 
 
   const renderStockDetails = () => {
+    const priceHistory = currentStockData.history || [];
+    const latestPrice = currentStockData.price || 0;
+    const prevClose = priceHistory.length > 1 ? priceHistory[priceHistory.length - 2]?.close : (priceHistory[0]?.close ?? latestPrice);
+    const realChange = latestPrice - prevClose;
+    const realPct = prevClose > 0 ? (realChange / prevClose) * 100 : 0;
+
     return (
       <div className="space-y-6 relative min-h-[400px]">
         {loadingStock && (
@@ -485,8 +507,8 @@ export default function MarketsClient({
                   {currentStockData.market === 'TASI' ? (isAr ? 'ريال سعودي' : 'Riyals (SAR)') : (isAr ? 'دولار أمريكي' : 'USD')}
                 </span>
               </div>
-              <p className={`text-sm font-semibold font-mono ${activeTicker.pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {activeTicker.change > 0 ? '+' : ''}{activeTicker.change.toFixed(2)} ({activeTicker.pct.toFixed(2)}%)
+              <p className={`text-sm font-semibold font-mono ${realPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {realChange > 0 ? '+' : ''}{realChange.toFixed(2)} ({realPct.toFixed(2)}%)
               </p>
             </div>
 

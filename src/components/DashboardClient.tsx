@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
-import { TICKERS } from './MarketsClient';
+import { TICKERS } from '@/lib/tickers';
 import { 
   Bot, Trophy, ArrowUpRight, ArrowDownRight, Activity, Wallet, 
   Briefcase, History, TrendingUp, Layers, CheckCircle2, AlertTriangle, Coins
