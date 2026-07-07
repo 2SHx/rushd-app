@@ -175,12 +175,35 @@ export class AlpacaAdapter implements MarketDataProvider {
     if (process.env.ALPACA_API_KEY === 'fail') {
       throw new Error('Alpaca service failure');
     }
+    const key = process.env.ALPACA_API_KEY;
+    const secret = process.env.ALPACA_API_SECRET ?? '';
+    if (!key) {
+      throw new Error('Alpaca API Key is not set');
+    }
+
+    const res = await fetch(`https://data.alpaca.markets/v2/stocks/trades/latest?symbols=${symbol}`, {
+      headers: {
+        'APCA-API-KEY-ID': key,
+        'APCA-API-SECRET-KEY': secret,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Alpaca latest trade request failed with status ${res.status}`);
+    }
+
+    const data = await res.json();
+    const trade = data.trades?.[symbol];
+    if (!trade) {
+      throw new Error(`Alpaca latest trade response has no data for ${symbol}`);
+    }
+
     return {
       symbol,
       market,
-      price: 365.25, // Distinct price to confirm Alpaca routing
+      price: trade.p,
       currency: 'USD',
-      asOf: new Date(),
+      asOf: new Date(trade.t),
     };
   }
 
@@ -188,7 +211,43 @@ export class AlpacaAdapter implements MarketDataProvider {
     if (process.env.ALPACA_API_KEY === 'fail') {
       throw new Error('Alpaca service failure');
     }
-    return generateMockHistory(365.25).slice(-days);
+    const key = process.env.ALPACA_API_KEY;
+    const secret = process.env.ALPACA_API_SECRET ?? '';
+    if (!key) {
+      throw new Error('Alpaca API Key is not set');
+    }
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (days + 15));
+    const startStr = startDate.toISOString().split('T')[0];
+
+    const res = await fetch(
+      `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Day&start=${startStr}&limit=${days + 30}&adjustment=split`,
+      {
+        headers: {
+          'APCA-API-KEY-ID': key,
+          'APCA-API-SECRET-KEY': secret,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error(`Alpaca bars request failed with status ${res.status}`);
+    }
+
+    const data = await res.json();
+    const barsList = data.bars?.[symbol] || [];
+
+    const candles: Candle[] = barsList.map((b: any) => ({
+      time: b.t.split('T')[0],
+      open: b.o,
+      high: b.h,
+      low: b.l,
+      close: b.c,
+      value: b.v,
+    }));
+
+    return candles.slice(-days);
   }
 }
 
