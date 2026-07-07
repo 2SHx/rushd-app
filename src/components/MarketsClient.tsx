@@ -419,7 +419,7 @@ export default function MarketsClient({
                       </div>
                       <div>
                         <h4 className="font-bold text-sm text-gray-200">{isAr ? t.arName : t.name}</h4>
-                        <span className="text-[10px] text-gray-500 font-mono">{t.symbol}</span>
+                        <span className="text-[10px] text-gray-500 font-mono">{t.symbol.replace('.SR', '')}</span>
                       </div>
                     </div>
                     <div className="text-right">
@@ -475,7 +475,7 @@ export default function MarketsClient({
                   {isAr ? activeTicker.arName : activeTicker.name}
                 </span>
                 <span className="text-[10px] text-gray-400 font-mono font-bold tracking-wider">
-                  {currentStockData.symbol}
+                  {currentStockData.symbol.replace('.SR', '')}
                 </span>
               </div>
 
@@ -768,8 +768,8 @@ export default function MarketsClient({
                   {/* Rating description */}
                   <p className="text-xs text-gray-400 leading-relaxed">
                     {isAr 
-                      ? `بناءً على تقييم المحللين لسهم ${currentStockData.symbol} خلال الأشهر الثلاثة الماضية.`
-                      : `Based on analyst recommendations for ${currentStockData.symbol} over the last three months.`
+                      ? `بناءً على تقييم المحللين لسهم ${currentStockData.symbol.replace('.SR', '')} خلال الأشهر الثلاثة الماضية.`
+                      : `Based on analyst recommendations for ${currentStockData.symbol.replace('.SR', '')} over the last three months.`
                     }
                   </p>
 
@@ -1205,7 +1205,7 @@ export default function MarketsClient({
                   } / {isAr ? 'للسهم' : 'per share'}
                 </span>
                 <h3 className="font-bold text-lg text-emerald-400">
-                  {isAr ? `تداول ${currentStockData.symbol}` : `Trade ${currentStockData.symbol}`}
+                  {isAr ? `تداول ${currentStockData.symbol.replace('.SR', '')}` : `Trade ${currentStockData.symbol.replace('.SR', '')}`}
                 </h3>
               </div>
 
@@ -1356,8 +1356,8 @@ export default function MarketsClient({
               <h3 className="font-bold text-lg">{isAr ? 'اكتملت الصفقة بنجاح!' : 'Simulated Trade Success!'}</h3>
               <p className="text-xs text-gray-400 leading-relaxed">
                 {isAr 
-                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${currentStockData.symbol} بنجاح. الرصيد الحالي: ${jarBalance.toFixed(2)} ريال.`
-                  : `Simulated ${tradeAction} order for ${currentStockData.symbol} executed successfully. Balance: ${jarBalance.toFixed(2)} SAR.`
+                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${currentStockData.symbol.replace('.SR', '')} بنجاح. الرصيد الحالي: ${jarBalance.toFixed(2)} ريال.`
+                  : `Simulated ${tradeAction} order for ${currentStockData.symbol.replace('.SR', '')} executed successfully. Balance: ${jarBalance.toFixed(2)} SAR.`
                 }
               </p>
               <button

@@ -333,7 +333,7 @@ export default function DashboardClient({
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h3 className="text-xl font-bold text-white">{displayName}</h3>
-                <span className="text-xs text-gray-400 font-mono font-bold tracking-wider block mt-0.5">{currentData.symbol}</span>
+                <span className="text-xs text-gray-400 font-mono font-bold tracking-wider block mt-0.5">{currentData.symbol.replace('.SR', '')}</span>
                 <p className="text-3xl font-mono font-bold mt-2 text-white">
                   {market === 'TASI' ? '' : '$'}{currentData.price.toFixed(2)} <span className="text-xs font-semibold text-gray-500">{market === 'TASI' ? 'SAR' : 'USD'}</span>
                 </p>
@@ -377,7 +377,7 @@ export default function DashboardClient({
                       const value = item.shares * item.price;
                       return (
                         <tr key={idx} className="border-b border-white/5 text-gray-300">
-                          <td className="py-2.5 font-bold font-mono text-white">{item.symbol}</td>
+                          <td className="py-2.5 font-bold font-mono text-white">{item.symbol.replace('.SR', '')}</td>
                           <td className="py-2.5 font-mono">{item.shares.toFixed(2)}</td>
                           <td className="py-2.5 text-right rtl:text-left font-mono">${item.price.toFixed(2)}</td>
                           <td className="py-2.5 text-right rtl:text-left font-mono text-emerald-400 font-bold">{value.toFixed(2)} SAR</td>
@@ -460,7 +460,7 @@ export default function DashboardClient({
                     ? (isAr ? 'جاري تنفيذ التداول...' : 'Executing Trade...') 
                     : aiSignal.complianceTag === 'HARAM' || aiSignal.complianceTag === 'MASHBOOH'
                       ? (isAr ? 'التداول محظور لغير المتوافقة' : 'Blocked (Non-Compliant)')
-                      : (isAr ? `شراء 10 أسهم من ${currentData.symbol}` : `Buy 10 shares of ${currentData.symbol}`)}
+                      : (isAr ? `شراء 10 أسهم من ${currentData.symbol.replace('.SR', '')}` : `Buy 10 shares of ${currentData.symbol.replace('.SR', '')}`)}
                 </motion.button>
               </div>
             ) : (
