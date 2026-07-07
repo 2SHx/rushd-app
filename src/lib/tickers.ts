@@ -13,8 +13,8 @@ export const TICKERS = {
     { symbol: '7020.SR', name: 'Mobily', arName: 'موبايلي', price: 48.95, change: 0.45, pct: 0.93 },
     { symbol: '5110.SR', name: 'Saudi Electricity', arName: 'الكهرباء السعودية', price: 19.10, change: -0.15, pct: -0.78 },
     { symbol: '1020.SR', name: 'Bank AlJazira', arName: 'بنك الجزيرة', price: 16.09, change: 0.11, pct: 0.69 },
-    { symbol: '8250.SR', name: 'Amana Insurance', arName: 'أمانة للتأمين', price: 8.25, change: 0.82, pct: 11.04 },
-    { symbol: '6060.SR', name: 'East Agriculture', arName: 'الشرقية للتنمية', price: 15.86, change: 1.44, pct: 9.99 }
+    { symbol: '8250.SR', name: 'Gulf Insurance Group', arName: 'أمانة للتأمين', price: 8.25, change: 0.82, pct: 11.04 },
+    { symbol: '6060.SR', name: 'Ash-Sharqiyah Development Co.', arName: 'الشرقية للتنمية', price: 15.86, change: 1.44, pct: 9.99 }
   ],
   NASDAQ: [
     { symbol: 'AAPL', name: 'Apple Inc.', arName: 'أبل', price: 180.25, change: 1.45, pct: 0.81 },
