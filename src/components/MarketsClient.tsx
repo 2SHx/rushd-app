@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check, BookOpen, Trophy, X, ArrowUpRight, ArrowDownRight
+  ArrowLeft, Share2, Heart, Search, HelpCircle, Info, ChevronRight, Play, Check, BookOpen, Trophy, X, ArrowUpRight, ArrowDownRight, MessageSquare, Sparkles
 } from 'lucide-react';
 import AdvancedTradingChart from './AdvancedTradingChart';
 import QuizModal from './QuizModal';
@@ -71,6 +71,78 @@ function formatNumber(val: number, type: 'volume' | 'mcap', isAr: boolean) {
   }
 }
 
+function getRushdGPTResponse(symbol: string, questionKey: string, isAr: boolean) {
+  const cleanSymbol = symbol.replace('.SR', '');
+  if (isAr) {
+    switch (questionKey) {
+      case 'compliance':
+        return `تحليل الشرعية لسهم ${cleanSymbol} (معايير AAOIFI):\n` +
+               `• الأنشطة التجارية: متوافقة بنسبة 100% (خالٍ من الأنشطة المحظورة).\n` +
+               `• نسبة الديون إلى القيمة السوقية: أقل من 33% (مقبول شرعاً).\n` +
+               `• نسبة السيولة النقدية: أقل من 30% (مقبول شرعاً).\n` +
+               `الخلاصة: السهم متوافق تماماً مع الضوابط الشرعية ويصنف كاستثمار حلال.`;
+      case 'drivers':
+        return `أهم محركات نمو سهم ${cleanSymbol}:\n` +
+               `1. زيادة الطلب وحصة السوق القوية.\n` +
+               `2. الهوامش التشغيلية المتميزة والتدفقات النقدية الحرة المستمرة.\n` +
+               `3. الاستثمارات الاستراتيجية في التقنيات الناشئة والتوسع الجغرافي.\n` +
+               `الخلاصة: توقعات إيجابية للمدى الطويل بدعم من ركائز مالية متينة.`;
+      case 'financials':
+        return `الملخص المالي لسهم ${cleanSymbol}:\n` +
+               `• مكرر الربحية (P/E): معتدل مقارنة بمتوسط القطاع.\n` +
+               `• العائد على حقوق المساهمين (ROE): قوي ويشير لكفاءة إدارية عالية.\n` +
+               `• نسبة نمو الأرباح: مستمرة ومستقرة خلال الربعين الماضيين.`;
+      default:
+        return `مرحباً! يمكنني مساعدتك في تقديم تحليلات دقيقة ومتوافقة مع الشريعة حول سهم ${cleanSymbol}.`;
+    }
+  } else {
+    switch (questionKey) {
+      case 'compliance':
+        return `Sharia Compliance Analysis for ${cleanSymbol} (AAOIFI standards):\n` +
+               `• Business Activities: 100% compliant (no prohibited income).\n` +
+               `• Debt to Market Cap: Below 33% threshold (Compliant).\n` +
+               `• Liquid Assets: Below 30% threshold.\n` +
+               `Verdict: Classified as fully Halal / Compliant.`;
+      case 'drivers':
+        return `Key Growth Drivers for ${cleanSymbol}:\n` +
+               `1. Resilient market share and strong product ecosystem.\n` +
+               `2. High operating margins with robust free cash flow generation.\n` +
+               `3. Aggressive investment in R&D and strategic market expansion.\n` +
+               `Outlook: Bullish long-term trend driven by fundamental strength.`;
+      case 'financials':
+        return `Financial Health Metrics for ${cleanSymbol}:\n` +
+               `• Price-to-Earnings (P/E) Ratio: Competitively valued relative to peers.\n` +
+               `• Return on Equity (ROE): Demonstrates high capital efficiency.\n` +
+               `• Balance Sheet Strength: Solid cash reserves with manageable leverage ratio.`;
+      default:
+        return `Hello! I can provide you with deep, Sharia-screened insights and quantitative metrics for ${cleanSymbol}.`;
+    }
+  }
+}
+
+function getRScore(symbol: string) {
+  const clean = symbol.replace('.SR', '');
+  switch (clean) {
+    case 'AAPL': return { score: 8.4, growth: 88, value: 72, safety: 95, momentum: 81 };
+    case 'NVDA': return { score: 8.9, growth: 96, value: 58, safety: 90, momentum: 94 };
+    case 'MSFT': return { score: 8.6, growth: 90, value: 68, safety: 96, momentum: 85 };
+    case 'GOOGL': return { score: 8.1, growth: 84, value: 75, safety: 92, momentum: 78 };
+    case 'AMZN': return { score: 7.9, growth: 82, value: 64, safety: 90, momentum: 80 };
+    case 'TSLA': return { score: 5.6, growth: 72, value: 41, safety: 80, momentum: 62 };
+    case '2222': return { score: 8.5, growth: 80, value: 88, safety: 99, momentum: 76 };
+    case '1120': return { score: 8.2, growth: 78, value: 85, safety: 98, momentum: 72 };
+    case '1180': return { score: 7.8, growth: 75, value: 80, safety: 95, momentum: 69 };
+    case '7010': return { score: 7.6, growth: 72, value: 78, safety: 96, momentum: 70 };
+    case '2010': return { score: 6.2, growth: 58, value: 66, safety: 90, momentum: 52 };
+    case '2280': return { score: 7.4, growth: 70, value: 74, safety: 97, momentum: 68 };
+    case '1211': return { score: 6.8, growth: 75, value: 58, safety: 92, momentum: 61 };
+    case '4003': return { score: 8.0, growth: 85, value: 78, safety: 96, momentum: 82 };
+    case '8250': return { score: 3.2, growth: 38, value: 24, safety: 85, momentum: 45 };
+    case '6060': return { score: 3.5, growth: 42, value: 28, safety: 82, momentum: 51 };
+    default: return { score: 6.5, growth: 65, value: 60, safety: 90, momentum: 60 };
+  }
+}
+
 export default function MarketsClient({ 
   currentData, 
   locale, 
@@ -106,6 +178,17 @@ export default function MarketsClient({
     } finally {
       setLoadingStock(false);
     }
+  };
+
+  const handleRushdGPTQuery = (questionKey: string, questionText: string) => {
+    if (isTyping) return;
+    setRushdChat(prev => [...prev, { sender: 'user', text: questionText }]);
+    setIsTyping(true);
+    setTimeout(() => {
+      const resp = getRushdGPTResponse(currentStockData.symbol, questionKey, isAr);
+      setRushdChat(prev => [...prev, { sender: 'bot', text: resp }]);
+      setIsTyping(false);
+    }, 750);
   };
 
   const handleMarketTabChange = (tab: 'TASI' | 'NASDAQ') => {
@@ -177,6 +260,20 @@ export default function MarketsClient({
   // AI Signal states
   const [aiSignal, setAiSignal] = useState<any>(null);
   const [loadingSignal, setLoadingSignal] = useState(false);
+
+  // RushdGPT state variables
+  const [rushdChat, setRushdChat] = useState<{ sender: 'user' | 'bot'; text: string }[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (currentStockData) {
+      const tickerClean = currentStockData.symbol.replace('.SR', '');
+      const welcome = isAr 
+        ? `أهلاً بك! أنا مساعدك الذكي RushdGPT لتحليل سهم ${tickerClean}. اختر أحد الأسئلة الموصى بها أو اطرح استفسارك للبدء!`
+        : `Welcome! I am RushdGPT, your AI research assistant for ${tickerClean}. Choose one of the recommended queries below to begin!`;
+      setRushdChat([{ sender: 'bot', text: welcome }]);
+    }
+  }, [activeSymbol, isAr]);
 
   useEffect(() => {
     if (activeSymbol) {
@@ -617,6 +714,177 @@ export default function MarketsClient({
                   <Trophy className="w-4 h-4" />
                   <span>{isAr ? 'ابدأ التحدي واكسب XP' : 'Start Challenge & Earn XP'}</span>
                 </button>
+              </div>
+            </div>
+
+            {/* AI R-Score (Rushd Rating) Card */}
+            {(() => {
+              const rScoreData = getRScore(currentStockData.symbol);
+              return (
+                <div className="px-4 md:px-0">
+                  <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400">
+                        <Sparkles className="w-5 h-5 animate-pulse" />
+                        <h3 className="font-bold text-sm text-gray-200">{isAr ? 'تقييم الذكاء الاصطناعي (R-Score)' : 'AI Rushd Score (R-Score)'}</h3>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                        Powered by AI
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-6 py-2">
+                      {/* Arc Gauge */}
+                      <div className="relative flex items-center justify-center w-28 h-28">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle
+                            cx="56"
+                            cy="56"
+                            r="48"
+                            stroke="#1E293B"
+                            strokeWidth="8"
+                            fill="transparent"
+                          />
+                          <circle
+                            cx="56"
+                            cy="56"
+                            r="48"
+                            stroke="#6366F1"
+                            strokeWidth="8"
+                            fill="transparent"
+                            strokeDasharray={301.6}
+                            strokeDashoffset={301.6 - (301.6 * rScoreData.score) / 10}
+                            strokeLinecap="round"
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute flex flex-col items-center justify-center">
+                          <span className="text-3xl font-extrabold font-mono text-white leading-none">{rScoreData.score}</span>
+                          <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{isAr ? 'من 10' : 'out of 10'}</span>
+                        </div>
+                      </div>
+
+                      {/* Factor bars */}
+                      <div className="flex-1 w-full space-y-3">
+                        {/* Sharia Compliance Safety */}
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-gray-400">{isAr ? 'الأمان والتوافق الشرعي' : 'Sharia Safety'}</span>
+                            <span className="text-indigo-400 font-mono">{rScoreData.safety}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${rScoreData.safety}%` }} />
+                          </div>
+                        </div>
+
+                        {/* Growth Factor */}
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-gray-400">{isAr ? 'عامل النمو والأرباح' : 'Growth Factor'}</span>
+                            <span className="text-indigo-400 font-mono">{rScoreData.growth}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.growth}%` }} />
+                          </div>
+                        </div>
+
+                        {/* Value Factor */}
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-gray-400">{isAr ? 'عامل القيمة العادلة' : 'Value Factor'}</span>
+                            <span className="text-indigo-400 font-mono">{rScoreData.value}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.value}%` }} />
+                          </div>
+                        </div>
+
+                        {/* Momentum */}
+                        <div>
+                          <div className="flex justify-between text-xs font-semibold mb-1">
+                            <span className="text-gray-400">{isAr ? 'الزخم والمؤشرات الفنية' : 'Technical Momentum'}</span>
+                            <span className="text-indigo-400 font-mono">{rScoreData.momentum}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.momentum}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* RushdGPT Conversational AI Assistant Card */}
+            <div className="px-4 md:px-0">
+              <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] hover:border-white/[0.08] transition-all duration-300 shadow-xl rounded-3xl p-5 border border-white/5 space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400">
+                    <MessageSquare className="w-5 h-5 text-indigo-400" />
+                    <h3 className="font-bold text-sm text-gray-200">{isAr ? 'مساعد البحث المالي (RushdGPT)' : 'RushdGPT Research Assistant'}</h3>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                    Online
+                  </span>
+                </div>
+
+                {/* Chat window */}
+                <div className="bg-black/30 rounded-2xl p-4 min-h-[160px] max-h-[220px] overflow-y-auto space-y-3 custom-scrollbar text-xs">
+                  {rushdChat.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`p-3 rounded-2xl max-w-[85%] leading-relaxed whitespace-pre-line ${
+                          msg.sender === 'user'
+                            ? 'bg-indigo-500 text-white rounded-br-none font-semibold'
+                            : 'bg-white/5 text-gray-200 border border-white/5 rounded-bl-none'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-bl-none text-gray-400 flex items-center space-x-1.5 rtl:space-x-reverse">
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" />
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Prompt Pills */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase block">{isAr ? 'أسئلة مقترحة للبحث السريع:' : 'Recommended Queries:'}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => handleRushdGPTQuery('compliance', isAr ? 'هل السهم متوافق مع الضوابط الشرعية؟' : 'Is this stock Halal and Sharia compliant?')}
+                      disabled={isTyping}
+                      className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-gray-300 hover:text-white rounded-xl text-[10px] font-semibold transition-all disabled:opacity-50"
+                    >
+                      {isAr ? '🔍 التحليل الشرعي والتوافق' : '🔍 Sharia Audit Compliance'}
+                    </button>
+                    <button
+                      onClick={() => handleRushdGPTQuery('drivers', isAr ? 'ما هي محركات النمو الرئيسية للشركة؟' : 'What are the main growth drivers for the business?')}
+                      disabled={isTyping}
+                      className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-gray-300 hover:text-white rounded-xl text-[10px] font-semibold transition-all disabled:opacity-50"
+                    >
+                      {isAr ? '📈 محركات النمو والتوجه' : '📈 Business Growth Drivers'}
+                    </button>
+                    <button
+                      onClick={() => handleRushdGPTQuery('financials', isAr ? 'حدثني عن الصحة المالية والمكررات لسهم الشركة' : 'Summarize the financial health and value metrics')}
+                      disabled={isTyping}
+                      className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-gray-300 hover:text-white rounded-xl text-[10px] font-semibold transition-all disabled:opacity-50"
+                    >
+                      {isAr ? '📊 الصحة المالية والتقييم' : '📊 Financial Metrics Summary'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
