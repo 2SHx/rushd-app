@@ -1,3 +1,5 @@
+import { TASI_UNIVERSE, NASDAQ_UNIVERSE_FALLBACK, type StockUniverseEntry } from '@/lib/stockUniverse';
+
 export interface Candle {
   time: string;
   open: number;
@@ -249,6 +251,38 @@ export class AlpacaAdapter implements MarketDataProvider {
 
     return candles.slice(-days);
   }
+
+  /** Live universe of tradable US equities. Used by /api/stocks/search; NOT a per-symbol quote. */
+  async getAssets(): Promise<{ symbol: string; name: string }[]> {
+    if (process.env.ALPACA_API_KEY === 'fail') {
+      throw new Error('Alpaca service failure');
+    }
+    const key = process.env.ALPACA_API_KEY;
+    const secret = process.env.ALPACA_API_SECRET ?? '';
+    if (!key) {
+      throw new Error('Alpaca API Key is not set');
+    }
+
+    const res = await fetch('https://paper-api.alpaca.markets/v2/assets?status=active&asset_class=us_equity', {
+      headers: {
+        'APCA-API-KEY-ID': key,
+        'APCA-API-SECRET-KEY': secret,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Alpaca assets request failed with status ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error('Alpaca assets response was not an array');
+    }
+
+    return data
+      .filter((a: any) => a.tradable === true && typeof a.symbol === 'string' && typeof a.name === 'string')
+      .map((a: any) => ({ symbol: a.symbol, name: a.name }));
+  }
 }
 
 export class YahooFinanceProvider implements MarketDataProvider {
@@ -488,6 +522,57 @@ export async function getCachedCandles(provider: MarketDataProvider, symbol: str
     console.error(`Error fetching candles for ${key}:`, err);
     if (cached) return cached.candles;
     return new MockProvider().getCandles(symbol, market, days);
+  }
+}
+
+// -------------------------------------------------------------
+// Stock Universe (for /api/stocks/search) — large, slow-changing, long TTL
+// -------------------------------------------------------------
+const universeCache = new Map<string, { entries: StockUniverseEntry[]; expiresAt: number }>();
+const universeLimiter = new TokenBucket(3, 0.05); // a handful of refetches/day is plenty for a ~12h-TTL list
+const UNIVERSE_TTL_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Full searchable universe for a market. NASDAQ uses the live Alpaca asset
+ * list when ALPACA_API_KEY is set (cached ~12h); otherwise (or on any
+ * fetch/rate-limit failure) falls back to the bundled list so the feature
+ * keeps working with no API keys set. TASI has no free listing API, so it is
+ * always the bundled, verified roster.
+ */
+export async function getStockUniverse(market: 'TASI' | 'NASDAQ'): Promise<StockUniverseEntry[]> {
+  if (market === 'TASI') {
+    return TASI_UNIVERSE;
+  }
+
+  const key = 'NASDAQ';
+  const now = Date.now();
+  const cached = universeCache.get(key);
+  if (cached && now < cached.expiresAt) {
+    return cached.entries;
+  }
+
+  if (!process.env.ALPACA_API_KEY) {
+    return NASDAQ_UNIVERSE_FALLBACK;
+  }
+
+  if (!universeLimiter.tryAcquire()) {
+    console.warn('Rate limit hit for NASDAQ universe fetch. Serving cached/bundled.');
+    return cached ? cached.entries : NASDAQ_UNIVERSE_FALLBACK;
+  }
+
+  try {
+    const assets = await new AlpacaAdapter().getAssets();
+    const entries: StockUniverseEntry[] = assets.map((a) => ({
+      symbol: a.symbol,
+      name: a.name,
+      arName: '',
+      market: 'NASDAQ',
+    }));
+    universeCache.set(key, { entries, expiresAt: now + UNIVERSE_TTL_MS });
+    return entries;
+  } catch (err) {
+    console.error('Error fetching NASDAQ universe from Alpaca:', err);
+    return cached ? cached.entries : NASDAQ_UNIVERSE_FALLBACK;
   }
 }
 
