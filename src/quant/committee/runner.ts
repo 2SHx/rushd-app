@@ -70,13 +70,15 @@ export async function runCommitteePass(inp: RunPassInput): Promise<{ decisionId:
     maxLookbackDays: PATTERN_WINDOW_DAYS,
   });
 
-  // Portfolio state — derived from the DB, never from the caller.
-  const items = await prisma.portfolioItem.findMany({ where: { userId: inp.userId } });
-  const snap = await prisma.portfolioSnapshot.findFirst({
-    where: { userId: inp.userId },
-    orderBy: { asOf: 'desc' },
-  });
-  const cash = snap?.cashVirtual ?? inp.startingCashVirtual ?? DEFAULT_CASH;
+  // Portfolio state — derived from the DB, never from the caller. Virtual cash is the
+  // authoritative User.cashVirtual (debited/credited by executeDecision), so equity does
+  // not double-count spent cash.
+  const [items, user, snap] = await Promise.all([
+    prisma.portfolioItem.findMany({ where: { userId: inp.userId } }),
+    prisma.user.findUnique({ where: { id: inp.userId } }),
+    prisma.portfolioSnapshot.findFirst({ where: { userId: inp.userId }, orderBy: { asOf: 'desc' } }),
+  ]);
+  const cash = user?.cashVirtual ?? inp.startingCashVirtual ?? DEFAULT_CASH;
 
   // Latest close per held symbol in one query (distinct on symbol/market).
   const symbols = items.map((i) => i.symbol);

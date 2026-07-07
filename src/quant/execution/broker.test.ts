@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { pickBrokerKind } from './broker';
 import { InternalSimBroker } from './internalSim';
+import { AlpacaPaperBroker } from './alpacaPaper';
 import { selectBroker } from './registry';
 import { assertLiveExecutionAllowed, isLiveExecutionAllowed, LiveExecutionBlocked } from './liveGuard';
 
@@ -51,6 +52,15 @@ describe('InternalSimBroker fills', () => {
     expect(sell.avgFillPrice.equals(new D('99.85'))).toBe(true);
     const again = await b.submitOrder({ symbol: 'AAPL', market: 'NASDAQ' as any, side: 'BUY' as any, qty: new D(10), refPrice: new D(100) });
     expect(again.brokerRef).toBe(buy.brokerRef); // deterministic
+  });
+});
+
+describe('AlpacaPaperBroker enforces the live gate at construction', () => {
+  it('constructs on a paper URL but THROWS on a live URL without the 3 conditions', () => {
+    // paper (default) is fine
+    expect(() => new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets')).not.toThrow();
+    // a live URL with no flags is blocked — real orders cannot be reached
+    expect(() => new AlpacaPaperBroker('k', 's', 'https://api.alpaca.markets')).toThrow(LiveExecutionBlocked);
   });
 });
 

@@ -12,6 +12,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     portfolioItem: { findMany: vi.fn() },
     portfolioSnapshot: { findFirst: vi.fn() },
+    user: { findUnique: vi.fn() },
     marketBar: { findMany: vi.fn() },
     $transaction: vi.fn(async (cb: any) => cb(h.tx)),
   },
@@ -54,6 +55,7 @@ describe('runCommitteePass', () => {
     vi.clearAllMocks();
     (prisma.portfolioItem.findMany as any).mockResolvedValue([]);
     (prisma.portfolioSnapshot.findFirst as any).mockResolvedValue(null);
+    (prisma.user.findUnique as any).mockResolvedValue({ cashVirtual: new D(100000) });
     (prisma.marketBar.findMany as any).mockResolvedValue([]);
     (loadPointInTimeContext as any).mockResolvedValue({
       symbol: 'AAPL',

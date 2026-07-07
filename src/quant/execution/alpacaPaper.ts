@@ -5,6 +5,7 @@
 import { Prisma } from '@prisma/client';
 import type { OrderStatus } from '@prisma/client';
 import type { BrokerAdapter, OrderRequest, OrderResult, Position } from './broker';
+import { assertLiveExecutionAllowed } from './liveGuard';
 
 const D = Prisma.Decimal;
 const PAPER_BASE = 'https://paper-api.alpaca.markets';
@@ -32,7 +33,12 @@ export class AlpacaPaperBroker implements BrokerAdapter {
     private readonly key: string,
     private readonly secret: string,
     private readonly baseUrl: string = process.env.ALPACA_BASE_URL || PAPER_BASE,
-  ) {}
+  ) {
+    // A live (non-paper) URL is only permitted behind the full live-execution gate.
+    // This is the enforcement point that keeps real-money orders dark by default.
+    const isLive = baseUrl.includes('api.alpaca.markets') && !baseUrl.includes('paper');
+    if (isLive) assertLiveExecutionAllowed();
+  }
 
   private headers(): Record<string, string> {
     return {
