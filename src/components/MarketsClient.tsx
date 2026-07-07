@@ -211,19 +211,11 @@ export default function MarketsClient({
     return matchesSearch;
   });
 
-  return (
-    <div className="min-h-screen text-white select-none max-w-md mx-auto relative bg-[#080B11] border-x border-white/5 pb-24">
-      <AnimatePresence mode="wait">
-        {!activeSymbol ? (
-          /* Market Overview / Dashboard View */
-          <motion.div
-            key="dashboard"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="p-4 space-y-6"
-          >
-            {/* Header */}
+
+  const renderMarketOverview = () => {
+    return (
+      <div className="space-y-6">
+                    {/* Header */}
             <div className="flex justify-between items-center">
               <h1 className="text-2xl font-bold font-sans">
                 {isAr ? 'الأسهم' : 'Stocks'}
@@ -372,29 +364,27 @@ export default function MarketsClient({
                 ))}
               </div>
             </div>
-          </motion.div>
-        ) : (
-          /* Detailed Stock View mimicking Slide 2 / 3 / 4 */
-          <motion.div
-            key="details"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="space-y-6"
-          >
-            {/* Top Navigation Row */}
-            <div className="p-4 flex justify-between items-center sticky top-0 bg-[#080B11]/90 backdrop-blur-md z-30">
+      </div>
+    );
+  };
+
+
+  const renderStockDetails = () => {
+    return (
+      <div className="space-y-6">
+                    {/* Top Navigation Row */}
+            <div className="p-4 md:p-0 flex justify-between items-center sticky md:relative top-0 bg-[#080B11]/90 md:bg-transparent backdrop-blur-md md:backdrop-blur-none z-30 pb-4 md:border-b md:border-white/5 md:mb-6">
               <button
                 onClick={() => {
                   window.location.href = `/${locale}/markets`;
                 }}
-                className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white"
+                className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white md:hidden"
               >
                 <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
               </button>
               
-              <div className="flex flex-col items-center">
-                <span className="font-sans font-bold text-sm text-gray-100 text-center line-clamp-1 max-w-[160px]">
+              <div className="flex flex-col items-center md:items-start md:text-left rtl:md:items-end rtl:md:text-right">
+                <span className="font-sans font-bold text-sm text-gray-100 text-center md:text-left rtl:md:text-right line-clamp-1 max-w-[160px] md:max-w-xs">
                   {isAr ? activeTicker.arName : activeTicker.name}
                 </span>
                 <span className="text-[10px] text-gray-400 font-mono font-bold tracking-wider">
@@ -418,7 +408,7 @@ export default function MarketsClient({
             </div>
 
             {/* Price Headers */}
-            <div className="px-4 space-y-1">
+            <div className="px-4 md:px-0 space-y-1">
               <div className="flex justify-between items-end">
                 <h2 className="text-4xl font-mono font-bold tracking-tight text-white">
                   ${currentData.price.toFixed(2)}
@@ -433,7 +423,7 @@ export default function MarketsClient({
             </div>
 
             {/* SVG line chart mimicking Slide 4 */}
-            <div className="px-4">
+            <div className="px-4 md:px-0">
               <div className="bg-[#121824] rounded-3xl p-4 border border-white/5 space-y-4">
                 <AdvancedTradingChart data={currentData.history} />
                 
@@ -457,7 +447,7 @@ export default function MarketsClient({
             </div>
 
             {/* Sharia Tag Pills Section */}
-            <div className="px-4">
+            <div className="px-4 md:px-0">
               <div className="flex flex-wrap gap-2 text-[10px] font-bold">
                 {/* Compliance Tag */}
                 {isCompliant ? (
@@ -493,7 +483,7 @@ export default function MarketsClient({
             </div>
 
             {/* Recommended Quiz Card */}
-            <div className="px-4">
+            <div className="px-4 md:px-0">
               <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
@@ -542,7 +532,7 @@ export default function MarketsClient({
 
             {/* AI Financial Analyst Insights Section */}
             {currentData.financials && (
-              <div className="px-4">
+              <div className="px-4 md:px-0">
                 <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                   <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400 border-b border-white/5 pb-2">
                     <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
@@ -678,7 +668,7 @@ export default function MarketsClient({
 
             {/* Analyst Ratings Card (Slide 2) */}
             {currentData.analystRatings && (
-              <div className="px-4">
+              <div className="px-4 md:px-0">
                 <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'تحليل السهم' : 'Stock Analyst Rating'}</h3>
                   
@@ -713,7 +703,7 @@ export default function MarketsClient({
 
             {/* SVG Expected vs Actual Quarterly Earnings Chart (Slide 2) */}
             {currentData.earningsHistory && (
-              <div className="px-4">
+              <div className="px-4 md:px-0">
                 <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'الأرباح' : 'Earnings'}</h3>
 
@@ -768,7 +758,7 @@ export default function MarketsClient({
             )}
 
             {/* About Text Block (Slide 3) */}
-            <div className="px-4">
+            <div className="px-4 md:px-0">
               <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                 <h3 className="font-bold text-sm text-gray-200">{isAr ? 'عن الشركة' : 'About the Company'}</h3>
                 
@@ -809,7 +799,7 @@ export default function MarketsClient({
 
             {/* Movement reason (Slide 3) */}
             {currentData.movementReasonArabic && (
-              <div className="px-4">
+              <div className="px-4 md:px-0">
                 <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-2">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'سبب حركة السهم' : 'Stock Movement Reason'}</h3>
                   <p className="text-xs text-gray-400 leading-relaxed">
@@ -821,7 +811,7 @@ export default function MarketsClient({
 
             {/* Statistics Section Sliders (Slide 4) */}
             {currentData.statistics && (
-              <div className="px-4">
+              <div className="px-4 md:px-0">
                 <div className="bg-[#121824] rounded-3xl p-5 border border-white/5 space-y-4">
                   <h3 className="font-bold text-sm text-gray-200">{isAr ? 'الإحصائيات' : 'Statistics'}</h3>
                   
@@ -887,7 +877,7 @@ export default function MarketsClient({
             )}
 
             {/* Sticky Bottom buying execution bar */}
-            <div className="fixed bottom-16 inset-x-0 bg-[#0E1524] border-t border-white/10 px-4 py-3 flex justify-between items-center z-30 max-w-md mx-auto">
+            <div className="fixed md:relative bottom-16 md:bottom-auto inset-x-0 md:inset-x-auto bg-[#0E1524] md:bg-[#121824] border-t md:border border-white/10 md:border-white/5 px-4 md:px-6 py-3 rounded-none md:rounded-3xl flex justify-between items-center z-30 max-w-md md:max-w-none mx-auto md:mx-0 md:mt-6">
               <div className="text-left rtl:text-right">
                 <p className="text-[10px] text-gray-400 font-medium">{isAr ? 'الرصيد المتاح' : 'Available Cash'}</p>
                 <p className="text-sm font-mono font-bold text-emerald-400">{jarBalance.toFixed(2)} SAR</p>
@@ -912,9 +902,53 @@ export default function MarketsClient({
                 {!isCompliant ? (isAr ? 'غير متوافق' : 'Non-Compliant') : (isAr ? 'تداول' : 'Trade')}
               </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
+    );
+  };
+
+
+  return (
+    <div className="min-h-screen text-white select-none max-w-md md:max-w-6xl mx-auto relative pb-24 md:pb-8">
+      {/* Desktop view (split layout) */}
+      <div className="hidden md:grid grid-cols-[380px,1fr] gap-6 items-start">
+        {/* Left Column: Watchlist & Search */}
+        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-black/40 space-y-6">
+          {renderMarketOverview()}
+        </div>
+        
+        {/* Right Column: Active Stock Details */}
+        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-black/40 space-y-6">
+          {renderStockDetails()}
+        </div>
+      </div>
+
+      {/* Mobile view (single-column switch) */}
+      <div className="md:hidden bg-[#080B11] border-x border-white/5 min-h-screen pb-24">
+        <AnimatePresence mode="wait">
+          {!activeSymbol ? (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="p-4 space-y-6"
+            >
+              {renderMarketOverview()}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="details"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="space-y-6"
+            >
+              {renderStockDetails()}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
 
       {/* Drawer: Purification Ratio Details bottom sheet (Slide 5) */}
       <AnimatePresence>
