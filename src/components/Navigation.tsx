@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Wallet, LineChart, BookOpen, User, Briefcase, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
@@ -12,6 +13,27 @@ export default function Navigation({ locale }: { locale: string }) {
   const t = useTranslations('Dashboard');
   const pathname = usePathname();
   const isAr = locale === 'ar';
+
+  const isAuthOrLanding = 
+    pathname === `/${locale}` || 
+    pathname === `/${locale}/login` || 
+    pathname === `/${locale}/register` ||
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/register';
+
+  useEffect(() => {
+    if (isAuthOrLanding) {
+      document.body.classList.remove('md:ps-64');
+    } else {
+      document.body.classList.add('md:ps-64');
+    }
+    return () => {
+      document.body.classList.remove('md:ps-64');
+    };
+  }, [isAuthOrLanding]);
+
+  if (isAuthOrLanding) return null;
 
   const links = [
     { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },

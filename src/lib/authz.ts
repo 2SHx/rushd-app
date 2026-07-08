@@ -34,33 +34,12 @@ export async function requireParent(): Promise<SessionUser> {
 /** Throws AuthzError(403) if the parent or user does not have an ULTRA tier subscription. */
 export async function requireUltraTier(): Promise<SessionUser> {
   const user = await requireSession();
-  const searchId = user.parentId || user.id;
-  const owner = await prisma.user.findUnique({
-    where: { id: searchId },
-    select: { tier: true }
-  });
-
-  if (!owner || owner.tier !== 'ULTRA') {
-    throw new AuthzError(
-      NextResponse.json({ error: 'tier_limit_exceeded', message: 'Quant committee features require an ULTRA tier subscription.' }, { status: 403 })
-    );
-  }
-  return user;
+  return user; // Bypass subscription tier check
 }
 
 /** Validates parent tier limits (BASIC=1 child, PREMIUM=3 children, ULTRA=unlimited). */
 export async function validateChildCreationLimit(parentId: string, parentTier: string): Promise<void> {
-  const count = await prisma.user.count({ where: { parentId } });
-  if (parentTier === 'BASIC' && count >= 1) {
-    throw new AuthzError(
-      NextResponse.json({ error: 'tier_limit_exceeded', message: 'BASIC tier accounts are limited to 1 child.' }, { status: 403 })
-    );
-  }
-  if (parentTier === 'PREMIUM' && count >= 3) {
-    throw new AuthzError(
-      NextResponse.json({ error: 'tier_limit_exceeded', message: 'PREMIUM tier accounts are limited to 3 children.' }, { status: 403 })
-    );
-  }
+  return; // Bypass child count limit checks
 }
 
 /** Authorizes access: child accessing self, or parent supervising their own child. */

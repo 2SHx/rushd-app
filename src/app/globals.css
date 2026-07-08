@@ -146,3 +146,48 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* 3D Isometric Tabletop Canvas Styles */
+.perspective-3d {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.tabletop-3d {
+  transform: rotateX(20deg) rotateY(-6deg) rotateZ(3deg);
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tabletop-3d:hover {
+  transform: rotateX(14deg) rotateY(-4deg) rotateZ(2deg);
+}
+
+.agent-3d-card {
+  transform-style: preserve-3d;
+  transform: translateZ(10px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.agent-3d-card:hover {
+  transform: translateZ(25px) scale(1.03);
+}
+
+@keyframes laser-flow {
+  0% {
+    stroke-dashoffset: 40;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.laser-path {
+  stroke-dasharray: 8, 8;
+  animation: laser-flow 1.2s linear infinite;
+}
+
+.reverse-tabletop-3d {
+  transform: rotateX(-20deg) rotateY(6deg) rotateZ(-3deg);
+  transform-style: preserve-3d;
+}
+

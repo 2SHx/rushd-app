@@ -350,16 +350,16 @@ export default function CommitteeClient({ locale }: { locale: string }) {
 
   // Visual layout config for nodes on the graph
   const nodes = [
-    { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '5%', y: '50%', type: 'data', icon: Database },
-    { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '25%', y: '15%', type: 'analyst' },
-    { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '25%', y: '38%', type: 'analyst' },
-    { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '25%', y: '62%', type: 'analyst' },
-    { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '25%', y: '85%', type: 'analyst' },
-    { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '15%', type: 'analyst' },
-    { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '38%', type: 'analyst' },
-    { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '62%', type: 'gate' },
-    { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '72%', y: '25%', type: 'debate', icon: Gavel },
-    { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '72%', y: '70%', type: 'pm', icon: Bot },
+    { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '10%', y: '50%', type: 'data', icon: Database },
+    { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '32%', y: '16%', type: 'analyst' },
+    { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '32%', y: '39%', type: 'analyst' },
+    { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '32%', y: '61%', type: 'analyst' },
+    { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '32%', y: '84%', type: 'analyst' },
+    { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '55%', y: '20%', type: 'analyst' },
+    { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '55%', y: '45%', type: 'analyst' },
+    { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '55%', y: '75%', type: 'gate' },
+    { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '78%', y: '30%', type: 'debate', icon: Gavel },
+    { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '78%', y: '75%', type: 'pm', icon: Bot },
     { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '92%', y: '50%', type: 'risk', icon: Gavel }
   ];
 
@@ -484,156 +484,226 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             </div>
 
             {/* Interactive Graph Node View */}
-            <div className="relative h-[480px] w-full border border-slate-200/50 dark:border-white/5 rounded-2xl bg-slate-50/50 dark:bg-black/35 overflow-hidden shadow-inner">
-              {/* Connection Lines (SVG) */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-40">
-                {/* Connecting lines dynamically based on flow */}
-                <defs>
-                  <linearGradient id="flow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0" />
-                    <stop offset="50%" stopColor="#00F0FF" stopOpacity="1" />
-                    <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
+            <div className="relative h-[500px] w-full border border-slate-200/50 dark:border-white/5 rounded-[2.5rem] bg-slate-50/50 dark:bg-black/35 overflow-hidden shadow-inner perspective-3d flex items-center justify-center pointer-events-auto">
+              <div className="absolute inset-0 tabletop-3d w-full h-full pointer-events-none">
+                {/* Connection Lines (SVG) */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-60">
+                  <defs>
+                    <linearGradient id="flow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity="0" />
+                      <stop offset="50%" stopColor="#00F0FF" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
 
-                {/* Left side -> analysts */}
-                {nodes.filter(n => n.type === 'analyst').map(node => (
-                  <path
-                    key={`line-ingest-${node.id}`}
-                    d={`M 35 240 Q 120 240, 310 ${node.id === 'QUANT_CORE' ? 72 : node.id === 'TECHNICAL' ? 182 : node.id === 'PATTERN_ANALOG' ? 297 : 408}`}
-                    fill="none"
-                    stroke={simStep === 'ingestion' ? 'url(#flow-gradient)' : '#475569'}
-                    strokeWidth={simStep === 'ingestion' ? 2 : 1}
-                    className={simStep === 'ingestion' ? 'animate-[dash_2s_linear_infinite]' : ''}
-                  />
-                ))}
+                  {/* Left side -> analysts */}
+                  {nodes.filter(n => n.type === 'analyst').map(node => (
+                    <line
+                      key={`line-ingest-${node.id}`}
+                      x1="10%"
+                      y1="50%"
+                      x2={node.x}
+                      y2={node.y}
+                      stroke={simStep === 'ingestion' ? '#10B981' : '#475569'}
+                      strokeWidth={simStep === 'ingestion' ? 2 : 1}
+                      strokeOpacity={simStep === 'ingestion' ? 0.9 : 0.4}
+                      className={simStep === 'ingestion' ? 'laser-path' : ''}
+                    />
+                  ))}
 
-                {/* Analysts -> Debate */}
-                {nodes.filter(n => n.type === 'analyst').map(node => (
+                  {/* Analysts -> Debate */}
+                  {nodes.filter(n => n.type === 'analyst' || n.type === 'gate').map(node => (
+                    <line
+                      key={`line-debate-${node.id}`}
+                      x1={node.x}
+                      y1={node.y}
+                      x2={node.id === 'SHARIA' ? '78%' : '78%'}
+                      y2={node.id === 'SHARIA' ? '75%' : '30%'}
+                      stroke={
+                        node.id === 'SHARIA'
+                          ? simStep === 'sharia'
+                            ? passData.shariaGate.compliant
+                              ? '#10B981'
+                              : '#EF4444'
+                            : '#475569'
+                          : simStep === 'analysts' || simStep === 'debate'
+                            ? '#00F0FF'
+                            : '#475569'
+                      }
+                      strokeWidth={1.5}
+                      strokeOpacity={0.5}
+                      className={
+                        node.id === 'SHARIA'
+                          ? simStep === 'sharia'
+                            ? 'laser-path'
+                            : ''
+                          : simStep === 'analysts' || simStep === 'debate'
+                            ? 'laser-path'
+                            : ''
+                      }
+                    />
+                  ))}
+
+                  {/* Debate -> PM */}
                   <line
-                    key={`line-debate-${node.id}`}
-                    x1={node.id.startsWith('F') || node.id.startsWith('R') || node.id.startsWith('S') ? '50%' : '25%'}
-                    y1={node.id === 'QUANT_CORE' || node.id === 'FUNDAMENTAL' ? '15%' : node.id === 'TECHNICAL' || node.id === 'RESEARCH' ? '38%' : node.id === 'PATTERN_ANALOG' || node.id === 'SHARIA' ? '62%' : '85%'}
-                    x2="72%"
-                    y2="25%"
-                    stroke={simStep === 'analysts' || simStep === 'debate' ? '#00F0FF' : '#475569'}
-                    strokeWidth={simStep === 'debate' ? 1.5 : 1}
+                    x1="78%"
+                    y1="30%"
+                    x2="78%"
+                    y2="75%"
+                    stroke={simStep === 'debate' ? '#00F0FF' : '#475569'}
+                    strokeWidth={2}
                     strokeOpacity={0.6}
+                    className={simStep === 'debate' ? 'laser-path' : ''}
                   />
-                ))}
 
-                {/* Sharia filter -> PM (Veto Line) */}
-                <line
-                  x1="50%"
-                  y1="62%"
-                  x2="72%"
-                  y2="70%"
-                  stroke={simStep === 'sharia' ? (passData.shariaGate.compliant ? '#10B981' : '#EF4444') : '#475569'}
-                  strokeWidth={2}
-                />
+                  {/* PM -> Risk */}
+                  <line
+                    x1="78%"
+                    y1="75%"
+                    x2="92%"
+                    y2="50%"
+                    stroke={simStep === 'pm' ? '#10B981' : '#475569'}
+                    strokeWidth={2}
+                    strokeOpacity={0.6}
+                    className={simStep === 'pm' ? 'laser-path' : ''}
+                  />
+                </svg>
 
-                {/* Debate & PM -> PM */}
-                <line x1="72%" y1="25%" x2="72%" y2="70%" stroke={simStep === 'debate' ? '#00F0FF' : '#475569'} strokeWidth={1.5} />
-                <line x1="72%" y1="70%" x2="92%" y2="50%" stroke={simStep === 'pm' ? '#10B981' : '#475569'} strokeWidth={2} />
-              </svg>
+                {/* Render Nodes */}
+                {nodes.map(node => {
+                  const isIngesting = simStep === 'ingestion';
+                  const isAnalystActive = simStep === 'analysts' && activeAgentId === node.id;
+                  const isShariaActive = simStep === 'sharia' && node.id === 'SHARIA';
+                  const isDebating = simStep === 'debate' && node.id === 'debate';
+                  const isPM = simStep === 'pm' && node.id === 'PORTFOLIO_MANAGER';
+                  const isRisk = simStep === 'risk' && node.id === 'risk';
 
-              {/* Render Nodes */}
-              {nodes.map(node => {
-                const isIngesting = simStep === 'ingestion';
-                const isAnalystActive = simStep === 'analysts' && activeAgentId === node.id;
-                const isShariaActive = simStep === 'sharia' && node.id === 'SHARIA';
-                const isDebating = simStep === 'debate' && node.id === 'debate';
-                const isPM = simStep === 'pm' && node.id === 'PORTFOLIO_MANAGER';
-                const isRisk = simStep === 'risk' && node.id === 'risk';
+                  // Stance styles for analyst cards
+                  const agentSignal = passData.signals.find(s => s.agent === node.id);
+                  const sStyle = agentSignal ? stanceStyle(agentSignal.stance) : null;
 
-                // Stance styles for analyst cards
-                const agentSignal = passData.signals.find(s => s.agent === node.id);
-                const sStyle = agentSignal ? stanceStyle(agentSignal.stance) : null;
+                  const isActive = isAnalystActive || isShariaActive || isDebating || isPM || isRisk;
 
-                const isActive = isAnalystActive || isShariaActive || isDebating || isPM || isRisk;
-
-                return (
-                  <motion.div
-                    key={node.id}
-                    style={{ left: node.x, top: node.y }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center"
-                    initial={{ scale: 0.9 }}
-                    animate={{ 
-                      scale: isActive ? 1.08 : 1,
-                      zIndex: isActive ? 30 : 10
-                    }}
-                    onClick={() => {
-                      if (agentSignal) setActiveAgentId(node.id);
-                    }}
-                  >
-                    {/* Node Circle */}
-                    <div 
-                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 shadow-lg transition-all duration-300 ${
-                        isActive 
-                          ? 'bg-emerald-500/20 border-emerald-400 ring-4 ring-emerald-500/20 scale-105' 
-                          : sStyle 
-                            ? `${sStyle.bg} ${sStyle.border} ${sStyle.color}`
-                            : 'bg-slate-200 dark:bg-[#1A2333] border-slate-300 dark:border-white/10 text-gray-500'
-                      }`}
+                  return (
+                    <motion.div
+                      key={node.id}
+                      style={{ left: node.x, top: node.y }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center pointer-events-auto cursor-pointer"
+                      initial={{ scale: 0.9 }}
+                      animate={{ 
+                        scale: isActive ? 1.05 : 1,
+                        zIndex: isActive ? 30 : 10
+                      }}
+                      onClick={() => {
+                        if (agentSignal) setActiveAgentId(node.id);
+                      }}
                     >
-                      {node.icon ? (
-                        <node.icon className="w-5 h-5" />
-                      ) : node.id === 'SHARIA' ? (
-                        passData.shariaGate.compliant ? (
-                          <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                        ) : (
-                          <ShieldAlert className="w-5 h-5 text-rose-400" />
-                        )
-                      ) : (
-                        <Bot className="w-5 h-5" />
-                      )}
-                    </div>
+                      {/* Avatar Card Reverse Tilt */}
+                      <div className={`w-32 p-3 rounded-2xl glass-panel reverse-tabletop-3d agent-3d-card border text-start flex flex-col justify-between transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-slate-100/10 dark:bg-[#1E293B]/90 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]' 
+                          : sStyle 
+                            ? 'bg-[#0D1527]/80 border-slate-700/50' 
+                            : 'bg-white/90 dark:bg-[#0E131F]/90 border-slate-200 dark:border-white/10 shadow-sm'
+                      }`}>
+                        {/* Avatar / Icon Header */}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className={`w-7 h-7 rounded-xl flex items-center justify-center border ${
+                            isActive 
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' 
+                              : sStyle 
+                                ? `${sStyle.bg} ${sStyle.border} ${sStyle.color}`
+                                : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-gray-500'
+                          }`}>
+                            {node.icon ? (
+                              <node.icon className="w-3.5 h-3.5" />
+                            ) : node.id === 'SHARIA' ? (
+                              passData.shariaGate.compliant ? (
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                              )
+                            ) : (
+                              <Bot className="w-3.5 h-3.5" />
+                            )}
+                          </div>
 
-                    {/* Node Text Label */}
-                    <span className={`text-[9px] font-bold mt-1.5 whitespace-nowrap px-1.5 py-0.5 rounded-md ${
-                      isActive ? 'bg-emerald-500 text-black' : 'bg-black/30 text-gray-400'
-                    }`}>
-                      {isAr ? node.nameAr : node.name}
-                    </span>
+                          {/* Pulsing Status dot */}
+                          {isActive && (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                          )}
 
-                    {/* Stance details on completed analysts */}
-                    {agentSignal && simStep !== 'ingestion' && (
-                      <span className={`text-[7px] font-black tracking-wider uppercase px-1 rounded-sm mt-0.5 ${sStyle?.bg} ${sStyle?.color}`}>
-                        {agentSignal.stance}
-                      </span>
-                    )}
-                  </motion.div>
-                );
-              })}
+                          {/* Stance Label */}
+                          {!isActive && agentSignal && simStep !== 'ingestion' && (
+                            <span className={`text-[7px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-md border ${sStyle?.bg} ${sStyle?.color} ${sStyle?.border}`}>
+                              {agentSignal.stance}
+                            </span>
+                          )}
+                        </div>
 
-              {/* Debate Speech Bubbles Overlay */}
-              <AnimatePresence>
-                {simStep === 'debate' && passData.debateTranscript?.[debateTurnIdx] && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="absolute top-10 right-4 left-4 md:right-8 md:left-auto md:w-80 glass-panel bg-black/80 border border-white/10 p-4 rounded-2xl z-40 text-start shadow-2xl"
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`w-2 h-2 rounded-full ${
-                        passData.debateTranscript[debateTurnIdx].side === 'BULL' ? 'bg-emerald-400' : 'bg-rose-400'
-                      }`} />
-                      <span className="text-[9px] font-extrabold uppercase text-gray-300">
-                        {passData.debateTranscript[debateTurnIdx].side} Arguments (Round {passData.debateTranscript[debateTurnIdx].round})
-                      </span>
-                    </div>
-                    <p className="text-xs text-white leading-relaxed font-semibold" dir="rtl">
-                      {passData.debateTranscript[debateTurnIdx].argumentAr}
-                    </p>
-                  </motion.div>
+                        {/* Name and Conviction */}
+                        <div className="flex flex-col">
+                          <span className="text-[9.5px] font-bold text-slate-800 dark:text-gray-200 truncate leading-tight">
+                            {isAr ? node.nameAr : node.name}
+                          </span>
+
+                          {/* Show tiny conviction status */}
+                          {agentSignal && simStep !== 'ingestion' && (
+                            <span className="text-[7.5px] text-gray-400 font-mono mt-0.5">
+                              Conv: {pct(Number(agentSignal.conviction))}
+                            </span>
+                          )}
+
+                          {/* Custom Sharia output */}
+                          {node.id === 'SHARIA' && simStep !== 'ingestion' && simStep !== 'analysts' && (
+                            <span className={`text-[7.5px] font-bold uppercase mt-0.5 ${
+                              passData.shariaGate.compliant ? 'text-emerald-400' : 'text-rose-400'
+                            }`}>
+                              {passData.shariaGate.compliant ? 'HALAL' : 'VETO HARAM'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {/* Debate Speech Bubbles Overlay */}
+                <AnimatePresence>
+                  {simStep === 'debate' && passData.debateTranscript?.[debateTurnIdx] && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      style={{ left: '78%', top: '8%' }}
+                      className="absolute -translate-x-1/2 z-40 w-72 glass-panel bg-black/95 border border-white/10 p-4 rounded-2xl text-start shadow-2xl reverse-tabletop-3d pointer-events-auto"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`w-2 h-2 rounded-full ${
+                          passData.debateTranscript[debateTurnIdx].side === 'BULL' ? 'bg-emerald-400' : 'bg-rose-400'
+                        }`} />
+                        <span className="text-[9px] font-extrabold uppercase text-gray-300">
+                          {passData.debateTranscript[debateTurnIdx].side} Arguments (Round {passData.debateTranscript[debateTurnIdx].round})
+                        </span>
+                      </div>
+                      <p className="text-xs text-white leading-relaxed font-semibold" dir="rtl">
+                        {passData.debateTranscript[debateTurnIdx].argumentAr}
+                      </p>
+                      <p className="text-[10px] text-gray-400 leading-relaxed font-semibold mt-1" dir="ltr">
+                        {passData.debateTranscript[debateTurnIdx].argumentEn}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Ingestion Stream pulse elements */}
+                {simStep === 'ingestion' && (
+                  <div className="absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-emerald-400 rounded-full blur-sm pulse-glow-ring pointer-events-none" />
                 )}
-              </AnimatePresence>
-
-              {/* Ingestion Stream pulse elements */}
-              {simStep === 'ingestion' && (
-                <div className="absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-emerald-400 rounded-full blur-sm pulse-glow-ring pointer-events-none" />
-              )}
+              </div>
             </div>
 
             {/* Typewriter Agent Thinking Display Panel */}

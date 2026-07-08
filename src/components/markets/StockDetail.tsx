@@ -121,121 +121,130 @@ export default function StockDetail({
         <span className="font-bold text-slate-800 dark:text-white text-sm">{displayName} ({cleanSymbol})</span>
       </div>
 
-      {/* Stock Quote Header Panel */}
-      <div className="glass-panel rounded-3xl p-6 space-y-4 text-start relative overflow-hidden shadow-xl">
-        {/* Glowing backdrop circle */}
-        <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-emerald-500/10 blur-xl pointer-events-none" />
+      {/* Desktop Workstation Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-start">
+        {/* Left Column (8/12 width): Core Market Data, Charts, and Analytics */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Stock Quote Header Panel */}
+          <div className="glass-panel rounded-3xl p-6 space-y-4 text-start relative overflow-hidden shadow-xl">
+            {/* Glowing backdrop circle */}
+            <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-emerald-500/10 blur-xl pointer-events-none" />
 
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">{cleanSymbol}</h1>
-              <span className="text-[10px] text-gray-500 font-bold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-full uppercase">
-                {data.market}
+            <div className="flex justify-between items-start">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                  <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">{cleanSymbol}</h1>
+                  <span className="text-[10px] text-gray-500 font-bold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-full uppercase">
+                    {data.market}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 leading-normal">{displayName}</p>
+              </div>
+
+              {/* Sharia Shield Badge */}
+              <div className={`flex items-center space-x-1.5 rtl:space-x-reverse px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all duration-300 ${
+                data.isShariaCompliant 
+                  ? 'bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-500/25 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.12)]' 
+                  : 'bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/25 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
+              }`}>
+                {data.isShariaCompliant ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-amber-400" />}
+                <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
+              </div>
+            </div>
+
+            {/* Live quote values */}
+            <div className="flex items-baseline space-x-3 rtl:space-x-reverse">
+              <span className="text-3xl font-extrabold font-mono text-slate-900 dark:text-white leading-none">
+                {data.market === 'TASI'
+                  ? t('formatTasi', { amount: data.price.toFixed(2) })
+                  : t('formatNasdaq', { amount: data.price.toFixed(2) })
+                }
+              </span>
+              <div className={`flex items-center space-x-1 rtl:space-x-reverse text-sm font-semibold font-mono ${
+                isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'
+              }`}>
+                {isUp ? (
+                  <ArrowUpRight className="w-4 h-4" />
+                ) : isDown ? (
+                  <ArrowDownRight className="w-4 h-4" />
+                ) : (
+                  <Minus className="w-4 h-4" />
+                )}
+                <span>{isUp ? '+' : ''}{change.toFixed(2)} ({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Price Chart */}
+          <PriceChartPanel history={history} />
+
+          {/* 5. Sage AI Advisor */}
+          <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
+
+          {/* 6. Company Biography & Financials */}
+          <FundamentalsPanel data={data} locale={locale} />
+        </div>
+
+        {/* Right Column (4/12 width): Action Panel, Sharia Gauges, and Educational quest */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* 7. Virtual Trade Portal */}
+          <TradeAction
+            symbol={data.symbol}
+            market={data.market}
+            currentPrice={data.price}
+            locale={locale}
+            jarBalance={jarBalance}
+            sharesOwned={sharesOwned}
+            isParent={isParent}
+            onTradeExecuted={onTradeExecuted}
+          />
+
+          {/* 3. AI R-Score Gauge */}
+          <RScorePanel symbol={data.symbol} locale={locale} />
+
+          {/* 4. Recommended Quiz Quest */}
+          <div className="glass-panel rounded-3xl p-5 space-y-4 text-start shadow-md">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-2">
+              <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
+                <BookOpen className="w-4 h-4" />
+                <h3 className="font-bold text-sm text-slate-800 dark:text-gray-200">{t('recommendedQuiz')}</h3>
+              </div>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                {recommendedQuiz.topic}
               </span>
             </div>
-            <p className="text-xs text-gray-400 leading-normal">{displayName}</p>
-          </div>
 
-          {/* Sharia Shield Badge */}
-          <div className={`flex items-center space-x-1.5 rtl:space-x-reverse px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all duration-300 ${
-            data.isShariaCompliant 
-              ? 'bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-500/25 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.12)]' 
-              : 'bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/25 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
-          }`}>
-            {data.isShariaCompliant ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-amber-400" />}
-            <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
-          </div>
-        </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              {isAr ? recommendedQuiz.descArabic : recommendedQuiz.descEnglish}
+            </p>
 
-        {/* Live quote values */}
-        <div className="flex items-baseline space-x-3 rtl:space-x-reverse">
-          <span className="text-3xl font-extrabold font-mono text-slate-900 dark:text-white leading-none">
-            {data.market === 'TASI'
-              ? t('formatTasi', { amount: data.price.toFixed(2) })
-              : t('formatNasdaq', { amount: data.price.toFixed(2) })
-            }
-          </span>
-          <div className={`flex items-center space-x-1 rtl:space-x-reverse text-sm font-semibold font-mono ${
-            isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'
-          }`}>
-            {isUp ? (
-              <ArrowUpRight className="w-4 h-4" />
-            ) : isDown ? (
-              <ArrowDownRight className="w-4 h-4" />
-            ) : (
-              <Minus className="w-4 h-4" />
+            {quizResult && (
+              <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
+                quizResult.passed 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold' 
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400 font-semibold'
+              }`}>
+                <span>
+                  {quizResult.passed 
+                    ? t('quizSuccess')
+                    : t('quizFail')}
+                </span>
+                <button onClick={() => setQuizResult(null)} className="underline hover:no-underline font-bold">
+                  {t('dismiss')}
+                </button>
+              </div>
             )}
-            <span>{isUp ? '+' : ''}{change.toFixed(2)} ({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
-          </div>
-        </div>
-      </div>
 
-      {/* 2. Price Chart */}
-      <PriceChartPanel history={history} />
-
-      {/* 3. AI R-Score Gauge */}
-      <RScorePanel symbol={data.symbol} locale={locale} />
-
-      {/* 4. Recommended Quiz Quest */}
-      <div className="glass-panel rounded-3xl p-5 space-y-4 text-start shadow-md">
-        <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-2">
-          <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
-            <BookOpen className="w-4 h-4" />
-            <h3 className="font-bold text-sm text-slate-800 dark:text-gray-200">{t('recommendedQuiz')}</h3>
-          </div>
-          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-            {recommendedQuiz.topic}
-          </span>
-        </div>
-
-        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-          {isAr ? recommendedQuiz.descArabic : recommendedQuiz.descEnglish}
-        </p>
-
-        {quizResult && (
-          <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
-            quizResult.passed 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold' 
-              : 'bg-rose-500/10 border-rose-500/20 text-rose-400 font-semibold'
-          }`}>
-            <span>
-              {quizResult.passed 
-                ? t('quizSuccess')
-                : t('quizFail')}
-            </span>
-            <button onClick={() => setQuizResult(null)} className="underline hover:no-underline font-bold">
-              {t('dismiss')}
+            <button
+              onClick={() => { setIsQuizOpen(true); setQuizResult(null); }}
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-black rounded-2xl font-bold text-xs transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse active:scale-95 neon-glow-btn"
+            >
+              <Trophy className="w-4 h-4 text-black" />
+              <span>{t('runQuiz')}</span>
             </button>
           </div>
-        )}
-
-        <button
-          onClick={() => { setIsQuizOpen(true); setQuizResult(null); }}
-          className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-2xl font-bold text-xs text-white transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse active:scale-95 neon-glow-btn"
-        >
-          <Trophy className="w-4 h-4" />
-          <span>{t('runQuiz')}</span>
-        </button>
+        </div>
       </div>
-
-      {/* 5. Sage AI Advisor */}
-      <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
-
-      {/* 6. Company Biography & Financials */}
-      <FundamentalsPanel data={data} locale={locale} />
-
-      {/* 7. Virtual Trade Portal */}
-      <TradeAction
-        symbol={data.symbol}
-        market={data.market}
-        currentPrice={data.price}
-        locale={locale}
-        jarBalance={jarBalance}
-        sharesOwned={sharesOwned}
-        isParent={isParent}
-        onTradeExecuted={onTradeExecuted}
-      />
 
       {/* Quiz Modal */}
       <QuizModal 

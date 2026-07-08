@@ -37,6 +37,7 @@ export default function MarketsContainer({
   );
   const [currentStockData, setCurrentStockData] = useState(currentData);
   const [loadingStock, setLoadingStock] = useState(false);
+  const [isListCollapsed, setIsListCollapsed] = useState(false);
 
   // Live balance states
   const [jarBalance, setJarBalance] = useState(initialJarBalance ?? 0);
@@ -264,12 +265,46 @@ export default function MarketsContainer({
       {/* Desktop-only split-screen view */}
       <div className="hidden md:grid grid-cols-12 gap-8 max-w-6xl mx-auto min-h-screen">
         {/* Left Column: Watchlist & Search */}
-        <div className="col-span-5 lg:col-span-4 space-y-6 border-r border-slate-200 dark:border-white/5 pe-6">
-          {renderMarketOverview()}
-        </div>
+        {!isListCollapsed && (
+          <div className="col-span-5 lg:col-span-4 space-y-6 border-r border-slate-200 dark:border-white/5 pe-6">
+            {renderMarketOverview()}
+          </div>
+        )}
 
         {/* Right Column: Dynamic Detail Panel */}
-        <div className="col-span-7 lg:col-span-8 space-y-6">
+        <div className={`space-y-6 transition-all duration-300 ${
+          isListCollapsed ? 'col-span-12' : 'col-span-7 lg:col-span-8'
+        }`}>
+          {/* Workstation Top Bar */}
+          <div className="flex items-center justify-between p-3 rounded-2xl glass-panel border border-slate-200 dark:border-white/5 bg-black/10">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsListCollapsed(!isListCollapsed)}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-bold transition-all border border-slate-200 dark:border-white/10 flex items-center gap-1.5"
+              >
+                {isListCollapsed ? (
+                  <>
+                    <span>Show Watchlist</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Maximize Detail</span>
+                  </>
+                )}
+              </button>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                Workstation Grid • {marketTab} • {activeSymbol || 'NO STOCK SELECTED'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[9px] font-bold text-emerald-400 uppercase font-mono tracking-wider">
+                LIVE TERMINAL
+              </span>
+            </div>
+          </div>
+
           <AnimatePresence mode="wait">
             {loadingStock ? (
               <motion.div

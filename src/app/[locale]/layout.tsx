@@ -50,7 +50,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:ps-64 bg-slate-50 text-slate-900 dark:bg-[#070B11] dark:text-white transition-colors duration-200`}>
+      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 bg-slate-50 text-slate-900 dark:bg-[#070B11] dark:text-white transition-colors duration-200`}>
         <NextIntlClientProvider messages={messages}>
           <DisclaimerBanner />
           <DesignControlCenter />
