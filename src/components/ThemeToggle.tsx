@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  inline?: boolean;
+}
+
+export default function ThemeToggle({ inline = false }: ThemeToggleProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
-    // Check initial theme from document element class or fallback to localStorage / system
     const isDark = document.documentElement.classList.contains('dark');
     setTheme(isDark ? 'dark' : 'light');
   }, []);
@@ -25,11 +28,15 @@ export default function ThemeToggle() {
     }
   };
 
+  const buttonClass = inline
+    ? 'flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 w-9 h-9 rounded-xl transition-all active:scale-95 text-slate-800 dark:text-yellow-400 border border-slate-200 dark:border-white/10'
+    : 'fixed top-4 end-28 z-[999] flex items-center justify-center bg-white/80 dark:bg-black/40 hover:bg-slate-100 dark:hover:bg-[#1D263B] backdrop-blur-md border border-slate-200 dark:border-white/10 w-9 h-9 rounded-full shadow-lg transition-all active:scale-95 text-slate-800 dark:text-yellow-400';
+
   return (
     <button
       onClick={toggleTheme}
       aria-label="Toggle theme"
-      className="fixed top-4 end-28 z-[999] flex items-center justify-center bg-white/80 dark:bg-black/40 hover:bg-slate-100 dark:hover:bg-[#1D263B] backdrop-blur-md border border-slate-200 dark:border-white/10 w-9 h-9 rounded-full shadow-lg transition-all active:scale-95 text-slate-800 dark:text-yellow-400"
+      className={buttonClass}
     >
       {theme === 'dark' ? (
         <Sun className="w-4 h-4" />
@@ -39,3 +46,4 @@ export default function ThemeToggle() {
     </button>
   );
 }
+

@@ -218,13 +218,13 @@ export default function MarketsContainer({
   );
 
   return (
-    <div className="min-h-screen text-slate-900 dark:text-white select-none max-w-xl mx-auto relative pb-24 md:pb-8">
-      {/* Unified View (single-column switch for both Desktop and Mobile) */}
-      <div className="bg-white dark:bg-[#080B11] border-x border-slate-200 dark:border-white/5 min-h-screen">
+    <div className="w-full text-slate-900 dark:text-white select-none relative pb-24 md:pb-8">
+      {/* Mobile-only view: switches between list and details */}
+      <div className="block md:hidden max-w-xl mx-auto min-h-screen">
         <AnimatePresence mode="wait">
           {!activeSymbol ? (
             <motion.div
-              key="dashboard"
+              key="mobile-list"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
@@ -234,7 +234,7 @@ export default function MarketsContainer({
             </motion.div>
           ) : (
             <motion.div
-              key="details"
+              key="mobile-details"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
@@ -259,6 +259,61 @@ export default function MarketsContainer({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Desktop-only split-screen view */}
+      <div className="hidden md:grid grid-cols-12 gap-8 max-w-6xl mx-auto min-h-screen">
+        {/* Left Column: Watchlist & Search */}
+        <div className="col-span-5 lg:col-span-4 space-y-6 border-r border-slate-200 dark:border-white/5 pe-6">
+          {renderMarketOverview()}
+        </div>
+
+        {/* Right Column: Dynamic Detail Panel */}
+        <div className="col-span-7 lg:col-span-8 space-y-6">
+          <AnimatePresence mode="wait">
+            {loadingStock ? (
+              <motion.div
+                key="desktop-loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center h-[500px] text-gray-500 space-y-3 glass-panel bg-black/40 border border-white/5 rounded-3xl p-8"
+              >
+                <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-xs font-mono font-bold text-emerald-400">SYNCING LIVE MARKET TICKER...</span>
+              </motion.div>
+            ) : currentStockData ? (
+              <motion.div
+                key={`desktop-detail-${activeSymbol}`}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                className="space-y-6"
+              >
+                <StockDetail
+                  data={currentStockData}
+                  locale={locale}
+                  jarBalance={jarBalance}
+                  sharesOwned={sharesOwned}
+                  isParent={isParent}
+                  onTradeExecuted={handleTradeExecuted}
+                  onBack={() => {}}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="desktop-empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center h-[500px] text-gray-500 glass-panel bg-black/40 border border-white/5 rounded-3xl p-8 text-center space-y-3"
+              >
+                <HelpCircle className="w-12 h-12 text-gray-600" />
+                <p className="font-bold text-gray-400">Select a stock to begin trading</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );

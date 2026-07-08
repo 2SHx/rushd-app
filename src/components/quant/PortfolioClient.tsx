@@ -349,59 +349,59 @@ export default function PortfolioClient({
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 text-slate-900 dark:text-slate-900 dark:text-white min-h-screen">
-      <div className="flex flex-col xl:flex-row gap-6">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 text-slate-900 dark:text-white min-h-screen">
+      <div className="flex flex-col xl:flex-row gap-8">
         
         {/* LEFT COLUMN - MAIN CONTENT */}
-        <div className="flex-1 space-y-6">
+        <div className="flex-1 space-y-8">
           
           {/* Header - TradeSphere style */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <div className="text-gray-400 text-sm font-semibold flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:text-white transition-colors">
-                Current Balance ($)
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <div className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+                Current Balance
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
               </div>
               <div className="flex items-center gap-4 mt-2">
-                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                  <img src="https://i.pravatar.cc/150?img=11" alt="Avatar" className="w-full h-full object-cover dark:opacity-80" />
+                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <div className="w-full h-full bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white font-extrabold text-lg">U</div>
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+                <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
                   {fmtMoney(nav).replace('$', '$ ')}
                 </h1>
               </div>
             </div>
 
             {/* Top Right Action Tabs */}
-            <div className="flex bg-[var(--card-bg)] p-1 rounded-xl border border-[var(--border-color)] h-12">
-              <button onClick={triggerManualRebalance} disabled={loading} className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-slate-900 dark:text-white disabled:opacity-50 flex items-center">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
-                Trade
+            <div className="flex glass-panel p-1 rounded-2xl border border-slate-200 dark:border-white/10 h-12 shadow-sm self-start">
+              <button onClick={triggerManualRebalance} disabled={loading} className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-50 flex items-center gap-1.5">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+                Rebalance
               </button>
-              <button className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-slate-900 dark:text-white flex items-center">Wallet</button>
-              <button className="px-5 text-sm font-bold rounded-lg transition-all bg-indigo-600 text-slate-900 dark:text-white shadow-lg shadow-indigo-500/25 flex items-center">Analytics</button>
+              <button className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white flex items-center">Wallet</button>
+              <button className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all bg-emerald-500 text-black shadow-lg shadow-emerald-500/25 flex items-center font-black">Analytics</button>
             </div>
           </div>
 
           {/* Main Navigation Tabs */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-8 border-b border-white/10 mt-8">
-            <button className="text-indigo-400 font-semibold pb-3 border-b-2 border-indigo-500 whitespace-nowrap">Overview</button>
-            <button className="text-gray-500 font-semibold pb-3 border-b-2 border-transparent hover:text-gray-300 whitespace-nowrap transition-colors">US Equities</button>
-            <button className="text-gray-500 font-semibold pb-3 border-b-2 border-transparent hover:text-gray-300 whitespace-nowrap transition-colors">Saudi Equities</button>
-            <button className="text-gray-500 font-semibold pb-3 border-b-2 border-transparent hover:text-gray-300 whitespace-nowrap transition-colors">Cash & Equivalents</button>
+          <div className="flex overflow-x-auto no-scrollbar gap-8 border-b border-slate-200 dark:border-white/5 mt-4">
+            <button className="text-emerald-500 dark:text-emerald-400 font-extrabold text-sm pb-3 border-b-2 border-emerald-500 whitespace-nowrap">Overview</button>
+            <button className="text-slate-500 dark:text-gray-400 font-bold text-sm pb-3 border-b-2 border-transparent hover:text-slate-900 dark:hover:text-white whitespace-nowrap transition-colors">US Equities</button>
+            <button className="text-slate-500 dark:text-gray-400 font-bold text-sm pb-3 border-b-2 border-transparent hover:text-slate-900 dark:hover:text-white whitespace-nowrap transition-colors">Saudi Equities</button>
+            <button className="text-slate-500 dark:text-gray-400 font-bold text-sm pb-3 border-b-2 border-transparent hover:text-slate-900 dark:hover:text-white whitespace-nowrap transition-colors">Cash & Equivalents</button>
           </div>
 
           {/* Performance Curve */}
-          <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] relative mt-6 shadow-sm">
+          <div className="glass-panel rounded-3xl p-6 border border-slate-200 dark:border-white/10 relative shadow-lg">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-base font-bold text-gray-200">Statistics</h2>
-              <div className="flex space-x-1 bg-black/40 p-1 rounded-lg border border-[var(--border-color)]">
+              <h2 className="text-sm font-bold text-slate-800 dark:text-gray-200 uppercase tracking-wider">Performance Curve</h2>
+              <div className="flex space-x-1 bg-black/20 p-1 rounded-xl border border-slate-200 dark:border-white/5">
                 {['1M', '3M', '1Y', 'ALL'].map((tf) => (
                   <button
                     key={tf}
                     onClick={() => setTimeframe(tf as any)}
-                    className={`px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${
-                      timeframe === tf ? 'bg-indigo-600 text-slate-900 dark:text-white' : 'text-gray-400 hover:text-slate-900 dark:text-white'
+                    className={`px-4 py-1.5 text-[10px] font-extrabold rounded-lg transition-all ${
+                      timeframe === tf ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {tf}
@@ -416,94 +416,106 @@ export default function PortfolioClient({
           </div>
 
           {/* Asset Class Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
-              <div className="text-gray-400 font-bold text-sm mb-3">US Equities</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
-                {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
-              </div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-slate-900 dark:text-white">
-                  {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-5">
-                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
-              </div>
-              <div className="flex justify-between items-center text-gray-500">
-                <div className="flex -space-x-2">
-                  <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-indigo-400 font-bold">APPL</span></div>
-                  <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-blue-400 font-bold">MSFT</span></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4">
+              <div>
+                <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">US Equities</div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                  {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
                 </div>
-                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-semibold mb-1.5">
+                  <span className="text-gray-400">Portfolio Share</span>
+                  <span className="text-slate-950 dark:text-white font-mono font-bold">
+                    {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
+                </div>
+                <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
+                  <div className="flex -space-x-1.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[8px] text-emerald-400 font-extrabold">AAPL</span></div>
+                    <div className="w-7 h-7 rounded-full bg-teal-500/10 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[8px] text-teal-400 font-extrabold">MSFT</span></div>
+                  </div>
+                  <button className="hover:text-slate-900 dark:hover:text-white transition-colors">→</button>
+                </div>
               </div>
             </div>
 
-            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
-              <div className="text-gray-400 font-bold text-sm mb-3">Saudi Equities</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
-                {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
-              </div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-slate-900 dark:text-white">
-                  {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-5">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
-              </div>
-              <div className="flex justify-between items-center text-gray-500">
-                <div className="flex -space-x-2">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-emerald-400 font-bold">2222</span></div>
-                  <div className="w-7 h-7 rounded-full bg-teal-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-teal-400 font-bold">1120</span></div>
+            <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4">
+              <div>
+                <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">Saudi Equities</div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                  {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
                 </div>
-                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-semibold mb-1.5">
+                  <span className="text-gray-400">Portfolio Share</span>
+                  <span className="text-slate-950 dark:text-white font-mono font-bold">
+                    {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
+                </div>
+                <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
+                  <div className="flex -space-x-1.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[8px] text-emerald-400 font-extrabold">2222</span></div>
+                    <div className="w-7 h-7 rounded-full bg-teal-500/10 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[8px] text-teal-400 font-extrabold">1120</span></div>
+                  </div>
+                  <button className="hover:text-slate-900 dark:hover:text-white transition-colors">→</button>
+                </div>
               </div>
             </div>
 
-            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
-              <div className="text-gray-400 font-bold text-sm mb-3">Cash & Purify</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
-                {fmtMoney(cash)}
-              </div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-slate-900 dark:text-white">
-                  {fmtPercent(nav > 0 ? cash / nav : 0)}
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-5">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, nav > 0 ? (cash / nav) * 100 : 0)}%` }}></div>
-              </div>
-              <div className="flex justify-between items-center text-gray-500">
-                <div className="flex -space-x-2">
-                  <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-amber-400 font-bold">USD</span></div>
+            <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4">
+              <div>
+                <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">Cash & Purify</div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                  {fmtMoney(cash)}
                 </div>
-                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-semibold mb-1.5">
+                  <span className="text-gray-400">Portfolio Share</span>
+                  <span className="text-slate-950 dark:text-white font-mono font-bold">
+                    {fmtPercent(nav > 0 ? cash / nav : 0)}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, nav > 0 ? (cash / nav) * 100 : 0)}%` }}></div>
+                </div>
+                <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
+                  <div className="flex -space-x-1.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[8px] text-emerald-400 font-extrabold">USD</span></div>
+                  </div>
+                  <button className="hover:text-slate-900 dark:hover:text-white transition-colors">→</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-4 mt-6 mb-8">
-            <button className="px-8 py-3 rounded-xl border border-[var(--border-color)] text-slate-900 dark:text-white font-bold text-sm hover:bg-white/5 transition-all">View All</button>
-            <button onClick={triggerManualRebalance} className="px-8 py-3 rounded-xl bg-indigo-600 text-slate-900 dark:text-white font-bold text-sm hover:bg-indigo-700 transition-all shadow-[0_0_15px_rgba(99,102,241,0.25)] flex items-center gap-2">
-              <Play className="w-4 h-4" /> Trade
+          <div className="flex justify-end gap-4 mt-4 mb-8">
+            <button className="px-8 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-white/5 transition-all">View All</button>
+            <button onClick={triggerManualRebalance} className="px-8 py-3 rounded-2xl bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2">
+              <Play className="w-4 h-4 text-black" /> Run Trade Strategy
             </button>
           </div>
 
           {/* Tables Section */}
-          <div className="space-y-6">
-            <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] overflow-hidden shadow-sm">
-              <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse mb-4">
-                <Coins className="w-5 h-5 text-indigo-400" />
+          <div className="space-y-8">
+            <div className="glass-panel rounded-3xl p-6 border border-slate-200 dark:border-white/10 overflow-hidden shadow-xl">
+              <h2 className="text-base font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-slate-800 dark:text-gray-200">
+                <Coins className="w-5 h-5 text-emerald-400" />
                 <span>{t('holdingsHeading')}</span>
               </h2>
               <div className="overflow-x-auto">
-                <table className="w-full text-start border-collapse">
+                <table className="w-full text-start border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
+                    <tr className="border-b border-slate-200 dark:border-white/10 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
                       <th className="py-3 text-start px-2">{t('symbol')}</th>
                       <th className="py-3 text-start px-2">{t('name')}</th>
                       <th className="py-3 text-start px-2">{t('shariaStatus')}</th>
@@ -514,23 +526,23 @@ export default function PortfolioClient({
                   </thead>
                   <tbody>
                     {positions.map(pos => (
-                      <tr key={pos.symbol} className="border-b border-white/5 hover:bg-white/5 text-sm transition-colors">
-                        <td className="py-3.5 px-2 font-bold text-indigo-400">{pos.symbol}</td>
-                        <td className="py-3.5 px-2 text-gray-300 max-w-[200px] truncate">{pos.name || pos.symbol}</td>
+                      <tr key={pos.symbol} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
+                        <td className="py-3.5 px-2 font-black font-mono text-emerald-400">{pos.symbol}</td>
+                        <td className="py-3.5 px-2 text-slate-700 dark:text-gray-300 max-w-[200px] truncate">{pos.name || pos.symbol}</td>
                         <td className="py-3.5 px-2">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider shadow-sm">
                             <ShieldCheck className="w-3.5 h-3.5" />
                             {t('compliant')}
                           </span>
                         </td>
-                        <td className="py-3.5 px-2 text-end font-mono">{pos.shares.toFixed(2)}</td>
+                        <td className="py-3.5 px-2 text-end font-mono text-slate-700 dark:text-gray-300">{pos.shares.toFixed(2)}</td>
                         <td className="py-3.5 px-2 text-end font-mono text-slate-900 dark:text-white font-bold">{fmtMoney(pos.value)}</td>
                         <td className="py-3.5 px-2 text-end">
                           <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden hidden sm:block">
-                              <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+                            <div className="w-16 h-1 bg-black/40 rounded-full overflow-hidden hidden sm:block">
+                              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
                             </div>
-                            <span className="font-mono font-semibold">{fmtPercent(pos.weight)}</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtPercent(pos.weight)}</span>
                           </div>
                         </td>
                       </tr>
@@ -544,20 +556,20 @@ export default function PortfolioClient({
             </div>
             
             {/* Purification Ledger */}
-            <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]">
+            <div className="glass-panel rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-xl">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse">
-                  <History className="w-5 h-5 text-indigo-400" />
+                <h2 className="text-base font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse text-slate-800 dark:text-gray-200">
+                  <History className="w-5 h-5 text-emerald-400" />
                   <span>{t('purificationLedgerTitle')}</span>
                 </h2>
-                <div className="text-xs font-semibold px-3 py-1 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/20">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20 shadow-sm">
                   Total Purified: {fmtMoney(runningPurificationTotal)}
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-start border-collapse">
+                <table className="w-full text-start border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
+                    <tr className="border-b border-slate-200 dark:border-white/10 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
                       <th className="py-3 text-start px-2">{t('date')}</th>
                       <th className="py-3 text-start px-2">{t('symbol')}</th>
                       <th className="py-3 text-end px-2">{t('purificationFeeOwed')}</th>
@@ -565,9 +577,9 @@ export default function PortfolioClient({
                   </thead>
                   <tbody>
                     {purification.map(entry => (
-                      <tr key={entry.id} className="border-b border-white/5 hover:bg-white/5 text-sm transition-colors">
+                      <tr key={entry.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
                         <td className="py-3.5 px-2 text-gray-400 font-mono text-xs">{new Date(entry.createdAt).toLocaleDateString(locale)}</td>
-                        <td className="py-3.5 px-2 font-bold text-indigo-400">{entry.symbol}</td>
+                        <td className="py-3.5 px-2 font-black text-emerald-400">{entry.symbol}</td>
                         <td className="py-3.5 px-2 text-end text-amber-400 font-bold font-mono">{fmtMoney(entry.amount)}</td>
                       </tr>
                     ))}
@@ -582,82 +594,69 @@ export default function PortfolioClient({
         </div>
 
         {/* RIGHT COLUMN - SIDEBAR */}
-        <div className="w-full xl:w-[380px] space-y-6 flex-shrink-0 mt-6 xl:mt-0">
-          
-          {/* Top Right Utilities */}
-          <div className="flex justify-end gap-3 hidden md:flex mb-8">
-            <button className="relative p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-gray-400 hover:text-slate-900 dark:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_5px_rgba(99,102,241,0.8)]"></span>
-            </button>
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)]">
-              <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold border border-emerald-500/30">M</div>
-              <span className="text-sm font-semibold text-gray-300 cursor-pointer pr-1">User Name <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></span>
-            </div>
-          </div>
-
+        <div className="w-full xl:w-[380px] space-y-6 flex-shrink-0">
           {/* Search Box */}
           <div className="relative mb-6">
-            <input type="text" placeholder="Search..." className="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl py-3 pl-11 pr-4 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500/50 transition-colors" />
-            <svg className="w-4 h-4 text-gray-500 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input type="text" placeholder="Search holdings..." className="w-full glass-panel bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl py-3 pl-11 pr-4 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all shadow-sm" />
+            <svg className="w-4 h-4 text-gray-500 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
 
           {/* Asset Allocation Donut Chart */}
-          <div className="mb-6">
+          <div>
             {renderAllocationDonut()}
           </div>
 
           {/* Key Metrics / Popular Strategies List */}
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Key Metrics</h3>
+          <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-lg">
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200 mb-4">Key Metrics</h3>
             <div className="space-y-4">
-              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-indigo-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-slate-900 dark:text-white transition-all">
-                  <Activity className="w-7 h-7" />
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <Activity className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Sharpe Ratio</div>
-                  <div className="text-xs text-gray-400 line-clamp-2 pr-2">Risk-adjusted return vs. Risk-free rate.</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Sharpe Ratio</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Risk-adjusted returns indicator</div>
                 </div>
-                <div className="text-lg font-bold text-indigo-400 font-mono">{metrics.sharpe.toFixed(2)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{metrics.sharpe.toFixed(2)}</div>
               </div>
 
-              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-emerald-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-900 dark:text-white transition-all">
-                  <TrendingUp className="w-7 h-7" />
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <TrendingUp className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">CAGR</div>
-                  <div className="text-xs text-gray-400 line-clamp-2 pr-2">Compound Annual Growth Rate of portfolio.</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">CAGR</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Compounded Annual Growth Rate</div>
                 </div>
-                <div className="text-lg font-bold text-emerald-400 font-mono">{fmtPercent(metrics.cagr)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.cagr)}</div>
               </div>
 
-              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-blue-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-900 dark:text-white transition-all">
-                  <Percent className="w-7 h-7" />
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <Percent className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Alpha vs SPUS</div>
-                  <div className="text-xs text-gray-400 line-clamp-2 pr-2">Excess return vs SPUS Halal Index benchmark.</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Alpha vs SPUS</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Outperformance vs SPUS index</div>
                 </div>
-                <div className="text-lg font-bold text-blue-400 font-mono">{fmtPercent(metrics.alphaVsSpus)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.alphaVsSpus)}</div>
               </div>
               
-              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-amber-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-900 dark:text-white transition-all">
-                  <AlertTriangle className="w-7 h-7" />
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-black transition-all">
+                  <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Max Drawdown</div>
-                  <div className="text-xs text-gray-400 line-clamp-2 pr-2">The maximum observed loss from peak.</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Max Drawdown</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Peak-to-trough historical drop</div>
                 </div>
-                <div className="text-lg font-bold text-amber-400 font-mono">{fmtPercent(metrics.maxDrawdown)}</div>
+                <div className="text-base font-black text-amber-400 font-mono">{fmtPercent(metrics.maxDrawdown)}</div>
               </div>
             </div>
             
-            <button className="w-full py-3.5 mt-5 text-sm font-bold text-gray-300 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl hover:bg-white/5 transition-colors shadow-sm">
-              View All
+            <button className="w-full py-3 mt-4 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-2xl transition-all border border-slate-200 dark:border-white/5">
+              View Extended Metrics
             </button>
           </div>
         </div>

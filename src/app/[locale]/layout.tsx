@@ -8,6 +8,7 @@ import Navigation from '@/components/Navigation';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import ThemeToggle from '@/components/ThemeToggle';
+import DesignControlCenter from '@/components/DesignControlCenter';
 
 const SUPPORTED_LOCALES = ['en', 'ar'];
 
@@ -49,13 +50,12 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:ps-64 bg-slate-50 text-slate-900 dark:bg-[#0B0F19] dark:text-white transition-colors duration-200`}>
+      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 md:ps-64 bg-slate-50 text-slate-900 dark:bg-[#070B11] dark:text-white transition-colors duration-200`}>
         <NextIntlClientProvider messages={messages}>
           <DisclaimerBanner />
-          <LanguageSwitcher locale={locale} />
-          <ThemeToggle />
+          <DesignControlCenter />
           <Navigation locale={locale} />
-          <main className="flex-1 w-full p-4 md:p-8">
+          <main className="flex-1 w-full p-4 md:p-6 lg:p-8">
             {children}
           </main>
         </NextIntlClientProvider>

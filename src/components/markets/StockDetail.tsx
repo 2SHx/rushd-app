@@ -114,23 +114,23 @@ export default function StockDetail({
   return (
     <div className="space-y-6">
       {/* Mobile Back Button & Header */}
-      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-white/5 bg-[#0F1420]/70 backdrop-blur-md">
-        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full text-emerald-400">
+      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-[#080B11]/80 backdrop-blur-md sticky top-0 z-40 rounded-b-2xl shadow-sm">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full text-emerald-400">
           <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
         </button>
-        <span className="font-bold text-white text-sm">{displayName} ({cleanSymbol})</span>
+        <span className="font-bold text-slate-800 dark:text-white text-sm">{displayName} ({cleanSymbol})</span>
       </div>
 
       {/* Stock Quote Header Panel */}
-      <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 space-y-4 text-start relative overflow-hidden">
+      <div className="glass-panel rounded-3xl p-6 space-y-4 text-start relative overflow-hidden shadow-xl">
         {/* Glowing backdrop circle */}
         <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-emerald-500/10 blur-xl pointer-events-none" />
 
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <h1 className="text-xl font-extrabold text-white">{cleanSymbol}</h1>
-              <span className="text-[10px] text-gray-500 font-bold bg-white/5 border border-white/10 px-2 py-0.5 rounded-full uppercase">
+              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">{cleanSymbol}</h1>
+              <span className="text-[10px] text-gray-500 font-bold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-full uppercase">
                 {data.market}
               </span>
             </div>
@@ -138,19 +138,19 @@ export default function StockDetail({
           </div>
 
           {/* Sharia Shield Badge */}
-          <div className={`flex items-center space-x-1.5 rtl:space-x-reverse px-3.5 py-1.5 rounded-full border text-xs font-bold ${
+          <div className={`flex items-center space-x-1.5 rtl:space-x-reverse px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all duration-300 ${
             data.isShariaCompliant 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-500/5' 
-              : 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-lg shadow-amber-500/5'
+              ? 'bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-500/25 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.12)]' 
+              : 'bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/25 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
           }`}>
-            {data.isShariaCompliant ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+            {data.isShariaCompliant ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-amber-400" />}
             <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
           </div>
         </div>
 
         {/* Live quote values */}
         <div className="flex items-baseline space-x-3 rtl:space-x-reverse">
-          <span className="text-3xl font-extrabold font-mono text-white leading-none">
+          <span className="text-3xl font-extrabold font-mono text-slate-900 dark:text-white leading-none">
             {data.market === 'TASI'
               ? t('formatTasi', { amount: data.price.toFixed(2) })
               : t('formatNasdaq', { amount: data.price.toFixed(2) })
@@ -178,18 +178,18 @@ export default function StockDetail({
       <RScorePanel symbol={data.symbol} locale={locale} />
 
       {/* 4. Recommended Quiz Quest */}
-      <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-5 space-y-4 text-start">
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+      <div className="glass-panel rounded-3xl p-5 space-y-4 text-start shadow-md">
+        <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-2">
           <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
             <BookOpen className="w-4 h-4" />
-            <h3 className="font-bold text-sm text-gray-200">{t('recommendedQuiz')}</h3>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-gray-200">{t('recommendedQuiz')}</h3>
           </div>
           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
             {recommendedQuiz.topic}
           </span>
         </div>
 
-        <p className="text-xs text-gray-400 leading-relaxed">
+        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
           {isAr ? recommendedQuiz.descArabic : recommendedQuiz.descEnglish}
         </p>
 
@@ -212,7 +212,7 @@ export default function StockDetail({
 
         <button
           onClick={() => { setIsQuizOpen(true); setQuizResult(null); }}
-          className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-2xl font-bold text-xs text-white transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse active:scale-95"
+          className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-2xl font-bold text-xs text-white transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse active:scale-95 neon-glow-btn"
         >
           <Trophy className="w-4 h-4" />
           <span>{t('runQuiz')}</span>

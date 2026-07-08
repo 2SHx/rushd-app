@@ -1,7 +1,6 @@
 'use client';
-// 'use client': this is the interactive committee console — form state, fetch calls,
-// and per-analyst UI state can't live in a server component.
-import { useState } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,6 +13,14 @@ import {
   AlertTriangle,
   Loader2,
   Gavel,
+  Play,
+  Pause,
+  RefreshCw,
+  Cpu,
+  Database,
+  ArrowRight,
+  HelpCircle,
+  Award,
 } from 'lucide-react';
 
 type MarketKind = 'TASI' | 'NASDAQ';
@@ -95,14 +102,14 @@ function toEvidenceChips(evidence: unknown): string[] {
 }
 
 function stanceStyle(stance: Stance) {
-  if (stance === 'BULLISH') return { color: 'text-emerald-400', bg: 'bg-emerald-500/10', Icon: TrendingUp };
-  if (stance === 'BEARISH') return { color: 'text-red-400', bg: 'bg-red-500/10', Icon: TrendingDown };
-  return { color: 'text-gray-400', bg: 'bg-gray-500/10', Icon: Minus };
+  if (stance === 'BULLISH') return { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', Icon: TrendingUp };
+  if (stance === 'BEARISH') return { color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20', Icon: TrendingDown };
+  return { color: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/20', Icon: Minus };
 }
 
 function actionStyle(action: string) {
   if (action === 'BUY') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-  if (action === 'SELL') return 'text-red-400 bg-red-500/10 border-red-500/30';
+  if (action === 'SELL') return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
   return 'text-neonBlue bg-neonBlue/10 border-neonBlue/30';
 }
 
@@ -110,9 +117,12 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+// Visual simulation steps definition
+type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
+
 export default function CommitteeClient({ locale }: { locale: string }) {
   const t = useTranslations('Quant');
-  void locale; // reserved: both AR + EN rationale are always shown side by side regardless of UI locale
+  const isAr = locale === 'ar';
 
   const [market, setMarket] = useState<MarketKind>('TASI');
   const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.TASI);
@@ -125,7 +135,41 @@ export default function CommitteeClient({ locale }: { locale: string }) {
   const [btError, setBtError] = useState<string | null>(null);
   const [btData, setBtData] = useState<BacktestResult | null>(null);
 
+  // Simulation play state
+  const [simStep, setSimStep] = useState<SimStep>('idle');
+  const [simPlay, setSimPlay] = useState(true);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [typedText, setTypedText] = useState('');
+  const [debateTurnIdx, setDebateTurnIdx] = useState(0);
+
+  const simTimerRef = useRef<NodeJS.Timeout | null>(null);
   const busy = passLoading || btLoading;
+
+  // Visual simulation settings loaded dynamically from DesignControlCenter
+  const [settings, setSettings] = useState({ simSpeed: 1, volatility: 1 });
+
+  useEffect(() => {
+    // Read starting values
+    const speed = localStorage.getItem('rushd_simSpeed');
+    const vol = localStorage.getItem('rushd_volatility');
+    setSettings({
+      simSpeed: speed ? Number(speed) : 1,
+      volatility: vol ? Number(vol) : 1,
+    });
+
+    // Listen to settings modifications
+    const handleSettingsChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setSettings({
+          simSpeed: detail.simSpeed ?? 1,
+          volatility: detail.volatility ?? 1,
+        });
+      }
+    };
+    window.addEventListener('rushd_settings_changed', handleSettingsChange);
+    return () => window.removeEventListener('rushd_settings_changed', handleSettingsChange);
+  }, []);
 
   function handleMarketChange(m: MarketKind) {
     setMarket(m);
@@ -134,6 +178,8 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     setBtData(null);
     setPassError(null);
     setBtError(null);
+    setSimStep('idle');
+    setDebateTurnIdx(0);
   }
 
   async function errorFromResponse(res: Response): Promise<string> {
@@ -142,12 +188,112 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     return t('errorGeneric');
   }
 
+  // Typewriter effect logic
+  useEffect(() => {
+    if (simStep === 'idle' || !passData) {
+      setTypedText('');
+      return;
+    }
+
+    let targetText = '';
+    if (simStep === 'sharia') {
+      targetText = passData.shariaGate.compliant
+        ? (isAr ? 'توافق شرعي كامل. معايير أنشطة و نسب مالية مقبولة.' : 'Sharia compliant. Sector filters and leverage ratios are fully within limits.')
+        : (isAr ? `تنبيه غير متوافق: ${passData.shariaGate.reason || 'محظور التداول'}` : `Non-compliant Veto: ${passData.shariaGate.reason || 'Trading blocked'}`);
+    } else if (simStep === 'analysts' && activeAgentId) {
+      const signal = passData.signals.find(s => s.agent === activeAgentId);
+      if (signal) {
+        targetText = isAr ? signal.rationaleAr : signal.rationaleEn;
+      }
+    } else if (simStep === 'debate' && passData.debateTranscript?.[debateTurnIdx]) {
+      const turn = passData.debateTranscript[debateTurnIdx];
+      targetText = isAr ? turn.argumentAr : turn.argumentEn;
+    } else if (simStep === 'pm') {
+      const pmSignal = passData.signals.find(s => s.agent === 'PORTFOLIO_MANAGER');
+      if (pmSignal) {
+        targetText = isAr ? pmSignal.rationaleAr : pmSignal.rationaleEn;
+      }
+    } else if (simStep === 'risk') {
+      targetText = isAr 
+        ? `مدير المخاطر يراجع ويطهر الأرصدة. تم تأكيد الإجراء النهائي: ${passData.finalAction}.` 
+        : `Risk Manager is executing final envelope constraints. Action validated: ${passData.finalAction}.`;
+    }
+
+    setTypedText('');
+    let idx = 0;
+    const interval = setInterval(() => {
+      if (idx < targetText.length) {
+        setTypedText(prev => prev + targetText.charAt(idx));
+        idx++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 15);
+
+    return () => clearInterval(interval);
+  }, [simStep, activeAgentId, debateTurnIdx, passData, isAr]);
+
+  // Simulation Sequence Engine
+  useEffect(() => {
+    if (!simPlay || !passData || simStep === 'idle' || simStep === 'done') {
+      if (simTimerRef.current) clearTimeout(simTimerRef.current);
+      return;
+    }
+
+    const delay = settings.simSpeed * 1000;
+    
+    // Quick skip if simSpeed is 0
+    if (settings.simSpeed === 0) {
+      setSimStep('done');
+      return;
+    }
+
+    const runNextStep = () => {
+      if (simStep === 'ingestion') {
+        setSimStep('analysts');
+        setActiveAgentId('QUANT_CORE');
+      } else if (simStep === 'analysts') {
+        // Step through the analysts
+        const currentIdx = AGENT_KEYS.indexOf(activeAgentId || '');
+        if (currentIdx !== -1 && currentIdx < 4) { // step through first 5 analysts
+          setActiveAgentId(AGENT_KEYS[currentIdx + 1]);
+        } else {
+          setSimStep('sharia');
+          setActiveAgentId('SHARIA');
+        }
+      } else if (simStep === 'sharia') {
+        if (passData.debateTranscript && passData.debateTranscript.length > 0) {
+          setSimStep('debate');
+          setDebateTurnIdx(0);
+        } else {
+          setSimStep('pm');
+        }
+      } else if (simStep === 'debate') {
+        if (passData.debateTranscript && debateTurnIdx < passData.debateTranscript.length - 1) {
+          setDebateTurnIdx(prev => prev + 1);
+        } else {
+          setSimStep('pm');
+        }
+      } else if (simStep === 'pm') {
+        setSimStep('risk');
+      } else if (simStep === 'risk') {
+        setSimStep('done');
+      }
+    };
+
+    simTimerRef.current = setTimeout(runNextStep, simStep === 'debate' ? delay * 1.5 : delay);
+    return () => {
+      if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    };
+  }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, settings.simSpeed]);
+
   async function runPass() {
     setPassLoading(true);
     setPassError(null);
     setPassData(null);
     setBtData(null);
     setBtError(null);
+    setSimStep('idle');
     try {
       const res = await fetch('/api/quant/pass', {
         method: 'POST',
@@ -158,7 +304,12 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         setPassError(await errorFromResponse(res));
         return;
       }
-      setPassData(await res.json());
+      const data = await res.json();
+      setPassData(data);
+      
+      // Start simulation
+      setSimStep('ingestion');
+      setSimPlay(true);
     } catch {
       setPassError(t('errorGeneric'));
     } finally {
@@ -170,6 +321,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     setBtLoading(true);
     setBtError(null);
     setBtData(null);
+    setSimStep('idle');
     try {
       const toDate = new Date();
       const fromDate = new Date();
@@ -196,10 +348,25 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     }
   }
 
+  // Visual layout config for nodes on the graph
+  const nodes = [
+    { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '5%', y: '50%', type: 'data', icon: Database },
+    { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '25%', y: '15%', type: 'analyst' },
+    { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '25%', y: '38%', type: 'analyst' },
+    { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '25%', y: '62%', type: 'analyst' },
+    { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '25%', y: '85%', type: 'analyst' },
+    { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '15%', type: 'analyst' },
+    { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '38%', type: 'analyst' },
+    { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '62%', type: 'gate' },
+    { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '72%', y: '25%', type: 'debate', icon: Gavel },
+    { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '72%', y: '70%', type: 'pm', icon: Bot },
+    { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '92%', y: '50%', type: 'risk', icon: Gavel }
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Controls */}
-      <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+      {/* Controls Console */}
+      <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex gap-2">
             {(['TASI', 'NASDAQ'] as const).map((m) => (
@@ -209,7 +376,9 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                 onClick={() => handleMarketChange(m)}
                 disabled={busy}
                 className={`px-5 py-2 rounded-full font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                  market === m ? 'bg-emerald-500 text-white' : 'glass-panel text-gray-400 hover:text-white'
+                  market === m 
+                    ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20' 
+                    : 'glass-panel text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
               >
                 {m === 'TASI' ? t('marketTasi') : t('marketNasdaq')}
@@ -218,7 +387,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
           </div>
 
           <div className="flex flex-col gap-1 flex-1 min-w-[10rem]">
-            <label htmlFor="quant-symbol" className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            <label htmlFor="quant-symbol" className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
               {t('symbolLabel')}
             </label>
             <input
@@ -227,7 +396,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
               onChange={(e) => setSymbol(e.target.value.toUpperCase())}
               placeholder={t('symbolPlaceholder')}
               disabled={busy}
-              className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50"
+              className="bg-black/20 border border-slate-200 dark:border-white/15 rounded-xl px-4 py-2.5 text-sm font-mono text-slate-950 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/30 disabled:opacity-50"
             />
           </div>
 
@@ -236,9 +405,9 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             type="button"
             onClick={runPass}
             disabled={busy || symbol.trim().length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 font-extrabold text-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 disabled:opacity-50 neon-glow-btn"
           >
-            {passLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {passLoading && <Loader2 className="w-4 h-4 animate-spin text-black" />}
             {passLoading ? t('running') : t('runButton')}
           </motion.button>
 
@@ -247,7 +416,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             type="button"
             onClick={runBacktest}
             disabled={busy || symbol.trim().length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-neonBlue/40 text-neonBlue font-bold text-xs uppercase tracking-wider hover:bg-neonBlue/10 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-500 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
           >
             {btLoading && <Loader2 className="w-4 h-4 animate-spin" />}
             {btLoading ? t('runningBacktest') : t('backtestButton')}
@@ -255,63 +424,284 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         </div>
 
         {passError && (
-          <p className="text-xs text-red-400 font-semibold text-start">{passError}</p>
+          <p className="text-xs text-rose-400 font-semibold text-start">{passError}</p>
         )}
       </div>
 
-      {/* Simulation Loading State */}
+      {/* Synchronizing loading screen */}
       {passLoading && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="glass-panel p-10 bg-black/40 border border-white/5 rounded-3xl flex flex-col items-center justify-center space-y-8"
+          className="glass-panel p-12 border border-slate-200 dark:border-white/10 rounded-3xl flex flex-col items-center justify-center space-y-6 shadow-xl"
         >
-          <div className="w-12 h-12 border-4 border-neonBlue border-t-transparent rounded-full animate-spin" />
-          <p className="text-neonBlue font-mono font-bold animate-pulse text-sm">
-            INITIALIZING AI AGENT WORKFLOW...
+          <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
+          <p className="text-emerald-400 font-mono font-bold animate-pulse text-xs uppercase tracking-widest">
+            Gathering market variables & sentiment vectors...
           </p>
-          
-          <div className="flex flex-col items-center space-y-2 opacity-70">
-            <div className="px-4 py-2 bg-white/10 rounded-lg text-[10px] font-mono border border-white/20 animate-pulse">DATA_INGESTION</div>
-            <div className="w-0.5 h-6 bg-white/20" />
-            <div className="flex space-x-2 rtl:space-x-reverse">
-              <div className="px-4 py-2 bg-blue-500/10 text-blue-400 rounded-lg text-[10px] font-mono border border-blue-500/20">TECHNICAL_AGENT</div>
-              <div className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-mono border border-emerald-500/20">FUNDAMENTAL_AGENT</div>
-              <div className="px-4 py-2 bg-purple-500/10 text-purple-400 rounded-lg text-[10px] font-mono border border-purple-500/20">NEWS_AGENT</div>
-            </div>
-            <div className="flex justify-center gap-20 w-full">
-              <div className="w-0.5 h-6 bg-white/20"></div>
-              <div className="w-0.5 h-6 bg-white/20"></div>
-              <div className="w-0.5 h-6 bg-white/20"></div>
-            </div>
-            <div className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-lg text-[10px] font-mono border border-amber-500/20">SHARIA_FILTER</div>
-            <div className="w-0.5 h-6 bg-white/20" />
-            <div className="px-4 py-2 bg-neonBlue/10 text-neonBlue rounded-lg text-[10px] font-mono border border-neonBlue/20 font-bold shadow-[0_0_15px_rgba(0,240,255,0.3)]">PORTFOLIO_MANAGER</div>
-          </div>
         </motion.div>
       )}
 
-      {/* Committee pass results */}
+      {/* Visual Game-like Simulation Canvas */}
+      {passData && simStep !== 'idle' && (
+        <div className="space-y-6">
+          <div className="glass-panel border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden bg-black/40">
+            {/* Simulation controls header */}
+            <div className="flex justify-between items-center mb-6 border-b border-slate-200/50 dark:border-white/5 pb-4">
+              <div>
+                <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 dark:text-gray-200">
+                  Visual Committee Board ({symbol})
+                </h3>
+                <p className="text-[10px] text-gray-500 font-semibold">
+                  Step: {simStep.toUpperCase()} • Delay: {settings.simSpeed}s
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSimPlay(!simPlay)}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white transition-all active:scale-95 border border-slate-200 dark:border-white/10"
+                >
+                  {simPlay ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-emerald-400" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setSimStep('ingestion');
+                    setSimPlay(true);
+                    setDebateTurnIdx(0);
+                  }}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white transition-all active:scale-95 border border-slate-200 dark:border-white/10"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setSimStep('done')}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-extrabold uppercase tracking-wider text-gray-400 hover:text-white"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Graph Node View */}
+            <div className="relative h-[480px] w-full border border-slate-200/50 dark:border-white/5 rounded-2xl bg-slate-50/50 dark:bg-black/35 overflow-hidden shadow-inner">
+              {/* Connection Lines (SVG) */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-40">
+                {/* Connecting lines dynamically based on flow */}
+                <defs>
+                  <linearGradient id="flow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#10B981" stopOpacity="0" />
+                    <stop offset="50%" stopColor="#00F0FF" stopOpacity="1" />
+                    <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Left side -> analysts */}
+                {nodes.filter(n => n.type === 'analyst').map(node => (
+                  <path
+                    key={`line-ingest-${node.id}`}
+                    d={`M 35 240 Q 120 240, 310 ${node.id === 'QUANT_CORE' ? 72 : node.id === 'TECHNICAL' ? 182 : node.id === 'PATTERN_ANALOG' ? 297 : 408}`}
+                    fill="none"
+                    stroke={simStep === 'ingestion' ? 'url(#flow-gradient)' : '#475569'}
+                    strokeWidth={simStep === 'ingestion' ? 2 : 1}
+                    className={simStep === 'ingestion' ? 'animate-[dash_2s_linear_infinite]' : ''}
+                  />
+                ))}
+
+                {/* Analysts -> Debate */}
+                {nodes.filter(n => n.type === 'analyst').map(node => (
+                  <line
+                    key={`line-debate-${node.id}`}
+                    x1={node.id.startsWith('F') || node.id.startsWith('R') || node.id.startsWith('S') ? '50%' : '25%'}
+                    y1={node.id === 'QUANT_CORE' || node.id === 'FUNDAMENTAL' ? '15%' : node.id === 'TECHNICAL' || node.id === 'RESEARCH' ? '38%' : node.id === 'PATTERN_ANALOG' || node.id === 'SHARIA' ? '62%' : '85%'}
+                    x2="72%"
+                    y2="25%"
+                    stroke={simStep === 'analysts' || simStep === 'debate' ? '#00F0FF' : '#475569'}
+                    strokeWidth={simStep === 'debate' ? 1.5 : 1}
+                    strokeOpacity={0.6}
+                  />
+                ))}
+
+                {/* Sharia filter -> PM (Veto Line) */}
+                <line
+                  x1="50%"
+                  y1="62%"
+                  x2="72%"
+                  y2="70%"
+                  stroke={simStep === 'sharia' ? (passData.shariaGate.compliant ? '#10B981' : '#EF4444') : '#475569'}
+                  strokeWidth={2}
+                />
+
+                {/* Debate & PM -> PM */}
+                <line x1="72%" y1="25%" x2="72%" y2="70%" stroke={simStep === 'debate' ? '#00F0FF' : '#475569'} strokeWidth={1.5} />
+                <line x1="72%" y1="70%" x2="92%" y2="50%" stroke={simStep === 'pm' ? '#10B981' : '#475569'} strokeWidth={2} />
+              </svg>
+
+              {/* Render Nodes */}
+              {nodes.map(node => {
+                const isIngesting = simStep === 'ingestion';
+                const isAnalystActive = simStep === 'analysts' && activeAgentId === node.id;
+                const isShariaActive = simStep === 'sharia' && node.id === 'SHARIA';
+                const isDebating = simStep === 'debate' && node.id === 'debate';
+                const isPM = simStep === 'pm' && node.id === 'PORTFOLIO_MANAGER';
+                const isRisk = simStep === 'risk' && node.id === 'risk';
+
+                // Stance styles for analyst cards
+                const agentSignal = passData.signals.find(s => s.agent === node.id);
+                const sStyle = agentSignal ? stanceStyle(agentSignal.stance) : null;
+
+                const isActive = isAnalystActive || isShariaActive || isDebating || isPM || isRisk;
+
+                return (
+                  <motion.div
+                    key={node.id}
+                    style={{ left: node.x, top: node.y }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center"
+                    initial={{ scale: 0.9 }}
+                    animate={{ 
+                      scale: isActive ? 1.08 : 1,
+                      zIndex: isActive ? 30 : 10
+                    }}
+                    onClick={() => {
+                      if (agentSignal) setActiveAgentId(node.id);
+                    }}
+                  >
+                    {/* Node Circle */}
+                    <div 
+                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 shadow-lg transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-emerald-500/20 border-emerald-400 ring-4 ring-emerald-500/20 scale-105' 
+                          : sStyle 
+                            ? `${sStyle.bg} ${sStyle.border} ${sStyle.color}`
+                            : 'bg-slate-200 dark:bg-[#1A2333] border-slate-300 dark:border-white/10 text-gray-500'
+                      }`}
+                    >
+                      {node.icon ? (
+                        <node.icon className="w-5 h-5" />
+                      ) : node.id === 'SHARIA' ? (
+                        passData.shariaGate.compliant ? (
+                          <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <ShieldAlert className="w-5 h-5 text-rose-400" />
+                        )
+                      ) : (
+                        <Bot className="w-5 h-5" />
+                      )}
+                    </div>
+
+                    {/* Node Text Label */}
+                    <span className={`text-[9px] font-bold mt-1.5 whitespace-nowrap px-1.5 py-0.5 rounded-md ${
+                      isActive ? 'bg-emerald-500 text-black' : 'bg-black/30 text-gray-400'
+                    }`}>
+                      {isAr ? node.nameAr : node.name}
+                    </span>
+
+                    {/* Stance details on completed analysts */}
+                    {agentSignal && simStep !== 'ingestion' && (
+                      <span className={`text-[7px] font-black tracking-wider uppercase px-1 rounded-sm mt-0.5 ${sStyle?.bg} ${sStyle?.color}`}>
+                        {agentSignal.stance}
+                      </span>
+                    )}
+                  </motion.div>
+                );
+              })}
+
+              {/* Debate Speech Bubbles Overlay */}
+              <AnimatePresence>
+                {simStep === 'debate' && passData.debateTranscript?.[debateTurnIdx] && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute top-10 right-4 left-4 md:right-8 md:left-auto md:w-80 glass-panel bg-black/80 border border-white/10 p-4 rounded-2xl z-40 text-start shadow-2xl"
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-2 h-2 rounded-full ${
+                        passData.debateTranscript[debateTurnIdx].side === 'BULL' ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`} />
+                      <span className="text-[9px] font-extrabold uppercase text-gray-300">
+                        {passData.debateTranscript[debateTurnIdx].side} Arguments (Round {passData.debateTranscript[debateTurnIdx].round})
+                      </span>
+                    </div>
+                    <p className="text-xs text-white leading-relaxed font-semibold" dir="rtl">
+                      {passData.debateTranscript[debateTurnIdx].argumentAr}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Ingestion Stream pulse elements */}
+              {simStep === 'ingestion' && (
+                <div className="absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-emerald-400 rounded-full blur-sm pulse-glow-ring pointer-events-none" />
+              )}
+            </div>
+
+            {/* Typewriter Agent Thinking Display Panel */}
+            <div className="mt-4 p-5 rounded-2xl bg-black/45 border border-slate-200/50 dark:border-white/5 text-start min-h-[100px] flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-2">
+                  <Cpu className="w-3.5 h-3.5" />
+                  {simStep === 'ingestion' && (isAr ? 'تجميع مدخلات السوق...' : 'Consolidation of Market Streams...')}
+                  {simStep === 'analysts' && activeAgentId && (
+                    isAr ? `تفكير الوكيل: ${nodes.find(n => n.id === activeAgentId)?.nameAr}` : `Agent Thinking: ${nodes.find(n => n.id === activeAgentId)?.name}`
+                  )}
+                  {simStep === 'sharia' && (isAr ? 'فرز التوافق الشرعي لمعايير AAOIFI...' : 'AAOIFI Sharia Compliance Screening...')}
+                  {simStep === 'debate' && (isAr ? 'حلقة نقاش الوكلاء الذكية...' : 'Analyst Committee Debate Round...')}
+                  {simStep === 'pm' && (isAr ? 'اتخاذ قرار مدير المحفظة...' : 'Portfolio Manager Decision Consolidation...')}
+                  {simStep === 'risk' && (isAr ? 'محاكاة مدير المخاطر و إنفاذ الحدود...' : 'Risk Management Verification...')}
+                  {simStep === 'done' && (isAr ? 'اكتملت المحاكاة' : 'Simulation Completed')}
+                </span>
+
+                <p className="text-sm font-semibold text-slate-800 dark:text-gray-200 leading-relaxed font-sans" dir={isAr ? 'rtl' : 'ltr'}>
+                  {typedText || (simStep === 'ingestion' ? 'Streaming bars, cash balances, and sentiment catalog...' : '')}
+                </p>
+              </div>
+
+              {simStep === 'done' && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-wrap items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">Final Decision:</span>
+                    <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg border ${actionStyle(passData.finalAction)}`}>
+                      {passData.finalAction}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">Compliance Verdict:</span>
+                    <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg border ${
+                      passData.shariaGate.compliant ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {passData.shariaGate.compliant ? 'HALAL' : 'HARAM VETO'}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Traditional detailed cards collapse container */}
       <AnimatePresence>
-        {passData && (
+        {passData && simStep === 'done' && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            {passData.signals.length === 0 && (
-              <p className="text-xs text-gray-500 text-center py-2">{t('noDataYet')}</p>
-            )}
-
+            {/* PM decision & Sharia */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* PM decision */}
-              <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-3">
-                <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
-                  <Gavel className="w-4 h-4 text-neonBlue" />
+              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 shadow-lg">
+                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
+                  <Gavel className="w-4 h-4 text-emerald-400" />
                   <span>{t('pmDecisionHeading')}</span>
                 </h3>
-                <div className={`inline-flex px-4 py-2 rounded-xl border font-extrabold text-lg tracking-wider ${actionStyle(passData.finalAction)}`}>
+                <div className={`inline-flex px-4 py-2 rounded-xl border font-extrabold text-lg tracking-wider shadow-sm ${actionStyle(passData.finalAction)}`}>
                   {passData.finalAction}
                 </div>
                 {passData.proposedAction && passData.proposedAction !== passData.finalAction && (
@@ -322,38 +712,37 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                 {(() => {
                   const pmSignal = passData.signals.find(s => s.agent === 'PORTFOLIO_MANAGER');
                   return pmSignal ? (
-                    <div className="space-y-2 pt-2 border-t border-white/5 text-start">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('pmRationaleAr')}</p>
-                      <p className="text-sm text-emerald-300 font-semibold leading-relaxed" dir="rtl">{pmSignal.rationaleAr}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('pmRationaleEn')}</p>
+                    <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-white/5 text-start">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t('pmRationaleAr')}</p>
+                      <p className="text-sm text-emerald-400 font-semibold leading-relaxed" dir="rtl">{pmSignal.rationaleAr}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t('pmRationaleEn')}</p>
                       <p className="text-xs text-gray-400 leading-relaxed" dir="ltr">{pmSignal.rationaleEn}</p>
                     </div>
                   ) : null;
                 })()}
-                <p className="text-[10px] text-gray-600 font-mono break-all pt-1">
+                <p className="text-[9px] text-gray-600 font-mono break-all pt-1">
                   {t('decisionIdLabel')}: {passData.decisionId}
                 </p>
               </div>
 
-              {/* Sharia gate */}
-              <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-3">
-                <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
+              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 shadow-lg">
+                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
                   {passData.shariaGate.compliant ? (
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   ) : (
-                    <ShieldAlert className="w-4 h-4 text-red-400" />
+                    <ShieldAlert className="w-4 h-4 text-rose-400" />
                   )}
                   <span>{t('shariaGateHeading')}</span>
                 </h3>
                 <span
-                  className={`inline-flex px-3 py-1 rounded-full font-bold uppercase text-[10px] ${
-                    passData.shariaGate.compliant ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                  className={`inline-flex px-3 py-1 rounded-full font-bold uppercase text-[10px] border ${
+                    passData.shariaGate.compliant ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                   }`}
                 >
                   {passData.shariaGate.compliant ? t('shariaCompliant') : t('shariaNonCompliant')}
                 </span>
                 {!passData.shariaGate.compliant && (
-                  <p className="text-xs text-red-400 font-semibold border border-red-500/20 bg-red-500/10 p-2.5 rounded-lg">
+                  <p className="text-xs text-rose-400 font-semibold border border-rose-500/20 bg-rose-500/10 p-2.5 rounded-lg text-start">
                     {t('shariaEducationalNote')}
                   </p>
                 )}
@@ -362,17 +751,17 @@ export default function CommitteeClient({ locale }: { locale: string }) {
 
             {/* Analyst signals */}
             <div className="space-y-3">
-              <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-neonBlue" />
+              <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-emerald-400" />
                 <span>{t('analystsHeading')}</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {passData.signals.map((signal, idx) => {
-                  const { color, bg, Icon } = stanceStyle(signal.stance);
+                  const { color, bg, border, Icon } = stanceStyle(signal.stance);
                   const conviction = Math.max(0, Math.min(1, Number(signal.conviction) || 0));
                   const evidenceChips = toEvidenceChips(signal.evidence);
                   const agentLabel = AGENT_KEYS.includes(signal.agent)
-                    ? t(`agents.${signal.agent}` as 'agents.QUANT_CORE')
+                    ? t(`agents.${signal.agent}` as any)
                     : signal.agent;
                   const stanceLabel =
                     signal.stance === 'BULLISH'
@@ -384,39 +773,39 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                   return (
                     <div
                       key={signal.id ?? idx}
-                      className="glass-panel p-5 bg-black/30 border border-white/5 rounded-2xl space-y-3 text-start"
+                      className="glass-panel p-5 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 text-start shadow-md"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-white text-sm">{agentLabel}</span>
-                        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${bg} ${color}`}>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{agentLabel}</span>
+                        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase border ${bg} ${color} ${border}`}>
                           <Icon className="w-3 h-3" />
                           {stanceLabel}
                         </span>
                       </div>
 
                       <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] text-gray-500 font-bold">
+                        <div className="flex justify-between text-[9px] text-gray-500 font-bold">
                           <span>{t('convictionLabel')}</span>
                           <span>{pct(conviction)}</span>
                         </div>
-                        <div className="h-1.5 bg-black/50 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
                           <div className={`h-full ${color.replace('text-', 'bg-')}`} style={{ width: pct(conviction) }} />
                         </div>
                       </div>
 
-                      <p className="text-sm text-gray-100 leading-relaxed" dir="rtl" lang="ar">
+                      <p className="text-xs text-slate-800 dark:text-gray-200 leading-relaxed font-semibold font-sans" dir="rtl" lang="ar">
                         {signal.rationaleAr}
                       </p>
-                      <p className="text-xs text-gray-500 leading-relaxed" dir="ltr" lang="en">
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-sans" dir="ltr" lang="en">
                         {signal.rationaleEn}
                       </p>
 
                       {evidenceChips.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200 dark:border-white/5">
                           {evidenceChips.map((chip, chipIdx) => (
                             <span
                               key={chipIdx}
-                              className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-mono text-gray-400"
+                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-mono text-gray-500 dark:text-gray-400"
                             >
                               {chip}
                             </span>
@@ -425,8 +814,8 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                       )}
 
                       {signal.failureMode !== 'ok' && (
-                        <p className="flex items-center gap-1.5 text-[10px] text-yellow-400 font-semibold">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <p className="flex items-center gap-1.5 text-[9px] text-amber-500 font-bold uppercase">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                           {signal.failureMode === 'abstain' ? t('abstainNote') : t('degradedNote')}
                         </p>
                       )}
@@ -435,10 +824,12 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                 })}
               </div>
             </div>
+
+            {/* Bull/bear debate transcript */}
             {passData.debateTranscript && passData.debateTranscript.length > 0 && (
-              <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
-                <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
-                  <Gavel className="w-5 h-5 text-neonBlue" />
+              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg">
+                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
+                  <Gavel className="w-5 h-5 text-emerald-400" />
                   <span>{t('debateHeading')}</span>
                 </h3>
                 <div className="flex flex-col gap-4">
@@ -447,22 +838,22 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                     return (
                       <div
                         key={idx}
-                        className={`flex flex-col gap-1.5 p-4 rounded-2xl max-w-2xl border text-start ${
+                        className={`flex flex-col gap-1.5 p-4 rounded-2xl max-w-2xl border text-start shadow-sm ${
                           isBull
                             ? 'bg-emerald-500/5 border-emerald-500/10 self-start align-start md:mr-12'
-                            : 'bg-red-500/5 border-red-500/10 self-end align-end md:ml-12'
+                            : 'bg-rose-500/5 border-rose-500/10 self-end align-end md:ml-12'
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${isBull ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                          <span className={`text-[10px] font-extrabold uppercase ${isBull ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <span className={`w-2 h-2 rounded-full ${isBull ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                          <span className={`text-[9px] font-extrabold uppercase ${isBull ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {isBull ? t('debateTurnBull') : t('debateTurnBear')} (Round {turn.round})
                           </span>
                         </div>
-                        <p className="text-sm text-white leading-relaxed font-semibold font-sans" dir="rtl">
+                        <p className="text-xs text-slate-800 dark:text-white leading-relaxed font-semibold" dir="rtl">
                           {turn.argumentAr}
                         </p>
-                        <p className="text-xs text-gray-400 leading-relaxed font-sans" dir="ltr">
+                        <p className="text-[11px] text-gray-500 leading-relaxed" dir="ltr">
                           {turn.argumentEn}
                         </p>
                       </div>
@@ -475,8 +866,8 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         )}
       </AnimatePresence>
 
-      {/* Backtest results */}
-      {btError && <p className="text-xs text-red-400 font-semibold text-start">{btError}</p>}
+      {/* Backtest metrics display */}
+      {btError && <p className="text-xs text-rose-400 font-semibold text-start">{btError}</p>}
 
       <AnimatePresence>
         {btData && (
@@ -484,9 +875,12 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4"
+            className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg text-start"
           >
-            <h3 className="font-bold text-sm text-gray-300">{t('backtestHeading')}</h3>
+            <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 dark:text-gray-300 flex items-center gap-2">
+              <Award className="w-4 h-4 text-emerald-400" />
+              {t('backtestHeading')}
+            </h3>
 
             {btData.metrics.trades === 0 ? (
               <p className="text-xs text-gray-500 text-center py-2">{t('backtestNoDataYet')}</p>
@@ -495,15 +889,15 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             )}
 
             {btData.metrics.implausible && (
-              <p className="flex items-center gap-1.5 text-xs text-yellow-400 font-semibold border border-yellow-500/20 bg-yellow-500/10 p-2.5 rounded-lg">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
+              <p className="flex items-center gap-1.5 text-xs text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 p-3 rounded-xl uppercase tracking-wider">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
                 {t('implausibleWarning')}
               </p>
             )}
 
             {btData.oosMetrics.trades > 0 && (
-              <div className="pt-3 border-t border-white/5 space-y-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('oosHeading')}</span>
+              <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-3">
+                <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">{t('oosHeading')}</span>
                 <MetricsRow metrics={btData.oosMetrics} t={t} compact />
               </div>
             )}
@@ -511,8 +905,8 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         )}
       </AnimatePresence>
 
-      {/* Disclaimers & Not Financial Advice Banner */}
-      <div className="text-center text-[10px] text-gray-500 max-w-lg mx-auto pt-6 border-t border-white/5 space-y-1">
+      {/* Disclaimers Bar */}
+      <div className="text-center text-[10px] text-gray-500 max-w-lg mx-auto pt-6 border-t border-slate-200 dark:border-white/5 space-y-1 font-bold">
         <p>⚠️ {t('disclaimer')}</p>
         <p>
           All simulated trades are executed under virtual, paper-trading conditions. Past performance does not guarantee future results.
@@ -531,20 +925,20 @@ function MetricsRow({
   t: ReturnType<typeof useTranslations>;
   compact?: boolean;
 }) {
-  const tiles: Array<{ label: string; value: string }> = [
-    { label: t('metricCagr'), value: pct(metrics.cagr) },
-    { label: t('metricSharpe'), value: metrics.sharpe.toFixed(2) },
-    { label: t('metricDeflatedSharpe'), value: metrics.deflatedSharpe.toFixed(2) },
-    { label: t('metricMaxDrawdown'), value: pct(metrics.maxDrawdown) },
-    { label: t('metricHitRate'), value: pct(metrics.hitRate) },
+  const tiles: Array<{ label: string; value: string; color?: string }> = [
+    { label: t('metricCagr'), value: pct(metrics.cagr), color: 'text-emerald-400' },
+    { label: t('metricSharpe'), value: metrics.sharpe.toFixed(2), color: 'text-emerald-400' },
+    { label: t('metricDeflatedSharpe'), value: metrics.deflatedSharpe.toFixed(2), color: 'text-emerald-400' },
+    { label: t('metricMaxDrawdown'), value: pct(metrics.maxDrawdown), color: 'text-rose-400' },
+    { label: t('metricHitRate'), value: pct(metrics.hitRate), color: 'text-emerald-400' },
     { label: t('metricTrades'), value: String(metrics.trades) },
   ];
   return (
-    <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 ${compact ? 'text-xs' : 'text-sm'}`}>
+    <div className={`grid grid-cols-2 md:grid-cols-6 gap-4 ${compact ? 'text-xs' : 'text-sm'}`}>
       {tiles.map((tile) => (
-        <div key={tile.label} className="bg-black/30 border border-white/5 rounded-xl p-3 text-center">
-          <div className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">{tile.label}</div>
-          <div className="font-mono font-bold text-white">{tile.value}</div>
+        <div key={tile.label} className="glass-panel bg-black/20 border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 text-center">
+          <div className="text-gray-500 text-[9px] font-extrabold uppercase tracking-wider mb-1 leading-tight">{tile.label}</div>
+          <div className={`font-mono font-bold text-base ${tile.color || 'text-slate-900 dark:text-white'}`}>{tile.value}</div>
         </div>
       ))}
     </div>
