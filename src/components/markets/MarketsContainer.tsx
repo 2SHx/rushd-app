@@ -103,7 +103,7 @@ export default function MarketsContainer({
           {t('stocksTab')}
         </h1>
         <div className="flex space-x-3 rtl:space-x-reverse">
-          <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/10">
             <span className="text-xs font-bold text-emerald-400">R</span>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function MarketsContainer({
             <p className="text-sm font-bold text-emerald-300">
               {t('aiCommitteeTab')}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
               {t('aiCommitteeSub')}
             </p>
           </div>
@@ -138,13 +138,13 @@ export default function MarketsContainer({
       />
 
       {/* Markets Selector Tabs */}
-      <div className="grid grid-cols-2 bg-white/[0.03] p-1 rounded-2xl border border-white/[0.06]">
+      <div className="grid grid-cols-2 bg-slate-100 dark:bg-white/[0.03] p-1 rounded-2xl border border-slate-200 dark:border-white/[0.06]">
         <button
           onClick={() => handleMarketTabChange('TASI')}
           className={`py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center space-x-2 active:scale-95 ${
             marketTab === 'TASI' 
-              ? 'bg-white/[0.08] text-white border border-white/[0.08] shadow-lg' 
-              : 'text-gray-400 hover:text-white'
+              ? 'bg-white dark:bg-white/[0.08] text-slate-900 dark:text-white border border-white/[0.08] shadow-lg' 
+              : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:text-white'
           }`}
         >
           <span>🇸🇦</span>
@@ -154,8 +154,8 @@ export default function MarketsContainer({
           onClick={() => handleMarketTabChange('NASDAQ')}
           className={`py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center space-x-2 active:scale-95 ${
             marketTab === 'NASDAQ' 
-              ? 'bg-white/[0.08] text-white border border-white/[0.08] shadow-lg' 
-              : 'text-gray-400 hover:text-white'
+              ? 'bg-white dark:bg-white/[0.08] text-slate-900 dark:text-white border border-white/[0.08] shadow-lg' 
+              : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:text-white'
           }`}
         >
           <span>🇺🇸</span>
@@ -164,7 +164,7 @@ export default function MarketsContainer({
       </div>
 
       {/* Market status info bar */}
-      <div className="bg-white/[0.02] rounded-2xl p-3 border border-white/[0.04] flex items-center justify-between text-xs text-gray-400 shadow-sm">
+      <div className="bg-slate-50 dark:bg-white/[0.02] rounded-2xl p-3 border border-slate-200 dark:border-white/[0.04] flex items-center justify-between text-xs text-slate-500 dark:text-gray-400 shadow-sm">
         <div className="flex items-center space-x-2 rtl:space-x-reverse">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           <span>
@@ -179,7 +179,7 @@ export default function MarketsContainer({
       {/* Top Gainers Carousel */}
       <div className="space-y-3">
         <div className="flex justify-between items-center text-sm">
-          <h3 className="font-bold text-gray-200">{t('marketSummary')}</h3>
+          <h3 className="font-bold text-slate-900 dark:text-gray-200">{t('marketSummary')}</h3>
           <span className="text-xs text-emerald-400 font-semibold">{t('topGainers')}</span>
         </div>
         <div className="flex space-x-3 overflow-x-auto pb-2 pr-1 no-scrollbar rtl:space-x-reverse">
@@ -187,12 +187,12 @@ export default function MarketsContainer({
             <button
               key={ticker.symbol}
               onClick={() => handleSelectSymbol(ticker.symbol, marketTab)}
-              className="bg-[#121824] border border-white/5 min-w-[120px] p-4 rounded-2xl text-center space-y-2 hover:bg-white/5 transition-all shrink-0 active:scale-95 text-start flex flex-col justify-center"
+              className="bg-slate-50 dark:bg-[#121824] border border-slate-200 dark:border-white/5 min-w-[120px] p-4 rounded-2xl text-center space-y-2 hover:bg-slate-100 dark:bg-white/5 transition-all shrink-0 active:scale-95 text-start flex flex-col justify-center"
             >
               <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-xs font-bold text-emerald-400 mx-auto font-mono">
                 {ticker.symbol.replace('.SR', '')}
               </div>
-              <p className="text-xs font-bold text-gray-300 truncate w-full text-center">{isAr ? ticker.arName : ticker.name}</p>
+              <p className="text-xs font-bold text-slate-800 dark:text-gray-300 truncate w-full text-center">{isAr ? ticker.arName : ticker.name}</p>
               <p className="text-sm font-mono font-bold text-center">
                 {marketTab === 'TASI' 
                   ? t('formatTasi', { amount: ticker.price.toFixed(2) })
@@ -218,9 +218,9 @@ export default function MarketsContainer({
   );
 
   return (
-    <div className="min-h-screen text-white select-none max-w-xl mx-auto relative pb-24 md:pb-8">
+    <div className="min-h-screen text-slate-900 dark:text-white select-none max-w-xl mx-auto relative pb-24 md:pb-8">
       {/* Unified View (single-column switch for both Desktop and Mobile) */}
-      <div className="bg-[#080B11] border-x border-white/5 min-h-screen">
+      <div className="bg-white dark:bg-[#080B11] border-x border-slate-200 dark:border-white/5 min-h-screen">
         <AnimatePresence mode="wait">
           {!activeSymbol ? (
             <motion.div

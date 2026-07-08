@@ -37,7 +37,7 @@ export default function Navigation({ locale }: { locale: string }) {
                 key={link.href} 
                 href={link.href}
                 className={`flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl transition-colors ${
-                  isActive ? 'bg-emerald-500/10 text-emerald-400' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 <link.icon className="w-5 h-5" />
@@ -49,7 +49,7 @@ export default function Navigation({ locale }: { locale: string }) {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 glass-panel border-x-0 border-b-0 rounded-t-3xl rounded-b-none z-50 pb-safe">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 glass-panel border-x-0 border-b-0 rounded-t-3xl rounded-b-none z-50 pb-safe shadow-lg">
         <div className="flex justify-around items-center h-16 px-2">
           {links.map((link) => {
             const isActive = pathname.startsWith(link.href);
@@ -58,7 +58,7 @@ export default function Navigation({ locale }: { locale: string }) {
                 key={link.href} 
                 href={link.href}
                 className={`flex flex-col items-center justify-center space-y-1 w-16 h-full ${
-                  isActive ? 'text-emerald-400' : 'text-gray-400'
+                  isActive ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
                 <link.icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''} transition-transform`} />

@@ -3,13 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #0B0F19;
+  --foreground: #f8fafc;
+  --card-bg: #1A1F2E;
+  --border-color: rgba(255,255,255,0.05);
 }
 
 body {
@@ -18,5 +22,5 @@ body {
 }
 
 .glass-panel {
-  @apply bg-white/10 dark:bg-black/40 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl;
+  @apply bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl;
 }

@@ -202,8 +202,8 @@ export default function PortfolioClient({
           </linearGradient>
         </defs>
 
-        <line x1={padding} y1={padding} x2={w - padding} y2={padding} stroke="rgba(255,255,255,0.05)" />
-        <line x1={padding} y1={h / 2} x2={w - padding} y2={h / 2} stroke="rgba(255,255,255,0.05)" />
+        <line x1={padding} y1={padding} x2={w - padding} y2={padding} stroke="currentColor" className="text-slate-200 dark:text-slate-900 dark:text-white/5" />
+        <line x1={padding} y1={h / 2} x2={w - padding} y2={h / 2} stroke="currentColor" className="text-slate-200 dark:text-slate-900 dark:text-white/5" />
         <line x1={padding} y1={h - padding} x2={w - padding} y2={h - padding} stroke="rgba(255,255,255,0.1)" />
 
         {/* Legend */}
@@ -263,7 +263,7 @@ export default function PortfolioClient({
               cx="72"
               cy="72"
               r={radius}
-              stroke="rgba(255,255,255,0.05)"
+              stroke="currentColor" className="text-slate-200 dark:text-slate-900 dark:text-white/5"
               strokeWidth={strokeWidth}
               fill="transparent"
             />
@@ -281,7 +281,7 @@ export default function PortfolioClient({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-white">{fmtPercent(metrics.maxDrawdown)}</span>
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">{fmtPercent(metrics.maxDrawdown)}</span>
           </div>
         </div>
       </div>
@@ -316,14 +316,14 @@ export default function PortfolioClient({
     const cashOffset = (usPct + saudiPct) * circumference;
 
     return (
-      <div className="flex flex-col items-center justify-center p-6 bg-[#1A1F2E] border border-white/5 rounded-3xl text-center h-full">
+      <div className="flex flex-col items-center justify-center p-6 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl text-center h-full">
         <div className="w-full flex justify-between items-center mb-6">
-          <h3 className="text-sm font-bold text-white">Asset Allocation</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Asset Allocation</h3>
           <span className="text-indigo-400 text-xs font-semibold cursor-pointer hover:text-indigo-300">View All</span>
         </div>
         <div className="relative w-40 h-40">
           <svg className="w-full h-full transform -rotate-90">
-            <circle cx="80" cy="80" r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeWidth} />
+            <circle cx="80" cy="80" r={radius} fill="transparent" stroke="currentColor" className="text-slate-200 dark:text-slate-900 dark:text-white/5" strokeWidth={strokeWidth} />
             {usPct > 0 && (
               <circle cx="80" cy="80" r={radius} fill="transparent" stroke="#6366F1" strokeWidth={strokeWidth} strokeDasharray={`${usPct * circumference} ${circumference}`} strokeDashoffset={0} />
             )}
@@ -336,7 +336,7 @@ export default function PortfolioClient({
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Positions</span>
-            <span className="text-2xl font-bold text-white">{positions.length}</span>
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">{positions.length}</span>
           </div>
         </div>
         <div className="flex flex-wrap justify-center gap-3 mt-6 text-[10px] font-bold">
@@ -349,7 +349,7 @@ export default function PortfolioClient({
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 text-white min-h-screen">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 text-slate-900 dark:text-slate-900 dark:text-white min-h-screen">
       <div className="flex flex-col xl:flex-row gap-6">
         
         {/* LEFT COLUMN - MAIN CONTENT */}
@@ -358,28 +358,28 @@ export default function PortfolioClient({
           {/* Header - TradeSphere style */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="text-gray-400 text-sm font-semibold flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+              <div className="text-gray-400 text-sm font-semibold flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:text-white transition-colors">
                 Current Balance ($)
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
               <div className="flex items-center gap-4 mt-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                  <img src="https://i.pravatar.cc/150?img=11" alt="Avatar" className="w-full h-full object-cover" />
+                  <img src="https://i.pravatar.cc/150?img=11" alt="Avatar" className="w-full h-full object-cover dark:opacity-80" />
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
                   {fmtMoney(nav).replace('$', '$ ')}
                 </h1>
               </div>
             </div>
 
             {/* Top Right Action Tabs */}
-            <div className="flex bg-[#1A1F2E] p-1 rounded-xl border border-white/5 h-12">
-              <button onClick={triggerManualRebalance} disabled={loading} className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-white disabled:opacity-50 flex items-center">
+            <div className="flex bg-[var(--card-bg)] p-1 rounded-xl border border-[var(--border-color)] h-12">
+              <button onClick={triggerManualRebalance} disabled={loading} className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-slate-900 dark:text-white disabled:opacity-50 flex items-center">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
                 Trade
               </button>
-              <button className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-white flex items-center">Wallet</button>
-              <button className="px-5 text-sm font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 flex items-center">Analytics</button>
+              <button className="px-5 text-sm font-bold rounded-lg transition-all text-gray-400 hover:text-slate-900 dark:text-white flex items-center">Wallet</button>
+              <button className="px-5 text-sm font-bold rounded-lg transition-all bg-indigo-600 text-slate-900 dark:text-white shadow-lg shadow-indigo-500/25 flex items-center">Analytics</button>
             </div>
           </div>
 
@@ -392,16 +392,16 @@ export default function PortfolioClient({
           </div>
 
           {/* Performance Curve */}
-          <div className="bg-[#1A1F2E] rounded-3xl p-6 border border-white/5 relative mt-6 shadow-sm">
+          <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] relative mt-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-base font-bold text-gray-200">Statistics</h2>
-              <div className="flex space-x-1 bg-black/40 p-1 rounded-lg border border-white/5">
+              <div className="flex space-x-1 bg-black/40 p-1 rounded-lg border border-[var(--border-color)]">
                 {['1M', '3M', '1Y', 'ALL'].map((tf) => (
                   <button
                     key={tf}
                     onClick={() => setTimeframe(tf as any)}
                     className={`px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${
-                      timeframe === tf ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
+                      timeframe === tf ? 'bg-indigo-600 text-slate-900 dark:text-white' : 'text-gray-400 hover:text-slate-900 dark:text-white'
                     }`}
                   >
                     {tf}
@@ -417,14 +417,14 @@ export default function PortfolioClient({
 
           {/* Asset Class Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="bg-[#1A1F2E] rounded-2xl p-5 border border-white/5 shadow-sm">
+            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
               <div className="text-gray-400 font-bold text-sm mb-3">US Equities</div>
-              <div className="text-2xl font-bold text-white mb-5">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
                 {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
               </div>
               <div className="flex justify-between text-xs font-semibold mb-2">
                 <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-white">
+                <span className="text-slate-900 dark:text-white">
                   {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
                 </span>
               </div>
@@ -436,18 +436,18 @@ export default function PortfolioClient({
                   <div className="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-indigo-400 font-bold">APPL</span></div>
                   <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-blue-400 font-bold">MSFT</span></div>
                 </div>
-                <button className="hover:text-white transition-colors">→</button>
+                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
               </div>
             </div>
 
-            <div className="bg-[#1A1F2E] rounded-2xl p-5 border border-white/5 shadow-sm">
+            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
               <div className="text-gray-400 font-bold text-sm mb-3">Saudi Equities</div>
-              <div className="text-2xl font-bold text-white mb-5">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
                 {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
               </div>
               <div className="flex justify-between text-xs font-semibold mb-2">
                 <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-white">
+                <span className="text-slate-900 dark:text-white">
                   {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
                 </span>
               </div>
@@ -459,18 +459,18 @@ export default function PortfolioClient({
                   <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-emerald-400 font-bold">2222</span></div>
                   <div className="w-7 h-7 rounded-full bg-teal-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-teal-400 font-bold">1120</span></div>
                 </div>
-                <button className="hover:text-white transition-colors">→</button>
+                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
               </div>
             </div>
 
-            <div className="bg-[#1A1F2E] rounded-2xl p-5 border border-white/5 shadow-sm">
+            <div className="bg-[var(--card-bg)] rounded-2xl p-5 border border-[var(--border-color)] shadow-sm">
               <div className="text-gray-400 font-bold text-sm mb-3">Cash & Purify</div>
-              <div className="text-2xl font-bold text-white mb-5">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white mb-5">
                 {fmtMoney(cash)}
               </div>
               <div className="flex justify-between text-xs font-semibold mb-2">
                 <span className="text-gray-400">Portfolio Share</span>
-                <span className="text-white">
+                <span className="text-slate-900 dark:text-white">
                   {fmtPercent(nav > 0 ? cash / nav : 0)}
                 </span>
               </div>
@@ -481,21 +481,21 @@ export default function PortfolioClient({
                 <div className="flex -space-x-2">
                   <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center border border-[#1A1F2E]"><span className="text-[9px] text-amber-400 font-bold">USD</span></div>
                 </div>
-                <button className="hover:text-white transition-colors">→</button>
+                <button className="hover:text-slate-900 dark:text-white transition-colors">→</button>
               </div>
             </div>
           </div>
 
           <div className="flex justify-end gap-4 mt-6 mb-8">
-            <button className="px-8 py-3 rounded-xl border border-white/10 text-white font-bold text-sm hover:bg-white/5 transition-all">View All</button>
-            <button onClick={triggerManualRebalance} className="px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-all shadow-[0_0_15px_rgba(99,102,241,0.25)] flex items-center gap-2">
+            <button className="px-8 py-3 rounded-xl border border-[var(--border-color)] text-slate-900 dark:text-white font-bold text-sm hover:bg-white/5 transition-all">View All</button>
+            <button onClick={triggerManualRebalance} className="px-8 py-3 rounded-xl bg-indigo-600 text-slate-900 dark:text-white font-bold text-sm hover:bg-indigo-700 transition-all shadow-[0_0_15px_rgba(99,102,241,0.25)] flex items-center gap-2">
               <Play className="w-4 h-4" /> Trade
             </button>
           </div>
 
           {/* Tables Section */}
           <div className="space-y-6">
-            <div className="bg-[#1A1F2E] rounded-3xl p-6 border border-white/5 overflow-hidden shadow-sm">
+            <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] overflow-hidden shadow-sm">
               <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse mb-4">
                 <Coins className="w-5 h-5 text-indigo-400" />
                 <span>{t('holdingsHeading')}</span>
@@ -524,7 +524,7 @@ export default function PortfolioClient({
                           </span>
                         </td>
                         <td className="py-3.5 px-2 text-end font-mono">{pos.shares.toFixed(2)}</td>
-                        <td className="py-3.5 px-2 text-end font-mono text-white font-bold">{fmtMoney(pos.value)}</td>
+                        <td className="py-3.5 px-2 text-end font-mono text-slate-900 dark:text-white font-bold">{fmtMoney(pos.value)}</td>
                         <td className="py-3.5 px-2 text-end">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden hidden sm:block">
@@ -544,7 +544,7 @@ export default function PortfolioClient({
             </div>
             
             {/* Purification Ledger */}
-            <div className="bg-[#1A1F2E] rounded-3xl p-6 border border-white/5">
+            <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse">
                   <History className="w-5 h-5 text-indigo-400" />
@@ -586,11 +586,11 @@ export default function PortfolioClient({
           
           {/* Top Right Utilities */}
           <div className="flex justify-end gap-3 hidden md:flex mb-8">
-            <button className="relative p-2 rounded-xl bg-[#1A1F2E] border border-white/5 text-gray-400 hover:text-white transition-colors">
+            <button className="relative p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-gray-400 hover:text-slate-900 dark:text-white transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
               <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full shadow-[0_0_5px_rgba(99,102,241,0.8)]"></span>
             </button>
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-[#1A1F2E] border border-white/5">
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)]">
               <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold border border-emerald-500/30">M</div>
               <span className="text-sm font-semibold text-gray-300 cursor-pointer pr-1">User Name <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></span>
             </div>
@@ -598,7 +598,7 @@ export default function PortfolioClient({
 
           {/* Search Box */}
           <div className="relative mb-6">
-            <input type="text" placeholder="Search..." className="w-full bg-[#1A1F2E] border border-white/5 rounded-xl py-3 pl-11 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500/50 transition-colors" />
+            <input type="text" placeholder="Search..." className="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl py-3 pl-11 pr-4 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500/50 transition-colors" />
             <svg className="w-4 h-4 text-gray-500 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
 
@@ -609,54 +609,54 @@ export default function PortfolioClient({
 
           {/* Key Metrics / Popular Strategies List */}
           <div>
-            <h3 className="text-lg font-bold text-white mb-4">Key Metrics</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Key Metrics</h3>
             <div className="space-y-4">
-              <div className="flex items-center gap-4 bg-[#1A1F2E] p-4 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-indigo-500/30 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-14 h-14 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-slate-900 dark:text-white transition-all">
                   <Activity className="w-7 h-7" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-white mb-1">Sharpe Ratio</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Sharpe Ratio</div>
                   <div className="text-xs text-gray-400 line-clamp-2 pr-2">Risk-adjusted return vs. Risk-free rate.</div>
                 </div>
                 <div className="text-lg font-bold text-indigo-400 font-mono">{metrics.sharpe.toFixed(2)}</div>
               </div>
 
-              <div className="flex items-center gap-4 bg-[#1A1F2E] p-4 rounded-2xl border border-white/5 hover:border-emerald-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-emerald-500/30 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-900 dark:text-white transition-all">
                   <TrendingUp className="w-7 h-7" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-white mb-1">CAGR</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">CAGR</div>
                   <div className="text-xs text-gray-400 line-clamp-2 pr-2">Compound Annual Growth Rate of portfolio.</div>
                 </div>
                 <div className="text-lg font-bold text-emerald-400 font-mono">{fmtPercent(metrics.cagr)}</div>
               </div>
 
-              <div className="flex items-center gap-4 bg-[#1A1F2E] p-4 rounded-2xl border border-white/5 hover:border-blue-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
+              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-blue-500/30 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-14 h-14 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-900 dark:text-white transition-all">
                   <Percent className="w-7 h-7" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-white mb-1">Alpha vs SPUS</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Alpha vs SPUS</div>
                   <div className="text-xs text-gray-400 line-clamp-2 pr-2">Excess return vs SPUS Halal Index benchmark.</div>
                 </div>
                 <div className="text-lg font-bold text-blue-400 font-mono">{fmtPercent(metrics.alphaVsSpus)}</div>
               </div>
               
-              <div className="flex items-center gap-4 bg-[#1A1F2E] p-4 rounded-2xl border border-white/5 hover:border-amber-500/30 transition-colors cursor-pointer group shadow-sm">
-                <div className="w-14 h-14 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-all">
+              <div className="flex items-center gap-4 bg-[var(--card-bg)] p-4 rounded-2xl border border-[var(--border-color)] hover:border-amber-500/30 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-14 h-14 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-900 dark:text-white transition-all">
                   <AlertTriangle className="w-7 h-7" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-bold text-white mb-1">Max Drawdown</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Max Drawdown</div>
                   <div className="text-xs text-gray-400 line-clamp-2 pr-2">The maximum observed loss from peak.</div>
                 </div>
                 <div className="text-lg font-bold text-amber-400 font-mono">{fmtPercent(metrics.maxDrawdown)}</div>
               </div>
             </div>
             
-            <button className="w-full py-3.5 mt-5 text-sm font-bold text-gray-300 bg-[#1A1F2E] border border-white/10 rounded-xl hover:bg-white/5 transition-colors shadow-sm">
+            <button className="w-full py-3.5 mt-5 text-sm font-bold text-gray-300 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl hover:bg-white/5 transition-colors shadow-sm">
               View All
             </button>
           </div>
