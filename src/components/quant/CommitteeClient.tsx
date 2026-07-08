@@ -21,7 +21,15 @@ import {
   ArrowRight,
   HelpCircle,
   Award,
+  Wallet,
+  Briefcase,
+  History,
+  ClipboardList,
+  Activity,
+  Percent,
+  Coins
 } from 'lucide-react';
+import { TICKERS } from '@/lib/tickers';
 
 type MarketKind = 'TASI' | 'NASDAQ';
 type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -58,20 +66,67 @@ interface PassResult {
   debateTranscript?: DebateTurn[];
 }
 
+interface Position {
+  symbol: string;
+  name: string;
+  shares: number;
+  costBasis: number;
+  price: number;
+  value: number;
+  weight: number;
+}
+
+interface Snapshot {
+  asOf: string;
+  nav: number;
+  cashVirtual: number;
+  spy: number;
+  spus: number;
+}
+
+interface PurificationEntry {
+  id: string;
+  symbol: string;
+  amount: number;
+  ratio: number;
+  profit: number;
+  createdAt: string;
+}
+
+interface Trade {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  createdAt: string;
+}
+
 interface Metrics {
   cagr: number;
   sharpe: number;
   deflatedSharpe: number;
   maxDrawdown: number;
-  hitRate: number;
-  trades: number;
-  implausible: boolean;
+  alphaVsSpy: number;
+  alphaVsSpus: number;
+  irVsSpy: number;
+  irVsSpus: number;
+  trackingErrorVsSpy: number;
+  trackingErrorVsSpus: number;
+  upCaptureVsSpy?: number;
+  upCaptureVsSpus?: number;
+  downCaptureVsSpy?: number;
+  downCaptureVsSpus?: number;
 }
 
-interface BacktestResult {
-  backtestRunId: string;
-  metrics: Metrics;
-  oosMetrics: Metrics;
+interface CommitteeClientProps {
+  locale: string;
+  initialNAV: number;
+  initialCash: number;
+  initialPositions: Position[];
+  initialSnapshots: Snapshot[];
+  initialPurification: PurificationEntry[];
+  initialMetrics: Metrics;
+  initialTrades?: Trade[];
 }
 
 const DEFAULT_SYMBOL: Record<MarketKind, string> = {
@@ -117,25 +172,42 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-// Visual simulation steps definition
 type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
 
-export default function CommitteeClient({ locale }: { locale: string }) {
+export default function CommitteeClient({
+  locale,
+  initialNAV,
+  initialCash,
+  initialPositions,
+  initialSnapshots,
+  initialPurification,
+  initialMetrics,
+  initialTrades = []
+}: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
 
-  const [market, setMarket] = useState<MarketKind>('TASI');
-  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.TASI);
+  const [market, setMarket] = useState<MarketKind>('NASDAQ');
+  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.NASDAQ);
 
   const [passLoading, setPassLoading] = useState(false);
   const [passError, setPassError] = useState<string | null>(null);
   const [passData, setPassData] = useState<PassResult | null>(null);
 
-  const [btLoading, setBtLoading] = useState(false);
-  const [btError, setBtError] = useState<string | null>(null);
-  const [btData, setBtData] = useState<BacktestResult | null>(null);
+  // Consolidated Index Portfolio States
+  const [nav, setNav] = useState(initialNAV);
+  const [cash, setCash] = useState(initialCash);
+  const [positions, setPositions] = useState<Position[]>(initialPositions);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>(initialSnapshots);
+  const [purification, setPurification] = useState<PurificationEntry[]>(initialPurification);
+  const [metrics, setMetrics] = useState<Metrics>(initialMetrics);
+  const [trades, setTrades] = useState<Trade[]>(initialTrades);
 
-  // Simulation play state
+  // Timeframe selector for charts
+  const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
+
+  // Autopilot 24/7 Engine
+  const [autoPilot, setAutoPilot] = useState(true);
   const [simStep, setSimStep] = useState<SimStep>('idle');
   const [simPlay, setSimPlay] = useState(true);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
@@ -143,13 +215,12 @@ export default function CommitteeClient({ locale }: { locale: string }) {
   const [debateTurnIdx, setDebateTurnIdx] = useState(0);
 
   const simTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const busy = passLoading || btLoading;
+  const autoPilotTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Visual simulation settings loaded dynamically from DesignControlCenter
+  // Visual settings loaded dynamically from DesignControlCenter
   const [settings, setSettings] = useState({ simSpeed: 1, volatility: 1 });
 
   useEffect(() => {
-    // Read starting values
     const speed = localStorage.getItem('rushd_simSpeed');
     const vol = localStorage.getItem('rushd_volatility');
     setSettings({
@@ -157,7 +228,6 @@ export default function CommitteeClient({ locale }: { locale: string }) {
       volatility: vol ? Number(vol) : 1,
     });
 
-    // Listen to settings modifications
     const handleSettingsChange = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail) {
@@ -175,17 +245,9 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     setMarket(m);
     setSymbol(DEFAULT_SYMBOL[m]);
     setPassData(null);
-    setBtData(null);
     setPassError(null);
-    setBtError(null);
     setSimStep('idle');
     setDebateTurnIdx(0);
-  }
-
-  async function errorFromResponse(res: Response): Promise<string> {
-    if (res.status === 401) return t('errorUnauthorized');
-    if (res.status === 429) return t('errorRateLimit');
-    return t('errorGeneric');
   }
 
   // Typewriter effect logic
@@ -228,7 +290,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
       } else {
         clearInterval(interval);
       }
-    }, 15);
+    }, 12);
 
     return () => clearInterval(interval);
   }, [simStep, activeAgentId, debateTurnIdx, passData, isAr]);
@@ -242,7 +304,6 @@ export default function CommitteeClient({ locale }: { locale: string }) {
 
     const delay = settings.simSpeed * 1000;
     
-    // Quick skip if simSpeed is 0
     if (settings.simSpeed === 0) {
       setSimStep('done');
       return;
@@ -253,9 +314,8 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         setSimStep('analysts');
         setActiveAgentId('QUANT_CORE');
       } else if (simStep === 'analysts') {
-        // Step through the analysts
         const currentIdx = AGENT_KEYS.indexOf(activeAgentId || '');
-        if (currentIdx !== -1 && currentIdx < 4) { // step through first 5 analysts
+        if (currentIdx !== -1 && currentIdx < 4) {
           setActiveAgentId(AGENT_KEYS[currentIdx + 1]);
         } else {
           setSimStep('sharia');
@@ -281,35 +341,61 @@ export default function CommitteeClient({ locale }: { locale: string }) {
       }
     };
 
-    simTimerRef.current = setTimeout(runNextStep, simStep === 'debate' ? delay * 1.5 : delay);
+    simTimerRef.current = setTimeout(runNextStep, simStep === 'debate' ? delay * 1.3 : delay);
     return () => {
       if (simTimerRef.current) clearTimeout(simTimerRef.current);
     };
   }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, settings.simSpeed]);
 
-  async function runPass() {
+  // Autopilot loop scheduler
+  useEffect(() => {
+    if (!autoPilot) {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+      return;
+    }
+
+    if (simStep === 'idle') {
+      // Pick a random symbol from active tickers to demonstrate 24/7 automated index trading
+      const activeTickers = market === 'TASI' ? TICKERS.TASI : TICKERS.NASDAQ;
+      const randomTicker = activeTickers[Math.floor(Math.random() * activeTickers.length)];
+      setSymbol(randomTicker.symbol);
+      runPass(randomTicker.symbol);
+    } else if (simStep === 'done' && passData) {
+      // Execute the decision, update live portfolio layout, and wait to trigger next asset rebalance loop
+      const price = TICKERS[market].find(t => t.symbol === symbol)?.price || 120.0;
+      executeAutopilotTrade(passData.finalAction, passData.shariaGate.compliant, price);
+
+      autoPilotTimerRef.current = setTimeout(() => {
+        setSimStep('idle');
+      }, 5000); // 5 seconds wait before selecting next stock
+    }
+
+    return () => {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simStep, autoPilot, market]);
+
+  async function runPass(overrideSymbol?: string) {
     setPassLoading(true);
     setPassError(null);
     setPassData(null);
-    setBtData(null);
-    setBtError(null);
     setSimStep('idle');
+    const targetSymbol = overrideSymbol || symbol;
     try {
       const res = await fetch('/api/quant/pass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, market }),
+        body: JSON.stringify({ symbol: targetSymbol, market }),
       });
       if (!res.ok) {
-        setPassError(await errorFromResponse(res));
+        setPassError(t('errorGeneric'));
         return;
       }
       const data = await res.json();
       setPassData(data);
-      
-      // Start simulation
       setSimStep('ingestion');
-      setSimPlay(true);
+      setDebateTurnIdx(0);
     } catch {
       setPassError(t('errorGeneric'));
     } finally {
@@ -317,38 +403,134 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     }
   }
 
-  async function runBacktest() {
-    setBtLoading(true);
-    setBtError(null);
-    setBtData(null);
-    setSimStep('idle');
-    try {
-      const toDate = new Date();
-      const fromDate = new Date();
-      fromDate.setFullYear(fromDate.getFullYear() - 2);
-      const res = await fetch('/api/quant/backtest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol,
-          market,
-          fromDate: fromDate.toISOString(),
-          toDate: toDate.toISOString(),
-        }),
-      });
-      if (!res.ok) {
-        setBtError(await errorFromResponse(res));
-        return;
+  // Update virtual portfolio holdings dynamically in autopilot mode
+  function executeAutopilotTrade(action: string, isCompliant: boolean, currentPrice: number) {
+    if (!isCompliant || action === 'HOLD') return;
+
+    const qty = 50; // Standard simulated rebalance batch
+    const cost = currentPrice * qty;
+
+    if (action === 'BUY') {
+      if (cash >= cost) {
+        const newCash = cash - cost;
+        setCash(newCash);
+
+        let positionExists = false;
+        const updatedPositions = positions.map(pos => {
+          if (pos.symbol === symbol) {
+            positionExists = true;
+            const newShares = pos.shares + qty;
+            const newValue = newShares * currentPrice;
+            return {
+              ...pos,
+              shares: newShares,
+              price: currentPrice,
+              value: newValue,
+              costBasis: (pos.costBasis * pos.shares + cost) / newShares
+            };
+          }
+          return pos;
+        });
+
+        if (!positionExists) {
+          updatedPositions.push({
+            symbol,
+            name: symbol,
+            shares: qty,
+            price: currentPrice,
+            value: cost,
+            costBasis: currentPrice,
+            weight: 0
+          });
+        }
+
+        const newNAV = newCash + updatedPositions.reduce((sum, p) => sum + p.value, 0);
+        setNav(newNAV);
+        setPositions(updatedPositions.map(p => ({ ...p, weight: p.value / newNAV })));
+
+        // Prepend automated execution transaction log
+        const newTrade: Trade = {
+          id: `autopilot-${Date.now()}`,
+          amount: cost,
+          currency: market === 'TASI' ? 'SAR' : 'USD',
+          description: `AUTO REBALANCE: Bought ${qty} shares of ${symbol} at ${fmtMoney(currentPrice)}`,
+          createdAt: new Date().toISOString()
+        };
+        setTrades(prev => [newTrade, ...prev]);
       }
-      setBtData(await res.json());
-    } catch {
-      setBtError(t('errorGeneric'));
-    } finally {
-      setBtLoading(false);
+    } else if (action === 'SELL') {
+      const activePosition = positions.find(pos => pos.symbol === symbol);
+      if (activePosition && activePosition.shares >= qty) {
+        const newCash = cash + cost;
+        setCash(newCash);
+
+        const updatedPositions = positions.map(pos => {
+          if (pos.symbol === symbol) {
+            const newShares = pos.shares - qty;
+            return {
+              ...pos,
+              shares: newShares,
+              value: newShares * currentPrice,
+              price: currentPrice
+            };
+          }
+          return pos;
+        }).filter(pos => pos.shares > 0);
+
+        const newNAV = newCash + updatedPositions.reduce((sum, p) => sum + p.value, 0);
+        setNav(newNAV);
+        setPositions(updatedPositions.map(p => ({ ...p, weight: p.value / newNAV })));
+
+        // Prepend automated execution transaction log
+        const newTrade: Trade = {
+          id: `autopilot-${Date.now()}`,
+          amount: cost,
+          currency: market === 'TASI' ? 'SAR' : 'USD',
+          description: `AUTO REBALANCE: Sold ${qty} shares of ${symbol} at ${fmtMoney(currentPrice)}`,
+          createdAt: new Date().toISOString()
+        };
+        setTrades(prev => [newTrade, ...prev]);
+
+        // Dynamic Sharia purification logic
+        const purificationOwed = cost * 0.05 * 0.02; // Purification fee math
+        const newPurificationEntry: PurificationEntry = {
+          id: `purify-${Date.now()}`,
+          symbol,
+          amount: purificationOwed,
+          ratio: 0.001,
+          profit: cost * 0.05,
+          createdAt: new Date().toISOString()
+        };
+        setPurification(prev => [newPurificationEntry, ...prev]);
+      }
     }
   }
 
-  // Visual layout config for nodes on the graph
+  const runningPurificationTotal = purification.reduce((sum, item) => sum + item.amount, 0);
+
+  const filteredSnapshots = snapshots.filter(s => {
+    if (timeframe === 'ALL' || snapshots.length === 0) return true;
+    const lastDate = new Date(snapshots[snapshots.length - 1].asOf).getTime();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    let days = 30;
+    if (timeframe === '1M') days = 30;
+    if (timeframe === '3M') days = 90;
+    if (timeframe === '1Y') days = 365;
+    const cutoff = lastDate - days * msPerDay;
+    return new Date(s.asOf).getTime() >= cutoff;
+  });
+
+  const fmtMoney = (val: number) => {
+    return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
+      style: 'currency',
+      currency: market === 'TASI' ? 'SAR' : 'USD'
+    }).format(val);
+  };
+
+  const fmtPercent = (val: number) => {
+    return `${(val * 100).toFixed(2)}%`;
+  };
+
   const nodes = [
     { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '10%', y: '50%', type: 'data', icon: Database },
     { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '32%', y: '16%', type: 'analyst' },
@@ -363,97 +545,187 @@ export default function CommitteeClient({ locale }: { locale: string }) {
     { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '92%', y: '50%', type: 'risk', icon: Gavel }
   ];
 
+  function renderSvgChart() {
+    if (filteredSnapshots.length < 2) {
+      return (
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          Not enough historical snapshots to render performance curve.
+        </div>
+      );
+    }
+
+    const w = 800;
+    const h = 260;
+    const padding = 40;
+
+    const vals = filteredSnapshots.flatMap(s => [s.nav, s.spy, s.spus]);
+    const minVal = Math.min(...vals) * 0.98;
+    const maxVal = Math.max(...vals) * 1.02;
+    const valRange = maxVal - minVal || 1;
+
+    const times = filteredSnapshots.map(s => new Date(s.asOf).getTime());
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    const timeRange = maxTime - minTime || 1;
+
+    const points = filteredSnapshots.map(s => {
+      const x = padding + ((new Date(s.asOf).getTime() - minTime) / timeRange) * (w - 2 * padding);
+      return {
+        x,
+        navY: h - padding - ((s.nav - minVal) / valRange) * (h - 2 * padding),
+        spyY: h - padding - ((s.spy - minVal) / valRange) * (h - 2 * padding),
+        spusY: h - padding - ((s.spus - minVal) / valRange) * (h - 2 * padding),
+        date: s.asOf
+      };
+    });
+
+    const createPath = (getY: (p: typeof points[0]) => number) => {
+      return points.reduce((acc, p, idx) => {
+        return acc + `${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${getY(p).toFixed(1)}`;
+      }, '');
+    };
+
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full text-gray-400">
+        <defs>
+          <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((r, idx) => {
+          const y = padding + r * (h - 2 * padding);
+          const gridVal = maxVal - r * valRange;
+          return (
+            <g key={idx}>
+              <line x1={padding} y1={y} x2={w - padding} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+              <text x={padding - 5} y={y + 4} textAnchor="end" className="text-[8px] font-mono fill-gray-500">
+                {fmtMoney(gridVal).replace('.00', '')}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Date labels */}
+        {points.length > 1 && [0, points.length - 1].map((pIdx) => {
+          const p = points[pIdx];
+          return (
+            <text key={pIdx} x={p.x} y={h - 15} textAnchor={pIdx === 0 ? 'start' : 'end'} className="text-[8px] font-mono fill-gray-500">
+              {new Date(p.date).toLocaleDateString(locale)}
+            </text>
+          );
+        })}
+
+        {/* Curves */}
+        <path d={createPath(p => p.spyY)} fill="none" stroke="#475569" strokeWidth={1.5} strokeDasharray="3,3" />
+        <path d={createPath(p => p.spusY)} fill="none" stroke="#00f0ff" strokeWidth={1.5} strokeOpacity={0.7} />
+        <path d={createPath(p => p.navY) + ` L ${points[points.length - 1].x} ${h - padding} L ${points[0].x} ${h - padding} Z`} fill="url(#navGradient)" />
+        <path d={createPath(p => p.navY)} fill="none" stroke="#10B981" strokeWidth={2.5} />
+      </svg>
+    );
+  }
+
+  function renderAllocationDonut() {
+    const radius = 50;
+    const strokeWidth = 12;
+    const circumference = 2 * Math.PI * radius;
+    
+    const usEquities = positions.filter(p => !p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
+    const saudiEquities = positions.filter(p => p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
+    const cashValue = cash;
+    const totalValue = nav || 1;
+    
+    const usPct = usEquities / totalValue;
+    const saudiPct = saudiEquities / totalValue;
+    const cashPct = cashValue / totalValue;
+
+    const usOffset = 0;
+    const saudiOffset = usPct * circumference;
+    const cashOffset = (usPct + saudiPct) * circumference;
+
+    return (
+      <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl text-center h-full shadow-md">
+        <div className="w-full flex justify-between items-center mb-6">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200">Asset Allocation</h3>
+          <span className="text-emerald-400 text-xs font-semibold uppercase tracking-wider font-mono">Balanced</span>
+        </div>
+        <div className="relative w-40 h-40">
+          <svg className="w-full h-full transform -rotate-90">
+            <circle cx="80" cy="80" r={radius} fill="transparent" stroke="currentColor" className="text-slate-200 dark:text-white/5" strokeWidth={strokeWidth} />
+            {usPct > 0 && (
+              <circle cx="80" cy="80" r={radius} fill="transparent" stroke="#00f0ff" strokeWidth={strokeWidth} strokeDasharray={`${usPct * circumference} ${circumference}`} strokeDashoffset={0} />
+            )}
+            {saudiPct > 0 && (
+              <circle cx="80" cy="80" r={radius} fill="transparent" stroke="#10B981" strokeWidth={strokeWidth} strokeDasharray={`${saudiPct * circumference} ${circumference}`} strokeDashoffset={-saudiOffset} />
+            )}
+            {cashPct > 0 && (
+              <circle cx="80" cy="80" r={radius} fill="transparent" stroke="#F59E0B" strokeWidth={strokeWidth} strokeDasharray={`${cashPct * circumference} ${circumference}`} strokeDashoffset={-cashOffset} />
+            )}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Holdings</span>
+            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{positions.length}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-center gap-3 mt-6 text-[10px] font-bold">
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"></div>US Equities</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>Saudi Equities</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>Cash</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Controls Console */}
-      <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex gap-2">
-            {(['TASI', 'NASDAQ'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => handleMarketChange(m)}
-                disabled={busy}
-                className={`px-5 py-2 rounded-full font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                  market === m 
-                    ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20' 
-                    : 'glass-panel text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
-                }`}
-              >
-                {m === 'TASI' ? t('marketTasi') : t('marketNasdaq')}
-              </button>
-            ))}
+      {/* 24/7 Autopilot Control Center Banner */}
+      <div className="glass-panel p-5 border border-slate-200/50 dark:border-white/10 rounded-3xl flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-emerald-500/5 via-transparent to-neonBlue/5 shadow-md text-start">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/25">
+            <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
           </div>
-
-          <div className="flex flex-col gap-1 flex-1 min-w-[10rem]">
-            <label htmlFor="quant-symbol" className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
-              {t('symbolLabel')}
-            </label>
-            <input
-              id="quant-symbol"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              placeholder={t('symbolPlaceholder')}
-              disabled={busy}
-              className="bg-black/20 border border-slate-200 dark:border-white/15 rounded-xl px-4 py-2.5 text-sm font-mono text-slate-950 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/30 disabled:opacity-50"
-            />
+          <div>
+            <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+              <span>Automated 24/7 Rebalancing Portfolio</span>
+              <span className="px-2 py-0.5 text-[8px] font-extrabold uppercase rounded-full bg-emerald-500 text-black">
+                Active
+              </span>
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+              The AI Advisor evaluates assets, runs sharia filters, debates trades, and auto-executes swaps.
+            </p>
           </div>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            type="button"
-            onClick={runPass}
-            disabled={busy || symbol.trim().length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 font-extrabold text-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 disabled:opacity-50 neon-glow-btn"
-          >
-            {passLoading && <Loader2 className="w-4 h-4 animate-spin text-black" />}
-            {passLoading ? t('running') : t('runButton')}
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            type="button"
-            onClick={runBacktest}
-            disabled={busy || symbol.trim().length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-500 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
-          >
-            {btLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {btLoading ? t('runningBacktest') : t('backtestButton')}
-          </motion.button>
         </div>
 
-        {passError && (
-          <p className="text-xs text-rose-400 font-semibold text-start">{passError}</p>
-        )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setAutoPilot(!autoPilot)}
+            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border active:scale-95 transition-all flex items-center gap-2 ${
+              autoPilot 
+                ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/20' 
+                : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            {autoPilot ? <Pause className="w-3.5 h-3.5 text-black" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+            <span>{autoPilot ? 'AUTOPILOT: ON' : 'AUTOPILOT: PAUSED'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Synchronizing loading screen */}
-      {passLoading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="glass-panel p-12 border border-slate-200 dark:border-white/10 rounded-3xl flex flex-col items-center justify-center space-y-6 shadow-xl"
-        >
-          <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
-          <p className="text-emerald-400 font-mono font-bold animate-pulse text-xs uppercase tracking-widest">
-            Gathering market variables & sentiment vectors...
-          </p>
-        </motion.div>
-      )}
-
-      {/* Visual Game-like Simulation Canvas */}
-      {passData && simStep !== 'idle' && (
-        <div className="space-y-6">
-          <div className="glass-panel border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden bg-black/40">
-            {/* Simulation controls header */}
+      {/* Grid: 3D tabletop Simulator & Auto Trade Ticker Logs */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Side: 3D tabletop simulation board */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="glass-panel border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden bg-black/40 text-start">
             <div className="flex justify-between items-center mb-6 border-b border-slate-200/50 dark:border-white/5 pb-4">
               <div>
                 <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 dark:text-gray-200">
                   Visual Committee Board ({symbol})
                 </h3>
                 <p className="text-[10px] text-gray-500 font-semibold">
-                  Step: {simStep.toUpperCase()} • Delay: {settings.simSpeed}s
+                  Autopilot Loop • Speed: {settings.simSpeed}s • Volatility: {settings.volatility}x
                 </p>
               </div>
 
@@ -522,7 +794,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                       stroke={
                         node.id === 'SHARIA'
                           ? simStep === 'sharia'
-                            ? passData.shariaGate.compliant
+                            ? passData?.shariaGate.compliant
                               ? '#10B981'
                               : '#EF4444'
                             : '#475569'
@@ -579,7 +851,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                   const isRisk = simStep === 'risk' && node.id === 'risk';
 
                   // Stance styles for analyst cards
-                  const agentSignal = passData.signals.find(s => s.agent === node.id);
+                  const agentSignal = passData?.signals.find(s => s.agent === node.id);
                   const sStyle = agentSignal ? stanceStyle(agentSignal.stance) : null;
 
                   const isActive = isAnalystActive || isShariaActive || isDebating || isPM || isRisk;
@@ -618,7 +890,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                             {node.icon ? (
                               <node.icon className="w-3.5 h-3.5" />
                             ) : node.id === 'SHARIA' ? (
-                              passData.shariaGate.compliant ? (
+                              passData?.shariaGate.compliant ? (
                                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                               ) : (
                                 <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
@@ -658,7 +930,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                           )}
 
                           {/* Custom Sharia output */}
-                          {node.id === 'SHARIA' && simStep !== 'ingestion' && simStep !== 'analysts' && (
+                          {node.id === 'SHARIA' && simStep !== 'ingestion' && simStep !== 'analysts' && passData && (
                             <span className={`text-[7.5px] font-bold uppercase mt-0.5 ${
                               passData.shariaGate.compliant ? 'text-emerald-400' : 'text-rose-400'
                             }`}>
@@ -673,7 +945,7 @@ export default function CommitteeClient({ locale }: { locale: string }) {
 
                 {/* Debate Speech Bubbles Overlay */}
                 <AnimatePresence>
-                  {simStep === 'debate' && passData.debateTranscript?.[debateTurnIdx] && (
+                  {simStep === 'debate' && passData?.debateTranscript?.[debateTurnIdx] && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -727,14 +999,14 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                 </p>
               </div>
 
-              {simStep === 'done' && (
+              {simStep === 'done' && passData && (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-wrap items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">Final Decision:</span>
+                    <span className="text-xs text-gray-400">Autopilot Action:</span>
                     <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg border ${actionStyle(passData.finalAction)}`}>
                       {passData.finalAction}
                     </span>
@@ -753,264 +1025,199 @@ export default function CommitteeClient({ locale }: { locale: string }) {
             </div>
           </div>
         </div>
-      )}
 
-      {/* Traditional detailed cards collapse container */}
-      <AnimatePresence>
-        {passData && simStep === 'done' && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="space-y-6"
-          >
-            {/* PM decision & Sharia */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 shadow-lg">
-                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
-                  <Gavel className="w-4 h-4 text-emerald-400" />
-                  <span>{t('pmDecisionHeading')}</span>
-                </h3>
-                <div className={`inline-flex px-4 py-2 rounded-xl border font-extrabold text-lg tracking-wider shadow-sm ${actionStyle(passData.finalAction)}`}>
-                  {passData.finalAction}
-                </div>
-                {passData.proposedAction && passData.proposedAction !== passData.finalAction && (
-                  <p className="text-xs text-gray-500">
-                    {t('proposedActionLabel')}: <span className="font-mono text-gray-300">{passData.proposedAction}</span>
-                  </p>
-                )}
-                {(() => {
-                  const pmSignal = passData.signals.find(s => s.agent === 'PORTFOLIO_MANAGER');
-                  return pmSignal ? (
-                    <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-white/5 text-start">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t('pmRationaleAr')}</p>
-                      <p className="text-sm text-emerald-400 font-semibold leading-relaxed" dir="rtl">{pmSignal.rationaleAr}</p>
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t('pmRationaleEn')}</p>
-                      <p className="text-xs text-gray-400 leading-relaxed" dir="ltr">{pmSignal.rationaleEn}</p>
-                    </div>
-                  ) : null;
-                })()}
-                <p className="text-[9px] text-gray-600 font-mono break-all pt-1">
-                  {t('decisionIdLabel')}: {passData.decisionId}
-                </p>
-              </div>
-
-              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 shadow-lg">
-                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
-                  {passData.shariaGate.compliant ? (
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  )}
-                  <span>{t('shariaGateHeading')}</span>
-                </h3>
-                <span
-                  className={`inline-flex px-3 py-1 rounded-full font-bold uppercase text-[10px] border ${
-                    passData.shariaGate.compliant ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                  }`}
-                >
-                  {passData.shariaGate.compliant ? t('shariaCompliant') : t('shariaNonCompliant')}
-                </span>
-                {!passData.shariaGate.compliant && (
-                  <p className="text-xs text-rose-400 font-semibold border border-rose-500/20 bg-rose-500/10 p-2.5 rounded-lg text-start">
-                    {t('shariaEducationalNote')}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Analyst signals */}
-            <div className="space-y-3">
-              <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-emerald-400" />
-                <span>{t('analystsHeading')}</span>
+        {/* Right Side: Autopilot Live Trade Console Log */}
+        <div className="lg:col-span-4 space-y-6 text-start">
+          <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl flex flex-col h-[624px] justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                <History className="w-4 h-4 text-emerald-400" />
+                <span>Autopilot Executions Log</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {passData.signals.map((signal, idx) => {
-                  const { color, bg, border, Icon } = stanceStyle(signal.stance);
-                  const conviction = Math.max(0, Math.min(1, Number(signal.conviction) || 0));
-                  const evidenceChips = toEvidenceChips(signal.evidence);
-                  const agentLabel = AGENT_KEYS.includes(signal.agent)
-                    ? t(`agents.${signal.agent}` as any)
-                    : signal.agent;
-                  const stanceLabel =
-                    signal.stance === 'BULLISH'
-                      ? t('stanceBullish')
-                      : signal.stance === 'BEARISH'
-                        ? t('stanceBearish')
-                        : t('stanceNeutral');
 
-                  return (
-                    <div
-                      key={signal.id ?? idx}
-                      className="glass-panel p-5 border border-slate-200 dark:border-white/10 rounded-3xl space-y-3 text-start shadow-md"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white text-sm">{agentLabel}</span>
-                        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase border ${bg} ${color} ${border}`}>
-                          <Icon className="w-3 h-3" />
-                          {stanceLabel}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[9px] text-gray-500 font-bold">
-                          <span>{t('convictionLabel')}</span>
-                          <span>{pct(conviction)}</span>
+              <div className="h-[430px] overflow-y-auto space-y-3.5 pr-2 no-scrollbar font-mono text-[10px] leading-relaxed">
+                <AnimatePresence>
+                  {trades.length === 0 ? (
+                    <p className="text-gray-500 text-center py-12">Waiting for first simulated trade rebalance pass...</p>
+                  ) : (
+                    trades.map((trade) => (
+                      <motion.div
+                        key={trade.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="p-3 bg-black/30 rounded-xl border border-white/5 space-y-1.5 shadow-sm text-start"
+                      >
+                        <div className="flex justify-between items-center text-gray-500 text-[8.5px]">
+                          <span>{new Date(trade.createdAt).toLocaleTimeString(locale)}</span>
+                          <span className="text-emerald-400 font-bold">STATUS: OK</span>
                         </div>
-                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
-                          <div className={`h-full ${color.replace('text-', 'bg-')}`} style={{ width: pct(conviction) }} />
+                        <p className="text-slate-200 font-semibold">{trade.description}</p>
+                        <div className="flex justify-between text-gray-500">
+                          <span>Batch Weight: 50 Shares</span>
+                          <span className="text-amber-400 font-extrabold">Value: {fmtMoney(trade.amount)}</span>
                         </div>
-                      </div>
-
-                      <p className="text-xs text-slate-800 dark:text-gray-200 leading-relaxed font-semibold font-sans" dir="rtl" lang="ar">
-                        {signal.rationaleAr}
-                      </p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed font-sans" dir="ltr" lang="en">
-                        {signal.rationaleEn}
-                      </p>
-
-                      {evidenceChips.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200 dark:border-white/5">
-                          {evidenceChips.map((chip, chipIdx) => (
-                            <span
-                              key={chipIdx}
-                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-mono text-gray-500 dark:text-gray-400"
-                            >
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {signal.failureMode !== 'ok' && (
-                        <p className="flex items-center gap-1.5 text-[9px] text-amber-500 font-bold uppercase">
-                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                          {signal.failureMode === 'abstain' ? t('abstainNote') : t('degradedNote')}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                      </motion.div>
+                    ))
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
-            {/* Bull/bear debate transcript */}
-            {passData.debateTranscript && passData.debateTranscript.length > 0 && (
-              <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg">
-                <h3 className="font-extrabold text-sm text-slate-800 dark:text-gray-300 flex items-center gap-2">
-                  <Gavel className="w-5 h-5 text-emerald-400" />
-                  <span>{t('debateHeading')}</span>
-                </h3>
-                <div className="flex flex-col gap-4">
-                  {passData.debateTranscript.map((turn, idx) => {
-                    const isBull = turn.side === 'BULL';
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex flex-col gap-1.5 p-4 rounded-2xl max-w-2xl border text-start shadow-sm ${
-                          isBull
-                            ? 'bg-emerald-500/5 border-emerald-500/10 self-start align-start md:mr-12'
-                            : 'bg-rose-500/5 border-rose-500/10 self-end align-end md:ml-12'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${isBull ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                          <span className={`text-[9px] font-extrabold uppercase ${isBull ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isBull ? t('debateTurnBull') : t('debateTurnBear')} (Round {turn.round})
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-800 dark:text-white leading-relaxed font-semibold" dir="rtl">
-                          {turn.argumentAr}
-                        </p>
-                        <p className="text-[11px] text-gray-500 leading-relaxed" dir="ltr">
-                          {turn.argumentEn}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Backtest metrics display */}
-      {btError && <p className="text-xs text-rose-400 font-semibold text-start">{btError}</p>}
-
-      <AnimatePresence>
-        {btData && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl space-y-4 shadow-lg text-start"
-          >
-            <h3 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 dark:text-gray-300 flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-400" />
-              {t('backtestHeading')}
-            </h3>
-
-            {btData.metrics.trades === 0 ? (
-              <p className="text-xs text-gray-500 text-center py-2">{t('backtestNoDataYet')}</p>
-            ) : (
-              <MetricsRow metrics={btData.metrics} t={t} />
-            )}
-
-            {btData.metrics.implausible && (
-              <p className="flex items-center gap-1.5 text-xs text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 p-3 rounded-xl uppercase tracking-wider">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
-                {t('implausibleWarning')}
-              </p>
-            )}
-
-            {btData.oosMetrics.trades > 0 && (
-              <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-3">
-                <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">{t('oosHeading')}</span>
-                <MetricsRow metrics={btData.oosMetrics} t={t} compact />
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Disclaimers Bar */}
-      <div className="text-center text-[10px] text-gray-500 max-w-lg mx-auto pt-6 border-t border-slate-200 dark:border-white/5 space-y-1 font-bold">
-        <p>⚠️ {t('disclaimer')}</p>
-        <p>
-          All simulated trades are executed under virtual, paper-trading conditions. Past performance does not guarantee future results.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function MetricsRow({
-  metrics,
-  t,
-  compact,
-}: {
-  metrics: Metrics;
-  t: ReturnType<typeof useTranslations>;
-  compact?: boolean;
-}) {
-  const tiles: Array<{ label: string; value: string; color?: string }> = [
-    { label: t('metricCagr'), value: pct(metrics.cagr), color: 'text-emerald-400' },
-    { label: t('metricSharpe'), value: metrics.sharpe.toFixed(2), color: 'text-emerald-400' },
-    { label: t('metricDeflatedSharpe'), value: metrics.deflatedSharpe.toFixed(2), color: 'text-emerald-400' },
-    { label: t('metricMaxDrawdown'), value: pct(metrics.maxDrawdown), color: 'text-rose-400' },
-    { label: t('metricHitRate'), value: pct(metrics.hitRate), color: 'text-emerald-400' },
-    { label: t('metricTrades'), value: String(metrics.trades) },
-  ];
-  return (
-    <div className={`grid grid-cols-2 md:grid-cols-6 gap-4 ${compact ? 'text-xs' : 'text-sm'}`}>
-      {tiles.map((tile) => (
-        <div key={tile.label} className="glass-panel bg-black/20 border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-gray-500 text-[9px] font-extrabold uppercase tracking-wider mb-1 leading-tight">{tile.label}</div>
-          <div className={`font-mono font-bold text-base ${tile.color || 'text-slate-900 dark:text-white'}`}>{tile.value}</div>
+            <div className="pt-4 border-t border-slate-200 dark:border-white/5 flex justify-between items-center text-[10px] font-bold text-gray-400">
+              <span>PURIFICATION RATIO: 0.1%</span>
+              <span className="text-emerald-400">PURIFIED: {fmtMoney(runningPurificationTotal)}</span>
+            </div>
+          </div>
         </div>
-      ))}
+      </div>
+
+      {/* Main Consolidated Portfolio Widgets Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Main Performance Curves Chart */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl space-y-4 text-start">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-gray-500 text-[10px] font-extrabold uppercase tracking-widest font-mono">Simulated Net Asset Value</span>
+                <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-1">
+                  {fmtMoney(nav)}
+                </h2>
+              </div>
+
+              {/* Timeframe Selectors */}
+              <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200 dark:border-white/5 self-start">
+                {(['1M', '3M', '1Y', 'ALL'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      timeframe === tf 
+                        ? 'bg-emerald-500 text-black font-extrabold shadow-md' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Performance curve SVG */}
+            <div className="h-64 w-full bg-black/10 rounded-2xl p-2 border border-white/5 relative">
+              {renderSvgChart()}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-6 text-[9.5px] font-bold mt-2">
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>Automated Index Strategy</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"></div>Sharia S&P Benchmark (SPUS)</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#475569]"></div>S&P 500 ETF (SPY)</div>
+            </div>
+          </div>
+
+          {/* Active Holdings Positions Table */}
+          <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl text-start">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse text-slate-800 dark:text-gray-200 mb-4">
+              <ClipboardList className="w-4 h-4 text-emerald-400" />
+              <span>Active Auto-Index Holdings ({positions.length})</span>
+            </h2>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-start border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/10 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-3 text-start px-2">Ticker</th>
+                    <th className="py-3 text-start px-2">Status</th>
+                    <th className="py-3 text-end px-2">Holdings</th>
+                    <th className="py-3 text-end px-2">Current Value</th>
+                    <th className="py-3 text-end px-2">Portfolio Weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.map(pos => (
+                    <tr key={pos.symbol} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
+                      <td className="py-3.5 px-2 font-black font-mono text-emerald-400">{pos.symbol.replace('.SR', '')}</td>
+                      <td className="py-3.5 px-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[8.5px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider shadow-sm">
+                          <ShieldCheck className="w-3 h-3" />
+                          Compliant
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-2 text-end font-mono text-slate-700 dark:text-gray-300">{pos.shares.toFixed(0)} Shares</td>
+                      <td className="py-3.5 px-2 text-end font-mono text-slate-900 dark:text-white font-bold">{fmtMoney(pos.value)}</td>
+                      <td className="py-3.5 px-2 text-end">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1 bg-black/40 rounded-full overflow-hidden hidden sm:block">
+                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+                          </div>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtPercent(pos.weight)}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {positions.length === 0 && (
+                    <tr><td colSpan={5} className="py-8 text-center text-gray-500">No active holdings. Autopilot rebalancing starting shortly...</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side Allocation and Stats */}
+        <div className="lg:col-span-4 space-y-6 text-start">
+          {renderAllocationDonut()}
+
+          {/* Key Metrics Dashboard */}
+          <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl text-start">
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200 mb-4">Key Metrics</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Sharpe Ratio</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Risk-adjusted returns indicator</div>
+                </div>
+                <div className="text-base font-black text-emerald-400 font-mono">{metrics.sharpe.toFixed(2)}</div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">CAGR</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Compounded Annual Growth Rate</div>
+                </div>
+                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.cagr)}</div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                  <Percent className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Alpha vs SPUS</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Outperformance margin</div>
+                </div>
+                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.alphaVsSpus)}</div>
+              </div>
+              
+              <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-black transition-all">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Max Drawdown</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">Peak-to-trough drop</div>
+                </div>
+                <div className="text-base font-black text-amber-400 font-mono">{fmtPercent(metrics.maxDrawdown)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
