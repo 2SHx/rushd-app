@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
 
 interface StockListRowProps {
@@ -22,6 +23,7 @@ export default function StockListRow({
   isSelected,
   onSelect
 }: StockListRowProps) {
+  const t = useTranslations('Markets');
   const isAr = locale === 'ar';
   const cleanSymbol = symbol.replace('.SR', '');
   const displayName = isAr && arName ? arName : name;
@@ -77,13 +79,10 @@ export default function StockListRow({
         ) : priceData ? (
           <>
             <span className="text-sm font-bold">
-              {market === 'TASI' && isAr ? (
-                <span>{priceData.price.toFixed(2)} {currency}</span>
-              ) : market === 'TASI' ? (
-                <span>{currency} {priceData.price.toFixed(2)}</span>
-              ) : (
-                <span>${priceData.price.toFixed(2)}</span>
-              )}
+              {market === 'TASI'
+                ? t('formatTasi', { amount: priceData.price.toFixed(2) })
+                : t('formatNasdaq', { amount: priceData.price.toFixed(2) })
+              }
             </span>
             <div className={`flex items-center space-x-1 rtl:space-x-reverse text-xs font-semibold ${
               isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'

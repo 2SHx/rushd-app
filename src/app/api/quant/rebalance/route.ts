@@ -43,9 +43,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'already_run_today' }, { status: 409 });
     }
 
-    // 4. Fetch all active NASDAQ strategies
+    // 4. Fetch all active NASDAQ strategies owned by ULTRA tier users
     const strategies = await prisma.strategy.findMany({
-      where: { enabled: true, market: 'NASDAQ' }
+      where: {
+        enabled: true,
+        market: 'NASDAQ',
+        owner: { tier: 'ULTRA' }
+      }
     });
 
     const logs: Record<string, any> = {};

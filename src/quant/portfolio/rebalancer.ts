@@ -30,6 +30,32 @@ export async function executePortfolioRebalance(
     throw new Error('User not found');
   }
 
+  // Tier-gate authorization check: rebalancing requires ULTRA tier.
+  if (user.tier !== 'ULTRA') {
+    throw new Error('Unauthorized: Strategy owner must be ULTRA tier');
+  }
+
+  // Idempotency and Race-safety guard: ensure rebalance is executed at most once per strategy per day
+  const todayStr = asOf.toISOString().slice(0, 10);
+  const claimKey = `rebalance-${strategyId}-${todayStr}`;
+  try {
+    await prisma.autoRunClaim.create({ data: { key: claimKey } });
+  } catch {
+    console.log(`Rebalance already executed or in progress for strategy ${strategyId} on ${todayStr}. Skipping.`);
+    
+    // Fetch latest snapshot to return correct NAV
+    const lastSnap = await prisma.portfolioSnapshot.findFirst({
+      where: { userId, strategyId },
+      orderBy: { asOf: 'desc' }
+    });
+    return {
+      rebalanced: false,
+      nav: lastSnap ? Number(lastSnap.nav.toString()) : 100000,
+      tradesPlaced: 0,
+      purificationOwed: 0
+    };
+  }
+
   // 1. Calculate current total NAV
   let totalHoldingsValue = 0;
   const currentPrices: Record<string, number> = {};

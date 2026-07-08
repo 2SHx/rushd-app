@@ -68,22 +68,22 @@ export default function TradeAction({
         setTradeDrawerOpen(false);
       }
     } catch (err) {
-      setTradeError(isAr ? 'خطأ في الاتصال. فشل التداول الافتراضي.' : 'Connection error. Failed to execute simulated trade.');
+      setTradeError(t('tradeConnectionError'));
     } finally {
       setIsSubmittingTrade(false);
     }
   };
 
   const formattedTotal = market === 'TASI'
-    ? (isAr ? `${totalCost.toFixed(2)} ر.س` : `SAR ${totalCost.toFixed(2)}`)
-    : `$${totalCost.toFixed(2)}`;
+    ? t('formatTasi', { amount: totalCost.toFixed(2) })
+    : t('formatNasdaq', { amount: totalCost.toFixed(2) });
 
   return (
     <div className="space-y-4">
       {/* Action Buttons Sticky Trigger */}
       <div className="bg-[#0f1420]/50 backdrop-blur-md border border-white/5 p-4 rounded-3xl flex justify-between items-center space-x-3 rtl:space-x-reverse text-start">
         <div>
-          <span className="text-[10px] text-gray-500 block uppercase">{isAr ? 'محفظتك الافتراضية' : 'Your Virtual Balance'}</span>
+          <span className="text-[10px] text-gray-500 block uppercase">{t('virtualBalance')}</span>
           <span className="font-extrabold text-white font-mono">{jarBalance.toFixed(2)} SAR</span>
         </div>
         <div className="flex space-x-2 rtl:space-x-reverse">
@@ -91,13 +91,13 @@ export default function TradeAction({
             onClick={() => { setTradeAction('BUY'); setTradeDrawerOpen(true); }}
             className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 transition-colors text-black active:scale-95 shadow-md shadow-emerald-500/10"
           >
-            {isAr ? 'شراء' : 'BUY'}
+            {t('buy')}
           </button>
           <button
             onClick={() => { setTradeAction('SELL'); setTradeDrawerOpen(true); }}
             className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 transition-colors text-white active:scale-95 shadow-md shadow-rose-500/10"
           >
-            {isAr ? 'بيع' : 'SELL'}
+            {t('sell')}
           </button>
         </div>
       </div>
@@ -105,10 +105,10 @@ export default function TradeAction({
       {/* Info items linking to detail drawers */}
       <div className="flex justify-between items-center text-[10px] text-gray-500 px-2">
         <button onClick={() => setPurificationDrawerOpen(true)} className="hover:text-emerald-400 underline transition-colors">
-          ✨ {isAr ? 'معرفة المزيد عن رسوم التطهير' : 'Learn about purification fee'}
+          ✨ {t('learnPurification')}
         </button>
         <button onClick={() => setFractionalDrawerOpen(true)} className="hover:text-emerald-400 underline transition-colors">
-          🍕 {isAr ? 'ما هي الأسهم المجزأة؟' : 'What are fractional shares?'}
+          🍕 {t('whatAreFractional')}
         </button>
       </div>
 
@@ -140,7 +140,7 @@ export default function TradeAction({
                 onClick={() => setPurificationDrawerOpen(false)}
                 className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl font-bold text-xs transition-all mt-4"
               >
-                {isAr ? 'حسناً' : 'Close'}
+                {t('close')}
               </button>
             </motion.div>
           </>
@@ -167,19 +167,17 @@ export default function TradeAction({
             >
               <div className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-2" />
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                <h3 className="font-bold text-lg text-emerald-400">{isAr ? 'الأسهم القابلة للتجزئة' : 'Fractional Shares'}</h3>
+                <h3 className="font-bold text-lg text-emerald-400">{t('fractionalTitle')}</h3>
                 <span className="text-xs text-gray-500 font-mono">Feature Details</span>
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">
-                {isAr
-                  ? 'تمكنك الأسهم المجزأة من الاستثمار بأي مبلغ تريده لشراء أجزاء من الأسهم (مثلاً شراء 0.5 سهم). هذا يعني أنك لست بحاجة إلى ميزانية ضخمة للبدء في امتلاك حصة في الشركات الكبرى!'
-                  : 'Fractional shares let you buy fractions of stock (e.g. 0.5 shares) using whatever budget you have, so you do not need a massive balance to start investing in giant companies.'}
+                {t('fractionalExplanation')}
               </p>
               <button
                 onClick={() => setFractionalDrawerOpen(false)}
                 className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl font-bold text-xs transition-all mt-4"
               >
-                {isAr ? 'فهمت' : 'I Understand'}
+                {t('understand')}
               </button>
             </motion.div>
           </>
@@ -208,14 +206,16 @@ export default function TradeAction({
               
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <h3 className="font-bold text-lg text-white">
-                  {isAr ? `تداول ${cleanSymbol}` : `Trade ${cleanSymbol}`}
+                  {t('tradeTitle', { symbol: cleanSymbol })}
                 </h3>
                 <span className="text-xs text-gray-500 font-mono">
-                  {market === 'TASI' && isAr ? `${currentPrice.toFixed(2)} ر.س` : market === 'TASI' ? `SAR ${currentPrice.toFixed(2)}` : `$${currentPrice.toFixed(2)}`} / {isAr ? 'سعر السهم' : 'share'}
+                  {market === 'TASI'
+                    ? t('formatTasi', { amount: currentPrice.toFixed(2) })
+                    : t('formatNasdaq', { amount: currentPrice.toFixed(2) })
+                  } / {t('sharePriceLabel')}
                 </span>
               </div>
 
-              {/* Action Tab toggle */}
               <div className="flex bg-black/40 p-1 rounded-xl">
                 <button
                   onClick={() => { setTradeAction('BUY'); setTradeError(null); }}
@@ -223,7 +223,7 @@ export default function TradeAction({
                     tradeAction === 'BUY' ? 'bg-emerald-500 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  {isAr ? 'شراء' : 'BUY'}
+                  {t('buy')}
                 </button>
                 <button
                   onClick={() => { setTradeAction('SELL'); setTradeError(null); }}
@@ -231,26 +231,24 @@ export default function TradeAction({
                     tradeAction === 'SELL' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  {isAr ? 'بيع' : 'SELL'}
+                  {t('sell')}
                 </button>
               </div>
 
-              {/* Balances details */}
               <div className="grid grid-cols-2 gap-3 text-xs bg-black/20 p-3 rounded-xl border border-white/5 font-mono">
                 <div>
-                  <span className="text-[10px] text-gray-500 block">{isAr ? 'الرصيد المتوفر' : 'Available Cash'}</span>
+                  <span className="text-[10px] text-gray-500 block">{t('availableCash')}</span>
                   <span className="font-bold text-emerald-400">{jarBalance.toFixed(2)} SAR</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-gray-500 block">{isAr ? 'الأسهم المملوكة' : 'Shares Owned'}</span>
+                  <span className="text-[10px] text-gray-500 block">{t('sharesOwned')}</span>
                   <span className="font-bold text-indigo-400">{sharesOwned.toFixed(2)}</span>
                 </div>
               </div>
 
-              {/* Input shares */}
               <div className="space-y-1">
                 <label className="block text-xs text-gray-400">
-                  {isAr ? 'عدد الأسهم (يقبل الكسور):' : 'Number of Shares (Fractional allowed):'}
+                  {t('numSharesLabel')}
                 </label>
                 <input
                   type="number"
@@ -262,9 +260,8 @@ export default function TradeAction({
                 />
               </div>
 
-              {/* Total display */}
               <div className="flex justify-between items-center text-xs py-1 border-t border-white/5 pt-3">
-                <span className="text-gray-400">{isAr ? 'القيمة الإجمالية المقدرة' : 'Estimated Total'}</span>
+                <span className="text-gray-400">{t('estimatedTotal')}</span>
                 <span className="font-bold font-mono text-white">{formattedTotal}</span>
               </div>
 
@@ -288,8 +285,8 @@ export default function TradeAction({
                 {isSubmittingTrade && <Loader2 className="w-4 h-4 animate-spin" />}
                 <span>
                   {isSubmittingTrade 
-                    ? (isAr ? 'جاري تنفيذ طلبك...' : 'Processing...') 
-                    : (isAr ? 'تأكيد تداول الصفقة' : 'Confirm Simulated Trade')}
+                    ? t('processing') 
+                    : t('confirmTrade')}
                 </span>
               </button>
             </motion.div>
@@ -312,15 +309,17 @@ export default function TradeAction({
               </div>
               <h3 className="font-bold text-lg">{t('questComplete')}</h3>
               <p className="text-xs text-gray-400 leading-relaxed">
-                {isAr
-                  ? `تم تنفيذ صفقة ال${tradeAction === 'BUY' ? 'شراء' : 'بيع'} لسهم ${cleanSymbol} بنجاح. الرصيد المتبقي في جرتك: ${jarBalance.toFixed(2)} ر.س.`
-                  : `Simulated ${tradeAction} order for ${cleanSymbol} executed successfully. Remaining balance: ${jarBalance.toFixed(2)} SAR.`}
+                {t('tradeSuccessDesc', {
+                  action: tradeAction === 'BUY' ? t('buy') : t('sell'),
+                  symbol: cleanSymbol,
+                  balance: jarBalance.toFixed(2)
+                })}
               </p>
               <button
                 onClick={() => setTradeSuccess(false)}
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold text-xs text-white transition-all shadow-lg"
               >
-                {isAr ? 'متابعة المغامرة' : 'Continue Quest'}
+                {t('continueQuest')}
               </button>
             </motion.div>
           </div>

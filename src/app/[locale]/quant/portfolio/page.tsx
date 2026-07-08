@@ -155,6 +155,19 @@ export default async function PortfolioPage({ params }: { params: { locale: stri
     createdAt: e.createdAt.toISOString()
   }));
 
+  const trades = await prisma.transaction.findMany({
+    where: { userId, type: 'TRADE' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const initialTrades = trades.map(t => ({
+    id: t.id,
+    amount: Number(t.amount.toString()),
+    currency: t.currency,
+    description: t.description || '',
+    createdAt: t.createdAt.toISOString()
+  }));
+
   return (
     <PortfolioClient
       locale={locale}
@@ -164,6 +177,7 @@ export default async function PortfolioPage({ params }: { params: { locale: stri
       initialSnapshots={initialSnapshots}
       initialPurification={initialPurification}
       initialMetrics={metrics}
+      initialTrades={initialTrades}
     />
   );
 }

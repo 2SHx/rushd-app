@@ -24,20 +24,20 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
     if (type === 'mcap') {
       const trils = val / 1e12;
       if (trils >= 1) {
-        return isAr ? `${trils.toFixed(2)} تريليون` : `$${trils.toFixed(2)}T`;
+        return t('trillions', { amount: trils.toFixed(2) });
       }
       const billions = val / 1e9;
-      return isAr ? `${billions.toFixed(2)} مليار` : `$${billions.toFixed(2)}B`;
+      return t('billions', { amount: billions.toFixed(2) });
     } else {
       const millions = val / 1e6;
       if (millions >= 1) {
-        return isAr ? `${millions.toFixed(2)} مليون` : `${millions.toFixed(2)}M`;
+        return t('millions', { amount: millions.toFixed(2) });
       }
       return val.toLocaleString();
     }
   };
 
-  const currency = data.market === 'TASI' ? (isAr ? 'ر.س' : 'SAR') : 'USD';
+  const currency = data.market === 'TASI' ? t('currencyTasi') : t('currencyNasdaq');
 
   return (
     <div className="space-y-6">
@@ -166,16 +166,16 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
           {/* Grid fields */}
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div className="flex justify-between border-b border-white/5 pb-1.5">
-              <span className="text-gray-400">{isAr ? 'سعر الافتتاح' : 'Open Price'}</span>
+              <span className="text-gray-400">{t('openPrice')}</span>
               <span className="font-bold font-mono">
-                {currency === 'USD' ? '$' : ''}{stats.open}{currency === 'SAR' ? ` ${currency}` : ''}
+                {currency === 'USD' ? '$' : ''}{stats.open}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
               </span>
             </div>
 
             <div className="flex justify-between border-b border-white/5 pb-1.5">
-              <span className="text-gray-400">{isAr ? 'الإغلاق السابق' : 'Prev Close'}</span>
+              <span className="text-gray-400">{t('prevCloseLabel')}</span>
               <span className="font-bold font-mono">
-                {currency === 'USD' ? '$' : ''}{stats.prevClose}{currency === 'SAR' ? ` ${currency}` : ''}
+                {currency === 'USD' ? '$' : ''}{stats.prevClose}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
               </span>
             </div>
 

@@ -25,7 +25,7 @@ export default function StockList({
 }: StockListProps) {
   const t = useTranslations('Markets');
   const [category, setCategory] = useState<'all' | 'sharia'>('all');
-  const isAr = locale === 'ar';
+  void locale;
 
   // Fallback to featured list if no active search query results are loaded
   const defaultList = market === 'TASI' ? TASI_UNIVERSE : NASDAQ_UNIVERSE_FALLBACK;
@@ -55,7 +55,7 @@ export default function StockList({
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          {isAr ? 'الكل' : 'All'}
+          {t('allFilter')}
         </button>
         <button
           onClick={() => setCategory('sharia')}
@@ -66,14 +66,14 @@ export default function StockList({
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>{isAr ? 'متوافق شرعاً' : 'Sharia Secure'}</span>
+          <span>{t('shariaSecureFilter')}</span>
         </button>
       </div>
 
       {/* List Header */}
       <div className="flex items-center justify-between text-xs text-gray-500 font-bold uppercase tracking-wider px-2">
-        <span>{isAr ? 'الشركة' : 'Company'}</span>
-        <span>{isAr ? 'السعر الحالي' : 'Market Price'}</span>
+        <span>{t('companyColumn')}</span>
+        <span>{t('marketPriceColumn')}</span>
       </div>
 
       {/* Rows Container */}

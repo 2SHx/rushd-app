@@ -13,7 +13,7 @@ interface AssistantPanelProps {
 
 export default function AssistantPanel({ symbol, market, currentPrice, locale }: AssistantPanelProps) {
   const t = useTranslations('Markets');
-  const isAr = locale === 'ar';
+  void locale;
   
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
@@ -64,7 +64,7 @@ export default function AssistantPanel({ symbol, market, currentPrice, locale }:
             className="flex items-center space-x-1.5 rtl:space-x-reverse bg-emerald-500 hover:bg-emerald-600 transition-colors text-black text-xs font-bold px-3 py-1.5 rounded-xl shadow-lg active:scale-95"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{isAr ? 'استشر المرشد' : 'Consult Mentor'}</span>
+            <span>{t('consultMentor')}</span>
           </button>
         )}
       </div>
@@ -87,7 +87,7 @@ export default function AssistantPanel({ symbol, market, currentPrice, locale }:
           {/* Action & Shield Row */}
           <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
             <div className="flex flex-col">
-              <span className="text-[10px] text-gray-500 uppercase">{isAr ? 'القرار المقترح' : 'Quest Action'}</span>
+              <span className="text-[10px] text-gray-500 uppercase">{t('questAction')}</span>
               <span className={`text-base font-extrabold font-sans mt-0.5 ${
                 result.action === 'BUY' ? 'text-emerald-400' :
                 result.action === 'SELL' ? 'text-rose-400' : 'text-gray-400'
@@ -117,7 +117,7 @@ export default function AssistantPanel({ symbol, market, currentPrice, locale }:
             <div className="flex items-start gap-2.5">
               <div className="mt-1 w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{isAr ? 'توجيه المرشد (عربي)' : 'Mentor Guidance (AR)'}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{t('mentorGuidanceAr')}</span>
                 <p className="text-xs text-gray-300 leading-relaxed font-sans">{result.reasoningArabic}</p>
               </div>
             </div>
@@ -125,7 +125,7 @@ export default function AssistantPanel({ symbol, market, currentPrice, locale }:
             <div className="flex items-start gap-2.5">
               <div className="mt-1 w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{isAr ? 'توجيه المرشد (إنجليزي)' : 'Mentor Guidance (EN)'}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{t('mentorGuidanceEn')}</span>
                 <p className="text-xs text-gray-300 leading-relaxed font-sans">{result.reasoningEnglish}</p>
               </div>
             </div>
@@ -136,7 +136,7 @@ export default function AssistantPanel({ symbol, market, currentPrice, locale }:
             <div className="bg-emerald-500/5 border border-emerald-500/10 p-3.5 rounded-2xl space-y-1">
               <div className="flex items-center space-x-1.5 rtl:space-x-reverse text-emerald-400 text-xs font-bold">
                 <HelpCircle className="w-3.5 h-3.5" />
-                <span>{isAr ? 'المفهوم التعليمي' : 'Quest Wisdom Concept'}</span>
+                <span>{t('questWisdom')}</span>
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed font-sans">{result.educationalConcept}</p>
             </div>

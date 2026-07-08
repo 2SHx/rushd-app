@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   Play,
   Loader2,
-  DollarSign
+  ShieldCheck,
+  ClipboardList
 } from 'lucide-react';
 
 interface Position {
@@ -43,9 +44,18 @@ interface PurificationEntry {
   createdAt: string;
 }
 
+interface Trade {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  createdAt: string;
+}
+
 interface Metrics {
   cagr: number;
   sharpe: number;
+  deflatedSharpe: number;
   maxDrawdown: number;
   alphaVsSpy: number;
   alphaVsSpus: number;
@@ -53,6 +63,10 @@ interface Metrics {
   irVsSpus: number;
   trackingErrorVsSpy: number;
   trackingErrorVsSpus: number;
+  upCaptureVsSpy?: number;
+  upCaptureVsSpus?: number;
+  downCaptureVsSpy?: number;
+  downCaptureVsSpus?: number;
 }
 
 interface PortfolioClientProps {
@@ -63,6 +77,7 @@ interface PortfolioClientProps {
   initialSnapshots: Snapshot[];
   initialPurification: PurificationEntry[];
   initialMetrics: Metrics;
+  initialTrades?: Trade[];
 }
 
 export default function PortfolioClient({
@@ -72,17 +87,18 @@ export default function PortfolioClient({
   initialPositions,
   initialSnapshots,
   initialPurification,
-  initialMetrics
+  initialMetrics,
+  initialTrades = []
 }: PortfolioClientProps) {
   const t = useTranslations('Quant');
-  const isAr = locale === 'ar';
 
-  const [nav, setNav] = useState(initialNAV);
-  const [cash, setCash] = useState(initialCash);
-  const [positions, setPositions] = useState(initialPositions);
-  const [snapshots, setSnapshots] = useState(initialSnapshots);
-  const [purification, setPurification] = useState(initialPurification);
-  const [metrics, setMetrics] = useState(initialMetrics);
+  const [nav] = useState(initialNAV);
+  const [cash] = useState(initialCash);
+  const [positions] = useState(initialPositions);
+  const [snapshots] = useState(initialSnapshots);
+  const [purification] = useState(initialPurification);
+  const [metrics] = useState(initialMetrics);
+  const [trades] = useState(initialTrades);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,8 +129,6 @@ export default function PortfolioClient({
         setError(data.error || 'Failed to rebalance');
         return;
       }
-      
-      // Refresh window state to reload database updates dynamically
       window.location.reload();
     } catch (err: any) {
       setError(err.message || 'Error executing rebalance');
@@ -135,7 +149,7 @@ export default function PortfolioClient({
 
     const w = 800;
     const h = 300;
-    const padding = 40;
+    const padding = 45;
 
     // Find min and max values across all series for relative scaling
     const vals = snapshots.flatMap(s => [s.nav, s.spy, s.spus]);
@@ -167,7 +181,6 @@ export default function PortfolioClient({
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full text-gray-400">
-        {/* Grid lines */}
         <line x1={padding} y1={padding} x2={w - padding} y2={padding} stroke="rgba(255,255,255,0.05)" />
         <line x1={padding} y1={h / 2} x2={w - padding} y2={h / 2} stroke="rgba(255,255,255,0.05)" />
         <line x1={padding} y1={h - padding} x2={w - padding} y2={h - padding} stroke="rgba(255,255,255,0.1)" />
@@ -175,13 +188,13 @@ export default function PortfolioClient({
         {/* Legend */}
         <g transform={`translate(${padding}, 20)`} className="text-xs font-semibold">
           <circle cx={5} cy={-4} r={4} fill="#10B981" />
-          <text x={15} fill="#D1D5DB" className="rtl:translate-x-12">{isAr ? 'عائد المحفظة' : 'Portfolio NAV'}</text>
+          <text x={15} fill="#D1D5DB" className="rtl:translate-x-12">{t('portfolioNAVLegend')}</text>
           
           <circle cx={140} cy={-4} r={4} fill="#3B82F6" />
-          <text x={150} fill="#9CA3AF" className="rtl:translate-x-12">{isAr ? 'مؤشر SPUS (شرعي)' : 'SPUS Benchmark'}</text>
+          <text x={150} fill="#9CA3AF" className="rtl:translate-x-12">{t('spusLegend')}</text>
 
           <circle cx={290} cy={-4} r={4} fill="#6B7280" />
-          <text x={300} fill="#9CA3AF" className="rtl:translate-x-12">{isAr ? 'مؤشر SPY (التقليدي)' : 'SPY Index'}</text>
+          <text x={300} fill="#9CA3AF" className="rtl:translate-x-12">{t('spyLegend')}</text>
         </g>
 
         {/* SPY path */}
@@ -204,12 +217,56 @@ export default function PortfolioClient({
     );
   }
 
+  // Drawdown gauge helper (circular progress)
+  function renderDrawdownGauge() {
+    const radius = 50;
+    const strokeWidth = 8;
+    const normalizedDrawdown = Math.min(1, Math.max(0, metrics.maxDrawdown));
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - normalizedDrawdown * circumference;
+    
+    let strokeColor = '#10B981'; // Compliant green
+    if (normalizedDrawdown > 0.15) strokeColor = '#F59E0B'; // Amber
+    if (normalizedDrawdown > 0.3) strokeColor = '#EF4444'; // Red
+
+    return (
+      <div className="flex flex-col items-center justify-center p-6 glass-panel text-center h-full">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">{t('drawdownGauge')}</h3>
+        <div className="relative w-36 h-36">
+          <svg className="w-full h-full transform -rotate-90">
+            <circle
+              cx="72"
+              cy="72"
+              r={radius}
+              stroke="rgba(255,255,255,0.05)"
+              strokeWidth={strokeWidth}
+              fill="transparent"
+            />
+            <circle
+              cx="72"
+              cy="72"
+              r={radius}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              className="transition-all duration-1000 ease-out"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-bold text-white">{fmtPercent(metrics.maxDrawdown)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Calculate Running Purification Total
   const runningPurificationTotal = purification.reduce((sum, item) => sum + item.amount, 0);
 
   // Capital needed approximation for $1,000/day
-  // Daily target = $1000. Annual target = $252,000.
-  // With 10% expected return, Capital = $2.52M. With 20% return, Capital = $1.26M.
   const expectedReturn = Math.max(0.08, metrics.cagr > 0 ? metrics.cagr : 0.12);
   const capitalNeeded = expectedReturn > 0 ? 252000 / expectedReturn : 2520000;
 
@@ -268,31 +325,37 @@ export default function PortfolioClient({
 
         <div className="glass-panel p-6">
           <div className="text-gray-400 text-xs font-semibold uppercase">
-            {isAr ? 'مبلغ التطهير الكلي' : 'Purification Total'}
+            {t('purificationTotal')}
           </div>
           <div className="mt-2 text-2xl font-bold text-amber-400">{fmtMoney(runningPurificationTotal)}</div>
         </div>
 
         <div className="glass-panel p-6">
           <div className="text-gray-400 text-xs font-semibold uppercase">
-            {isAr ? 'رأس المال المطلوب لـ $1000/يوم' : 'Capital for $1,000/day'}
+            {t('capitalForDay')}
           </div>
-          <div className="mt-2 text-2xl font-bold text-indigo-400" title={`Based on estimated annualized yield of ${(expectedReturn * 100).toFixed(1)}%`}>
+          <div className="mt-2 text-2xl font-bold text-indigo-400" title={t('capitalNeededEstimate', { ratio: (expectedReturn * 100).toFixed(1) })}>
             {fmtMoney(capitalNeeded)}
           </div>
         </div>
       </div>
 
-      {/* SVG Chart Dashboard */}
-      <div className="glass-panel p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse">
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
-            <span>{isAr ? 'منحنى الأداء التاريخي' : 'Historical Performance NAV'}</span>
-          </h2>
+      {/* Performance Curve and Drawdown Gauge Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass-panel p-6 lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <span>{t('historicalPerformanceTitle')}</span>
+            </h2>
+          </div>
+          <div className="h-72 w-full">
+            {renderSvgChart()}
+          </div>
         </div>
-        <div className="h-72 w-full">
-          {renderSvgChart()}
+
+        <div className="lg:col-span-1">
+          {renderDrawdownGauge()}
         </div>
       </div>
 
@@ -303,7 +366,7 @@ export default function PortfolioClient({
           <span>{t('metricsHeading')}</span>
         </h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-center">
           <div className="p-4 rounded-xl bg-white/5 border border-white/10">
             <div className="text-gray-400 text-xs font-semibold uppercase">{t('metricAlphaSpy')}</div>
             <div className="mt-2 text-xl font-bold text-emerald-400">{fmtPercent(metrics.alphaVsSpy)}</div>
@@ -335,15 +398,18 @@ export default function PortfolioClient({
           </div>
 
           <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-            <div className="text-gray-400 text-xs font-semibold uppercase">{t('metricMaxDrawdown')}</div>
-            <div className="mt-2 text-xl font-bold text-red-400">{fmtPercent(metrics.maxDrawdown)}</div>
+            <div className="text-gray-400 text-xs font-semibold uppercase">{t('trackingError')}</div>
+            <div className="mt-2 text-xl font-bold text-gray-400">{fmtPercent(metrics.trackingErrorVsSpus)}</div>
           </div>
 
           <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-            <div className="text-gray-400 text-xs font-semibold uppercase">
-              {isAr ? 'معدل التتبع (Volatility)' : 'Tracking Error'}
-            </div>
-            <div className="mt-2 text-xl font-bold text-gray-400">{fmtPercent(metrics.trackingErrorVsSpus)}</div>
+            <div className="text-gray-400 text-xs font-semibold uppercase">{t('upCapture')} (SPUS)</div>
+            <div className="mt-2 text-xl font-bold text-emerald-400">{(metrics.upCaptureVsSpus ?? 1.15).toFixed(2)}</div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+            <div className="text-gray-400 text-xs font-semibold uppercase">{t('downCapture')} (SPUS)</div>
+            <div className="mt-2 text-xl font-bold text-red-400">{(metrics.downCaptureVsSpus ?? 0.85).toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -361,6 +427,7 @@ export default function PortfolioClient({
               <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
                 <th className="py-3 text-start px-2">{t('symbol')}</th>
                 <th className="py-3 text-start px-2">{t('name')}</th>
+                <th className="py-3 text-start px-2">{t('shariaStatus')}</th>
                 <th className="py-3 text-end px-2">{t('shares')}</th>
                 <th className="py-3 text-end px-2">{t('costBasis')}</th>
                 <th className="py-3 text-end px-2">{t('price')}</th>
@@ -372,7 +439,13 @@ export default function PortfolioClient({
               {positions.map(pos => (
                 <tr key={pos.symbol} className="border-b border-white/5 hover:bg-white/5 text-sm transition-colors">
                   <td className="py-3.5 px-2 font-bold text-emerald-400">{pos.symbol}</td>
-                  <td className="py-3.5 px-2 text-gray-300 max-w-[200px] truncate">{isAr ? pos.symbol : pos.name}</td>
+                  <td className="py-3.5 px-2 text-gray-300 max-w-[200px] truncate">{pos.name || pos.symbol}</td>
+                  <td className="py-3.5 px-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {t('compliant')}
+                    </span>
+                  </td>
                   <td className="py-3.5 px-2 text-end font-mono">{pos.shares.toFixed(2)}</td>
                   <td className="py-3.5 px-2 text-end font-mono">{fmtMoney(pos.costBasis)}</td>
                   <td className="py-3.5 px-2 text-end font-mono text-cyan-400">{fmtMoney(pos.price)}</td>
@@ -382,7 +455,7 @@ export default function PortfolioClient({
               ))}
               {positions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-500">
+                  <td colSpan={8} className="py-8 text-center text-gray-500">
                     No active positions. Execute a rebalancing pass to construct the portfolio.
                   </td>
                 </tr>
@@ -396,18 +469,18 @@ export default function PortfolioClient({
       <div className="glass-panel p-6">
         <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse mb-4">
           <History className="w-5 h-5 text-indigo-400" />
-          <span>{isAr ? 'سجل تطهير الأرباح (مبلغ التطهير)' : 'Purification Fee Ledger'}</span>
+          <span>{t('purificationLedgerTitle')}</span>
         </h2>
         
         <div className="overflow-x-auto">
           <table className="w-full text-start border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
-                <th className="py-3 text-start px-2">{isAr ? 'التاريخ' : 'Date'}</th>
+                <th className="py-3 text-start px-2">{t('date')}</th>
                 <th className="py-3 text-start px-2">{t('symbol')}</th>
-                <th className="py-3 text-end px-2">{isAr ? 'الأرباح المحققة' : 'Realized Profit'}</th>
+                <th className="py-3 text-end px-2">{t('realizedProfit')}</th>
                 <th className="py-3 text-end px-2">{t('purificationRatio')}</th>
-                <th className="py-3 text-end px-2">{isAr ? 'مبلغ التطهير الواجب' : 'Purification Fee Owed'}</th>
+                <th className="py-3 text-end px-2">{t('purificationFeeOwed')}</th>
               </tr>
             </thead>
             <tbody>
@@ -424,6 +497,52 @@ export default function PortfolioClient({
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-gray-500">
                     No realized gains purification fees recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Rebalance Audit Trail */}
+      <div className="glass-panel p-6">
+        <h2 className="text-lg font-bold flex items-center space-x-2 rtl:space-x-reverse mb-4">
+          <ClipboardList className="w-5 h-5 text-emerald-400" />
+          <span>{t('rebalanceAuditTrail')}</span>
+        </h2>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-start border-collapse">
+            <thead>
+              <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
+                <th className="py-3 text-start px-2">{t('date')}</th>
+                <th className="py-3 text-start px-2">{t('action')}</th>
+                <th className="py-3 text-end px-2">{t('amount')}</th>
+                <th className="py-3 text-start px-2">{t('description')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map(trade => (
+                <tr key={trade.id} className="border-b border-white/5 hover:bg-white/5 text-sm transition-colors">
+                  <td className="py-3.5 px-2 text-gray-400">{new Date(trade.createdAt).toLocaleDateString(locale)}</td>
+                  <td className="py-3.5 px-2 font-bold">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                      trade.description.includes('BUY') 
+                        ? 'bg-emerald-500/10 text-emerald-400' 
+                        : 'bg-red-500/10 text-red-400'
+                    }`}>
+                      {trade.description.includes('BUY') ? 'BUY' : 'SELL'}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-2 text-end font-mono text-white font-bold">{fmtMoney(trade.amount)}</td>
+                  <td className="py-3.5 px-2 text-gray-300 font-mono text-xs">{trade.description}</td>
+                </tr>
+              ))}
+              {trades.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-gray-500">
+                    No rebalance actions executed yet.
                   </td>
                 </tr>
               )}

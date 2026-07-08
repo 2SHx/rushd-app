@@ -169,3 +169,159 @@ export function computeMetrics(
     implausible: sharpe > 3,
   };
 }
+
+export interface PortfolioEquityPoint {
+  ts: Date;
+  equity: number;
+  cash: number;
+  spy: number;
+  spus: number;
+}
+
+export interface PortfolioBacktestMetrics {
+  cagr: number;
+  sharpe: number;
+  deflatedSharpe: number;
+  maxDrawdown: number;
+  hitRate: number;
+  trades: number;
+  turnover: number;
+  alphaVsSpy: number;
+  alphaVsSpus: number;
+  irVsSpy: number;
+  irVsSpus: number;
+  trackingErrorVsSpy: number;
+  trackingErrorVsSpus: number;
+  upCaptureVsSpy: number;
+  upCaptureVsSpus: number;
+  downCaptureVsSpy: number;
+  downCaptureVsSpus: number;
+}
+
+function stdDev(returns: number[]): number {
+  if (returns.length < 2) return 0;
+  const avg = mean(returns);
+  const variance = returns.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / (returns.length - 1);
+  return Math.sqrt(variance);
+}
+
+function computeCaptureRatios(strategyReturns: number[], benchmarkReturns: number[]): { upCapture: number; downCapture: number } {
+  const upStrat: number[] = [];
+  const upBench: number[] = [];
+  const downStrat: number[] = [];
+  const downBench: number[] = [];
+
+  for (let i = 0; i < benchmarkReturns.length; i++) {
+    const br = benchmarkReturns[i];
+    const sr = strategyReturns[i];
+    if (br > 0) {
+      upStrat.push(sr);
+      upBench.push(br);
+    } else if (br < 0) {
+      downStrat.push(sr);
+      downBench.push(br);
+    }
+  }
+
+  const meanUpStrat = upStrat.length ? upStrat.reduce((a, b) => a + b, 0) / upStrat.length : 0;
+  const meanUpBench = upBench.length ? upBench.reduce((a, b) => a + b, 0) / upBench.length : 0;
+  const meanDownStrat = downStrat.length ? downStrat.reduce((a, b) => a + b, 0) / downStrat.length : 0;
+  const meanDownBench = downBench.length ? downBench.reduce((a, b) => a + b, 0) / downBench.length : 0;
+
+  return {
+    upCapture: meanUpBench !== 0 ? meanUpStrat / meanUpBench : 0,
+    downCapture: meanDownBench !== 0 ? meanDownStrat / meanDownBench : 0
+  };
+}
+
+export function computePortfolioMetrics(
+  curve: PortfolioEquityPoint[],
+  opts: { trades: number; turnover: number; trials?: number } = { trades: 0, turnover: 0 }
+): PortfolioBacktestMetrics {
+  if (curve.length < 2) {
+    return {
+      cagr: 0, sharpe: 0, deflatedSharpe: 0, maxDrawdown: 0, hitRate: 0,
+      trades: opts.trades, turnover: opts.turnover,
+      alphaVsSpy: 0, alphaVsSpus: 0, irVsSpy: 0, irVsSpus: 0,
+      trackingErrorVsSpy: 0, trackingErrorVsSpus: 0,
+      upCaptureVsSpy: 0, upCaptureVsSpus: 0,
+      downCaptureVsSpy: 0, downCaptureVsSpus: 0
+    };
+  }
+
+  const first = curve[0];
+  const last = curve[curve.length - 1];
+
+  const elapsedYears = (last.ts.getTime() - first.ts.getTime()) / MS_PER_YEAR;
+  const cagr = first.equity > 0 && elapsedYears > 0 ? Math.pow(last.equity / first.equity, 1 / elapsedYears) - 1 : 0;
+  const spyCagr = first.spy > 0 && elapsedYears > 0 ? Math.pow(last.spy / first.spy, 1 / elapsedYears) - 1 : 0;
+  const spusCagr = first.spus > 0 && elapsedYears > 0 ? Math.pow(last.spus / first.spus, 1 / elapsedYears) - 1 : 0;
+
+  const dailyReturns: number[] = [];
+  const spyDailyReturns: number[] = [];
+  const spusDailyReturns: number[] = [];
+  
+  const diffSpy: number[] = [];
+  const diffSpus: number[] = [];
+
+  for (let i = 1; i < curve.length; i++) {
+    const r = curve[i - 1].equity !== 0 ? (curve[i].equity - curve[i - 1].equity) / curve[i - 1].equity : 0;
+    const rSpy = curve[i - 1].spy !== 0 ? (curve[i].spy - curve[i - 1].spy) / curve[i - 1].spy : 0;
+    const rSpus = curve[i - 1].spus !== 0 ? (curve[i].spus - curve[i - 1].spus) / curve[i - 1].spus : 0;
+
+    dailyReturns.push(r);
+    spyDailyReturns.push(rSpy);
+    spusDailyReturns.push(rSpus);
+
+    diffSpy.push(r - rSpy);
+    diffSpus.push(r - rSpus);
+  }
+
+  const avgRet = mean(dailyReturns);
+  const dailyVol = stdDev(dailyReturns);
+  const sharpe = dailyVol > 0 ? (avgRet / dailyVol) * Math.sqrt(252) : 0;
+
+  let peak = curve[0].equity;
+  let maxDrawdown = 0;
+  for (const pt of curve) {
+    if (pt.equity > peak) peak = pt.equity;
+    const dd = peak > 0 ? (peak - pt.equity) / peak : 0;
+    if (dd > maxDrawdown) maxDrawdown = dd;
+  }
+
+  const hitRate = dailyReturns.length ? dailyReturns.filter(r => r > 0).length / dailyReturns.length : 0;
+
+  const alphaVsSpy = cagr - spyCagr;
+  const alphaVsSpus = cagr - spusCagr;
+
+  const spyTe = stdDev(diffSpy) * Math.sqrt(252);
+  const spusTe = stdDev(diffSpus) * Math.sqrt(252);
+
+  const irVsSpy = spyTe > 0 ? (mean(diffSpy) * Math.sqrt(252)) / spyTe : 0;
+  const irVsSpus = spusTe > 0 ? (mean(diffSpus) * Math.sqrt(252)) / spusTe : 0;
+
+  const spyCapture = computeCaptureRatios(dailyReturns, spyDailyReturns);
+  const spusCapture = computeCaptureRatios(dailyReturns, spusDailyReturns);
+
+  const ds = dailyVol > 0 ? deflatedSharpe(dailyReturns, avgRet / dailyVol, opts.trials ?? 1) : 0;
+
+  return {
+    cagr,
+    sharpe,
+    deflatedSharpe: ds,
+    maxDrawdown,
+    hitRate,
+    trades: opts.trades,
+    turnover: opts.turnover,
+    alphaVsSpy,
+    alphaVsSpus,
+    irVsSpy,
+    irVsSpus,
+    trackingErrorVsSpy: spyTe,
+    trackingErrorVsSpus: spusTe,
+    upCaptureVsSpy: spyCapture.upCapture,
+    upCaptureVsSpus: spusCapture.upCapture,
+    downCaptureVsSpy: spyCapture.downCapture,
+    downCaptureVsSpus: spusCapture.downCapture
+  };
+}

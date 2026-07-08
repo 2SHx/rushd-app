@@ -84,7 +84,7 @@ export default function StockDetail({
   const isUp = change > 0;
   const isDown = change < 0;
   
-  const currency = data.market === 'TASI' ? (isAr ? 'ر.س' : 'SAR') : 'USD';
+  const currency = data.market === 'TASI' ? t('currencyTasi') : t('currencyNasdaq');
   const recommendedQuiz = getRecommendedQuiz(data.symbol);
 
   const handleQuizComplete = async (passed: boolean) => {
@@ -151,13 +151,10 @@ export default function StockDetail({
         {/* Live quote values */}
         <div className="flex items-baseline space-x-3 rtl:space-x-reverse">
           <span className="text-3xl font-extrabold font-mono text-white leading-none">
-            {data.market === 'TASI' && isAr ? (
-              <span>{data.price.toFixed(2)} {currency}</span>
-            ) : data.market === 'TASI' ? (
-              <span>{currency} {data.price.toFixed(2)}</span>
-            ) : (
-              <span>${data.price.toFixed(2)}</span>
-            )}
+            {data.market === 'TASI'
+              ? t('formatTasi', { amount: data.price.toFixed(2) })
+              : t('formatNasdaq', { amount: data.price.toFixed(2) })
+            }
           </span>
           <div className={`flex items-center space-x-1 rtl:space-x-reverse text-sm font-semibold font-mono ${
             isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'
@@ -185,7 +182,7 @@ export default function StockDetail({
         <div className="flex justify-between items-center border-b border-white/5 pb-2">
           <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
             <BookOpen className="w-4 h-4" />
-            <h3 className="font-bold text-sm text-gray-200">{isAr ? 'اختبار تعليمي موصى به' : 'Recommended Quiz'}</h3>
+            <h3 className="font-bold text-sm text-gray-200">{t('recommendedQuiz')}</h3>
           </div>
           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
             {recommendedQuiz.topic}
@@ -204,11 +201,11 @@ export default function StockDetail({
           }`}>
             <span>
               {quizResult.passed 
-                ? (isAr ? 'تهانينا! نجحت في الاختبار واكتسبت (+50 XP)' : 'Congratulations! You passed (+50 XP)') 
-                : (isAr ? 'لم تتجاوز الاختبار بنجاح، حاول مجدداً!' : 'Did not pass, try again!')}
+                ? t('quizSuccess')
+                : t('quizFail')}
             </span>
             <button onClick={() => setQuizResult(null)} className="underline hover:no-underline font-bold">
-              {isAr ? 'إغلاق' : 'Dismiss'}
+              {t('dismiss')}
             </button>
           </div>
         )}

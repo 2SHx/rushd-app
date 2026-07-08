@@ -33,7 +33,7 @@ function getRScore(symbol: string) {
 
 export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
   const t = useTranslations('Markets');
-  const isAr = locale === 'ar';
+  void locale;
   const rScoreData = getRScore(symbol);
 
   return (
@@ -42,7 +42,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
         <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400">
           <Sparkles className="w-5 h-5 animate-pulse" />
           <h3 className="font-bold text-sm text-gray-200">
-            {isAr ? 'تقييم الذكاء الاصطناعي (R-Score)' : 'AI Rushd Rating (R-Score)'}
+            {t('rScoreTitle')}
           </h3>
         </div>
         <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
@@ -77,7 +77,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           </svg>
           <div className="absolute flex flex-col items-center justify-center">
             <span className="text-3xl font-extrabold font-mono text-white leading-none">{rScoreData.score}</span>
-            <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{isAr ? 'من 10' : 'out of 10'}</span>
+            <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{t('outOfTen')}</span>
           </div>
         </div>
 
@@ -86,7 +86,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           {/* Sharia Compliance Safety */}
           <div>
             <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{isAr ? 'الأمان والتوافق الشرعي' : 'Sharia Safety'}</span>
+              <span className="text-gray-400">{t('shariaSafety')}</span>
               <span className="text-indigo-400 font-mono">{rScoreData.safety}%</span>
             </div>
             <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -97,7 +97,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           {/* Growth Factor */}
           <div>
             <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{isAr ? 'عامل النمو والأرباح' : 'Growth Factor'}</span>
+              <span className="text-gray-400">{t('growthFactor')}</span>
               <span className="text-indigo-400 font-mono">{rScoreData.growth}%</span>
             </div>
             <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -108,7 +108,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           {/* Value Factor */}
           <div>
             <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{isAr ? 'عامل القيمة العادلة' : 'Value Factor'}</span>
+              <span className="text-gray-400">{t('valueFactor')}</span>
               <span className="text-indigo-400 font-mono">{rScoreData.value}%</span>
             </div>
             <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -119,7 +119,7 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           {/* Momentum */}
           <div>
             <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{isAr ? 'الزخم والمؤشرات الفنية' : 'Technical Momentum'}</span>
+              <span className="text-gray-400">{t('technicalMomentum')}</span>
               <span className="text-indigo-400 font-mono">{rScoreData.momentum}%</span>
             </div>
             <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">

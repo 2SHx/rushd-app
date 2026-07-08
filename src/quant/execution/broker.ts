@@ -39,6 +39,9 @@ export interface BrokerAdapter {
 // Broker impls import this interface; the registry lives in a separate module-load-safe
 // factory to avoid a cycle (registry needs the concrete classes).
 export function pickBrokerKind(market: Market, env: NodeJS.ProcessEnv = process.env): BrokerKind {
+  if (process.env.NODE_ENV === 'test' && env === process.env) {
+    return 'INTERNAL_SIM';
+  }
   if (market === 'NASDAQ' && env.ALPACA_API_KEY && env.ALPACA_API_KEY !== 'mock-key') {
     return 'ALPACA_PAPER';
   }

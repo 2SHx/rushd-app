@@ -35,12 +35,20 @@ interface ShariaGate {
   reason?: string;
 }
 
+interface DebateTurn {
+  side: 'BULL' | 'BEAR';
+  round: number;
+  argumentEn: string;
+  argumentAr: string;
+}
+
 interface PassResult {
   decisionId: string;
   finalAction: string;
   proposedAction?: string;
   shariaGate: ShariaGate;
   signals: Signal[];
+  debateTranscript?: DebateTurn[];
 }
 
 interface Metrics {
@@ -279,7 +287,18 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                     {t('proposedActionLabel')}: <span className="font-mono text-gray-300">{passData.proposedAction}</span>
                   </p>
                 )}
-                <p className="text-[10px] text-gray-600 font-mono break-all">
+                {(() => {
+                  const pmSignal = passData.signals.find(s => s.agent === 'PORTFOLIO_MANAGER');
+                  return pmSignal ? (
+                    <div className="space-y-2 pt-2 border-t border-white/5 text-start">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('pmRationaleAr')}</p>
+                      <p className="text-sm text-emerald-300 font-semibold leading-relaxed" dir="rtl">{pmSignal.rationaleAr}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('pmRationaleEn')}</p>
+                      <p className="text-xs text-gray-400 leading-relaxed" dir="ltr">{pmSignal.rationaleEn}</p>
+                    </div>
+                  ) : null;
+                })()}
+                <p className="text-[10px] text-gray-600 font-mono break-all pt-1">
                   {t('decisionIdLabel')}: {passData.decisionId}
                 </p>
               </div>
@@ -384,6 +403,42 @@ export default function CommitteeClient({ locale }: { locale: string }) {
                 })}
               </div>
             </div>
+            {passData.debateTranscript && passData.debateTranscript.length > 0 && (
+              <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+                <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
+                  <Gavel className="w-5 h-5 text-neonBlue" />
+                  <span>{t('debateHeading')}</span>
+                </h3>
+                <div className="flex flex-col gap-4">
+                  {passData.debateTranscript.map((turn, idx) => {
+                    const isBull = turn.side === 'BULL';
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex flex-col gap-1.5 p-4 rounded-2xl max-w-2xl border text-start ${
+                          isBull
+                            ? 'bg-emerald-500/5 border-emerald-500/10 self-start align-start md:mr-12'
+                            : 'bg-red-500/5 border-red-500/10 self-end align-end md:ml-12'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${isBull ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                          <span className={`text-[10px] font-extrabold uppercase ${isBull ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {isBull ? t('debateTurnBull') : t('debateTurnBear')} (Round {turn.round})
+                          </span>
+                        </div>
+                        <p className="text-sm text-white leading-relaxed font-semibold font-sans" dir="rtl">
+                          {turn.argumentAr}
+                        </p>
+                        <p className="text-xs text-gray-400 leading-relaxed font-sans" dir="ltr">
+                          {turn.argumentEn}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
