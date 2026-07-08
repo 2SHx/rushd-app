@@ -218,41 +218,9 @@ export default function MarketsContainer({
   );
 
   return (
-    <div className="min-h-screen text-white select-none max-w-md md:max-w-6xl mx-auto relative pb-24 md:pb-8">
-      {/* Desktop view (split layout) */}
-      <div className="hidden md:grid grid-cols-[380px,1fr] gap-6 items-start">
-        {/* Left Column: Watchlist & Search */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-black/40 space-y-6">
-          {renderMarketOverview()}
-        </div>
-        
-        {/* Right Column: Active Stock Details */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-black/40 min-h-[600px]">
-          {loadingStock ? (
-            <div className="flex flex-col items-center justify-center h-[500px] text-gray-500 space-y-3 animate-pulse">
-              <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs">{t('loading')}</span>
-            </div>
-          ) : currentStockData ? (
-            <StockDetail
-              data={currentStockData}
-              locale={locale}
-              jarBalance={jarBalance}
-              sharesOwned={sharesOwned}
-              isParent={isParent}
-              onTradeExecuted={handleTradeExecuted}
-              onBack={() => setActiveSymbol(null)}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-[500px] text-gray-500">
-              {t('selectStockPrompt')}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile view (single-column switch) */}
-      <div className="md:hidden bg-[#080B11] border-x border-white/5 min-h-screen pb-24">
+    <div className="min-h-screen text-white select-none max-w-xl mx-auto relative pb-24 md:pb-8">
+      {/* Unified View (single-column switch for both Desktop and Mobile) */}
+      <div className="bg-[#080B11] border-x border-white/5 min-h-screen">
         <AnimatePresence mode="wait">
           {!activeSymbol ? (
             <motion.div

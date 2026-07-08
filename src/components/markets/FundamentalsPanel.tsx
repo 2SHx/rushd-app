@@ -201,6 +201,74 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
           </div>
         </div>
       )}
+
+      {/* Analyst Ratings (Visual Dummy Data) */}
+      <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-5 space-y-4 text-start">
+        <h3 className="font-bold text-sm text-gray-200">{t('analystRatings')}</h3>
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <div className="w-16 h-16 rounded-full border-4 border-emerald-500 flex items-center justify-center">
+            <span className="text-xl font-bold text-emerald-400">76%</span>
+          </div>
+          <div className="flex-1 space-y-2 text-xs">
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <span className="w-8 text-gray-400">{t('buyRating')}</span>
+              <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '76%' }} />
+              </div>
+              <span className="w-6 text-end text-emerald-400">76%</span>
+            </div>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <span className="w-8 text-gray-400">{t('holdRating')}</span>
+              <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                <div className="h-full bg-gray-500 rounded-full" style={{ width: '20%' }} />
+              </div>
+              <span className="w-6 text-end text-gray-400">20%</span>
+            </div>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <span className="w-8 text-gray-400">{t('sellRating')}</span>
+              <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 rounded-full" style={{ width: '4%' }} />
+              </div>
+              <span className="w-6 text-end text-red-400">4%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Earnings (Visual Dummy Data) */}
+      <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-5 space-y-4 text-start">
+        <h3 className="font-bold text-sm text-gray-200">{t('earningsSummary')}</h3>
+        <p className="text-xs text-gray-500">{t('expectedVsActual')}</p>
+        <div className="h-32 flex items-end justify-between px-2 pt-4 relative">
+          {/* Chart Background Grid Lines */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
+            <div className="border-b border-white/5 w-full h-0" />
+            <div className="border-b border-white/5 w-full h-0" />
+            <div className="border-b border-white/5 w-full h-0" />
+          </div>
+
+          {[
+            { quarter: t('q1'), expected: 0.8, actual: 0.9 },
+            { quarter: t('q2'), expected: 0.85, actual: 0.8 },
+            { quarter: t('q3'), expected: 0.9, actual: 0.95 },
+            { quarter: t('q4'), expected: 0.95, actual: 1.1 }
+          ].map((item, idx) => (
+            <div key={idx} className="flex flex-col items-center space-y-2 z-10 w-8">
+              <div className="flex space-x-1 rtl:space-x-reverse items-end h-20">
+                <div 
+                  className="w-2 bg-gray-600 rounded-t-sm" 
+                  style={{ height: `${item.expected * 50}%` }} 
+                />
+                <div 
+                  className={`w-2 rounded-t-sm ${item.actual >= item.expected ? 'bg-emerald-400' : 'bg-red-400'}`} 
+                  style={{ height: `${item.actual * 50}%` }} 
+                />
+              </div>
+              <span className="text-[10px] text-gray-400 font-bold">{item.quarter}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

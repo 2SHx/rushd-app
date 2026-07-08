@@ -259,6 +259,16 @@
     "marketSummary": "ملخص السوق",
     "topGainers": "الأكثر ارتفاعاً",
     "selectStockPrompt": "اختر شركة لبدء التحليل والتداول",
-    "tradeSuccessDesc": "تم تنفيذ صفقة ال{action} لسهم {symbol} بنجاح. الرصيد المتبقي في جرتك: {balance} ر.س."
+    "tradeSuccessDesc": "تم تنفيذ صفقة ال{action} لسهم {symbol} بنجاح. الرصيد المتبقي في جرتك: {balance} ر.س.",
+    "analystRatings": "تقييم المحللين",
+    "buyRating": "شراء",
+    "holdRating": "احتفاظ",
+    "sellRating": "بيع",
+    "earningsSummary": "الأرباح",
+    "expectedVsActual": "العائد الفعلي مقابل المتوقع (EPS)",
+    "q1": "الربع 1",
+    "q2": "الربع 2",
+    "q3": "الربع 3",
+    "q4": "الربع 4"
   }
 }

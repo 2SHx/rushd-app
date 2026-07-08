@@ -259,6 +259,38 @@ export default function CommitteeClient({ locale }: { locale: string }) {
         )}
       </div>
 
+      {/* Simulation Loading State */}
+      {passLoading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="glass-panel p-10 bg-black/40 border border-white/5 rounded-3xl flex flex-col items-center justify-center space-y-8"
+        >
+          <div className="w-12 h-12 border-4 border-neonBlue border-t-transparent rounded-full animate-spin" />
+          <p className="text-neonBlue font-mono font-bold animate-pulse text-sm">
+            INITIALIZING AI AGENT WORKFLOW...
+          </p>
+          
+          <div className="flex flex-col items-center space-y-2 opacity-70">
+            <div className="px-4 py-2 bg-white/10 rounded-lg text-[10px] font-mono border border-white/20 animate-pulse">DATA_INGESTION</div>
+            <div className="w-0.5 h-6 bg-white/20" />
+            <div className="flex space-x-2 rtl:space-x-reverse">
+              <div className="px-4 py-2 bg-blue-500/10 text-blue-400 rounded-lg text-[10px] font-mono border border-blue-500/20">TECHNICAL_AGENT</div>
+              <div className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-mono border border-emerald-500/20">FUNDAMENTAL_AGENT</div>
+              <div className="px-4 py-2 bg-purple-500/10 text-purple-400 rounded-lg text-[10px] font-mono border border-purple-500/20">NEWS_AGENT</div>
+            </div>
+            <div className="flex justify-center gap-20 w-full">
+              <div className="w-0.5 h-6 bg-white/20"></div>
+              <div className="w-0.5 h-6 bg-white/20"></div>
+              <div className="w-0.5 h-6 bg-white/20"></div>
+            </div>
+            <div className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-lg text-[10px] font-mono border border-amber-500/20">SHARIA_FILTER</div>
+            <div className="w-0.5 h-6 bg-white/20" />
+            <div className="px-4 py-2 bg-neonBlue/10 text-neonBlue rounded-lg text-[10px] font-mono border border-neonBlue/20 font-bold shadow-[0_0_15px_rgba(0,240,255,0.3)]">PORTFOLIO_MANAGER</div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Committee pass results */}
       <AnimatePresence>
         {passData && (

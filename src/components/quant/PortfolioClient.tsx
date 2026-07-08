@@ -103,6 +103,20 @@ export default function PortfolioClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
+  
+  const filteredSnapshots = snapshots.filter(s => {
+    if (timeframe === 'ALL' || snapshots.length === 0) return true;
+    const lastDate = new Date(snapshots[snapshots.length - 1].asOf).getTime();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    let days = 30;
+    if (timeframe === '1M') days = 30;
+    if (timeframe === '3M') days = 90;
+    if (timeframe === '1Y') days = 365;
+    const cutoff = lastDate - days * msPerDay;
+    return new Date(s.asOf).getTime() >= cutoff;
+  });
+
   // Formatter helpers
   const fmtMoney = (val: number) => {
     return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
@@ -139,10 +153,10 @@ export default function PortfolioClient({
 
   // Pure SVG scaling chart logic
   function renderSvgChart() {
-    if (snapshots.length < 2) {
+    if (filteredSnapshots.length < 2) {
       return (
         <div className="flex items-center justify-center h-64 text-gray-500">
-          Not enough historical snapshots to render performance curve. Run a rebalance to start.
+          Not enough historical snapshots to render performance curve for this timeframe.
         </div>
       );
     }
@@ -152,17 +166,17 @@ export default function PortfolioClient({
     const padding = 45;
 
     // Find min and max values across all series for relative scaling
-    const vals = snapshots.flatMap(s => [s.nav, s.spy, s.spus]);
+    const vals = filteredSnapshots.flatMap(s => [s.nav, s.spy, s.spus]);
     const minVal = Math.min(...vals) * 0.98;
     const maxVal = Math.max(...vals) * 1.02;
     const valRange = maxVal - minVal || 1;
 
-    const times = snapshots.map(s => new Date(s.asOf).getTime());
+    const times = filteredSnapshots.map(s => new Date(s.asOf).getTime());
     const minTime = Math.min(...times);
     const maxTime = Math.max(...times);
     const timeRange = maxTime - minTime || 1;
 
-    const points = snapshots.map(s => {
+    const points = filteredSnapshots.map(s => {
       const x = padding + ((new Date(s.asOf).getTime() - minTime) / timeRange) * (w - 2 * padding);
       return {
         x,
@@ -181,6 +195,13 @@ export default function PortfolioClient({
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full text-gray-400">
+        <defs>
+          <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
         <line x1={padding} y1={padding} x2={w - padding} y2={padding} stroke="rgba(255,255,255,0.05)" />
         <line x1={padding} y1={h / 2} x2={w - padding} y2={h / 2} stroke="rgba(255,255,255,0.05)" />
         <line x1={padding} y1={h - padding} x2={w - padding} y2={h - padding} stroke="rgba(255,255,255,0.1)" />
@@ -204,6 +225,10 @@ export default function PortfolioClient({
         <path d={createPath(p => p.spusY)} fill="none" stroke="#3B82F6" strokeWidth="2" strokeDasharray="2 2" />
 
         {/* Strategy NAV path (highlighted/glowing) */}
+        <path 
+          d={`${createPath(p => p.navY)} L ${points[points.length-1].x} ${h-padding} L ${points[0].x} ${h-padding} Z`} 
+          fill="url(#navGradient)" 
+        />
         <path d={createPath(p => p.navY)} fill="none" stroke="#10B981" strokeWidth="3" />
         
         {/* Axis Labels */}
@@ -348,6 +373,19 @@ export default function PortfolioClient({
               <TrendingUp className="w-5 h-5 text-emerald-400" />
               <span>{t('historicalPerformanceTitle')}</span>
             </h2>
+            <div className="flex space-x-1 rtl:space-x-reverse bg-black/40 p-1 rounded-xl">
+              {['1M', '3M', '1Y', 'ALL'].map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf as any)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                    timeframe === tf ? 'bg-emerald-500 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="h-72 w-full">
             {renderSvgChart()}
@@ -450,7 +488,17 @@ export default function PortfolioClient({
                   <td className="py-3.5 px-2 text-end font-mono">{fmtMoney(pos.costBasis)}</td>
                   <td className="py-3.5 px-2 text-end font-mono text-cyan-400">{fmtMoney(pos.price)}</td>
                   <td className="py-3.5 px-2 text-end font-mono text-emerald-400">{fmtMoney(pos.value)}</td>
-                  <td className="py-3.5 px-2 text-end font-mono font-semibold">{fmtPercent(pos.weight)}</td>
+                  <td className="py-3.5 px-2 text-end">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden hidden sm:block">
+                        <div 
+                          className="h-full bg-emerald-400 rounded-full" 
+                          style={{ width: `${pos.weight * 100}%` }}
+                        />
+                      </div>
+                      <span className="font-mono font-semibold">{fmtPercent(pos.weight)}</span>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {positions.length === 0 && (
