@@ -247,7 +247,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
           <div>
             <h2 className="text-base font-extrabold text-foreground flex items-center gap-2">
               <Zap className="w-4 h-4 text-emerald-400" />
-              {isAr ? 'شاشة أسهم رشد (ياهو فاينانشال)' : 'Rushd Ticker Screener (Yahoo Finance)'}
+              {isAr ? 'شاشة أسهم رشد' : 'Rushd Ticker Screener'}
             </h2>
             <p className="text-xs text-foreground/50 mt-0.5">
               {isAr ? 'شاشة فرز فورية تدعم جميع القطاعات والفلترة المتقدمة' : 'Real-time screener supporting all sectors and core filters'}
@@ -387,21 +387,6 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         ) : (
           /* ── Heatmap View (Sector Grouped accurate mapping) ── */
           <div className="space-y-6">
-            {/* Color Legend scale */}
-            <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground/50 border-b border-white/5 pb-4">
-              <span>{isAr ? 'خسارة شديدة' : 'Down'}</span>
-              <div className="flex gap-1">
-                <span className="w-8 h-4 bg-[#b91c1c] rounded-md text-center text-white pt-0.5">{"<=-3%"}</span>
-                <span className="w-8 h-4 bg-[#ef4444] rounded-md text-center text-white pt-0.5">-2%</span>
-                <span className="w-8 h-4 bg-[#fca5a5]/70 rounded-md text-center text-red-950 pt-0.5">-1%</span>
-                <span className="w-8 h-4 bg-[#374151] rounded-md text-center text-gray-300 pt-0.5">0%</span>
-                <span className="w-8 h-4 bg-[#6ee7b7]/70 rounded-md text-center text-emerald-950 pt-0.5">+1%</span>
-                <span className="w-8 h-4 bg-[#10b981] rounded-md text-center text-white pt-0.5">+2%</span>
-                <span className="w-8 h-4 bg-[#047857] rounded-md text-center text-white pt-0.5">{">=+3%"}</span>
-              </div>
-              <span>{isAr ? 'ربح شديد' : 'Up'}</span>
-            </div>
-
             {/* Treemap Sector Layout Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {sectors.map((sec) => {
