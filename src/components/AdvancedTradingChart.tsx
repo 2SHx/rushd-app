@@ -32,10 +32,6 @@ export default function AdvancedTradingChart({ data }: { data: Candle[] }) {
       const isDark = document.documentElement.classList.contains('dark');
       const palette = isDark ? CHART_PALETTE.dark : CHART_PALETTE.light;
 
-      const handleResize = () => {
-        chartRef.current?.applyOptions({ width: chartContainerRef.current?.clientWidth });
-      };
-
       const chart = createChart(chartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
@@ -45,7 +41,7 @@ export default function AdvancedTradingChart({ data }: { data: Candle[] }) {
           vertLines: { color: palette.grid },
           horzLines: { color: palette.grid },
         },
-        width: chartContainerRef.current.clientWidth,
+        width: chartContainerRef.current.clientWidth || 300,
         height: 400,
         timeScale: {
           timeVisible: true,
@@ -64,10 +60,16 @@ export default function AdvancedTradingChart({ data }: { data: Candle[] }) {
 
       candlestickSeries.setData(data as any);
 
-      window.addEventListener('resize', handleResize);
+      const resizeObserver = new ResizeObserver((entries) => {
+        if (entries[0] && chartRef.current) {
+          const { width } = entries[0].contentRect;
+          chartRef.current.applyOptions({ width });
+        }
+      });
+      resizeObserver.observe(chartContainerRef.current);
 
       return () => {
-        window.removeEventListener('resize', handleResize);
+        resizeObserver.disconnect();
         chart.remove();
       };
     }
