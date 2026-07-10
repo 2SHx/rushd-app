@@ -2,6 +2,20 @@
 
 The 9 agent definitions in `.claude/agents/*.md` are the canonical layer (plain system prompts + tool lists). Three independent routes run them on **any** model. Pick per agent, per task, or per budget — the definitions never change.
 
+## Current executable profile (Codex app)
+
+This machine currently has the Codex runner available; the Gemini and Claude CLIs are optional and are not assumed. `scripts/models.map.json` therefore defaults to models the Codex app can actually launch:
+
+| Work | Model | Effort | Why |
+|---|---|---:|---|
+| Codebase scouting | `gpt-5.6-luna` | low | Fast, cheap, read-only context gathering |
+| Bounded tests / mechanical work | `gpt-5.6-terra` | medium | Good implementation quality without frontier cost |
+| Frontend systems, backend, data | `gpt-5.6-sol` | high | Long-horizon implementation and integration |
+| Quant strategy / money-critical logic | `gpt-5.6-sol` | xhigh | Highest reasoning only where errors are expensive |
+| Architecture, QA, security | `gpt-5.5` | xhigh | Fresh model family and fresh context for independent review |
+
+Use `DISPATCH_EFFORT=low|medium|high|xhigh` for a one-off override. Fable remains the preferred optional planning/review override once the Claude CLI is installed; Gemini remains an optional low-cost scout/i18n override once its CLI is installed. Never route to an unavailable binary and silently assume the review ran.
+
 ## Route 1 — Swap models INSIDE Claude Code (gateway) · zero workflow change
 
 Claude Code speaks the Anthropic API to whatever `ANTHROPIC_BASE_URL` points at. Run a [LiteLLM](https://docs.litellm.ai) gateway that maps the tier names our agents already use (`haiku`/`sonnet`/`opus`) to ANY provider — Gemini, GPT, Qwen, DeepSeek, or local Ollama:

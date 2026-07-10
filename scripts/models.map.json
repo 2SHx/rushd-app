@@ -1,20 +1,22 @@
 {
-  "_edit_me": "Per-agent routing: set runner + model for each agent. Env DISPATCH_RUNNER / DISPATCH_MODEL override everything for one run. Suggested models per runner are in docs/MODELS.md.",
+  "_edit_me": "Executable default routing for this machine: cheap scouting→gpt-5.6-luna/low; bounded implementation and tests→gpt-5.6-terra/medium; high-risk UI, backend, data and quant work→gpt-5.6-sol/high or xhigh; independent architecture/QA/security review→gpt-5.5/xhigh. Fable or Gemini remain available as one-off DISPATCH_RUNNER / DISPATCH_MODEL overrides after their CLIs are installed. Each route has a low-cost Codex fallback. DISPATCH_NO_FALLBACK=1 disables fallback.",
   "runners": {
     "claude":   { "cmd": ["claude", "--model", "{model}", "--permission-mode", "acceptEdits", "-p", "{prompt}"] },
     "gemini":   { "cmd": ["gemini", "-m", "{model}", "--yolo", "-p", "{prompt}"] },
     "opencode": { "cmd": ["opencode", "run", "-m", "{model}", "{prompt}"] },
-    "codex":    { "cmd": ["codex", "exec", "--full-auto", "-m", "{model}", "{prompt}"] }
+    "codex":    { "cmd": ["codex", "exec", "--full-auto", "--ephemeral", "-m", "{model}", "-c", "model_reasoning_effort=\"{effort}\"", "{prompt}"] }
   },
   "agents": {
-    "explorer":           { "runner": "claude", "model": "haiku"  },
-    "frontend-expert":    { "runner": "claude", "model": "sonnet" },
-    "backend-expert":     { "runner": "claude", "model": "sonnet" },
-    "ai-features-expert": { "runner": "claude", "model": "sonnet" },
-    "i18n-fintech-expert":{ "runner": "claude", "model": "sonnet" },
-    "test-engineer":      { "runner": "claude", "model": "sonnet" },
-    "security-auditor":   { "runner": "claude", "model": "opus"   },
-    "qa-reviewer":        { "runner": "claude", "model": "opus"   },
-    "architect":          { "runner": "claude", "model": "opus"   }
+    "explorer":           { "runner": "codex", "model": "gpt-5.6-luna",  "effort": "low",    "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "frontend-expert":    { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "backend-expert":     { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "ai-features-expert": { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "test-engineer":      { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium", "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "data-engineer":      { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "quant-strategist":   { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
+    "i18n-fintech-expert":{ "runner": "codex", "model": "gpt-5.6-terra", "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "qa-reviewer":        { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
+    "security-auditor":   { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
+    "architect":          { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } }
   }
 }

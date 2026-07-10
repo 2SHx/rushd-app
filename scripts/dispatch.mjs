@@ -18,9 +18,9 @@ const map = JSON.parse(readFileSync(join(root, 'scripts/models.map.json'), 'utf8
 const args = process.argv.slice(2);
 
 if (args[0] === '--list' || args.length === 0) {
-  console.log('agent'.padEnd(22) + 'runner'.padEnd(10) + 'model');
+  console.log('agent'.padEnd(22) + 'runner'.padEnd(10) + 'model'.padEnd(20) + 'effort');
   for (const [name, r] of Object.entries(map.agents))
-    console.log(name.padEnd(22) + r.runner.padEnd(10) + r.model);
+    console.log(name.padEnd(22) + r.runner.padEnd(10) + r.model.padEnd(20) + (r.effort || 'medium'));
   console.log('\nUsage: node scripts/dispatch.mjs <agent> "<task>" [--dry-run]');
   process.exit(0);
 }
@@ -36,6 +36,7 @@ if (!task) { console.error('Missing task. Usage: dispatch.mjs <agent> "<task>"')
 
 const runnerName = process.env.DISPATCH_RUNNER || route.runner;
 const model = process.env.DISPATCH_MODEL || route.model;
+const effort = process.env.DISPATCH_EFFORT || route.effort || 'medium';
 const runner = map.runners[runnerName];
 if (!runner) {
   console.error(`Unknown runner "${runnerName}". Known: ${Object.keys(map.runners).join(', ')}`);
@@ -50,16 +51,33 @@ const houseRules = runnerName === 'claude' ? ''
   : '\n\nHOUSE RULES: you are a guest agent in this repo — read ./AGENTS.md and obey it; never touch prisma/migrations/** or .env*; verify with `npm run lint && npx tsc --noEmit` before reporting.';
 const prompt = `${body}${houseRules}\n\n=== DISPATCH ===\n${task}`;
 
-const cmd = runner.cmd.map(p => p.replace('{model}', model).replace('{prompt}', prompt));
-console.error(`[dispatch] agent=${agent} runner=${runnerName} model=${model} prompt=${prompt.length} chars`);
-if (dryRun) {
-  console.log(cmd.map(c => (c.length > 120 ? c.slice(0, 120) + `…(+${c.length - 120} chars)` : c))
-    .map(c => (/\s/.test(c) ? JSON.stringify(c) : c)).join(' '));
-  process.exit(0);
+// A run attempt on one runner/model. Returns the spawn result (or {missing:true} if the binary isn't on PATH).
+function runOn(rName, m, e, label) {
+  const r = map.runners[rName];
+  if (!r) { console.error(`Unknown runner "${rName}". Known: ${Object.keys(map.runners).join(', ')}`); return { missing: true }; }
+  const cmd = r.cmd.map(p => p.replace('{model}', m).replace('{effort}', e).replace('{prompt}', prompt));
+  console.error(`[dispatch]${label} agent=${agent} runner=${rName} model=${m} effort=${e} prompt=${prompt.length} chars`);
+  if (dryRun) {
+    console.log(cmd.map(c => (c.length > 120 ? c.slice(0, 120) + `…(+${c.length - 120} chars)` : c))
+      .map(c => (/\s/.test(c) ? JSON.stringify(c) : c)).join(' '));
+    return { status: 0 };
+  }
+  const res = spawnSync(cmd[0], cmd.slice(1), { cwd: root, stdio: 'inherit' });
+  if (res.error?.code === 'ENOENT') { console.error(`Runner binary "${cmd[0]}" not found on PATH.`); return { missing: true }; }
+  return res;
 }
-const res = spawnSync(cmd[0], cmd.slice(1), { cwd: root, stdio: 'inherit' });
-if (res.error?.code === 'ENOENT') {
-  console.error(`Runner binary "${cmd[0]}" not found on PATH. Install it or pick another runner (docs/MODELS.md).`);
+
+// Primary → lower-cost fallback (unless an env override or DISPATCH_NO_FALLBACK is set).
+const overridden = process.env.DISPATCH_RUNNER || process.env.DISPATCH_MODEL || process.env.DISPATCH_EFFORT;
+let res = runOn(runnerName, model, effort, '');
+const primaryFailed = res.missing || (res.status ?? 1) !== 0;
+if (primaryFailed && !dryRun && !overridden && route.fallback && process.env.DISPATCH_NO_FALLBACK !== '1') {
+  const fb = route.fallback;
+  console.error(`[dispatch] primary failed (${res.missing ? 'binary missing' : 'exit ' + res.status}) — falling back to ${fb.runner}/${fb.model}`);
+  res = runOn(fb.runner, fb.model, fb.effort || 'low', ' [fallback]');
+}
+if (res.missing) {
+  console.error(`No usable runner (primary + fallback binaries absent). Install one or pick another runner (docs/MODELS.md).`);
   process.exit(127);
 }
 process.exit(res.status ?? 1);

@@ -32,6 +32,9 @@ yarn-error.log*
 # claude code local settings
 .claude/settings.local.json
 
+# local agent indexes
+/.codegraph/
+
 # vercel
 .vercel
 

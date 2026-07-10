@@ -1,0 +1,13 @@
+[mcp_servers.postgres]
+command = "sh"
+args = [
+    "-c",
+    'set -a; . ./.env 2>/dev/null; set +a; exec npx -y @modelcontextprotocol/server-postgres "$DATABASE_URL"',
+]
+
+[mcp_servers.rushd-market]
+command = "npx"
+args = [
+    "tsx",
+    "mcp/rushd-market/index.ts",
+]
