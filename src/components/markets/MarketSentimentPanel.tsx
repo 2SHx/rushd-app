@@ -60,28 +60,62 @@ interface Props {
   fg: FearGreed | null;
   sectors: SectorGroup[];
   isAr: boolean;
+  onSelectSector?: (sector: SectorGroup) => void;
 }
 
-export default function MarketSentimentPanel({ fg, sectors, isAr }: Props) {
+export default function MarketSentimentPanel({ fg, sectors, isAr, onSelectSector }: Props) {
   return (
-    <div className="space-y-4">
-      <div className="glass-panel rounded-3xl p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60 mb-4">
-          {isAr ? 'مؤشر الخوف والجشع' : 'Sentiment Gauge'}
+    <div className="glass-panel rounded-3xl p-5 space-y-4 text-start">
+      <div>
+        <h3 className="font-bold text-xs uppercase tracking-wider text-foreground/50">
+          {isAr ? 'نبض السوق وأداء القطاعات' : 'Market Pulse & Sectors'}
+        </h3>
+        <p className="text-[10px] text-foreground/40 mt-0.5">
+          {isAr ? 'مؤشر الخوف والجشع ونظرة عامة على القطاعات النشطة' : 'Fear & Greed sentiment and active sector overview'}
         </p>
-        {fg ? (
-          <FearGreedGauge fg={fg} isAr={isAr} />
-        ) : (
-          <div className="h-40 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-6 h-6 border-2 border-foreground/10 border-t-accent rounded-full animate-spin" />
-              <span className="text-[10px] text-foreground/40 uppercase tracking-wide">{isAr ? 'جارٍ المزامنة' : 'Syncing'}</span>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Daily Sector Strength removed in favor of Screener Heatmap */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        {/* Left: Fear & Greed Dial */}
+        <div className="flex flex-col items-center">
+          {fg ? (
+            <FearGreedGauge fg={fg} isAr={isAr} />
+          ) : (
+            <div className="h-36 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-5 h-5 border-2 border-foreground/10 border-t-accent rounded-full animate-spin" />
+                <span className="text-[10px] text-foreground/40 uppercase tracking-wide">
+                  {isAr ? 'المرشد يتأمل...' : 'Loading...'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Top Performing Sectors list (Interactive) */}
+        <div className="space-y-3 border-t md:border-t-0 md:border-s border-[var(--border-color)] pt-4 md:pt-0 md:ps-6">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 block">
+            {isAr ? 'أداء القطاعات (انقر للتفاصيل)' : 'Sector Performance (Click to zoom)'}
+          </span>
+          <div className="space-y-1.5 max-h-[140px] overflow-y-auto no-scrollbar">
+            {sectors.slice(0, 4).map((sec) => (
+              <button
+                key={sec.name}
+                type="button"
+                onClick={() => onSelectSector?.(sec)}
+                className="flex items-center justify-between w-full p-2 rounded-xl hover:bg-foreground/[0.03] active:bg-foreground/[0.05] transition-colors text-start group"
+              >
+                <span className="text-xs font-bold text-foreground group-hover:text-accent transition-colors truncate max-w-[130px]">
+                  {isAr ? sec.nameAr : sec.name}
+                </span>
+                <span className={`text-xs font-mono font-bold tabular-nums ${sec.avgPct >= 0 ? 'text-up' : 'text-down'}`}>
+                  {sec.avgPct >= 0 ? '+' : ''}{sec.avgPct.toFixed(2)}%
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

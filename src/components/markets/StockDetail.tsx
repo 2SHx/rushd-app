@@ -13,6 +13,7 @@ import PriceChartPanel from './PriceChartPanel';
 import RScorePanel from './RScorePanel';
 import FundamentalsPanel from './FundamentalsPanel';
 import AssistantPanel from './AssistantPanel';
+import TradeAction from './TradeAction';
 
 interface StockDetailProps {
   data: any;
@@ -29,6 +30,10 @@ type Tab = 'overview' | 'assistant' | 'fundamentals' | 'sharia';
 export default function StockDetail({
   data,
   locale,
+  jarBalance,
+  sharesOwned,
+  isParent,
+  onTradeExecuted,
   onBack
 }: StockDetailProps) {
   const t = useTranslations('Markets');
@@ -66,130 +71,212 @@ export default function StockDetail({
         <span className="text-foreground/50 text-xs truncate">• {displayName}</span>
       </div>
 
-      {/* ── Hero Quote Header — the price is the hero; no ambient glow (ui-craft §0) ── */}
-      <div className="relative overflow-hidden rounded-3xl glass-panel p-6">
-        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          {/* Left: Name + Price */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black font-mono tracking-widest text-foreground/50 bg-foreground/5 px-2.5 py-1 rounded-full border border-[var(--border-color)] uppercase">
-                {data.market}
-              </span>
-              <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
-                {cleanSymbol}
-              </span>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mt-4">
+        {/* Left Column (8 cols): Stock Details, Chart, Tabs */}
+        <div className="lg:col-span-8 space-y-4">
+          
+          {/* ── Hero Quote Header ── */}
+          <div className="relative overflow-hidden rounded-3xl glass-panel p-6">
+            <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              {/* Left: Name + Price */}
+              <div className="space-y-2 text-start">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black font-mono tracking-widest text-foreground/50 bg-foreground/5 px-2.5 py-1 rounded-full border border-[var(--border-color)] uppercase">
+                    {data.market}
+                  </span>
+                  <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                    {cleanSymbol}
+                  </span>
+                </div>
 
-            <h1 className="text-lg font-extrabold text-foreground leading-tight">{displayName}</h1>
+                <h1 className="text-lg font-extrabold text-foreground leading-tight">{displayName}</h1>
 
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-4xl font-black font-mono tabular-nums text-foreground leading-none tracking-tight">
-                {data.market === 'TASI'
-                  ? t('formatTasi', { amount: data.price.toFixed(2) })
-                  : t('formatNasdaq', { amount: data.price.toFixed(2) })}
-              </span>
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-4xl font-black font-mono tabular-nums text-foreground leading-none tracking-tight">
+                    {data.market === 'TASI'
+                      ? t('formatTasi', { amount: data.price.toFixed(2) })
+                      : t('formatNasdaq', { amount: data.price.toFixed(2) })}
+                  </span>
 
-              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono tabular-nums ${
-                isUp
-                  ? 'bg-up/10 text-up border border-up/20'
-                  : isDown
-                  ? 'bg-down/10 text-down border border-down/20'
-                  : 'bg-foreground/5 text-foreground/50 border border-[var(--border-color)]'
-              }`}>
-                {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                <span>{isUp ? '+' : ''}{change.toFixed(2)}</span>
-                <span className="text-[10px] opacity-70">({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
-              </div>
-            </div>
-
-            {/* Live badge */}
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-up animate-pulse" />
-              <span className="text-[10px] text-foreground/50 font-mono font-bold uppercase tracking-wider">Live Market Data</span>
-            </div>
-          </div>
-
-          {/* Right: Sharia Shield */}
-          <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold ${
-            data.isShariaCompliant
-              ? 'bg-up/10 border-up/20 text-up'
-              : 'bg-noncompliant/10 border-noncompliant/20 text-noncompliant'
-          }`}>
-            {data.isShariaCompliant
-              ? <ShieldCheck className="w-5 h-5" />
-              : <ShieldAlert className="w-5 h-5" />}
-            <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Tab Navigation ── */}
-      <div className="flex gap-1 bg-foreground/[0.02] border border-[var(--border-color)] p-1 rounded-2xl mt-4">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-colors duration-200 ${
-              activeTab === tab.id
-                ? 'bg-accent text-white'
-                : 'text-foreground/50 hover:text-foreground hover:bg-foreground/5'
-            }`}
-          >
-            {isAr ? tab.labelAr : tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab Content ── */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.18 }}
-          className="mt-4 space-y-4"
-        >
-          {activeTab === 'overview' && (
-            <>
-              <PriceChartPanel history={history} />
-              <RScorePanel symbol={data.symbol} locale={locale} />
-              {/* AI Committee CTA */}
-              <Link
-                href={`/${locale}/quant`}
-                className="flex items-center justify-between p-4 rounded-2xl border border-accent/15 bg-accent/[0.03] hover:bg-accent/[0.06] transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-accent" />
-                  </div>
-                  <div className="text-start">
-                    <p className="text-sm font-bold text-foreground">
-                      {isAr ? 'قرار لجنة الذكاء الاصطناعي' : 'View AI Committee Decision'}
-                    </p>
-                    <p className="text-[11px] text-foreground/50 mt-0.5">
-                      {isAr ? 'شاهد كيف تقيّم اللجنة هذا السهم الآن' : 'See how the 8-agent committee rates this stock live'}
-                    </p>
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono tabular-nums ${
+                    isUp
+                      ? 'bg-up/10 text-up border border-up/20'
+                      : isDown
+                      ? 'bg-down/10 text-down border border-down/20'
+                      : 'bg-foreground/5 text-foreground/50 border border-[var(--border-color)]'
+                  }`}>
+                    {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                    <span>{isUp ? '+' : ''}{change.toFixed(2)}</span>
+                    <span className="text-[10px] opacity-70">({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-accent group-hover:translate-x-1 transition-transform rtl:rotate-180" />
-              </Link>
-            </>
-          )}
 
-          {activeTab === 'assistant' && (
-            <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
-          )}
+                {/* Live badge */}
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-up animate-pulse" />
+                  <span className="text-[10px] text-foreground/50 font-mono font-bold uppercase tracking-wider">Live Market Data</span>
+                </div>
+              </div>
 
-          {activeTab === 'fundamentals' && (
-            <FundamentalsPanel data={data} locale={locale} />
-          )}
+              {/* Right: Sharia Shield */}
+              <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold ${
+                data.isShariaCompliant
+                  ? 'bg-up/10 border-up/20 text-up'
+                  : 'bg-noncompliant/10 border-noncompliant/20 text-noncompliant'
+              }`}>
+                {data.isShariaCompliant
+                  ? <ShieldCheck className="w-5 h-5" />
+                  : <ShieldAlert className="w-5 h-5" />}
+                <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
+              </div>
+            </div>
+          </div>
 
-          {activeTab === 'sharia' && (
-            <ShariaTab data={data} locale={locale} t={t} isAr={isAr} />
+          {/* TradeAction - MOBILE/TABLET ONLY (hidden on lg+) */}
+          <div className="block lg:hidden">
+            <TradeAction
+              symbol={data.symbol}
+              market={data.market}
+              currentPrice={data.price}
+              locale={locale}
+              jarBalance={jarBalance}
+              sharesOwned={sharesOwned}
+              isParent={isParent}
+              onTradeExecuted={onTradeExecuted}
+            />
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex gap-1 bg-foreground/[0.02] border border-[var(--border-color)] p-1 rounded-2xl">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-colors duration-200 ${
+                  activeTab === tab.id
+                    ? 'bg-accent text-white'
+                    : 'text-foreground/50 hover:text-foreground hover:bg-foreground/5'
+                }`}
+              >
+                {isAr ? tab.labelAr : tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-4"
+            >
+              {activeTab === 'overview' && (
+                <>
+                  <PriceChartPanel history={history} />
+                  <RScorePanel symbol={data.symbol} locale={locale} />
+                  {/* AI Committee CTA */}
+                  <Link
+                    href={`/${locale}/quant`}
+                    className="flex items-center justify-between p-4 rounded-2xl border border-accent/15 bg-accent/[0.03] hover:bg-accent/[0.06] transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+                        <Bot className="w-5 h-5 text-accent" />
+                      </div>
+                      <div className="text-start">
+                        <p className="text-sm font-bold text-foreground">
+                          {isAr ? 'قرار لجنة الذكاء الاصطناعي' : 'View AI Committee Decision'}
+                        </p>
+                        <p className="text-[11px] text-foreground/50 mt-0.5">
+                          {isAr ? 'شاهد كيف تقيّم اللجنة هذا السهم الآن' : 'See how the 8-agent committee rates this stock live'}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-accent group-hover:translate-x-1 transition-transform rtl:rotate-180" />
+                  </Link>
+                </>
+              )}
+
+              {activeTab === 'assistant' && (
+                <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
+              )}
+
+              {activeTab === 'fundamentals' && (
+                <FundamentalsPanel data={data} locale={locale} />
+              )}
+
+              {activeTab === 'sharia' && (
+                <ShariaTab data={data} locale={locale} t={t} isAr={isAr} />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Right Column (4 cols): Sticky TradeAction + Holdings (lg+ only) */}
+        <div className="hidden lg:block lg:col-span-4 lg:sticky lg:top-6 space-y-4">
+          <TradeAction
+            symbol={data.symbol}
+            market={data.market}
+            currentPrice={data.price}
+            locale={locale}
+            jarBalance={jarBalance}
+            sharesOwned={sharesOwned}
+            isParent={isParent}
+            onTradeExecuted={onTradeExecuted}
+          />
+
+          {/* User portfolio holding context card */}
+          {sharesOwned > 0 && (
+            <div className="glass-panel p-5 rounded-3xl space-y-3 text-start">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/50">
+                {isAr ? 'تفاصيل محفظتك' : 'Your Position'}
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] text-foreground/50 block">{isAr ? 'الأسهم المملوكة' : 'Shares Owned'}</span>
+                  <span className="text-sm font-bold font-mono tabular-nums">{sharesOwned.toFixed(4)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-foreground/50 block">{isAr ? 'القيمة الحالية' : 'Current Value'}</span>
+                  <span className="text-sm font-bold font-mono tabular-nums text-up">
+                    {data.market === 'TASI'
+                      ? t('formatTasi', { amount: (sharesOwned * data.price).toFixed(2) })
+                      : t('formatNasdaq', { amount: (sharesOwned * data.price).toFixed(2) })}
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
-        </motion.div>
-      </AnimatePresence>
+        </div>
+
+        {/* Mobile Holdings Info card below everything else */}
+        {sharesOwned > 0 && (
+          <div className="block lg:hidden w-full pt-4">
+            <div className="glass-panel p-5 rounded-3xl space-y-3 text-start">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground/50">
+                {isAr ? 'تفاصيل محفظتك' : 'Your Position'}
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] text-foreground/50 block">{isAr ? 'الأسهم المملوكة' : 'Shares Owned'}</span>
+                  <span className="text-sm font-bold font-mono tabular-nums">{sharesOwned.toFixed(4)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-foreground/50 block">{isAr ? 'القيمة الحالية' : 'Current Value'}</span>
+                  <span className="text-sm font-bold font-mono tabular-nums text-up">
+                    {data.market === 'TASI'
+                      ? t('formatTasi', { amount: (sharesOwned * data.price).toFixed(2) })
+                      : t('formatNasdaq', { amount: (sharesOwned * data.price).toFixed(2) })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
