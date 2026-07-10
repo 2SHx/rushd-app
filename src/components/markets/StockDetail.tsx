@@ -2,13 +2,17 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { BookOpen, Trophy, ShieldCheck, ShieldAlert, ArrowLeft, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
-import QuizModal from '../QuizModal';
+import { 
+  ShieldCheck, ShieldAlert, ArrowLeft, ArrowUpRight, ArrowDownRight, 
+  Minus, Sparkles, ChevronRight, Building2, User, Users, MapPin, 
+  BarChart3, TrendingUp, Activity, Bot
+} from 'lucide-react';
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import PriceChartPanel from './PriceChartPanel';
 import RScorePanel from './RScorePanel';
 import FundamentalsPanel from './FundamentalsPanel';
 import AssistantPanel from './AssistantPanel';
-import TradeAction from './TradeAction';
 
 interface StockDetailProps {
   data: any;
@@ -17,243 +21,280 @@ interface StockDetailProps {
   sharesOwned: number;
   isParent: boolean;
   onTradeExecuted: (newBalance: number, newShares: number) => void;
-  onBack: () => void; // for mobile back button
+  onBack: () => void;
 }
 
-function getRecommendedQuiz(symbol: string) {
-  switch (symbol.replace('.SR', '')) {
-    case 'NVDA':
-      return { 
-        topic: 'NASDAQ Markets', 
-        descEnglish: 'Learn how NASDAQ technology markets work, trade times, and pricing in USD.',
-        descArabic: 'تعرّف على كيفية عمل أسواق ناسداك التقنية ومواعيد التداول والتسعير بالدولار الأمريكي.'
-      };
-    case '2222':
-      return { 
-        topic: 'TASI Markets', 
-        descEnglish: 'Master Saudi Tadawul specific calendars, TASI indices, and SAR trading.',
-        descArabic: 'تعلم أساسيات مؤشر تاسي وتداول الأسهم بالريال السعودي وجداول عمل السوق المالية السعودية.'
-      };
-    case 'TSLA':
-      return { 
-        topic: 'Sharia Compliance', 
-        descEnglish: 'Learn why some companies fail Sharia financial ratios or business screening.',
-        descArabic: 'اكتشف معايير أيقوفي (AAOIFI) ولماذا لا تتوافق بعض الشركات مع ضوابط الاستثمار الإسلامي.'
-      };
-    case '1120':
-      return { 
-        topic: 'Savings & Jars', 
-        descEnglish: 'Understand Mudarabah savings split models and sharia compliant yields.',
-        descArabic: 'افهم عقود المضاربة الشرعية وكيفية توزيع الأرباح بين المودعين والمنصة لتنمية مدخراتك.'
-      };
-    default:
-      return { 
-        topic: 'Stock Market Basics', 
-        descEnglish: 'Learn the fundamentals of stocks, shares, buy/sell spreads, and order books.',
-        descArabic: 'تعلم المبادئ الأساسية للأسهم، وكيفية بيع وشراء حصص الشركات وتوزيع الأرباح الافتراضية.'
-      };
-  }
-}
+type Tab = 'overview' | 'assistant' | 'fundamentals' | 'sharia';
 
 export default function StockDetail({
   data,
   locale,
-  jarBalance,
-  sharesOwned,
-  isParent,
-  onTradeExecuted,
   onBack
 }: StockDetailProps) {
   const t = useTranslations('Markets');
   const isAr = locale === 'ar';
-  
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [quizResult, setQuizResult] = useState<{ passed: boolean; xp: number; level: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   if (!data) return null;
 
   const cleanSymbol = data.symbol.replace('.SR', '');
   const displayName = isAr && data.arName ? data.arName : data.name || data.symbol;
-  
-  // Calculate daily price change details
+
   const history = data.history || [];
   const prevClose = history.length > 1 ? history[history.length - 2]?.close : (history[0]?.close ?? data.price);
   const change = data.price - prevClose;
   const pct = prevClose > 0 ? (change / prevClose) * 100 : 0;
-  
+
   const isUp = change > 0;
   const isDown = change < 0;
-  
-  const currency = data.market === 'TASI' ? t('currencyTasi') : t('currencyNasdaq');
-  const recommendedQuiz = getRecommendedQuiz(data.symbol);
 
-  const handleQuizComplete = async (passed: boolean) => {
-    try {
-      const res = await fetch('/api/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: recommendedQuiz.topic,
-          score: passed ? 100 : 0,
-          passed
-        })
-      });
-
-      if (res.ok) {
-        const resData = await res.json();
-        setQuizResult({ passed, xp: resData.xp, level: resData.level });
-      } else {
-        setQuizResult({ passed, xp: 0, level: 0 });
-      }
-    } catch (err) {
-      console.error('Failed to submit quiz complete status:', err);
-      setQuizResult({ passed, xp: 0, level: 0 });
-    }
-  };
+  const tabs: { id: Tab; label: string; labelAr: string }[] = [
+    { id: 'overview', label: 'Chart', labelAr: 'الرسم البياني' },
+    { id: 'assistant', label: 'AI Analysis', labelAr: 'تحليل الذكاء الاصطناعي' },
+    { id: 'fundamentals', label: 'Fundamentals', labelAr: 'البيانات المالية' },
+    { id: 'sharia', label: 'Sharia', labelAr: 'التوافق الشرعي' },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Mobile Back Button & Header */}
-      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-[#080B11]/80 backdrop-blur-md sticky top-0 z-40 rounded-b-2xl shadow-sm">
-        <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full text-emerald-400">
+    <div className="space-y-0">
+      {/* Mobile Back Button */}
+      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-white/5 bg-[#080B11]/90 backdrop-blur-md sticky top-0 z-40">
+        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full text-emerald-400 transition-colors">
           <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
         </button>
-        <span className="font-bold text-slate-800 dark:text-white text-sm">{displayName} ({cleanSymbol})</span>
+        <span className="font-bold text-white text-sm">{cleanSymbol}</span>
+        <span className="text-gray-400 text-xs truncate">• {displayName}</span>
       </div>
 
-      {/* Desktop Workstation Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-start">
-        {/* Left Column (8/12 width): Core Market Data, Charts, and Analytics */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* Stock Quote Header Panel */}
-          <div className="glass-panel rounded-3xl p-6 space-y-4 text-start relative overflow-hidden shadow-xl">
-            {/* Glowing backdrop circle */}
-            <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-emerald-500/10 blur-xl pointer-events-none" />
+      {/* ── Hero Quote Header ── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0a0f1e] via-[#0d1520] to-[#070c18] border border-white/[0.06] p-6 shadow-xl">
+        {/* Ambient glow based on compliance */}
+        <div className={`absolute -right-12 -top-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none ${
+          data.isShariaCompliant ? 'bg-emerald-400' : 'bg-amber-400'
+        }`} />
+        <div className="absolute -left-8 -bottom-8 w-32 h-32 rounded-full blur-3xl opacity-10 bg-indigo-500 pointer-events-none" />
 
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                  <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">{cleanSymbol}</h1>
-                  <span className="text-[10px] text-gray-500 font-bold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-full uppercase">
-                    {data.market}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 leading-normal">{displayName}</p>
-              </div>
-
-              {/* Sharia Shield Badge */}
-              <div className={`flex items-center space-x-1.5 rtl:space-x-reverse px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all duration-300 ${
-                data.isShariaCompliant 
-                  ? 'bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-500/25 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.12)]' 
-                  : 'bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/25 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
-              }`}>
-                {data.isShariaCompliant ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-amber-400" />}
-                <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
-              </div>
+        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          {/* Left: Name + Price */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black font-mono tracking-widest text-gray-500 bg-white/5 px-2.5 py-1 rounded-full border border-white/10 uppercase">
+                {data.market}
+              </span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                {cleanSymbol}
+              </span>
             </div>
 
-            {/* Live quote values */}
-            <div className="flex items-baseline space-x-3 rtl:space-x-reverse">
-              <span className="text-3xl font-extrabold font-mono text-slate-900 dark:text-white leading-none">
+            <h1 className="text-lg font-extrabold text-white leading-tight">{displayName}</h1>
+
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="text-4xl font-black font-mono text-white leading-none tracking-tight">
                 {data.market === 'TASI'
                   ? t('formatTasi', { amount: data.price.toFixed(2) })
-                  : t('formatNasdaq', { amount: data.price.toFixed(2) })
-                }
+                  : t('formatNasdaq', { amount: data.price.toFixed(2) })}
               </span>
-              <div className={`flex items-center space-x-1 rtl:space-x-reverse text-sm font-semibold font-mono ${
-                isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'
+
+              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono ${
+                isUp
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                  : isDown
+                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                  : 'bg-white/5 text-gray-400 border border-white/10'
               }`}>
-                {isUp ? (
-                  <ArrowUpRight className="w-4 h-4" />
-                ) : isDown ? (
-                  <ArrowDownRight className="w-4 h-4" />
-                ) : (
-                  <Minus className="w-4 h-4" />
-                )}
-                <span>{isUp ? '+' : ''}{change.toFixed(2)} ({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
+                {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                <span>{isUp ? '+' : ''}{change.toFixed(2)}</span>
+                <span className="text-[10px] opacity-70">({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
               </div>
+            </div>
+
+            {/* Live badge */}
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-wider">Live Market Data</span>
             </div>
           </div>
 
-          {/* 2. Price Chart */}
-          <PriceChartPanel history={history} />
-
-          {/* 5. Sage AI Advisor */}
-          <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
-
-          {/* 6. Company Biography & Financials */}
-          <FundamentalsPanel data={data} locale={locale} />
-        </div>
-
-        {/* Right Column (4/12 width): Action Panel, Sharia Gauges, and Educational quest */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* 7. Virtual Trade Portal */}
-          <TradeAction
-            symbol={data.symbol}
-            market={data.market}
-            currentPrice={data.price}
-            locale={locale}
-            jarBalance={jarBalance}
-            sharesOwned={sharesOwned}
-            isParent={isParent}
-            onTradeExecuted={onTradeExecuted}
-          />
-
-          {/* 3. AI R-Score Gauge */}
-          <RScorePanel symbol={data.symbol} locale={locale} />
-
-          {/* 4. Recommended Quiz Quest */}
-          <div className="glass-panel rounded-3xl p-5 space-y-4 text-start shadow-md">
-            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-2">
-              <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
-                <BookOpen className="w-4 h-4" />
-                <h3 className="font-bold text-sm text-slate-800 dark:text-gray-200">{t('recommendedQuiz')}</h3>
-              </div>
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                {recommendedQuiz.topic}
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-              {isAr ? recommendedQuiz.descArabic : recommendedQuiz.descEnglish}
-            </p>
-
-            {quizResult && (
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
-                quizResult.passed 
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold' 
-                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400 font-semibold'
-              }`}>
-                <span>
-                  {quizResult.passed 
-                    ? t('quizSuccess')
-                    : t('quizFail')}
-                </span>
-                <button onClick={() => setQuizResult(null)} className="underline hover:no-underline font-bold">
-                  {t('dismiss')}
-                </button>
-              </div>
-            )}
-
-            <button
-              onClick={() => { setIsQuizOpen(true); setQuizResult(null); }}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-black rounded-2xl font-bold text-xs transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center space-x-2 rtl:space-x-reverse active:scale-95 neon-glow-btn"
-            >
-              <Trophy className="w-4 h-4 text-black" />
-              <span>{t('runQuiz')}</span>
-            </button>
+          {/* Right: Sharia Shield */}
+          <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold transition-all ${
+            data.isShariaCompliant
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.15)]'
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.15)]'
+          }`}>
+            {data.isShariaCompliant
+              ? <ShieldCheck className="w-5 h-5" />
+              : <ShieldAlert className="w-5 h-5" />}
+            <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
           </div>
         </div>
       </div>
 
-      {/* Quiz Modal */}
-      <QuizModal 
-        isOpen={isQuizOpen} 
-        onClose={() => setIsQuizOpen(false)} 
-        topic={recommendedQuiz.topic} 
-        onComplete={handleQuizComplete} 
-        locale={locale}
-      />
+      {/* ── Tab Navigation ── */}
+      <div className="flex gap-1 bg-white/[0.02] border border-white/[0.05] p-1 rounded-2xl mt-4">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-all duration-200 ${
+              activeTab === tab.id
+                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            {isAr ? tab.labelAr : tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab Content ── */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18 }}
+          className="mt-4 space-y-4"
+        >
+          {activeTab === 'overview' && (
+            <>
+              <PriceChartPanel history={history} />
+              <RScorePanel symbol={data.symbol} locale={locale} />
+              {/* AI Committee CTA */}
+              <Link
+                href={`/${locale}/quant`}
+                className="flex items-center justify-between p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/5 to-indigo-500/5 hover:from-emerald-500/10 hover:to-indigo-500/10 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="text-start">
+                    <p className="text-sm font-bold text-white">
+                      {isAr ? 'قرار لجنة الذكاء الاصطناعي' : 'View AI Committee Decision'}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {isAr ? 'شاهد كيف تقيّم اللجنة هذا السهم الآن' : 'See how the 8-agent committee rates this stock live'}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform rtl:rotate-180" />
+              </Link>
+            </>
+          )}
+
+          {activeTab === 'assistant' && (
+            <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
+          )}
+
+          {activeTab === 'fundamentals' && (
+            <FundamentalsPanel data={data} locale={locale} />
+          )}
+
+          {activeTab === 'sharia' && (
+            <ShariaTab data={data} locale={locale} t={t} isAr={isAr} />
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Sharia Tab (inline) ──────────────────────────────────────────
+function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: any; isAr: boolean }) {
+  const compliance = data.financials?.complianceRatios;
+
+  const criteria = [
+    {
+      label: isAr ? 'نشاط تجاري حلال' : 'Halal Business Activity',
+      description: isAr ? 'لا يشمل الكحول أو التبغ أو الأسلحة أو الترفيه المحظور' : 'No alcohol, tobacco, weapons, or prohibited entertainment',
+      pass: data.isShariaCompliant,
+    },
+    {
+      label: isAr ? 'نسبة الدين (<33%)' : 'Debt Ratio (<33%)',
+      description: isAr ? 'الديون الكلية مقسومة على متوسط القيمة السوقية' : 'Total debt divided by trailing 36-month average market cap',
+      pass: compliance ? compliance.debtToMcap < 33 : data.isShariaCompliant,
+      value: compliance ? `${Number(compliance.debtToMcap).toFixed(1)}%` : null,
+    },
+    {
+      label: isAr ? 'دخل الفوائد (<5%)' : 'Interest Income (<5%)',
+      description: isAr ? 'دخل الفوائد مقسوم على إجمالي الإيرادات' : 'Interest income as a percentage of total revenue',
+      pass: compliance ? compliance.interestIncomeToRevenue < 5 : data.isShariaCompliant,
+      value: compliance ? `${Number(compliance.interestIncomeToRevenue).toFixed(1)}%` : null,
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Verdict Banner */}
+      <div className={`p-5 rounded-2xl border flex items-center gap-4 ${
+        data.isShariaCompliant
+          ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_40px_rgba(16,185,129,0.08)]'
+          : 'bg-amber-500/5 border-amber-500/20 shadow-[0_0_40px_rgba(245,158,11,0.08)]'
+      }`}>
+        {data.isShariaCompliant
+          ? <ShieldCheck className="w-8 h-8 text-emerald-400 shrink-0" />
+          : <ShieldAlert className="w-8 h-8 text-amber-400 shrink-0" />}
+        <div>
+          <p className={`font-extrabold text-sm ${data.isShariaCompliant ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {data.isShariaCompliant
+              ? (isAr ? 'متوافق مع الشريعة الإسلامية' : 'Sharia Compliant — Halal to Invest')
+              : (isAr ? 'غير متوافق مع الشريعة الإسلامية' : 'Non-Compliant — Caution Advised')}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {isAr ? 'وفقاً لمعايير هيئة المحاسبة والمراجعة للمؤسسات المالية الإسلامية (AAOIFI)' : 'Screened per AAOIFI financial ratio standards'}
+          </p>
+        </div>
+      </div>
+
+      {/* Criteria Cards */}
+      <div className="space-y-3">
+        {criteria.map((c, i) => (
+          <div key={i} className="flex items-start gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+            <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-xs font-black mt-0.5 ${
+              c.pass ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+            }`}>
+              {c.pass ? '✓' : '✗'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-bold text-white">{c.label}</p>
+                {c.value && (
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                    c.pass ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                  }`}>{c.value}</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{c.description}</p>
+
+              {/* Progress bar for ratio criteria */}
+              {c.value && compliance && (
+                <div className="mt-2 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${c.pass ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                    style={{
+                      width: `${Math.min(
+                        i === 1 ? (compliance.debtToMcap / 33) * 100 : (compliance.interestIncomeToRevenue / 5) * 100,
+                        100
+                      )}%`
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Purification Note */}
+      <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-xs text-amber-400/80 leading-relaxed">
+        <span className="font-bold text-amber-400">
+          {isAr ? 'ملاحظة التطهير: ' : 'Purification Note: '}
+        </span>
+        {isAr
+          ? 'إذا كانت الشركة تحقق دخلاً من فوائد بنسبة أقل من الحد المسموح، يجب تبرع جزء من الأرباح للجهات الخيرية.'
+          : 'If a compliant company earns minor interest income below the threshold, a proportionate amount of dividends must be donated to charity.'}
+      </div>
     </div>
   );
 }

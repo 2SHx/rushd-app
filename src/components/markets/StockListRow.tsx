@@ -55,50 +55,64 @@ export default function StockListRow({
     return () => { active = false; };
   }, [symbol, market]);
 
-  const currency = market === 'TASI' ? (isAr ? 'ر.س' : 'SAR') : 'USD';
   const isUp = priceData && priceData.change > 0;
   const isDown = priceData && priceData.change < 0;
 
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-start flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 ${
-        isSelected 
-          ? 'bg-emerald-500/10 border-emerald-500/20 text-white' 
-          : 'bg-[#0f1420]/30 border-white/[0.03] hover:bg-white/[0.04] text-gray-300'
+      className={`w-full text-start flex items-center justify-between px-4 py-3.5 rounded-2xl border transition-all duration-200 group relative overflow-hidden ${
+        isSelected
+          ? 'bg-emerald-500/8 border-emerald-500/25 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.15)]'
+          : 'bg-transparent border-white/[0.04] hover:bg-white/[0.03] hover:border-white/[0.08]'
       }`}
     >
-      <div className="flex flex-col space-y-1">
-        <span className="text-sm font-bold tracking-wide font-mono text-white">{cleanSymbol}</span>
-        <span className="text-xs text-gray-400 truncate max-w-[200px]">{displayName}</span>
+      {/* Selected accent bar */}
+      {isSelected && (
+        <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-emerald-400 rounded-r-full" />
+      )}
+
+      {/* Left: Symbol avatar + name */}
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black font-mono shrink-0 transition-colors ${
+          isSelected
+            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+            : 'bg-white/[0.04] text-gray-400 border border-white/[0.06] group-hover:text-white'
+        }`}>
+          {cleanSymbol.slice(0, 4)}
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className={`text-sm font-bold tracking-wide truncate transition-colors ${
+            isSelected ? 'text-white' : 'text-gray-200'
+          }`}>{cleanSymbol}</span>
+          <span className="text-[11px] text-gray-500 truncate max-w-[140px] leading-tight">{displayName}</span>
+        </div>
       </div>
 
-      <div className="flex flex-col items-end space-y-1 font-mono">
+      {/* Right: Price + change */}
+      <div className="flex flex-col items-end gap-0.5 font-mono shrink-0">
         {loading && !priceData ? (
-          <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+          <Loader2 className="w-4 h-4 text-emerald-400/50 animate-spin" />
         ) : priceData ? (
           <>
-            <span className="text-sm font-bold">
+            <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-200'}`}>
               {market === 'TASI'
                 ? t('formatTasi', { amount: priceData.price.toFixed(2) })
-                : t('formatNasdaq', { amount: priceData.price.toFixed(2) })
-              }
+                : t('formatNasdaq', { amount: priceData.price.toFixed(2) })}
             </span>
-            <div className={`flex items-center space-x-1 rtl:space-x-reverse text-xs font-semibold ${
-              isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'
+            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+              isUp
+                ? 'bg-emerald-500/10 text-emerald-400'
+                : isDown
+                ? 'bg-rose-500/10 text-rose-400'
+                : 'bg-white/5 text-gray-500'
             }`}>
-              {isUp ? (
-                <TrendingUp className="w-3.5 h-3.5" />
-              ) : isDown ? (
-                <TrendingDown className="w-3.5 h-3.5" />
-              ) : (
-                <Minus className="w-3.5 h-3.5" />
-              )}
+              {isUp ? <TrendingUp className="w-3 h-3" /> : isDown ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
               <span>{isUp ? '+' : ''}{priceData.pct.toFixed(2)}%</span>
             </div>
           </>
         ) : (
-          <span className="text-xs text-gray-500">-</span>
+          <span className="text-xs text-gray-600">—</span>
         )}
       </div>
     </button>

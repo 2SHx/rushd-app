@@ -1,115 +1,177 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import AdvancedTradingChart from './AdvancedTradingChart';
-import QuizModal from './QuizModal';
-import { TICKERS } from '@/lib/tickers';
 import { 
-  Bot, Trophy, ArrowUpRight, ArrowDownRight, Activity, Wallet, 
-  Briefcase, History, TrendingUp, Layers, CheckCircle2, AlertTriangle, Coins
+  Wallet, Briefcase, History, TrendingUp, CheckCircle2, Coins,
+  BarChart2, Target, Activity, ArrowUpRight, ArrowDownRight, Clock
 } from 'lucide-react';
 
+export interface Position {
+  symbol: string;
+  name: string;
+  shares: number;
+  costBasis: number;
+  price: number;
+  value: number;
+  weight: number;
+}
+
+export interface Snapshot {
+  asOf: string;
+  nav: number;
+  cashVirtual: number;
+  spy: number;
+  spus: number;
+}
+
+interface DashboardClientProps {
+  locale: string;
+  initialNAV: number;
+  initialCash: number;
+  initialPositions: Position[];
+  initialSnapshots: Snapshot[];
+  initialMetrics: any;
+  initialTransactions: any[];
+}
+
 export default function DashboardClient({ 
-  tasiData, 
-  nasdaqData, 
-  initialXp, 
-  initialLevel, 
   locale,
-  initialJarBalance,
-  initialPortfolio,
+  initialNAV,
+  initialCash,
+  initialPositions,
+  initialSnapshots,
+  initialMetrics,
   initialTransactions
-}: any) {
-  const t = useTranslations('Dashboard');
-  const [market, setMarket] = useState<'TASI' | 'NASDAQ'>('TASI');
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [xp, setXp] = useState<number>(initialXp ?? 0);
-  const [level, setLevel] = useState<number>(initialLevel ?? 1);
-  
-  const [jarBal, setJarBal] = useState(initialJarBalance ?? 100000.0);
-  const [portfolio, setPortfolio] = useState<any[]>(initialPortfolio ?? []);
+}: DashboardClientProps) {
+  const t = useTranslations('dashboard');
+  const isAr = locale === 'ar';
+
+  const [jarBal, setJarBal] = useState(initialCash);
   const [txs, setTxs] = useState<any[]>(initialTransactions ?? []);
   
   const [zakatPaidSuccess, setZakatPaidSuccess] = useState(false);
   const [zakatPaidAmount, setZakatPaidAmount] = useState('0.00');
   const [isZakatSubmitting, setIsZakatSubmitting] = useState(false);
 
-  const currentData = market === 'TASI' ? tasiData : nasdaqData;
-  const isAr = locale === 'ar';
-  
-  const listTickers = [...TICKERS.TASI, ...TICKERS.NASDAQ];
-  const activeTicker = listTickers.find(ticker => ticker.symbol === currentData.symbol);
-  const displayName = activeTicker ? (isAr ? activeTicker.arName : activeTicker.name) : currentData.symbol;
+  // P&L timeframe selector
+  const [plTimeframe, setPlTimeframe] = useState<'24H'|'7D'|'30D'|'90D'>('24H');
 
-  // AI Signal State on Dashboard
-  const [aiSignal, setAiSignal] = useState<any>(null);
-  const [loadingSignal, setLoadingSignal] = useState(false);
-  const [tradeExecutionError, setTradeExecutionError] = useState<string | null>(null);
-  const [tradeExecutionSuccess, setTradeExecutionSuccess] = useState(false);
-  const [isExecutingTrade, setIsExecutingTrade] = useState(false);
+  // Derived metrics
+  const lastSnap = useMemo(
+    () => initialSnapshots && initialSnapshots.length > 0
+      ? initialSnapshots[initialSnapshots.length - 1]
+      : { nav: initialNAV, cashVirtual: initialCash, asOf: '', spy: 100, spus: 100 },
+    [initialSnapshots, initialNAV, initialCash]
+  );
+  const prevSnap = initialSnapshots && initialSnapshots.length > 1 ? initialSnapshots[initialSnapshots.length - 2] : lastSnap;
+  const dailyReturn = lastSnap.nav - prevSnap.nav;
+  const dailyReturnPct = prevSnap.nav > 0 ? (dailyReturn / prevSnap.nav) * 100 : 0;
 
-  useEffect(() => {
-    if (currentData) {
-      setLoadingSignal(true);
-      setTradeExecutionError(null);
-      fetch('/api/signals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: currentData.symbol,
-          market: currentData.market,
-          currentPrice: currentData.price
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        setAiSignal(data);
-        setLoadingSignal(false);
-      })
-      .catch(err => {
-        console.error('Failed to load AI signal:', err);
-        setLoadingSignal(false);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentData?.symbol, currentData?.market, currentData?.price]);
+  // P&L for selected timeframe (computed from snapshots)
+  const plData = useMemo(() => {
+    if (!initialSnapshots || initialSnapshots.length < 2) return { value: dailyReturn, pct: dailyReturnPct };
+    const daysMap: Record<string, number> = { '24H': 1, '7D': 7, '30D': 30, '90D': 90 };
+    const days = daysMap[plTimeframe];
+    const cutoff = new Date(Date.now() - days * 86400000);
+    const baseSnap = [...initialSnapshots].reverse().find(s => new Date(s.asOf) <= cutoff) ?? initialSnapshots[0];
+    const pl = lastSnap.nav - baseSnap.nav;
+    const plPct = baseSnap.nav > 0 ? (pl / baseSnap.nav) * 100 : 0;
+    return { value: pl, pct: plPct };
+  }, [plTimeframe, initialSnapshots, lastSnap, dailyReturn, dailyReturnPct]);
 
-  // Calculations
-  const cashVal = jarBal;
-  const stocksVal = portfolio.reduce((acc, item) => acc + (item.shares * item.price), 0);
-  const nav = cashVal + stocksVal;
-  
-  const dailyReturn = portfolio.reduce((acc, item) => acc + (item.shares * item.price * (item.pct / 100)), 0);
-  const dailyReturnPct = nav > 0 ? (dailyReturn / nav) * 100 : 0;
+  // Win rate: profitable positions / total positions
+  const winRate = useMemo(() => {
+    if (!initialPositions || initialPositions.length === 0) return 0;
+    const winners = initialPositions.filter(p => p.price > p.costBasis).length;
+    return (winners / initialPositions.length) * 100;
+  }, [initialPositions]);
 
-  // Zakat: 2.5% of Cash + Sharia-compliant Stock value
-  const compliantStocksVal = portfolio.reduce((acc, item) => {
-    return item.isCompliant ? acc + (item.shares * item.price) : acc;
-  }, 0);
-  const zakatableWealth = cashVal + compliantStocksVal;
+  const activeTrades = initialPositions.length;
+
+  const compliantStocksVal = initialPositions.reduce((acc, item) => acc + item.value, 0);
+  const zakatableWealth = jarBal + compliantStocksVal;
   const zakatDue = zakatableWealth * 0.025;
 
-  const handleQuizComplete = async (passed: boolean, topic: string) => {
-    try {
-      const res = await fetch('/api/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: topic || 'Stock Market Basics',
-          score: passed ? 100 : 0,
-          passed
-        })
-      });
+  const renderSvgChart = () => {
+    if (!initialSnapshots || initialSnapshots.length === 0) return null;
+    
+    const maxNav = Math.max(...initialSnapshots.map(s => s.nav));
+    const minNav = Math.min(...initialSnapshots.map(s => s.nav));
+    const maxSpy = Math.max(...initialSnapshots.map(s => s.spy));
+    const minSpy = Math.min(...initialSnapshots.map(s => s.spy));
+    const maxSpus = Math.max(...initialSnapshots.map(s => s.spus));
+    const minSpus = Math.min(...initialSnapshots.map(s => s.spus));
 
-      if (res.ok) {
-        const data = await res.json();
-        setXp(data.xp);
-        setLevel(data.level);
-      }
-    } catch (err) {
-      console.error('Error submitting quiz results:', err);
-    }
+    const overallMax = Math.max(maxNav, maxSpy, maxSpus);
+    const overallMin = Math.min(minNav, minSpy, minSpus);
+    
+    const range = overallMax - overallMin || 1;
+    const height = 240;
+    const width = 800;
+
+    const mapPoint = (val: number, i: number, length: number) => {
+      const x = (i / (length - 1)) * width;
+      const y = height - ((val - overallMin) / range) * height;
+      return `${x},${y}`;
+    };
+
+    const navPoints = initialSnapshots.map((s, i) => mapPoint(s.nav, i, initialSnapshots.length)).join(' ');
+    const spyPoints = initialSnapshots.map((s, i) => mapPoint(s.spy, i, initialSnapshots.length)).join(' ');
+    const spusPoints = initialSnapshots.map((s, i) => mapPoint(s.spus, i, initialSnapshots.length)).join(' ');
+
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+        <polyline points={spyPoints} fill="none" stroke="#4B5563" strokeWidth="2" strokeDasharray="4 4" opacity="0.4" />
+        <polyline points={spusPoints} fill="none" stroke="#6366F1" strokeWidth="2" strokeDasharray="4 4" opacity="0.6" />
+        <polyline points={navPoints} fill="none" stroke="#34D399" strokeWidth="3" className="drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+      </svg>
+    );
   };
+
+  const renderAllocationDonut = () => {
+    if (initialPositions.length === 0) return null;
+    let currentAngle = 0;
+    const size = 200;
+    const center = size / 2;
+    const radius = 80;
+
+    return (
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[200px] mx-auto overflow-visible">
+        {initialPositions.map((pos, i) => {
+          const angle = pos.weight * 360;
+          if (angle === 0) return null;
+          const largeArcFlag = angle > 180 ? 1 : 0;
+          const startX = center + radius * Math.cos((currentAngle - 90) * Math.PI / 180);
+          const startY = center + radius * Math.sin((currentAngle - 90) * Math.PI / 180);
+          const endX = center + radius * Math.cos((currentAngle + angle - 90) * Math.PI / 180);
+          const endY = center + radius * Math.sin((currentAngle + angle - 90) * Math.PI / 180);
+          
+          const pathData = [
+            `M ${center} ${center}`,
+            `L ${startX} ${startY}`,
+            `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+            'Z'
+          ].join(' ');
+
+          currentAngle += angle;
+          return (
+            <path 
+              key={pos.symbol} 
+              d={pathData} 
+              fill={`hsl(150, 80%, ${30 + (i * 15)}%)`} 
+              className="stroke-black stroke-2 hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <title>{pos.symbol}: {(pos.weight * 100).toFixed(1)}%</title>
+            </path>
+          );
+        })}
+        <circle cx={center} cy={center} r={radius * 0.6} fill="#000" className="opacity-90" />
+      </svg>
+    );
+  };
+
+
 
   const handlePayZakat = async () => {
     setIsZakatSubmitting(true);
@@ -121,19 +183,15 @@ export default function DashboardClient({
         setZakatPaidAmount(data.amountPaid);
         setZakatPaidSuccess(true);
         
-        // Refresh local transaction list
-        const refreshedTxs = await fetch(`/api/me`).then(() => {
-          // Add temporary transaction locally to avoid delay
-          const newTx = {
-            id: Math.random().toString(),
-            amount: -parseFloat(data.amountPaid),
-            currency: 'SAR',
-            type: 'WITHDRAWAL',
-            description: `Zakat Purification / دفع الزكاة (2.5% of ${zakatableWealth.toFixed(2)} SAR)`,
-            createdAt: new Date().toISOString()
-          };
-          setTxs(prev => [newTx, ...prev]);
-        });
+        const newTx = {
+          id: Math.random().toString(),
+          amount: -parseFloat(data.amountPaid),
+          currency: 'SAR',
+          type: 'WITHDRAWAL',
+          description: `Zakat Purification / دفع الزكاة (2.5% of ${zakatableWealth.toFixed(2)} SAR)`,
+          createdAt: new Date().toISOString()
+        };
+        setTxs(prev => [newTx, ...prev]);
       } else {
         alert(data.message || 'Zakat payment failed.');
       }
@@ -144,253 +202,204 @@ export default function DashboardClient({
     }
   };
 
-  const handleExecuteMockTrade = async () => {
-    if (!aiSignal || !currentData) return;
-    setIsExecutingTrade(true);
-    setTradeExecutionError(null);
-    try {
-      const res = await fetch('/api/trade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: currentData.symbol,
-          market: currentData.market,
-          action: aiSignal.action === 'BUY' ? 'BUY' : 'SELL',
-          shares: 10 // execute 10 shares trade based on signal
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setTradeExecutionError(data.message || data.error || 'Execution failed');
-      } else {
-        setJarBal(parseFloat(data.balance));
-        setTradeExecutionSuccess(true);
-        
-        // Update local holdings representation or force reload dashboard
-        window.location.reload();
-      }
-    } catch (err) {
-      setTradeExecutionError('Connection error during trade execution.');
-    } finally {
-      setIsExecutingTrade(false);
-    }
-  };
+  const plUp = plData.value >= 0;
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto p-4 md:p-6">
-      {/* Header & Gamification Banner */}
+    <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24">
+      {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
-            {isAr ? 'محطة التداول المتقدمة' : 'Advanced Trading Workstation'}
+          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+            {isAr ? 'مركز المحفظة بالذكاء الاصطناعي' : 'AI Portfolio Hub'}
           </h1>
-          <p className="text-gray-400 mt-1">
-            {isAr ? `المستثمر المحترف • مستوى ${level}` : `Professional Trader • Level ${level}`}
+          <p className="text-gray-500 mt-1 text-sm">
+            {isAr ? 'إدارة الثروات المؤتمتة والتدقيق الشرعي' : 'Automated wealth management & Sharia-compliant auditing'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          {isAr ? 'الذكاء الاصطناعي يعمل 24/7' : 'AI AUTOPILOT ACTIVE'}
+        </div>
+      </div>
+
+      {/* ── Premium KPI Strip (inspired by pro trading dashboard) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Portfolio Value */}
+        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-cyan-500/8 blur-2xl pointer-events-none" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'قيمة المحفظة' : 'Portfolio Value'}</p>
+          <p className="text-2xl font-black font-mono text-white">
+            {initialNAV.toLocaleString('en-US', { maximumFractionDigits: 0 })} <span className="text-xs text-gray-500">SAR</span>
+          </p>
+          <p className="text-[11px] text-gray-500">{isAr ? 'سيولة:' : 'Cash:'} <span className="text-gray-300 font-mono">{jarBal.toFixed(0)} SAR</span></p>
+        </div>
+
+        {/* P&L with Timeframe Selector */}
+        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1.5 relative overflow-hidden">
+          <div className={`absolute -right-4 -top-4 w-20 h-20 rounded-full blur-2xl pointer-events-none ${plUp ? 'bg-emerald-500/8' : 'bg-rose-500/8'}`} />
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">P&L</p>
+            <div className="flex gap-0.5">
+              {(['24H','7D','30D','90D'] as const).map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setPlTimeframe(tf)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                    plTimeframe === tf ? 'bg-emerald-500/20 text-emerald-400' : 'text-gray-600 hover:text-gray-400'
+                  }`}
+                >{tf}</button>
+              ))}
+            </div>
+          </div>
+          <p className={`text-2xl font-black font-mono flex items-center gap-1 ${plUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+            {plUp ? '+' : ''}{plData.value.toFixed(0)}
+          </p>
+          <p className={`text-[11px] font-bold font-mono ${plUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+            {plUp ? '+' : ''}{plData.pct.toFixed(2)}% {isAr ? 'خلال' : 'over'} {plTimeframe}
           </p>
         </div>
 
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setIsQuizOpen(true)}
-          className="flex items-center space-x-2 rtl:space-x-reverse bg-gradient-to-r from-emerald-500/20 to-neonBlue/20 border border-emerald-500/40 px-6 py-3 rounded-2xl text-emerald-400 hover:from-emerald-500/35 hover:to-neonBlue/35 transition-all shadow-lg"
-        >
-          <Trophy className="w-5 h-5 text-yellow-400" />
-          <span className="font-bold text-xs uppercase tracking-wider">{isAr ? 'بدء اختبار المعرفة (+50 XP)' : 'Take Knowledge Quiz (+50 XP)'}</span>
-        </motion.button>
-      </div>
-
-      {/* XP Level Bar */}
-      <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-black/40">
-        <div className="flex justify-between text-xs mb-2">
-          <span className="text-gray-400 font-bold">
-            {isAr ? `مؤشر الخبرة والتقدم` : `Experience Level Progress`}
-          </span>
-          <span className="font-bold text-emerald-400">{xp} / {Math.pow(level, 2) * 100} XP</span>
+        {/* Win Rate */}
+        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-indigo-500/8 blur-2xl pointer-events-none" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'نسبة الربح' : 'Win Rate'}</p>
+          <p className="text-2xl font-black font-mono text-indigo-300">{winRate.toFixed(1)}%</p>
+          <div className="flex items-center gap-1.5">
+            <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${winRate}%` }} />
+            </div>
+            <span className="text-[10px] text-gray-500">{isAr ? 'آخر 90 صفقة' : 'Last 90 trades'}</span>
+          </div>
         </div>
-        <div className="h-2 bg-black/50 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: `${(xp / (Math.pow(level, 2) * 100)) * 100}%` }}
-            className="h-full bg-gradient-to-r from-emerald-400 to-neonBlue rounded-full"
-          />
+
+        {/* Active Trades */}
+        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-amber-500/8 blur-2xl pointer-events-none" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'الصفقات النشطة' : 'Active Trades'}</p>
+          <p className="text-2xl font-black font-mono text-amber-300">{activeTrades}</p>
+          <p className="text-[11px] text-gray-500">
+            {isAr ? 'أصل مُدار بالذكاء الاصطناعي' : `${activeTrades} AI-managed position${activeTrades !== 1 ? 's' : ''}`}
+          </p>
         </div>
       </div>
 
-      {/* Portfolio Performance Grid & Zakat Tool */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* NAV Widget */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-gradient-to-b from-[#121824] to-black/40 space-y-2 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-neonBlue/5 blur-3xl rounded-full" />
+      {/* ── Secondary KPI Row: Zakat + NAV details ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* NAV card */}
+        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 blur-3xl rounded-full" />
           <div className="flex items-center justify-between">
             <span className="text-gray-400 text-xs font-bold">{isAr ? 'صافي قيمة الأصول (NAV)' : 'Net Asset Value (NAV)'}</span>
-            <Wallet className="w-5 h-5 text-neonBlue" />
+            <Wallet className="w-4 h-4 text-cyan-400" />
           </div>
-          <h2 className="text-3xl font-mono font-bold text-white">{nav.toFixed(2)} <span className="text-xs text-gray-400">SAR</span></h2>
-          
+          <h2 className="text-2xl font-mono font-bold text-white">{initialNAV.toFixed(2)} <span className="text-xs text-gray-400">SAR</span></h2>
           <div className="pt-2 flex justify-between items-center text-xs border-t border-white/5">
-            <span className="text-gray-500">{isAr ? 'السيولة في المحفظة' : 'Simulated Cash'}</span>
-            <span className="font-mono text-gray-300 font-bold">{cashVal.toFixed(2)} SAR</span>
+            <span className="text-gray-500">{isAr ? 'السيولة' : 'Cash'}</span>
+            <span className="font-mono text-gray-300 font-bold">{jarBal.toFixed(2)} SAR</span>
           </div>
         </div>
 
-        {/* Daily P&L Return */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-gradient-to-b from-[#121824] to-black/40 space-y-2 relative overflow-hidden">
+        {/* Daily Return */}
+        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs font-bold">{isAr ? 'العائد اليومي المقدر' : 'Estimated Daily Return'}</span>
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            <span className="text-gray-400 text-xs font-bold">{isAr ? 'العائد اليومي' : 'Daily Return'}</span>
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
-          <h2 className={`text-3xl font-mono font-bold flex items-center ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {dailyReturn >= 0 ? '+' : ''}{dailyReturn.toFixed(2)} <span className="text-xs text-gray-400 ml-1">SAR</span>
+          <h2 className={`text-2xl font-mono font-bold ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {dailyReturn >= 0 ? '+' : ''}{dailyReturn.toFixed(2)} <span className="text-xs text-gray-400">SAR</span>
           </h2>
-          
           <div className="pt-2 flex justify-between items-center text-xs border-t border-white/5">
-            <span className="text-gray-500">{isAr ? 'النسبة المئوية لليوم' : 'Daily Profit %'}</span>
-            <span className={`font-bold ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <span className="text-gray-500">{isAr ? 'يومي' : 'Daily %'}</span>
+            <span className={`font-bold ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {dailyReturn >= 0 ? '+' : ''}{dailyReturnPct.toFixed(2)}%
             </span>
           </div>
         </div>
 
-        {/* Zakat purification Widget */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-gradient-to-b from-[#121824] to-black/40 space-y-2 relative overflow-hidden">
+        {/* Zakat */}
+        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 blur-3xl rounded-full" />
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs font-bold">{isAr ? 'مستحقات الزكاة الشرعية (2.5%)' : 'Estimated Due Zakat (2.5%)'}</span>
-            <Coins className="w-5 h-5 text-yellow-400" />
+            <span className="text-gray-400 text-xs font-bold">{isAr ? 'الزكاة المستحقة (2.5%)' : 'Due Zakat (2.5%)'}</span>
+            <Coins className="w-4 h-4 text-yellow-400" />
           </div>
-          <h2 className="text-3xl font-mono font-bold text-white">
+          <h2 className="text-2xl font-mono font-bold text-white">
             {zakatDue.toFixed(2)} <span className="text-xs text-gray-400">SAR</span>
           </h2>
-
           <div className="pt-1 flex items-center justify-between gap-2">
             <span className="text-[10px] text-gray-500 leading-tight">
-              {isAr ? 'تزكية المحفظة (السيولة + الأسهم الحلال)' : 'Calculated on cash + halal stocks'}
+              {isAr ? 'سيولة + أسهم حلال' : 'Cash + halal stocks'}
             </span>
             <button
               onClick={handlePayZakat}
               disabled={isZakatSubmitting || zakatDue <= 0.01}
               className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold rounded-xl transition-all disabled:opacity-50"
             >
-              {isZakatSubmitting ? (isAr ? 'جاري الدفع...' : 'Paying...') : (isAr ? 'تطهير الآن' : 'Purify Now')}
+              {isZakatSubmitting ? '...' : (isAr ? 'تطهير' : 'Purify')}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Asset Allocation Breakdown */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-black/30 space-y-4">
-        <h3 className="font-bold text-sm text-gray-300 flex items-center space-x-2 rtl:space-x-reverse">
-          <Layers className="w-4 h-4 text-neonBlue" />
-          <span>{isAr ? 'توزيع أصول المحفظة الاستثمارية' : 'Asset Allocation Metrics'}</span>
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-gray-400">
-              <span>{isAr ? 'نقد وسيولة (مضاربة)' : 'Mudarabah Cash'}</span>
-              <span className="font-bold text-emerald-400">{nav > 0 ? ((cashVal / nav) * 100).toFixed(1) : '100'}%</span>
-            </div>
-            <div className="h-2 bg-black/50 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500" style={{ width: `${nav > 0 ? (cashVal / nav) * 100 : 100}%` }} />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-gray-400">
-              <span>{isAr ? 'الأسهم وحصص الشركات' : 'Stock Equity'}</span>
-              <span className="font-bold text-neonBlue">{nav > 0 ? ((stocksVal / nav) * 100).toFixed(1) : '0'}%</span>
-            </div>
-            <div className="h-2 bg-black/50 rounded-full overflow-hidden">
-              <div className="h-full bg-neonBlue" style={{ width: `${nav > 0 ? (stocksVal / nav) * 100 : 0}%` }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Layout */}
+      {/* Row 1: AI Portfolio Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Side: Chart Widget */}
+        {/* Left Column: AI Portfolio Performance & Active Holdings Table */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="flex space-x-4 rtl:space-x-reverse">
-            {(['TASI', 'NASDAQ'] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => setMarket(m)}
-                className={`px-6 py-2 rounded-full font-bold text-xs uppercase tracking-wider transition-colors ${
-                  market === m 
-                    ? 'bg-emerald-500 text-white' 
-                    : 'glass-panel text-gray-400 hover:text-white'
-                }`}
-              >
-                {t(m.toLowerCase() as any)}
-              </button>
-            ))}
-          </div>
-
-          <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl">
-            <div className="flex justify-between items-start mb-6">
+          <div className="glass-panel rounded-3xl p-6 border border-emerald-500/20 bg-emerald-500/5">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-xl font-bold text-white">{displayName}</h3>
-                <span className="text-xs text-gray-400 font-mono font-bold tracking-wider block mt-0.5">{currentData.symbol.replace('.SR', '')}</span>
-                <p className="text-3xl font-mono font-bold mt-2 text-white">
-                  {market === 'TASI' ? '' : '$'}{currentData.price.toFixed(2)} <span className="text-xs font-semibold text-gray-500">{market === 'TASI' ? 'SAR' : 'USD'}</span>
-                </p>
+                <h2 className="text-lg font-bold text-white mb-1">{isAr ? 'أداء المحفظة المدارة بالذكاء الاصطناعي' : 'AI-Managed Portfolio Performance'}</h2>
+                <div className="flex items-center gap-4 text-xs font-mono">
+                  <span className="flex items-center gap-1.5 text-emerald-400"><div className="w-2 h-2 rounded-full bg-emerald-400"/> AI Portfolio</span>
+                  <span className="flex items-center gap-1.5 text-indigo-400"><div className="w-2 h-2 rounded-full bg-indigo-400"/> SPUS (Halal)</span>
+                  <span className="flex items-center gap-1.5 text-gray-400"><div className="w-2 h-2 rounded-full bg-gray-400"/> SPY</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                <Activity className="w-4 h-4 animate-pulse" />
-                <span>{isAr ? 'مباشر' : 'Live'}</span>
+              <div className="text-right">
+                <p className="text-2xl font-mono font-bold text-emerald-400">+{((initialSnapshots.length > 0 ? (lastSnap.nav / initialSnapshots[0].nav) - 1 : 0) * 100).toFixed(2)}%</p>
+                <p className="text-xs text-emerald-500/60 font-bold tracking-wider">{isAr ? 'العائد التراكمي' : 'CUMULATIVE RETURN'}</p>
               </div>
             </div>
-            <AdvancedTradingChart data={currentData.history} />
+            <div className="h-64 w-full relative">
+              {renderSvgChart()}
+            </div>
           </div>
 
-          {/* Portfolio positions table */}
-          <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
-            <h3 className="font-bold text-sm text-gray-300 flex items-center space-x-2 rtl:space-x-reverse">
-              <Briefcase className="w-4 h-4 text-neonBlue" />
-              <span>{isAr ? 'المراكز الاستثمارية المفتوحة' : 'Active Stock Holdings'}</span>
+          {/* Active Holdings Table */}
+          <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20">
+            <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-emerald-400" />
+              {isAr ? 'تخصيص أصول الذكاء الاصطناعي النشطة' : 'Active AI Asset Allocation'}
             </h3>
-
-            {portfolio.length === 0 ? (
+            
+            {initialPositions.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">
-                {isAr 
-                  ? 'لا توجد مراكز استثمارية مفتوحة في المحفظة حالياً. انتقل إلى علامة تبويب الأسهم لبدء التداول الافتراضي.' 
-                  : 'No active stock positions. Go to Stocks tab to begin simulated trading!'
-                }
+                {isAr ? 'لا توجد مراكز استثمارية مفتوحة في المحفظة حالياً.' : 'No active stock positions. The AI committee is currently holding cash.'}
               </p>
             ) : (
-              <div className="overflow-x-auto text-xs">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left rtl:text-right border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10 text-gray-500 font-bold">
-                      <th className="pb-2">{isAr ? 'الرمز' : 'Symbol'}</th>
-                      <th className="pb-2">{isAr ? 'الأسهم المملوكة' : 'Shares Owned'}</th>
-                      <th className="pb-2 text-right rtl:text-left">{isAr ? 'السعر الحالي' : 'Market Price'}</th>
-                      <th className="pb-2 text-right rtl:text-left">{isAr ? 'القيمة الإجمالية' : 'Market Value'}</th>
-                      <th className="pb-2 text-center">{isAr ? 'الشرعية' : 'Sharia'}</th>
+                    <tr className="border-b border-white/5 text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                      <th className="pb-3">{isAr ? 'الرمز' : 'Asset'}</th>
+                      <th className="pb-3 text-right rtl:text-left">{isAr ? 'الأسهم' : 'Shares'}</th>
+                      <th className="pb-3 text-right rtl:text-left">{isAr ? 'السعر' : 'Price'}</th>
+                      <th className="pb-3 text-right rtl:text-left">{isAr ? 'الوزن' : 'Weight'}</th>
+                      <th className="pb-3 text-right rtl:text-left">{isAr ? 'القيمة' : 'Value'}</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {portfolio.map((item: any, idx: number) => {
-                      const value = item.shares * item.price;
-                      return (
-                        <tr key={idx} className="border-b border-white/5 text-gray-300">
-                          <td className="py-2.5 font-bold font-mono text-white">{item.symbol.replace('.SR', '')}</td>
-                          <td className="py-2.5 font-mono">{item.shares.toFixed(2)}</td>
-                          <td className="py-2.5 text-right rtl:text-left font-mono">${item.price.toFixed(2)}</td>
-                          <td className="py-2.5 text-right rtl:text-left font-mono text-emerald-400 font-bold">{value.toFixed(2)} SAR</td>
-                          <td className="py-2.5 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                              item.isCompliant ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                            }`}>
-                              {item.isCompliant ? (isAr ? 'متوافق' : 'Halal') : (isAr ? 'غير متوافق' : 'Haram')}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  <tbody className="text-xs font-mono">
+                    {initialPositions.map((pos) => (
+                      <tr key={pos.symbol} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                        <td className="py-3 text-white font-bold">{pos.symbol.replace('.SR', '')}</td>
+                        <td className="py-3 text-gray-400 text-right rtl:text-left">{pos.shares.toFixed(2)}</td>
+                        <td className="py-3 text-gray-400 text-right rtl:text-left">${pos.price.toFixed(2)}</td>
+                        <td className="py-3 text-emerald-400 text-right rtl:text-left">{(pos.weight * 100).toFixed(1)}%</td>
+                        <td className="py-3 text-white text-right rtl:text-left">${pos.value.toFixed(2)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -398,106 +407,49 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* Right Side: AI recommendations & Transaction History */}
+        {/* Right Column: Allocation Donut & Metrics */}
         <div className="space-y-6">
-          {/* AI Signal Engine Panel */}
-          <div className="glass-panel p-6 relative overflow-hidden bg-black/40 border border-white/5 rounded-3xl">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-neonBlue/10 blur-3xl rounded-full animate-pulse" />
-            <div className="flex items-center space-x-3 rtl:space-x-reverse mb-6">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <Bot className="w-6 h-6 text-emerald-400 animate-bounce" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white">{isAr ? 'إشارة تداول الذكاء الاصطناعي' : 'AI Trade Recommendation'}</h3>
-                <p className="text-xs text-gray-400">{isAr ? 'مدعوم بواسطة Qwen 2.5' : 'Powered by Qwen AI'}</p>
+          {/* Allocation Donut */}
+          <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20 text-center relative overflow-hidden">
+            <h3 className="font-bold text-white mb-6 text-left rtl:text-right">{isAr ? 'التوزيع القطاعي' : 'Sector Distribution'}</h3>
+            <div className="relative">
+              {renderAllocationDonut()}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-xl font-bold text-white">{initialPositions.length}</span>
               </div>
             </div>
-
-            {loadingSignal ? (
-              <div className="flex flex-col items-center justify-center py-8 space-y-2 text-xs">
-                <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-gray-500">{isAr ? 'جاري التحليل واستخلاص النتائج...' : 'AI is analyzing...'}</span>
-              </div>
-            ) : aiSignal ? (
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-xs text-start rtl:text-right">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400">{isAr ? 'التوجيه المقترح' : 'AI Recommendation'}</span>
-                    <span className={`font-bold px-2 py-0.5 rounded-md flex items-center text-[10px] ${
-                      aiSignal.action === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' :
-                      aiSignal.action === 'SELL' ? 'bg-red-500/10 text-red-400' : 'bg-gray-500/10 text-gray-400'
-                    }`}>
-                      {aiSignal.action === 'BUY' ? <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" /> : null}
-                      {aiSignal.action}
-                    </span>
-                  </div>
-                  <p className="text-gray-300 leading-relaxed">
-                    {isAr ? aiSignal.reasoningArabic : aiSignal.reasoningEnglish}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-neonBlue/5 border border-neonBlue/20 text-xs text-start rtl:text-right">
-                  <span className="text-[10px] font-bold text-neonBlue uppercase tracking-wider block mb-1">
-                    {isAr ? 'المفهوم المكتسب' : 'Concept Learned'}
-                  </span>
-                  <p className="text-gray-400">
-                    {aiSignal.educationalConcept}
-                  </p>
-                </div>
-
-                {tradeExecutionError && (
-                  <p className="text-xs text-red-400 font-semibold">{tradeExecutionError}</p>
-                )}
-
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  disabled={isExecutingTrade || aiSignal.complianceTag === 'HARAM' || aiSignal.complianceTag === 'MASHBOOH'}
-                  onClick={handleExecuteMockTrade}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50 text-xs uppercase tracking-wider text-center"
-                >
-                  {isExecutingTrade 
-                    ? (isAr ? 'جاري تنفيذ التداول...' : 'Executing Trade...') 
-                    : aiSignal.complianceTag === 'HARAM' || aiSignal.complianceTag === 'MASHBOOH'
-                      ? (isAr ? 'التداول محظور لغير المتوافقة' : 'Blocked (Non-Compliant)')
-                      : (isAr ? `شراء 10 أسهم من ${currentData.symbol.replace('.SR', '')}` : `Buy 10 shares of ${currentData.symbol.replace('.SR', '')}`)}
-                </motion.button>
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400">{isAr ? 'فشل تحميل إشارة الذكاء الاصطناعي.' : 'Failed to load AI signal.'}</p>
-            )}
-          </div>
-          
-          {/* Sharia status card */}
-          <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl">
-             <h3 className="font-bold mb-4 text-sm text-gray-300">{isAr ? 'التوافق الشرعي للسوق' : 'Market Sharia Compliance'}</h3>
-             <div className="flex items-center justify-between text-xs">
-               <span className="text-gray-400">{isAr ? 'حالة السهم المختار' : 'Selected Symbol Status'}</span>
-               {currentData.isShariaCompliant ? (
-                 <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full font-bold uppercase text-[10px]">
-                   {isAr ? 'متوافق شريعة' : 'Compliant'}
-                 </span>
-               ) : (
-                 <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full font-bold uppercase text-[10px]">
-                   {isAr ? 'غير متوافق شريعة' : 'Non-Compliant'}
-                 </span>
-               )}
-             </div>
-             {!currentData.isShariaCompliant && (
-               <p className="text-xs text-red-400 mt-3 font-semibold border border-red-500/20 bg-red-500/10 p-2.5 rounded-lg text-center">
-                 غير متوافق مع الشريعة — تعليمي فقط / Not Sharia-compliant — educational only
-               </p>
-             )}
           </div>
 
-          {/* Dynamic Transaction history ledger */}
+          {/* Key Metrics */}
+          <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20">
+            <h3 className="font-bold text-white mb-4">{isAr ? 'المقاييس الرئيسية (AI)' : 'Key Metrics (AI)'}</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                <span className="text-gray-400">Sharpe Ratio</span>
+                <span className="font-mono text-white font-bold">{initialMetrics.sharpe?.toFixed(2) ?? '0.00'}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                <span className="text-gray-400">CAGR</span>
+                <span className="font-mono text-emerald-400 font-bold">{((initialMetrics.cagr ?? 0) * 100).toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                <span className="text-gray-400">Alpha vs SPUS</span>
+                <span className="font-mono text-emerald-400 font-bold">{((initialMetrics.alphaVsSpus ?? 0) * 100).toFixed(2)}%</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-400">Max Drawdown</span>
+                <span className="font-mono text-red-400 font-bold">{((initialMetrics.maxDrawdown ?? 0) * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+          {/* Transaction Ledger */}
           <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
              <h3 className="font-bold text-sm text-gray-300 flex items-center space-x-2 rtl:space-x-reverse">
                <History className="w-4 h-4 text-neonBlue" />
                <span>{isAr ? 'سجل المعاملات والتدقيق المالي' : 'Transaction Audit Ledger'}</span>
              </h3>
 
-             <div className="space-y-3 max-h-64 overflow-y-auto text-xs">
+             <div className="space-y-3 max-h-64 overflow-y-auto text-xs pr-2">
                {txs.length === 0 ? (
                  <p className="text-gray-500 text-center py-4">{isAr ? 'لا توجد معاملات مسجلة بعد.' : 'No transactions recorded yet.'}</p>
                ) : (
@@ -513,7 +465,7 @@ export default function DashboardClient({
                          }`}>
                            {tx.type}
                          </span>
-                         <p className="text-gray-400 text-[10px] leading-tight pt-1">{tx.description || tx.type}</p>
+                         <p className="text-gray-400 text-[10px] leading-tight pt-1 w-32 truncate">{tx.description || tx.type}</p>
                        </div>
                        <span className={`font-mono font-bold ${isNegative ? 'text-red-400' : 'text-emerald-400'}`}>
                          {isNegative ? '' : '+'}{tx.amount.toFixed(2)} SAR
@@ -527,12 +479,10 @@ export default function DashboardClient({
         </div>
       </div>
 
-      <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onComplete={handleQuizComplete} locale={locale} />
-
-      {/* Dialog: Zakat success paid modal */}
+      {/* Dialogs */}
       <AnimatePresence>
         {zakatPaidSuccess && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm max-w-md mx-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -554,40 +504,6 @@ export default function DashboardClient({
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold text-xs text-white transition-all shadow-lg shadow-emerald-500/20"
               >
                 {isAr ? 'حسناً' : 'Done'}
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Dialog: Trade success paid modal */}
-      <AnimatePresence>
-        {tradeExecutionSuccess && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm max-w-md mx-auto">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#121824] border border-white/10 p-6 rounded-3xl text-center space-y-4 max-w-xs"
-            >
-              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-lg">{isAr ? 'اكتمل تنفيذ تداول إشارة الذكاء الاصطناعي!' : 'AI Signal Trade Success!'}</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                {isAr 
-                  ? `تم تنفيذ صفقة تداول بناءً على توصية إشارة الذكاء الاصطناعي بنجاح.`
-                  : `Successfully executed stock transactions based on the dynamic AI analyst signal recommendation.`
-                }
-              </p>
-              <button
-                onClick={() => {
-                  setTradeExecutionSuccess(false);
-                  window.location.reload();
-                }}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold text-xs text-white transition-all shadow-lg shadow-emerald-500/20"
-              >
-                {isAr ? 'تحديث ومتابعة' : 'Refresh & Continue'}
               </button>
             </motion.div>
           </div>

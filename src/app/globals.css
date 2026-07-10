@@ -36,29 +36,33 @@ body {
   background-attachment: fixed;
 }
 
-/* Glassmorphism Premium Cards */
+/* Premium Apple/Linear Inspired Glassmorphism Cards */
 .glass-panel {
-  background-color: rgba(var(--card-bg-rgb), var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--border-color);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
-  transition: background-color 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.dark .glass-panel {
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.glass-panel-hover {
+  background-color: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.03), 0 0 1px 0 rgba(0, 0, 0, 0.05);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.dark .glass-panel {
+  background-color: rgba(16, 16, 18, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.2), inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 .glass-panel-hover:hover {
-  transform: translateY(-2px);
-  background-color: rgba(var(--card-bg-rgb), calc(var(--glass-opacity) + 0.08));
-  border-color: rgba(var(--accent-color-rgb), 0.3);
-  box-shadow: 0 12px 40px 0 rgba(var(--accent-color-rgb), calc(var(--glow-intensity) * 0.15));
+  transform: translateY(-1px);
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.06), 0 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass-panel-hover:hover {
+  background-color: rgba(24, 24, 27, 0.75);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px -4px rgba(0, 0, 0, 0.3), inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* Custom glow borders and text styles */
@@ -148,28 +152,29 @@ body {
 
 /* 3D Isometric Tabletop Canvas Styles */
 .perspective-3d {
-  perspective: 1200px;
+  perspective: 2000px;
   transform-style: preserve-3d;
 }
 
 .tabletop-3d {
-  transform: rotateX(20deg) rotateY(-6deg) rotateZ(3deg);
+  transform: rotateX(15deg) rotateY(-5deg) rotateZ(2deg);
   transform-style: preserve-3d;
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .tabletop-3d:hover {
-  transform: rotateX(14deg) rotateY(-4deg) rotateZ(2deg);
+  transform: rotateX(10deg) rotateY(-3deg) rotateZ(1deg);
 }
 
 .agent-3d-card {
   transform-style: preserve-3d;
-  transform: translateZ(10px);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(20px);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .agent-3d-card:hover {
-  transform: translateZ(25px) scale(1.03);
+  transform: translateZ(40px) scale(1.05);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2);
 }
 
 @keyframes laser-flow {
@@ -183,11 +188,11 @@ body {
 
 .laser-path {
   stroke-dasharray: 8, 8;
-  animation: laser-flow 1.2s linear infinite;
+  animation: laser-flow 1.5s linear infinite;
 }
 
 .reverse-tabletop-3d {
-  transform: rotateX(-20deg) rotateY(6deg) rotateZ(-3deg);
+  transform: rotateX(-15deg) rotateY(5deg) rotateZ(-2deg);
   transform-style: preserve-3d;
 }
 

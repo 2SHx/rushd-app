@@ -15,9 +15,9 @@ interface MarketsPageProps {
 
 export default async function MarketsPage({ searchParams, params }: MarketsPageProps) {
   const session = await auth();
-  const rawMarket = searchParams.market === 'NASDAQ' ? 'NASDAQ' : 'TASI';
-  const defaultSymbol = rawMarket === 'TASI' ? '2222.SR' : 'NVDA';
-  const symbol = searchParams.symbol || defaultSymbol;
+  const rawMarket = 'NASDAQ';
+  const defaultSymbol = 'NVDA';
+  const symbol = searchParams.symbol && !searchParams.symbol.endsWith('.SR') ? searchParams.symbol : defaultSymbol;
 
   const currentData = await fetchMarketData(symbol, rawMarket);
   const isParent = session?.user?.role === 'PARENT';

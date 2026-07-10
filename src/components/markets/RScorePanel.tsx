@@ -31,101 +31,92 @@ function getRScore(symbol: string) {
   }
 }
 
+function scoreColor(score: number) {
+  if (score >= 8) return { ring: '#10B981', glow: 'rgba(16,185,129,0.3)', text: 'text-emerald-400', label: 'Strong', labelAr: 'قوي' };
+  if (score >= 6.5) return { ring: '#F59E0B', glow: 'rgba(245,158,11,0.3)', text: 'text-amber-400', label: 'Moderate', labelAr: 'متوسط' };
+  return { ring: '#EF4444', glow: 'rgba(239,68,68,0.3)', text: 'text-rose-400', label: 'Weak', labelAr: 'ضعيف' };
+}
+
+const factors = [
+  { key: 'safety' as const, label: 'Sharia Safety', labelAr: 'الأمان الشرعي', color: 'from-emerald-500 to-emerald-400' },
+  { key: 'growth' as const, label: 'Growth', labelAr: 'النمو', color: 'from-indigo-500 to-indigo-400' },
+  { key: 'value' as const, label: 'Value', labelAr: 'القيمة', color: 'from-cyan-500 to-cyan-400' },
+  { key: 'momentum' as const, label: 'Momentum', labelAr: 'الزخم', color: 'from-violet-500 to-violet-400' },
+];
+
 export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
   const t = useTranslations('Markets');
-  void locale;
-  const rScoreData = getRScore(symbol);
+  const isAr = locale === 'ar';
+  const r = getRScore(symbol);
+  const c = scoreColor(r.score);
+
+  const circumference = 2 * Math.PI * 48;
+  const dashOffset = circumference - (circumference * r.score) / 10;
 
   return (
-    <div className="bg-[#0F1420]/75 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-5 space-y-4 text-start">
-      <div className="flex justify-between items-center border-b border-white/5 pb-2">
-        <div className="flex items-center space-x-2 rtl:space-x-reverse text-indigo-400">
-          <Sparkles className="w-5 h-5 animate-pulse" />
-          <h3 className="font-bold text-sm text-gray-200">
-            {t('rScoreTitle')}
-          </h3>
+    <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-[#0a0f1e] to-[#0d1420] border border-white/[0.05] shadow-lg">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+          <h3 className="text-sm font-extrabold text-white">{t('rScoreTitle')}</h3>
         </div>
-        <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-          Powered by AI
+        <span className="text-[9px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full">
+          AI Powered
         </span>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-6 py-2">
-        {/* Arc Gauge */}
-        <div className="relative flex items-center justify-center w-28 h-28 shrink-0">
-          <svg className="w-full h-full transform -rotate-90">
+      <div className="flex items-center gap-6 px-5 pb-5">
+        {/* Glowing Arc Gauge */}
+        <div className="relative flex items-center justify-center w-32 h-32 shrink-0">
+          {/* Outer glow ring */}
+          <div
+            className="absolute inset-2 rounded-full blur-md opacity-30"
+            style={{ background: `radial-gradient(circle, ${c.glow} 0%, transparent 70%)` }}
+          />
+          <svg className="w-full h-full -rotate-90 relative z-10">
+            {/* Track */}
+            <circle cx="64" cy="64" r="48" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="9" />
+            {/* Progress */}
             <circle
-              cx="56"
-              cy="56"
-              r="48"
-              stroke="#1E293B"
-              strokeWidth="8"
-              fill="transparent"
-            />
-            <circle
-              cx="56"
-              cy="56"
-              r="48"
-              stroke="#6366F1"
-              strokeWidth="8"
-              fill="transparent"
-              strokeDasharray={301.6}
-              strokeDashoffset={301.6 - (301.6 * rScoreData.score) / 10}
+              cx="64" cy="64" r="48"
+              fill="none"
+              stroke={c.ring}
+              strokeWidth="9"
               strokeLinecap="round"
-              className="transition-all duration-1000 ease-out"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              style={{
+                filter: `drop-shadow(0 0 6px ${c.ring})`,
+                transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)'
+              }}
             />
           </svg>
-          <div className="absolute flex flex-col items-center justify-center">
-            <span className="text-3xl font-extrabold font-mono text-white leading-none">{rScoreData.score}</span>
-            <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{t('outOfTen')}</span>
+          <div className="absolute flex flex-col items-center justify-center z-20">
+            <span className={`text-3xl font-black font-mono leading-none ${c.text}`}>{r.score}</span>
+            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">{t('outOfTen')}</span>
           </div>
         </div>
 
-        {/* Factor bars */}
-        <div className="flex-1 w-full space-y-3">
-          {/* Sharia Compliance Safety */}
-          <div>
-            <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{t('shariaSafety')}</span>
-              <span className="text-indigo-400 font-mono">{rScoreData.safety}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${rScoreData.safety}%` }} />
-            </div>
+        {/* Verdict + Factor Bars */}
+        <div className="flex-1 space-y-3">
+          <div className={`text-xs font-black uppercase tracking-wider ${c.text}`}>
+            {isAr ? c.labelAr : c.label} • R-Score {r.score}/10
           </div>
-
-          {/* Growth Factor */}
-          <div>
-            <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{t('growthFactor')}</span>
-              <span className="text-indigo-400 font-mono">{rScoreData.growth}%</span>
+          {factors.map(f => (
+            <div key={f.key}>
+              <div className="flex justify-between text-[11px] font-semibold mb-1">
+                <span className="text-gray-400">{isAr ? f.labelAr : f.label}</span>
+                <span className="text-white font-mono">{r[f.key]}%</span>
+              </div>
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r ${f.color} rounded-full`}
+                  style={{ width: `${r[f.key]}%`, transition: 'width 1s ease-out' }}
+                />
+              </div>
             </div>
-            <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.growth}%` }} />
-            </div>
-          </div>
-
-          {/* Value Factor */}
-          <div>
-            <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{t('valueFactor')}</span>
-              <span className="text-indigo-400 font-mono">{rScoreData.value}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.value}%` }} />
-            </div>
-          </div>
-
-          {/* Momentum */}
-          <div>
-            <div className="flex justify-between text-xs font-semibold mb-1">
-              <span className="text-gray-400">{t('technicalMomentum')}</span>
-              <span className="text-indigo-400 font-mono">{rScoreData.momentum}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${rScoreData.momentum}%` }} />
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>
