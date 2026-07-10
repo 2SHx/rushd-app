@@ -65,23 +65,23 @@ export default function StockSearch({ market, onSearchResults, onSearchingChange
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="w-5 h-5 text-gray-500 absolute left-4 top-3.5 rtl:left-auto rtl:right-4" />
+        <Search className="w-4 h-4 text-foreground/40 absolute start-4 top-1/2 -translate-y-1/2" />
         <input
           type="text"
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder={t('searchPlaceholder')}
-          className="w-full bg-[#121824] border border-white/5 focus:border-emerald-500/30 rounded-2xl py-3 pl-12 pr-4 rtl:pl-4 rtl:pr-12 text-sm text-white placeholder-gray-500 outline-none transition-all"
+          className="w-full bg-surface-raised border border-[var(--border-color)] focus:border-accent/40 rounded-xl py-2.5 ps-11 pe-4 text-sm text-foreground placeholder:text-foreground/40 outline-none transition-colors"
         />
         {loading && (
-          <div className="absolute right-4 top-3.5 rtl:right-auto rtl:left-4">
-            <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+          <div className="absolute end-4 top-1/2 -translate-y-1/2">
+            <Loader2 className="w-4 h-4 text-accent animate-spin" />
           </div>
         )}
       </div>
-      
+
       {error && (
-        <div className="flex items-center space-x-2 rtl:space-x-reverse text-rose-400 text-xs px-2">
+        <div className="flex items-center gap-2 text-down text-xs px-2">
           <AlertCircle className="w-4 h-4" />
           <span>{error}</span>
         </div>

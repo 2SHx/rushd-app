@@ -73,7 +73,7 @@ export default function QuizListPage({ params }: { params: { locale: string } })
   return (
     <div className="max-w-5xl mx-auto space-y-8 p-6 text-slate-900 dark:text-white pb-24 md:pb-8">
       <div>
-        <h1 className="text-3xl font-black bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent tracking-tight">
+        <h1 className="text-3xl font-black bg-gradient-to-r from-emerald-400 to-accent bg-clip-text text-transparent tracking-tight">
           {isAr ? 'أكاديمية رشد التعليمية' : 'RUSHD Education Academy'}
         </h1>
         <p className="text-gray-400 mt-1.5 text-sm font-semibold">

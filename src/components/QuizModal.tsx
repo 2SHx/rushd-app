@@ -54,7 +54,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }
             <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-3">
               <div className="flex items-center space-x-2 rtl:space-x-reverse">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-extrabold uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
+                <h2 className="text-sm font-extrabold uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-accent bg-clip-text text-transparent">
                   {isAr && quiz.topicAr ? quiz.topicAr : quiz.topic}
                 </h2>
               </div>
@@ -120,7 +120,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }
                       onComplete(selected === quiz.correctOptionIndex, quiz.topic);
                       onClose();
                     }}
-                    className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 font-extrabold text-xs uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 transition-all active:scale-95 neon-glow-btn flex items-center justify-center gap-1.5"
+                    className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 font-extrabold text-xs uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
                   >
                     <Trophy className="w-4 h-4 text-black" />
                     <span>{isAr ? 'متابعة المحفظة' : 'Continue Portfolio'}</span>
@@ -133,7 +133,7 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }
               <button 
                 onClick={() => setShowResult(true)}
                 disabled={selected === null}
-                className="w-full py-3 rounded-2xl bg-emerald-500 disabled:opacity-50 font-extrabold text-xs uppercase tracking-wider text-black transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5 active:scale-95 disabled:pointer-events-none neon-glow-btn"
+                className="w-full py-3 rounded-2xl bg-emerald-500 disabled:opacity-50 font-extrabold text-xs uppercase tracking-wider text-black transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5 active:scale-95 disabled:pointer-events-none"
               >
                 <HelpCircle className="w-4 h-4 text-black" />
                 <span>{isAr ? 'إرسال الإجابة' : 'Submit Answer'}</span>

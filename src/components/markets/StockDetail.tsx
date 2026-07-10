@@ -58,49 +58,43 @@ export default function StockDetail({
   return (
     <div className="space-y-0">
       {/* Mobile Back Button */}
-      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-white/5 bg-[#080B11]/90 backdrop-blur-md sticky top-0 z-40">
-        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full text-emerald-400 transition-colors">
+      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-[var(--border-color)] bg-surface-paper sticky top-0 z-40">
+        <button onClick={onBack} className="p-2 hover:bg-foreground/5 rounded-full text-accent transition-colors">
           <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
         </button>
-        <span className="font-bold text-white text-sm">{cleanSymbol}</span>
-        <span className="text-gray-400 text-xs truncate">• {displayName}</span>
+        <span className="font-bold text-foreground text-sm">{cleanSymbol}</span>
+        <span className="text-foreground/50 text-xs truncate">• {displayName}</span>
       </div>
 
-      {/* ── Hero Quote Header ── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0a0f1e] via-[#0d1520] to-[#070c18] border border-white/[0.06] p-6 shadow-xl">
-        {/* Ambient glow based on compliance */}
-        <div className={`absolute -right-12 -top-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none ${
-          data.isShariaCompliant ? 'bg-emerald-400' : 'bg-amber-400'
-        }`} />
-        <div className="absolute -left-8 -bottom-8 w-32 h-32 rounded-full blur-3xl opacity-10 bg-indigo-500 pointer-events-none" />
-
+      {/* ── Hero Quote Header — the price is the hero; no ambient glow (ui-craft §0) ── */}
+      <div className="relative overflow-hidden rounded-3xl glass-panel p-6">
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           {/* Left: Name + Price */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black font-mono tracking-widest text-gray-500 bg-white/5 px-2.5 py-1 rounded-full border border-white/10 uppercase">
+              <span className="text-[10px] font-black font-mono tracking-widest text-foreground/50 bg-foreground/5 px-2.5 py-1 rounded-full border border-[var(--border-color)] uppercase">
                 {data.market}
               </span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
                 {cleanSymbol}
               </span>
             </div>
 
-            <h1 className="text-lg font-extrabold text-white leading-tight">{displayName}</h1>
+            <h1 className="text-lg font-extrabold text-foreground leading-tight">{displayName}</h1>
 
             <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-4xl font-black font-mono text-white leading-none tracking-tight">
+              <span className="text-4xl font-black font-mono tabular-nums text-foreground leading-none tracking-tight">
                 {data.market === 'TASI'
                   ? t('formatTasi', { amount: data.price.toFixed(2) })
                   : t('formatNasdaq', { amount: data.price.toFixed(2) })}
               </span>
 
-              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono ${
+              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono tabular-nums ${
                 isUp
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                  ? 'bg-up/10 text-up border border-up/20'
                   : isDown
-                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                  : 'bg-white/5 text-gray-400 border border-white/10'
+                  ? 'bg-down/10 text-down border border-down/20'
+                  : 'bg-foreground/5 text-foreground/50 border border-[var(--border-color)]'
               }`}>
                 {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
                 <span>{isUp ? '+' : ''}{change.toFixed(2)}</span>
@@ -110,16 +104,16 @@ export default function StockDetail({
 
             {/* Live badge */}
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-wider">Live Market Data</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-up animate-pulse" />
+              <span className="text-[10px] text-foreground/50 font-mono font-bold uppercase tracking-wider">Live Market Data</span>
             </div>
           </div>
 
           {/* Right: Sharia Shield */}
-          <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold transition-all ${
+          <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold ${
             data.isShariaCompliant
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.15)]'
-              : 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.15)]'
+              ? 'bg-up/10 border-up/20 text-up'
+              : 'bg-noncompliant/10 border-noncompliant/20 text-noncompliant'
           }`}>
             {data.isShariaCompliant
               ? <ShieldCheck className="w-5 h-5" />
@@ -130,15 +124,15 @@ export default function StockDetail({
       </div>
 
       {/* ── Tab Navigation ── */}
-      <div className="flex gap-1 bg-white/[0.02] border border-white/[0.05] p-1 rounded-2xl mt-4">
+      <div className="flex gap-1 bg-foreground/[0.02] border border-[var(--border-color)] p-1 rounded-2xl mt-4">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-all duration-200 ${
+            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-colors duration-200 ${
               activeTab === tab.id
-                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-accent text-white'
+                : 'text-foreground/50 hover:text-foreground hover:bg-foreground/5'
             }`}
           >
             {isAr ? tab.labelAr : tab.label}
@@ -163,22 +157,22 @@ export default function StockDetail({
               {/* AI Committee CTA */}
               <Link
                 href={`/${locale}/quant`}
-                className="flex items-center justify-between p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/5 to-indigo-500/5 hover:from-emerald-500/10 hover:to-indigo-500/10 transition-all group"
+                className="flex items-center justify-between p-4 rounded-2xl border border-accent/15 bg-accent/[0.03] hover:bg-accent/[0.06] transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-accent" />
                   </div>
                   <div className="text-start">
-                    <p className="text-sm font-bold text-white">
+                    <p className="text-sm font-bold text-foreground">
                       {isAr ? 'قرار لجنة الذكاء الاصطناعي' : 'View AI Committee Decision'}
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-[11px] text-foreground/50 mt-0.5">
                       {isAr ? 'شاهد كيف تقيّم اللجنة هذا السهم الآن' : 'See how the 8-agent committee rates this stock live'}
                     </p>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform rtl:rotate-180" />
+                <ChevronRight className="w-5 h-5 text-accent group-hover:translate-x-1 transition-transform rtl:rotate-180" />
               </Link>
             </>
           )}
@@ -229,19 +223,19 @@ function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: an
       {/* Verdict Banner */}
       <div className={`p-5 rounded-2xl border flex items-center gap-4 ${
         data.isShariaCompliant
-          ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_40px_rgba(16,185,129,0.08)]'
-          : 'bg-amber-500/5 border-amber-500/20 shadow-[0_0_40px_rgba(245,158,11,0.08)]'
+          ? 'bg-up/5 border-up/20'
+          : 'bg-noncompliant/5 border-noncompliant/20'
       }`}>
         {data.isShariaCompliant
-          ? <ShieldCheck className="w-8 h-8 text-emerald-400 shrink-0" />
-          : <ShieldAlert className="w-8 h-8 text-amber-400 shrink-0" />}
+          ? <ShieldCheck className="w-8 h-8 text-up shrink-0" />
+          : <ShieldAlert className="w-8 h-8 text-noncompliant shrink-0" />}
         <div>
-          <p className={`font-extrabold text-sm ${data.isShariaCompliant ? 'text-emerald-400' : 'text-amber-400'}`}>
+          <p className={`font-extrabold text-sm ${data.isShariaCompliant ? 'text-up' : 'text-noncompliant'}`}>
             {data.isShariaCompliant
               ? (isAr ? 'متوافق مع الشريعة الإسلامية' : 'Sharia Compliant — Halal to Invest')
               : (isAr ? 'غير متوافق مع الشريعة الإسلامية' : 'Non-Compliant — Caution Advised')}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-foreground/60 mt-1">
             {isAr ? 'وفقاً لمعايير هيئة المحاسبة والمراجعة للمؤسسات المالية الإسلامية (AAOIFI)' : 'Screened per AAOIFI financial ratio standards'}
           </p>
         </div>
@@ -250,28 +244,28 @@ function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: an
       {/* Criteria Cards */}
       <div className="space-y-3">
         {criteria.map((c, i) => (
-          <div key={i} className="flex items-start gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+          <div key={i} className="flex items-start gap-3 p-4 rounded-2xl glass-panel">
             <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-xs font-black mt-0.5 ${
-              c.pass ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+              c.pass ? 'bg-up/20 text-up' : 'bg-down/20 text-down'
             }`}>
               {c.pass ? '✓' : '✗'}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center">
-                <p className="text-sm font-bold text-white">{c.label}</p>
+                <p className="text-sm font-bold text-foreground">{c.label}</p>
                 {c.value && (
-                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
-                    c.pass ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                  <span className={`text-xs font-mono font-bold tabular-nums px-2 py-0.5 rounded-full ${
+                    c.pass ? 'bg-up/10 text-up' : 'bg-down/10 text-down'
                   }`}>{c.value}</span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{c.description}</p>
+              <p className="text-xs text-foreground/50 mt-1 leading-relaxed">{c.description}</p>
 
               {/* Progress bar for ratio criteria */}
               {c.value && compliance && (
-                <div className="mt-2 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${c.pass ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                    className={`h-full rounded-full transition-all ${c.pass ? 'bg-up' : 'bg-down'}`}
                     style={{
                       width: `${Math.min(
                         i === 1 ? (compliance.debtToMcap / 33) * 100 : (compliance.interestIncomeToRevenue / 5) * 100,
@@ -287,8 +281,8 @@ function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: an
       </div>
 
       {/* Purification Note */}
-      <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-xs text-amber-400/80 leading-relaxed">
-        <span className="font-bold text-amber-400">
+      <div className="p-4 rounded-2xl bg-noncompliant/5 border border-noncompliant/10 text-xs text-noncompliant/80 leading-relaxed">
+        <span className="font-bold text-noncompliant">
           {isAr ? 'ملاحظة التطهير: ' : 'Purification Note: '}
         </span>
         {isAr

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
+import { IBM_Plex_Sans_Arabic } from "next/font/google";
 import "../globals.css";
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -8,11 +9,16 @@ import Navigation from '@/components/Navigation';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import ThemeToggle from '@/components/ThemeToggle';
-import DesignControlCenter from '@/components/DesignControlCenter';
 
 const SUPPORTED_LOCALES = ['en', 'ar'];
 
-const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
+const geistSans = localFont({ src: '../fonts/GeistVF.woff', variable: '--font-sans' });
+const geistMono = localFont({ src: '../fonts/GeistMonoVF.woff', variable: '--font-mono' });
+const plexArabic = IBM_Plex_Sans_Arabic({
+  subsets: ['arabic'],
+  weight: ['400', '500', '700'],
+  variable: '--font-arabic',
+});
 
 export const metadata: Metadata = {
   title: "Rushd Financial",
@@ -39,7 +45,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                var theme = localStorage.getItem('theme') || 'dark';
+                var theme = localStorage.getItem('theme') || 'light';
                 if (theme === 'dark') {
                   document.documentElement.classList.add('dark');
                 } else {
@@ -50,14 +56,14 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased min-h-screen pb-16 md:pb-0 bg-slate-50 text-slate-900 dark:bg-[#070B11] dark:text-white transition-colors duration-200`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${plexArabic.variable} ${locale === 'ar' ? 'font-arabic leading-[1.7]' : 'font-sans'} antialiased min-h-screen pb-16 md:pb-0 bg-background text-foreground transition-colors duration-200`}>
         <NextIntlClientProvider messages={messages}>
           <DisclaimerBanner />
-          <DesignControlCenter />
-          <Navigation locale={locale} />
-          <main className="flex-1 w-full p-4 md:p-6 lg:p-8">
-            {children}
-          </main>
+          <Navigation locale={locale}>
+            <main className="flex-1 w-full p-4 md:p-6 lg:p-8">
+              {children}
+            </main>
+          </Navigation>
         </NextIntlClientProvider>
       </body>
     </html>

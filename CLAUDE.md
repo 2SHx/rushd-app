@@ -20,7 +20,7 @@ Next.js 14.2 App Router · TypeScript 5 · Tailwind 3.4 · Prisma 5 + PostgreSQL
 
 ## Orchestration
 Main session orchestrates; subagents implement. ALWAYS dispatch with the template in `docs/AGENTS.md` — never freehand.
-Routing: questions→explorer · UI→frontend-expert · DB/API/auth→backend-expert · LLM/MCP→ai-features-expert · Arabic/RTL/Sharia→i18n-fintech-expert · tests/CI→test-engineer · verify→qa-reviewer · auth/money/API-surface changes also get security-auditor · design→architect only.
+Routing: questions→explorer · UI→frontend-expert · 3D/WebGL (landing hero + /quant scene only, per DR-13)→3d-visualist · DB/API/auth→backend-expert · LLM/MCP→ai-features-expert · Arabic/RTL/Sharia→i18n-fintech-expert · tests/CI→test-engineer · verify→qa-reviewer · auth/money/API-surface changes also get security-auditor · design→architect only.
 Cold-start a work session from `docs/JOURNAL.md` + the relevant `docs/SYSTEM_DESIGN.md` slice — do not re-explore the codebase.
 Any-model routing: `node scripts/dispatch.mjs <agent> "task"` runs any agent on any runner/model (map: `scripts/models.map.json`, guide: `docs/MODELS.md`).
 

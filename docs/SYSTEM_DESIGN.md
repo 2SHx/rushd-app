@@ -77,6 +77,22 @@ Rationale: RUSHD already deploys on Render (commit `ddd56be1`); one daily, idemp
 Consequences: the cron route must authenticate (shared secret) and be idempotent (guard against double-run per day). No retry infra; a missed run is caught by the next day's idempotent pass.
 Revisit when: distribution fan-out exceeds ~1 job/minute or needs per-user scheduling, or a second recurring job appears — then introduce one worker + a lightweight queue.
 
+**Presentation layer.** The visual contract for all UI is ui-craft §0 (institutional minimalism, morpho.org reference) — quoted, never re-stated here. DR-12 fixes the token-level decisions; DR-13 fixes the one place 3D is permitted and the dependency that powers it.
+
+### DR-12: Institutional-minimal design system — light-first paper base, one purple accent, semantic-only status colors, ThemeToggle is the sole appearance control
+Decision: replace the neon/glass token set (`globals.css`, `tailwind.config.ts` incl. `neonBlue`) with an institutional-minimal system per ui-craft §0 — "Near-monochrome base. One restrained accent, used sparingly for a single primary action. Whitespace is the layout. Almost no borders. Quiet motion. Applied to RUSHD: the numbers ARE the ornament — if a decoration competes with a number, delete the decoration." Four settled (user-DECIDED) points: (a) theme is **light-first** — off-white paper base ~`#FAFAFA`, near-black type; dark remains first-class via `ThemeToggle`, and the layout bootstrap default flips `'dark'`→`'light'`. (b) The brand accent is **one** restrained institutional purple (iris/violet, `#5B5BD6`–`#7C3AED` range; exact token chosen at implementation with ≥4.5:1 contrast on the light base); emerald/rose/amber become purely semantic — up/compliant · down · non-compliant — never decorative. (c) `DesignControlCenter.tsx` (user-facing glow/blur/color-preset customizer) is **removed**; `ThemeToggle` is the only appearance control. (d) All tokens live in the Tailwind theme + CSS variables — no per-component hex.
+Options: keep the neon/glass aesthetic (reads as a game skin, undermines the SAMA-credibility posture of DR-9) / dark-first minimal (institutional, but light paper is the stronger trust register for a family-finance product and prints/screenshots cleanly for regulators) / light-first institutional-minimal with first-class dark (chosen — matches ui-craft §0 and the reference aesthetic).
+Rationale: a product asking regulators and parents to take it seriously cannot look like a neon terminal toy; the data (prices, NAV curves, XP) must be the ornament. One accent with semantic colors reserved for meaning also removes the standing risk of red/green being repurposed decoratively, which matters when rose additionally encodes "non-compliant" (DR-5).
+Consequences: `neonBlue` and all glow/glass utilities are deleted, not aliased; every component re-skinned in M9 must pass design-reviewer against ui-craft; the `DesignControlCenter` removal deletes its persisted preferences (acceptable — presentation-only, no schema impact); en/ar parity holds because tokens carry no copy. Dark theme is a token swap, never a component fork.
+Revisit when: a brand refresh introduces a second accent, or user research shows dark-first preference dominant in the Gulf family segment — then re-run the theme-default decision, not the token architecture.
+
+### DR-13: A single lazy-loaded 3D layer (three + @react-three/fiber) on the landing hero and /quant only — everywhere else stays 2D
+Decision: adopt `three` + `@react-three/fiber` (drei only if a concrete helper is proven needed during implementation, not preinstalled) for exactly two surfaces — the landing hero and the `/quant` analyst-committee scene — loaded via `next/dynamic` with `ssr: false` so no other route pays for it. Rung-1→5 justification (required for any new dependency): **Rung 1 — do nothing:** fails; the revamp mandate includes a credibility-grade hero and a committee visualization, and the current static neon hero is being deleted (DR-12). **Rung 2 — use what exists:** fails; framer-motion and CSS 3D transforms cannot produce lit, depth-sorted, state-driven 3D — no scene graph, no lighting model, no z-sorted geometry reacting to committee state. **Rung 3 — write a little code:** fails; hand-rolled WebGL is ≈1000+ untested lines of shader, matrix, and resize/context-loss plumbing — strictly worse than the audited library. **Rung 4 — adapt an existing dep:** fails; no installed dependency renders 3D. **Rung 5 — new dependency:** `three` + `@react-three/fiber`, approved.
+Options: no 3D at all (rung 1 — loses the committee scene that makes the quant module legible to a learner) / raw three.js without r3f (imperative escape hatch inside a React app; manual lifecycle/disposal is exactly the bug class r3f exists to remove) / three + r3f lazy-loaded on two routes (chosen).
+Rationale: the committee scene is pedagogy, not decoration — the learner watches 8 analysts deliberate (DR-10) — and the hero is the one page where spectacle earns trust rather than competing with a number; every other surface obeys "the numbers ARE the ornament", so 3D is fenced to these two routes by construction.
+Consequences — the perf budget is a contract, tested in M9: the render loop (RAF) is **paused when the tab is hidden or the canvas is off-screen**; `prefers-reduced-motion` renders a **static frame** (no loop); **mobile / no-WebGL gets a 2D card fallback** (all four ui-craft states, no blank canvas); and `npm run build` must show **zero first-load JS growth on non-3D routes** — the 3D bundle exists only in the two routes' dynamic chunks. The 2D fallback doubles as the no-key/mock-mode-safe path: the scene renders from the same view-model whether committee data is mock or live.
+Revisit when: a third surface genuinely needs 3D (re-justify the fence, not the dependency) or the 3D chunk exceeds ~300 kB gzipped on either route — then trim drei/three imports before touching the design.
+
 ---
 
 ## 3. Auth
@@ -331,6 +347,19 @@ Goal: authz enforced, PDPL minimized, audit complete.
 | Auth-event audit log + rate limits on auth & LLM endpoints | backend-expert | brute-force test locks out; auth events recorded (query/artifact) |
 | PDPL data-map + retention/erasure note artifact | backend-expert | `docs/DATA_MAP.md` lists child fields = {name, username, pinHash} only |
 | Security & authz test suite | test-engineer | `npx vitest run security` green |
+
+*(M8 is the Rushd Quant track — Q0–Q7 in `docs/QUANT_DESIGN.md`, DR-10/DR-11.)*
+
+### M9: Front-end revamp (institutional-minimal, DR-12 + DR-13)
+Goal: every surface re-skinned to the DR-12 token system; 3D lands on exactly two routes within the DR-13 perf budget. Units execute in DAG order U1→U5; each unit ships independently green.
+| Work item | Owner | Exit criterion |
+|---|---|---|
+| U1 — Foundation tokens: light-first paper base + purple accent + semantic emerald/rose/amber in Tailwind theme/CSS vars; delete `neonBlue`, glow/glass utilities, `DesignControlCenter.tsx`; layout bootstrap default `'dark'`→`'light'` | frontend-expert | `grep -rn "neonBlue\|DesignControlCenter" src tailwind.config.ts` empty; ThemeToggle still switches light↔dark; design-reviewer PASS |
+| U2 — Landing + navigation re-skin on U1 tokens (no 3D yet; hero renders the 2D fallback) | frontend-expert | landing + nav show no legacy neon classes (visual walk-through en+ar); design-reviewer PASS |
+| U3 — 3D committee scene + landing hero: `three` + `@react-three/fiber` via `next/dynamic` `ssr:false`; RAF pauses on hidden tab/off-screen canvas; `prefers-reduced-motion` → static frame; mobile/no-WebGL → 2D card fallback; works in mock mode | frontend-expert | `npm run build` output shows zero first-load JS growth on non-3D routes; reduced-motion and no-WebGL fallbacks demonstrated; design-reviewer PASS |
+| U4 — Markets re-skin: quotes/candles/compliance labels on semantic-only status colors | frontend-expert | `/markets` uses only DR-12 tokens (grep for legacy classes empty in `src/app/[locale]/markets`); design-reviewer PASS |
+| U5 — Remaining surfaces (dashboard, quiz, profile, auth screens) re-skinned; RTL logical props preserved | frontend-expert | no legacy token remains repo-wide (`grep -rn "neon" src` empty); design-reviewer PASS |
+| en/ar parity + regression suite for the revamp | test-engineer | `npm run lint` + `npx tsc --noEmit` + `npx vitest run` green incl. en/ar key-parity test |
 
 ---
 

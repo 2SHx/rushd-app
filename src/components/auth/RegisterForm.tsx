@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 
 const inputClass =
-  'w-full glass-panel bg-black/30 px-4 py-3 text-start placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50';
+  'w-full rounded-xl border border-[var(--border-color)] bg-foreground/[0.03] px-4 py-3 text-start text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors duration-150';
 
 export default function RegisterForm({ locale }: { locale: string }) {
   const t = useTranslations('Auth.register');
@@ -41,18 +41,18 @@ export default function RegisterForm({ locale }: { locale: string }) {
   if (isSuccess) {
     return (
       <div className="glass-panel p-6 space-y-4 text-center">
-        <h2 className="text-xl font-bold text-emerald-400">
+        <h2 className="text-xl font-semibold text-up">
           {locale === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Account Created Successfully!'}
         </h2>
-        <p className="text-sm text-gray-400">
-          {locale === 'ar' 
-            ? 'يمكنك الآن تسجيل الدخول باستخدام بريدك الإلكتروني وكلمة المرور لتجربة محاكاة التداول المتقدمة.' 
+        <p className="text-sm text-foreground/60">
+          {locale === 'ar'
+            ? 'يمكنك الآن تسجيل الدخول باستخدام بريدك الإلكتروني وكلمة المرور لتجربة محاكاة التداول المتقدمة.'
             : 'You can now log in using your email and password to start your advanced trading simulator.'}
         </p>
         <div className="pt-4">
           <Link
             href={`/${locale}/login`}
-            className="w-full block py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 text-center"
+            className="w-full block py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 text-center"
           >
             {locale === 'ar' ? 'تسجيل الدخول' : 'Log In'}
           </Link>
@@ -65,7 +65,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
     <div className="glass-panel p-6 space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="name" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="name" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('nameLabel')}
           </label>
           <input
@@ -78,7 +78,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
           />
         </div>
         <div>
-          <label htmlFor="email" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="email" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('emailLabel')}
           </label>
           <input
@@ -91,7 +91,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="password" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('passwordLabel')}
           </label>
           <input
@@ -106,7 +106,7 @@ export default function RegisterForm({ locale }: { locale: string }) {
         </div>
 
         {hasError && (
-          <p role="alert" className="text-sm text-red-400">
+          <p role="alert" className="text-sm text-down">
             {t('error')}
           </p>
         )}
@@ -114,15 +114,15 @@ export default function RegisterForm({ locale }: { locale: string }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 disabled:opacity-60"
         >
           {isSubmitting ? t('submitting') : t('submit')}
         </button>
       </form>
 
-      <p className="text-sm text-gray-400 text-center">
+      <p className="text-sm text-foreground/60 text-center">
         {t('haveAccount')}{' '}
-        <Link href={`/${locale}/login`} className="text-emerald-400 hover:underline">
+        <Link href={`/${locale}/login`} className="text-accent hover:underline">
           {t('loginLink')}
         </Link>
       </p>

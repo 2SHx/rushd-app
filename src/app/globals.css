@@ -2,32 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* DR-12 institutional-minimal tokens: light-first paper base, one purple accent,
+   semantic-only status colors. Dark remains first-class via ThemeToggle. */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card-bg: #ffffff;
+  --background: #FAFAFA;
+  --foreground: #0B0B0F;
+
+  --surface-paper: #FAFAFA;
+  --surface-card: #FFFFFF;
+  --surface-raised: #FFFFFF;
+
+  --card-bg: #FFFFFF;
   --card-bg-rgb: 255, 255, 255;
-  --border-color: #e2e8f0;
-  
-  /* Apple Premium Customization Variables */
-  --glass-blur: 16px;
-  --glass-opacity: 0.75;
-  --glow-intensity: 0.15;
-  --accent-color-rgb: 16, 185, 129; /* Emerald */
-  --accent-secondary-rgb: 0, 240, 255; /* Neon Blue */
-  --neon-blue-rgb: 0, 240, 255;
-  --emerald-rgb: 16, 185, 129;
+  --border-color: rgba(0, 0, 0, 0.08);
+
+  /* Institutional purple accent, #5B5BD6 (>=4.5:1 on paper base) */
+  --accent: #5B5BD6;
+  --accent-color-rgb: 91, 91, 214;
+
+  /* Semantic status colors — never decorative. Darkened from base emerald/rose/amber
+     to clear 4.5:1 as text on the #FAFAFA paper base:
+     up #047857 = 5.25:1, down #BE123C = 6.02:1, noncompliant #B45309 = 4.81:1 */
+  --up: #047857;
+  --down: #BE123C;
+  --noncompliant: #B45309;
 }
 
 .dark {
   --background: #070B11;
   --foreground: #f8fafc;
+
+  --surface-paper: #070B11;
+  --surface-card: #101524;
+  --surface-raised: #131A2B;
+
   --card-bg: #101524;
   --card-bg-rgb: 16, 21, 36;
   --border-color: rgba(255, 255, 255, 0.06);
-  
-  --glass-opacity: 0.45;
-  --glow-intensity: 0.55;
+
+  --accent: #7C7CE8;
+  --accent-color-rgb: 124, 124, 232;
+
+  --up: #34d399;
+  --down: #fb7185;
+  --noncompliant: #fbbf24;
 }
 
 body {
@@ -36,38 +54,38 @@ body {
   background-attachment: fixed;
 }
 
-/* Premium Apple/Linear Inspired Glassmorphism Cards */
+/* Quiet institutional surface. NOT glass: no blur, no glow — a near-opaque card
+   on the paper base with a hairline border and a contact + ambient shadow pair
+   (ui-craft §2). Classname kept for now; a later unit renames to .surface. */
 .glass-panel {
-  background-color: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.03), 0 0 1px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-color);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.04),
+    0 12px 32px -12px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark .glass-panel {
-  background-color: rgba(16, 16, 18, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.2), inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-color);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.3),
+    0 12px 32px -12px rgba(0, 0, 0, 0.5);
 }
 
 .glass-panel-hover:hover {
-  transform: translateY(-1px);
-  background-color: rgba(255, 255, 255, 0.85);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.06), 0 0 1px 0 rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.05),
+    0 16px 40px -12px rgba(0, 0, 0, 0.1);
 }
 
 .dark .glass-panel-hover:hover {
-  background-color: rgba(24, 24, 27, 0.75);
   border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 40px -4px rgba(0, 0, 0, 0.3), inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-/* Custom glow borders and text styles */
-.accent-glow-text {
-  text-shadow: 0 0 12px rgba(var(--accent-color-rgb), calc(var(--glow-intensity) * 0.8));
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.35),
+    0 16px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
 .accent-bg {
@@ -82,16 +100,18 @@ body {
   border-color: rgba(var(--accent-color-rgb), 0.4);
 }
 
-.neon-glow-btn {
-  box-shadow: 0 4px 14px 0 rgba(var(--accent-color-rgb), calc(var(--glow-intensity) * 0.4));
-  transition: all 0.2s ease;
+/* Tabular numerals for money/quant figures */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
-.neon-glow-btn:hover:not(:disabled) {
-  box-shadow: 0 6px 20px 0 rgba(var(--accent-color-rgb), calc(var(--glow-intensity) * 0.6));
+/* Focus-visible ring in accent, for a11y */
+:focus-visible {
+  outline: 2px solid rgb(var(--accent-color-rgb));
+  outline-offset: 2px;
 }
 
-/* Custom Premium Apple Scrollbars */
+/* Custom scrollbars, accent-tinted */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -102,36 +122,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(var(--accent-color-rgb), 0.15);
+  background: rgba(var(--accent-color-rgb), 0.25);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--accent-color-rgb), 0.35);
+  background: rgba(var(--accent-color-rgb), 0.45);
   border: 2px solid transparent;
   background-clip: padding-box;
-}
-
-/* Animation utilities */
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(var(--accent-color-rgb), 0.4);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 10px rgba(var(--accent-color-rgb), 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(var(--accent-color-rgb), 0);
-  }
-}
-
-.pulse-glow-ring {
-  animation: pulse-ring 2s infinite;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -150,33 +150,8 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* 3D Isometric Tabletop Canvas Styles */
-.perspective-3d {
-  perspective: 2000px;
-  transform-style: preserve-3d;
-}
-
-.tabletop-3d {
-  transform: rotateX(15deg) rotateY(-5deg) rotateZ(2deg);
-  transform-style: preserve-3d;
-  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.tabletop-3d:hover {
-  transform: rotateX(10deg) rotateY(-3deg) rotateZ(1deg);
-}
-
-.agent-3d-card {
-  transform-style: preserve-3d;
-  transform: translateZ(20px);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.agent-3d-card:hover {
-  transform: translateZ(40px) scale(1.05);
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2);
-}
-
+/* Committee flow diagram connector (src/components/quant/CommitteeClient.tsx) —
+   restyled quiet: accent-colored, no neon glow. */
 @keyframes laser-flow {
   0% {
     stroke-dashoffset: 40;
@@ -191,8 +166,17 @@ body {
   animation: laser-flow 1.5s linear infinite;
 }
 
-.reverse-tabletop-3d {
-  transform: rotateX(-15deg) rotateY(5deg) rotateZ(-2deg);
-  transform-style: preserve-3d;
-}
+/* Respect reduced-motion: kill the laser animation and any non-opacity
+   transitions (ui-craft §1 — reduced motion keeps opacity, or nothing). */
+@media (prefers-reduced-motion: reduce) {
+  .laser-path {
+    animation: none;
+  }
 
+  .glass-panel,
+  .glass-panel-hover:hover,
+  .dark .glass-panel,
+  .dark .glass-panel-hover:hover {
+    transition: opacity 0.15s ease;
+  }
+}

@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSceneAvailability } from '@/hooks/useSceneAvailability';
+import CommitteePipeline2D from './CommitteePipeline2D';
 import {
   Bot,
   TrendingUp,
@@ -32,9 +35,9 @@ import {
 import { TICKERS } from '@/lib/tickers';
 
 type MarketKind = 'TASI' | 'NASDAQ';
-type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
 
-interface Signal {
+export interface Signal {
   id?: string;
   agent: string;
   stance: Stance;
@@ -45,19 +48,19 @@ interface Signal {
   failureMode: string;
 }
 
-interface ShariaGate {
+export interface ShariaGate {
   compliant: boolean;
   reason?: string;
 }
 
-interface DebateTurn {
+export interface DebateTurn {
   side: 'BULL' | 'BEAR';
   round: number;
   argumentEn: string;
   argumentAr: string;
 }
 
-interface PassResult {
+export interface PassResult {
   decisionId: string;
   finalAction: string;
   proposedAction?: string;
@@ -156,7 +159,7 @@ function toEvidenceChips(evidence: unknown): string[] {
   return [];
 }
 
-function stanceStyle(stance: Stance) {
+export function stanceStyle(stance: Stance) {
   if (stance === 'BULLISH') return { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', Icon: TrendingUp };
   if (stance === 'BEARISH') return { color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20', Icon: TrendingDown };
   return { color: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/20', Icon: Minus };
@@ -168,11 +171,11 @@ function actionStyle(action: string) {
   return 'text-neonBlue bg-neonBlue/10 border-neonBlue/30';
 }
 
-function pct(n: number): string {
+export function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
+export type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
 
 export default function CommitteeClient({
   locale,
@@ -237,6 +240,28 @@ export default function CommitteeClient({
     return { pct, stance };
   }, [passData]);
 
+
+  // DR-13: WebGL/reduced-motion detection gates the 3D committee scene.
+  // No WebGL (or still checking) -> 2D pipeline fallback (never a blank canvas).
+  const { webglSupported, reducedMotion } = useSceneAvailability();
+  const use3D = webglSupported === true;
+  const CommitteeScene3D = useMemo(
+    () =>
+      dynamic(() => import('./CommitteeScene3D'), {
+        ssr: false,
+        loading: () => (
+          <CommitteePipeline2D
+            simStep="idle"
+            activeAgentId={null}
+            passData={null}
+            debateTurnIdx={0}
+            isAr={isAr}
+          />
+        ),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const [isVisible, setIsVisible] = useState(true);
   useEffect(() => {
@@ -821,275 +846,26 @@ export default function CommitteeClient({
               </div>
             </div>
 
-            {/* ── NASA Deep Space Board Canvas ── */}
-            <div className="relative h-[560px] w-full overflow-hidden" style={{
-              background: 'radial-gradient(ellipse at 30% 60%, rgba(99,102,241,0.08) 0%, transparent 45%), radial-gradient(ellipse at 75% 25%, rgba(16,185,129,0.07) 0%, transparent 40%), radial-gradient(ellipse at 50% 80%, rgba(139,92,246,0.05) 0%, transparent 50%), #010408'
-            }}>
-              {/* ─ Star field ─ */}
-              <div className="absolute inset-0 pointer-events-none" aria-hidden>
-                {[...Array(80)].map((_, i) => (
-                  <span
-                    key={i}
-                    className="absolute rounded-full"
-                    style={{
-                      width: i % 5 === 0 ? '2px' : '1px',
-                      height: i % 5 === 0 ? '2px' : '1px',
-                      left: `${(i * 1.28 + 3) % 100}%`,
-                      top: `${(i * 2.17 + 7) % 100}%`,
-                      background: i % 7 === 0 ? 'rgba(99,102,241,0.8)' : i % 11 === 0 ? 'rgba(16,185,129,0.8)' : 'rgba(255,255,255,0.5)',
-                      animation: `pulse ${1.5 + (i % 4) * 0.7}s ease-in-out ${(i * 0.13) % 2}s infinite alternate`
-                    }}
-                  />
-                ))}
-              </div>
-              {/* Nebula clouds */}
-              <div className="absolute top-[15%] left-[40%] w-32 h-32 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none" />
-              <div className="absolute bottom-[20%] right-[25%] w-24 h-24 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
-              {/* ─ Orbital connection paths ─ */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-[1]">
-                <defs>
-                  <filter id="glow-green">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                  <filter id="glow-cyan">
-                    <feGaussianBlur stdDeviation="2.5" result="blur" />
-                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                  <linearGradient id="flow-gradient-h" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0" />
-                    <stop offset="50%" stopColor="#00F0FF" stopOpacity="0.9" />
-                    <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {/* Ingest → Analysts */}
-                {nodes.filter(n => n.type === 'analyst').map(node => (
-                  <line
-                    key={`line-ingest-${node.id}`}
-                    x1="10%" y1="50%" x2={node.x} y2={node.y}
-                    stroke={simStep === 'ingestion' ? '#10B981' : 'rgba(255,255,255,0.06)'}
-                    strokeWidth={simStep === 'ingestion' ? 1.5 : 1}
-                    filter={simStep === 'ingestion' ? 'url(#glow-green)' : undefined}
-                    className={simStep === 'ingestion' ? 'laser-path' : ''}
-                  />
-                ))}
-                {/* Analysts/Gate → Debate/PM */}
-                {nodes.filter(n => n.type === 'analyst' || n.type === 'gate').map(node => {
-                  const toX = node.id === 'SHARIA' ? '78%' : '78%';
-                  const toY = node.id === 'SHARIA' ? '75%' : '30%';
-                  const active = node.id === 'SHARIA' ? simStep === 'sharia' : (simStep === 'analysts' || simStep === 'debate');
-                  const color = node.id === 'SHARIA'
-                    ? (passData?.shariaGate.compliant ? '#10B981' : '#EF4444')
-                    : '#00F0FF';
-                  return (
-                    <line
-                      key={`line-debate-${node.id}`}
-                      x1={node.x} y1={node.y} x2={toX} y2={toY}
-                      stroke={active ? color : 'rgba(255,255,255,0.05)'}
-                      strokeWidth={active ? 1.5 : 0.8}
-                      filter={active ? (node.id === 'SHARIA' ? 'url(#glow-green)' : 'url(#glow-cyan)') : undefined}
-                      className={active ? 'laser-path' : ''}
-                    />
-                  );
-                })}
-                {/* Debate → PM */}
-                <line x1="78%" y1="30%" x2="78%" y2="75%"
-                  stroke={simStep === 'debate' ? '#00F0FF' : 'rgba(255,255,255,0.05)'}
-                  strokeWidth={simStep === 'debate' ? 2 : 0.8}
-                  filter={simStep === 'debate' ? 'url(#glow-cyan)' : undefined}
-                  className={simStep === 'debate' ? 'laser-path' : ''}
-                />
-                {/* PM → Risk */}
-                <line x1="78%" y1="75%" x2="92%" y2="50%"
-                  stroke={simStep === 'pm' ? '#10B981' : 'rgba(255,255,255,0.05)'}
-                  strokeWidth={simStep === 'pm' ? 2 : 0.8}
-                  filter={simStep === 'pm' ? 'url(#glow-green)' : undefined}
-                  className={simStep === 'pm' ? 'laser-path' : ''}
-                />
-              </svg>
+            {/* ── Committee Visualization: state-driven 3D scene, 2D pipeline fallback ── */}
+            {use3D ? (
+              <CommitteeScene3D
+                simStep={simStep}
+                activeAgentId={activeAgentId}
+                passData={passData}
+                debateTurnIdx={debateTurnIdx}
+                reducedMotion={reducedMotion}
+              />
+            ) : (
+              <CommitteePipeline2D
+                simStep={simStep}
+                activeAgentId={activeAgentId}
+                passData={passData}
+                debateTurnIdx={debateTurnIdx}
+                isAr={isAr}
+                onSelectAgent={setActiveAgentId}
+              />
+            )}
 
-              {/* ─ Agent Nodes as Planetary Spheres ─ */}
-              {nodes.map(node => {
-                const isAnalystActive = simStep === 'analysts' && activeAgentId === node.id;
-                const isShariaActive = simStep === 'sharia' && node.id === 'SHARIA';
-                const isDebating = simStep === 'debate' && node.id === 'debate';
-                const isPM = simStep === 'pm' && node.id === 'PORTFOLIO_MANAGER';
-                const isRisk = simStep === 'risk' && node.id === 'risk';
-                const agentSignal = passData?.signals.find(s => s.agent === node.id);
-                const sStyle = agentSignal ? stanceStyle(agentSignal.stance) : null;
-                const isActive = isAnalystActive || isShariaActive || isDebating || isPM || isRisk;
-
-                // NASA planet colors per node type
-                const planetColors = {
-                  data: { core: '#3b82f6', glow: 'rgba(59,130,246,0.4)', ring: '#60a5fa' },
-                  analyst: { core: '#6366f1', glow: 'rgba(99,102,241,0.35)', ring: '#818cf8' },
-                  gate: { core: '#f59e0b', glow: 'rgba(245,158,11,0.35)', ring: '#fbbf24' },
-                  debate: { core: '#8b5cf6', glow: 'rgba(139,92,246,0.35)', ring: '#a78bfa' },
-                  pm: { core: '#10b981', glow: 'rgba(16,185,129,0.4)', ring: '#34d399' },
-                  risk: { core: '#ef4444', glow: 'rgba(239,68,68,0.35)', ring: '#f87171' },
-                };
-                const pColor = isActive
-                  ? { core: '#10b981', glow: 'rgba(16,185,129,0.6)', ring: '#6ee7b7' }
-                  : sStyle && agentSignal
-                    ? (agentSignal.stance === 'BULLISH'
-                      ? { core: '#10b981', glow: 'rgba(16,185,129,0.4)', ring: '#34d399' }
-                      : agentSignal.stance === 'BEARISH'
-                      ? { core: '#ef4444', glow: 'rgba(239,68,68,0.35)', ring: '#f87171' }
-                      : planetColors[node.type as keyof typeof planetColors] ?? planetColors.analyst)
-                  : planetColors[node.type as keyof typeof planetColors] ?? planetColors.analyst;
-
-                return (
-                  <motion.div
-                    key={node.id}
-                    style={{ left: node.x, top: node.y, position: 'absolute' }}
-                    className="-translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center cursor-pointer"
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: isActive ? 1.12 : 1, opacity: 1, zIndex: isActive ? 40 : 10 }}
-                    transition={{ duration: 0.4, type: 'spring', stiffness: 200 }}
-                    onClick={() => { if (agentSignal) setActiveAgentId(node.id); }}
-                  >
-                    {/* Outer orbital ring (NASA-style) */}
-                    {isActive && (
-                      <div
-                        className="absolute rounded-full border-2 animate-spin"
-                        style={{
-                          width: '72px', height: '72px',
-                          top: '50%', left: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          borderColor: pColor.ring,
-                          borderTopColor: 'transparent',
-                          borderLeftColor: 'transparent',
-                          opacity: 0.8,
-                          animationDuration: '3s'
-                        }}
-                      />
-                    )}
-                    {/* Halo glow */}
-                    <div
-                      className="absolute rounded-full blur-md pointer-events-none"
-                      style={{
-                        width: isActive ? '56px' : '40px',
-                        height: isActive ? '56px' : '40px',
-                        top: '50%', left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        background: pColor.glow,
-                        transition: 'all 0.4s ease'
-                      }}
-                    />
-
-                    {/* Planet card */}
-                    <div className={`relative w-[140px] p-3 rounded-2xl border flex flex-col gap-1.5 transition-all duration-300 ${
-                      isActive
-                        ? 'border-emerald-400/60 bg-[#06150f]/90 shadow-[0_0_24px_rgba(16,185,129,0.25)]'
-                        : sStyle
-                        ? 'border-white/10 bg-[#08091a]/85'
-                        : 'border-white/[0.06] bg-[#06080f]/80'
-                    }`} style={{ backdropFilter: 'blur(12px)' }}>
-                      {/* Planet sphere + status */}
-                      <div className="flex items-center justify-between">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center border-2 shrink-0"
-                          style={{
-                            background: `radial-gradient(circle at 35% 35%, ${pColor.ring}, ${pColor.core})`,
-                            borderColor: isActive ? pColor.ring : 'rgba(255,255,255,0.1)',
-                            boxShadow: isActive ? `0 0 14px ${pColor.glow}` : `0 0 6px ${pColor.glow}`
-                          }}
-                        >
-                          {node.icon ? (
-                            <node.icon className="w-4 h-4 text-white" />
-                          ) : node.id === 'SHARIA' ? (
-                            passData?.shariaGate.compliant
-                              ? <ShieldCheck className="w-4 h-4 text-white" />
-                              : <ShieldAlert className="w-4 h-4 text-white" />
-                          ) : (
-                            <Bot className="w-4 h-4 text-white" />
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-0.5">
-                          {isActive && (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: pColor.ring }} />
-                              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: pColor.ring }} />
-                            </span>
-                          )}
-                          {!isActive && agentSignal && simStep !== 'ingestion' && (
-                            <span className={`text-[7px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-md border ${sStyle?.bg} ${sStyle?.color} ${sStyle?.border}`}>
-                              {agentSignal.stance}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Node name */}
-                      <span className="text-[10px] font-bold text-gray-100 truncate leading-tight">
-                        {isAr ? node.nameAr : node.name}
-                      </span>
-
-                      {/* Conviction bar */}
-                      {agentSignal && simStep !== 'ingestion' && (
-                        <div>
-                          <div className="flex justify-between items-center mb-0.5">
-                            <span className="text-[8px] text-gray-500">Conv</span>
-                            <span className="text-[8px] font-mono text-gray-400">{pct(Number(agentSignal.conviction))}</span>
-                          </div>
-                          <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: pct(Number(agentSignal.conviction)),
-                                background: pColor.ring
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Sharia verdict */}
-                      {node.id === 'SHARIA' && simStep !== 'ingestion' && simStep !== 'analysts' && passData && (
-                        <span className={`text-[8px] font-black uppercase ${
-                          passData.shariaGate.compliant ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
-                          {passData.shariaGate.compliant ? '✓ HALAL CLEARED' : '✗ SHARIA VETO'}
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-
-              {/* ── Debate Speech Bubble ── */}
-              <AnimatePresence>
-                {simStep === 'debate' && passData?.debateTranscript?.[debateTurnIdx] && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    style={{ left: '78%', top: '6%' }}
-                    className="absolute -translate-x-1/2 z-40 w-72 bg-[#080c14]/95 border border-indigo-500/20 p-4 rounded-2xl shadow-2xl shadow-indigo-500/10 pointer-events-auto"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`w-2 h-2 rounded-full ${
-                        passData.debateTranscript[debateTurnIdx].side === 'BULL' ? 'bg-emerald-400' : 'bg-rose-400'
-                      }`} />
-                      <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
-                        {passData.debateTranscript[debateTurnIdx].side} — Round {passData.debateTranscript[debateTurnIdx].round}
-                      </span>
-                    </div>
-                    <p className="text-xs text-white leading-relaxed font-semibold" dir="rtl">
-                      {passData.debateTranscript[debateTurnIdx].argumentAr}
-                    </p>
-                    <p className="text-[10px] text-gray-500 leading-relaxed mt-1.5" dir="ltr">
-                      {passData.debateTranscript[debateTurnIdx].argumentEn}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Ingestion pulse */}
-              {simStep === 'ingestion' && (
-                <div className="absolute left-[15%] top-1/2 -translate-y-1/2 w-5 h-5 bg-emerald-400 rounded-full blur-sm animate-pulse pointer-events-none" />
-              )}
-            </div>
 
             {/* ── Live Terminal Panel ── */}
             <div className="mx-0 border-t border-white/[0.05] bg-[#030508] px-6 py-4 font-mono min-h-[110px]">

@@ -9,6 +9,7 @@
   "agents": {
     "explorer":           { "runner": "codex", "model": "gpt-5.6-luna",  "effort": "low",    "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
     "frontend-expert":    { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
+    "3d-visualist":       { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
     "backend-expert":     { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
     "ai-features-expert": { "runner": "codex", "model": "gpt-5.6-sol",   "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
     "test-engineer":      { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium", "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },

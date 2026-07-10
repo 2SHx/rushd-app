@@ -1,6 +1,7 @@
 // src/components/LanguageSwitcher.tsx
 'use client';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Globe } from 'lucide-react';
 
 interface LanguageSwitcherProps {
@@ -8,6 +9,7 @@ interface LanguageSwitcherProps {
 }
 
 export default function LanguageSwitcher({ locale, inline = false }: { locale: string; inline?: boolean }) {
+  const t = useTranslations('LanguageSwitcher');
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isAr = locale === 'ar';
@@ -31,7 +33,7 @@ export default function LanguageSwitcher({ locale, inline = false }: { locale: s
   return (
     <button
       onClick={handleLocaleChange}
-      aria-label="Toggle language"
+      aria-label={t('toggleLanguage')}
       className={buttonClass}
     >
       <Globe className="w-3.5 h-3.5" />

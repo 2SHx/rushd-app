@@ -46,7 +46,7 @@ export default async function ProfilePage({ params }: { params: { locale: string
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-4">
       <div>
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-accent bg-clip-text text-transparent">
           {isAr ? 'حسابي' : 'My Profile'}
         </h1>
         <p className="text-gray-400 mt-1">
@@ -86,8 +86,8 @@ export default async function ProfilePage({ params }: { params: { locale: string
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
                 {isAr ? 'مستوى العضوية' : 'Premium Tier'}
               </span>
-              <div className="flex items-center space-x-2 rtl:space-x-reverse text-neonBlue">
-                <Star className="w-4 h-4 fill-neonBlue/10" />
+              <div className="flex items-center space-x-2 rtl:space-x-reverse text-accent">
+                <Star className="w-4 h-4 fill-accent/10" />
                 <span className="font-semibold">{user.tier}</span>
               </div>
             </div>

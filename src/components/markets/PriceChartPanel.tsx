@@ -8,7 +8,7 @@ interface PriceChartPanelProps {
 
 export default function PriceChartPanel({ history }: PriceChartPanelProps) {
   return (
-    <div className="glass-panel p-4 rounded-3xl border border-white/5 bg-[#0f1420]/30">
+    <div className="glass-panel p-4 rounded-3xl">
       <AdvancedTradingChart data={history} />
     </div>
   );

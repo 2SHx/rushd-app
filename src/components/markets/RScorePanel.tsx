@@ -31,17 +31,21 @@ function getRScore(symbol: string) {
   }
 }
 
+// Ring stroke reads the semantic CSS var directly (SVG accepts var() in inline
+// style) — no literal hex, stays on the DR-12 up/noncompliant/down triad.
 function scoreColor(score: number) {
-  if (score >= 8) return { ring: '#10B981', glow: 'rgba(16,185,129,0.3)', text: 'text-emerald-400', label: 'Strong', labelAr: 'قوي' };
-  if (score >= 6.5) return { ring: '#F59E0B', glow: 'rgba(245,158,11,0.3)', text: 'text-amber-400', label: 'Moderate', labelAr: 'متوسط' };
-  return { ring: '#EF4444', glow: 'rgba(239,68,68,0.3)', text: 'text-rose-400', label: 'Weak', labelAr: 'ضعيف' };
+  if (score >= 8) return { ring: 'var(--up)', text: 'text-up', label: 'Strong', labelAr: 'قوي' };
+  if (score >= 6.5) return { ring: 'var(--noncompliant)', text: 'text-noncompliant', label: 'Moderate', labelAr: 'متوسط' };
+  return { ring: 'var(--down)', text: 'text-down', label: 'Weak', labelAr: 'ضعيف' };
 }
 
+// Non-directional factor bars are decoration, not up/down/noncompliant signals —
+// kept to the single accent hue at descending opacities (ui-craft: one purple accent).
 const factors = [
-  { key: 'safety' as const, label: 'Sharia Safety', labelAr: 'الأمان الشرعي', color: 'from-emerald-500 to-emerald-400' },
-  { key: 'growth' as const, label: 'Growth', labelAr: 'النمو', color: 'from-indigo-500 to-indigo-400' },
-  { key: 'value' as const, label: 'Value', labelAr: 'القيمة', color: 'from-cyan-500 to-cyan-400' },
-  { key: 'momentum' as const, label: 'Momentum', labelAr: 'الزخم', color: 'from-violet-500 to-violet-400' },
+  { key: 'safety' as const, label: 'Sharia Safety', labelAr: 'الأمان الشرعي', barClass: 'bg-accent' },
+  { key: 'growth' as const, label: 'Growth', labelAr: 'النمو', barClass: 'bg-accent/80' },
+  { key: 'value' as const, label: 'Value', labelAr: 'القيمة', barClass: 'bg-accent/60' },
+  { key: 'momentum' as const, label: 'Momentum', labelAr: 'الزخم', barClass: 'bg-accent/40' },
 ];
 
 export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
@@ -54,29 +58,24 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
   const dashOffset = circumference - (circumference * r.score) / 10;
 
   return (
-    <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-[#0a0f1e] to-[#0d1420] border border-white/[0.05] shadow-lg">
+    <div className="rounded-3xl overflow-hidden glass-panel">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-          <h3 className="text-sm font-extrabold text-white">{t('rScoreTitle')}</h3>
+          <Sparkles className="w-4 h-4 text-accent" />
+          <h3 className="text-sm font-extrabold text-foreground">{t('rScoreTitle')}</h3>
         </div>
-        <span className="text-[9px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full">
+        <span className="text-[9px] font-black uppercase tracking-wider bg-accent/10 text-accent border border-accent/20 px-2.5 py-1 rounded-full">
           AI Powered
         </span>
       </div>
 
       <div className="flex items-center gap-6 px-5 pb-5">
-        {/* Glowing Arc Gauge */}
+        {/* Arc Gauge — plain stroke, no glow/blur (ui-craft §0) */}
         <div className="relative flex items-center justify-center w-32 h-32 shrink-0">
-          {/* Outer glow ring */}
-          <div
-            className="absolute inset-2 rounded-full blur-md opacity-30"
-            style={{ background: `radial-gradient(circle, ${c.glow} 0%, transparent 70%)` }}
-          />
           <svg className="w-full h-full -rotate-90 relative z-10">
             {/* Track */}
-            <circle cx="64" cy="64" r="48" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="9" />
+            <circle cx="64" cy="64" r="48" fill="none" stroke="var(--border-color)" strokeWidth="9" />
             {/* Progress */}
             <circle
               cx="64" cy="64" r="48"
@@ -86,15 +85,12 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
-              style={{
-                filter: `drop-shadow(0 0 6px ${c.ring})`,
-                transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)'
-              }}
+              style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }}
             />
           </svg>
           <div className="absolute flex flex-col items-center justify-center z-20">
-            <span className={`text-3xl font-black font-mono leading-none ${c.text}`}>{r.score}</span>
-            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">{t('outOfTen')}</span>
+            <span className={`text-3xl font-black font-mono tabular-nums leading-none ${c.text}`}>{r.score}</span>
+            <span className="text-[9px] text-foreground/50 font-bold uppercase tracking-wider mt-0.5">{t('outOfTen')}</span>
           </div>
         </div>
 
@@ -106,12 +102,12 @@ export default function RScorePanel({ symbol, locale }: RScorePanelProps) {
           {factors.map(f => (
             <div key={f.key}>
               <div className="flex justify-between text-[11px] font-semibold mb-1">
-                <span className="text-gray-400">{isAr ? f.labelAr : f.label}</span>
-                <span className="text-white font-mono">{r[f.key]}%</span>
+                <span className="text-foreground/60">{isAr ? f.labelAr : f.label}</span>
+                <span className="text-foreground font-mono tabular-nums">{r[f.key]}%</span>
               </div>
-              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-foreground/10 rounded-full overflow-hidden">
                 <div
-                  className={`h-full bg-gradient-to-r ${f.color} rounded-full`}
+                  className={`h-full ${f.barClass} rounded-full`}
                   style={{ width: `${r[f.key]}%`, transition: 'width 1s ease-out' }}
                 />
               </div>

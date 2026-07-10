@@ -122,9 +122,9 @@ export default function DashboardClient({
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
-        <polyline points={spyPoints} fill="none" stroke="#4B5563" strokeWidth="2" strokeDasharray="4 4" opacity="0.4" />
-        <polyline points={spusPoints} fill="none" stroke="#6366F1" strokeWidth="2" strokeDasharray="4 4" opacity="0.6" />
-        <polyline points={navPoints} fill="none" stroke="#34D399" strokeWidth="3" className="drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+        <polyline points={spyPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-foreground/30" />
+        <polyline points={spusPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-accent/60" />
+        <polyline points={navPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-up" />
       </svg>
     );
   };
@@ -159,14 +159,16 @@ export default function DashboardClient({
             <path 
               key={pos.symbol} 
               d={pathData} 
-              fill={`hsl(150, 80%, ${30 + (i * 15)}%)`} 
-              className="stroke-black stroke-2 hover:opacity-80 transition-opacity cursor-pointer"
+              fill={`hsl(150, 55%, ${28 + (i * 12)}%)`}
+              style={{ stroke: 'var(--surface-card)' }}
+              strokeWidth={2}
+              className="hover:opacity-80 transition-opacity cursor-pointer"
             >
               <title>{pos.symbol}: {(pos.weight * 100).toFixed(1)}%</title>
             </path>
           );
         })}
-        <circle cx={center} cy={center} r={radius * 0.6} fill="#000" className="opacity-90" />
+        <circle cx={center} cy={center} r={radius * 0.6} style={{ fill: 'var(--surface-card)' }} />
       </svg>
     );
   };
@@ -209,76 +211,72 @@ export default function DashboardClient({
       {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">
             {isAr ? 'مركز المحفظة بالذكاء الاصطناعي' : 'AI Portfolio Hub'}
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <p className="text-foreground/50 mt-1 text-sm">
             {isAr ? 'إدارة الثروات المؤتمتة والتدقيق الشرعي' : 'Automated wealth management & Sharia-compliant auditing'}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-accent bg-accent/10 px-3 py-1.5 rounded-full border border-accent/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           {isAr ? 'الذكاء الاصطناعي يعمل 24/7' : 'AI AUTOPILOT ACTIVE'}
         </div>
       </div>
 
-      {/* ── Premium KPI Strip (inspired by pro trading dashboard) ── */}
+      {/* ── KPI strip: one dominant number per card ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Portfolio Value */}
-        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-cyan-500/8 blur-2xl pointer-events-none" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'قيمة المحفظة' : 'Portfolio Value'}</p>
-          <p className="text-2xl font-black font-mono text-white">
-            {initialNAV.toLocaleString('en-US', { maximumFractionDigits: 0 })} <span className="text-xs text-gray-500">SAR</span>
+        <div className="glass-panel rounded-2xl p-4 space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'قيمة المحفظة' : 'Portfolio Value'}</p>
+          <p className="text-2xl font-bold font-mono tabular-nums text-foreground">
+            {initialNAV.toLocaleString('en-US', { maximumFractionDigits: 0 })} <span className="text-xs text-foreground/50">SAR</span>
           </p>
-          <p className="text-[11px] text-gray-500">{isAr ? 'سيولة:' : 'Cash:'} <span className="text-gray-300 font-mono">{jarBal.toFixed(0)} SAR</span></p>
+          <p className="text-[11px] text-foreground/50">{isAr ? 'سيولة:' : 'Cash:'} <span className="text-foreground/70 font-mono tabular-nums">{jarBal.toFixed(0)} SAR</span></p>
         </div>
 
         {/* P&L with Timeframe Selector */}
-        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1.5 relative overflow-hidden">
-          <div className={`absolute -right-4 -top-4 w-20 h-20 rounded-full blur-2xl pointer-events-none ${plUp ? 'bg-emerald-500/8' : 'bg-rose-500/8'}`} />
+        <div className="glass-panel rounded-2xl p-4 space-y-1.5">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">P&L</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">P&L</p>
             <div className="flex gap-0.5">
               {(['24H','7D','30D','90D'] as const).map(tf => (
                 <button
                   key={tf}
                   onClick={() => setPlTimeframe(tf)}
                   className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                    plTimeframe === tf ? 'bg-emerald-500/20 text-emerald-400' : 'text-gray-600 hover:text-gray-400'
+                    plTimeframe === tf ? 'bg-accent/15 text-accent' : 'text-foreground/40 hover:text-foreground/70'
                   }`}
                 >{tf}</button>
               ))}
             </div>
           </div>
-          <p className={`text-2xl font-black font-mono flex items-center gap-1 ${plUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={`text-2xl font-bold font-mono tabular-nums flex items-center gap-1 ${plUp ? 'text-up' : 'text-down'}`}>
             {plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
             {plUp ? '+' : ''}{plData.value.toFixed(0)}
           </p>
-          <p className={`text-[11px] font-bold font-mono ${plUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+          <p className={`text-[11px] font-bold font-mono tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
             {plUp ? '+' : ''}{plData.pct.toFixed(2)}% {isAr ? 'خلال' : 'over'} {plTimeframe}
           </p>
         </div>
 
         {/* Win Rate */}
-        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-indigo-500/8 blur-2xl pointer-events-none" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'نسبة الربح' : 'Win Rate'}</p>
-          <p className="text-2xl font-black font-mono text-indigo-300">{winRate.toFixed(1)}%</p>
+        <div className="glass-panel rounded-2xl p-4 space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'نسبة الربح' : 'Win Rate'}</p>
+          <p className="text-2xl font-bold font-mono tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
           <div className="flex items-center gap-1.5">
-            <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${winRate}%` }} />
+            <div className="flex-1 h-1 bg-foreground/10 rounded-full overflow-hidden">
+              <div className="h-full bg-accent rounded-full" style={{ width: `${winRate}%` }} />
             </div>
-            <span className="text-[10px] text-gray-500">{isAr ? 'آخر 90 صفقة' : 'Last 90 trades'}</span>
+            <span className="text-[10px] text-foreground/50">{isAr ? 'آخر 90 صفقة' : 'Last 90 trades'}</span>
           </div>
         </div>
 
         {/* Active Trades */}
-        <div className="rounded-2xl bg-[#080c14] border border-white/[0.06] p-4 space-y-1 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-amber-500/8 blur-2xl pointer-events-none" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{isAr ? 'الصفقات النشطة' : 'Active Trades'}</p>
-          <p className="text-2xl font-black font-mono text-amber-300">{activeTrades}</p>
-          <p className="text-[11px] text-gray-500">
+        <div className="glass-panel rounded-2xl p-4 space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'الصفقات النشطة' : 'Active Trades'}</p>
+          <p className="text-2xl font-bold font-mono tabular-nums text-foreground">{activeTrades}</p>
+          <p className="text-[11px] text-foreground/50">
             {isAr ? 'أصل مُدار بالذكاء الاصطناعي' : `${activeTrades} AI-managed position${activeTrades !== 1 ? 's' : ''}`}
           </p>
         </div>

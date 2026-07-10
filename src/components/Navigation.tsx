@@ -1,134 +1,117 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Wallet, LineChart, BookOpen, User, Briefcase, Sparkles } from 'lucide-react';
+import { Wallet, LineChart, BookOpen, User, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import ThemeToggle from './ThemeToggle';
 import LanguageSwitcher from './LanguageSwitcher';
 
-export default function Navigation({ locale }: { locale: string }) {
-  const t = useTranslations('Dashboard');
+export default function Navigation({
+  locale,
+  children,
+}: {
+  locale: string;
+  children: React.ReactNode;
+}) {
+  const t = useTranslations('Nav');
   const pathname = usePathname();
-  const isAr = locale === 'ar';
 
-  const isAuthOrLanding = 
-    pathname === `/${locale}` || 
-    pathname === `/${locale}/login` || 
+  const isAuthOrLanding =
+    pathname === `/${locale}` ||
+    pathname === `/${locale}/login` ||
     pathname === `/${locale}/register` ||
     pathname === '/' ||
     pathname === '/login' ||
     pathname === '/register';
 
-  useEffect(() => {
-    if (isAuthOrLanding) {
-      document.body.classList.remove('md:ps-64');
-    } else {
-      document.body.classList.add('md:ps-64');
-    }
-    return () => {
-      document.body.classList.remove('md:ps-64');
-    };
-  }, [isAuthOrLanding]);
+  // 'use client': needs usePathname to decide sidebar visibility per route,
+  // and to gate the main-content inline-start padding here instead of the
+  // previous document.body classList hack.
+  if (isAuthOrLanding) {
+    return <>{children}</>;
+  }
 
-  if (isAuthOrLanding) return null;
-
-  const links = [
-    { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },
-    { href: `/${locale}/markets`, icon: LineChart, label: isAr ? 'الأسهم' : 'Stocks' },
-    { href: `/${locale}/quant`, icon: Sparkles, label: isAr ? 'الذكاء الكمي' : 'Quant Advisor' },
-    { href: `/${locale}/quiz`, icon: BookOpen, label: isAr ? 'التعليم' : 'Quizzes' },
-    { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' },
-  ];
-
-  // Subset of links for mobile dock to prevent crowding
-  const mobileLinks = [
-    { href: `/${locale}/dashboard`, icon: Wallet, label: isAr ? 'المحفظة' : 'Portfolio' },
-    { href: `/${locale}/markets`, icon: LineChart, label: isAr ? 'الأسهم' : 'Stocks' },
-    { href: `/${locale}/quant`, icon: Sparkles, label: isAr ? 'الذكاء' : 'Quant' },
-    { href: `/${locale}/quiz`, icon: BookOpen, label: isAr ? 'التعليم' : 'Quizzes' },
-    { href: `/${locale}/profile`, icon: User, label: isAr ? 'حسابي' : 'Profile' },
+  // Single source of truth for both the desktop sidebar and mobile dock —
+  // shortLabel is only used where the dock's narrow columns need it.
+  const navItems = [
+    { href: `/${locale}/dashboard`, icon: Wallet, label: t('portfolio'), shortLabel: t('portfolio') },
+    { href: `/${locale}/markets`, icon: LineChart, label: t('stocks'), shortLabel: t('stocks') },
+    { href: `/${locale}/quant`, icon: Sparkles, label: t('quant'), shortLabel: t('quantShort') },
+    { href: `/${locale}/quiz`, icon: BookOpen, label: t('quizzes'), shortLabel: t('quizzes') },
+    { href: `/${locale}/profile`, icon: User, label: t('profile'), shortLabel: t('profile') },
   ];
 
   return (
     <>
-      {/* Desktop Sidebar - Premium Floating Design */}
-      <aside className="hidden md:flex flex-col fixed top-4 bottom-4 start-4 w-64 glass-panel border border-slate-200 dark:border-white/10 z-50 rounded-3xl p-4 justify-between shadow-2xl">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col fixed top-4 bottom-4 start-4 w-64 glass-panel z-50 rounded-2xl p-4 justify-between">
         <div className="space-y-6">
-          <div className="px-4 py-2 border-b border-slate-200 dark:border-white/5 pb-4">
-            <h1 className="text-2xl font-black bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent tracking-tight">
-              {t('title')}
-            </h1>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">Simulated Banking</p>
+          <div className="px-4 py-2 border-b border-[var(--border-color)] pb-4">
+            <h1 className="text-lg font-bold ltr:tracking-tight">{t('title')}</h1>
+            <p className="text-[10px] text-foreground/70 font-semibold uppercase ltr:tracking-wider mt-1">
+              {t('tagline')}
+            </p>
           </div>
-          
+
           <nav className="space-y-1">
-            {links.map((link) => {
+            {navItems.map((link) => {
               const isActive = pathname.startsWith(link.href);
               return (
-                <Link 
-                  key={link.href} 
+                <Link
+                  key={link.href}
                   href={link.href}
-                  className="block relative"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-accent/10 text-accent font-semibold border-s-2 border-accent'
+                      : 'text-foreground/60 hover:text-foreground hover:bg-foreground/5'
+                  }`}
                 >
-                  <motion.div
-                    className={`flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl transition-all ${
-                      isActive 
-                        ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-400 font-bold border-l-2 border-emerald-500' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
-                    }`}
-                    whileHover={{ x: isAr ? -4 : 4 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                  >
-                    <link.icon className={`w-5 h-5 ${isActive ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-                    <span className="text-sm font-semibold">{link.label}</span>
-                  </motion.div>
+                  <link.icon className="w-5 h-5" />
+                  <span className="text-sm">{link.label}</span>
                 </Link>
               );
             })}
           </nav>
         </div>
 
-        {/* Desktop Bottom settings and utilities consolidated */}
-        <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-4">
+        {/* Desktop bottom utilities */}
+        <div className="pt-4 border-t border-[var(--border-color)] space-y-4">
           <div className="flex items-center justify-between gap-2 px-2">
             <LanguageSwitcher locale={locale} inline={true} />
             <ThemeToggle inline={true} />
           </div>
-          <div className="text-[10px] text-gray-500 text-center font-bold font-mono">
-            v1.2.0 • GCC SHARIA
+          <div className="text-[10px] text-foreground/70 text-center font-mono">
+            {t('version')}
           </div>
         </div>
       </aside>
 
-      {/* Mobile Bottom Navigation - Floating iOS Style Dock */}
-      <nav className="md:hidden fixed bottom-4 inset-x-4 max-w-lg mx-auto glass-panel border border-slate-200 dark:border-white/10 rounded-full z-50 shadow-2xl h-16 flex items-center justify-around px-2">
-        {mobileLinks.map((link) => {
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-4 inset-x-4 max-w-lg mx-auto glass-panel rounded-full z-50 h-16 flex items-center justify-around px-2">
+        {navItems.map((link) => {
           const isActive = pathname.startsWith(link.href);
           return (
-            <Link 
-              key={link.href} 
+            <Link
+              key={link.href}
               href={link.href}
-              className={`flex flex-col items-center justify-center space-y-0.5 w-14 h-full relative ${
-                isActive ? 'text-emerald-400' : 'text-slate-500 dark:text-slate-400'
+              className={`flex flex-col items-center justify-center gap-0.5 w-14 h-full relative ${
+                isActive ? 'text-accent' : 'text-foreground/70'
               }`}
             >
               {isActive && (
-                <motion.span 
-                  layoutId="activePill"
-                  className="absolute inset-0 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-2xl -z-10 border border-emerald-500/20"
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                />
+                <span className="absolute inset-0 bg-accent/10 rounded-2xl -z-10" />
               )}
-              <link.icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110 text-emerald-400' : ''}`} />
-              <span className="text-[9px] font-bold tracking-tight">{link.label}</span>
+              <link.icon className="w-5 h-5" />
+              <span className="text-[9px] font-semibold ltr:tracking-tight">{link.shortLabel}</span>
             </Link>
           );
         })}
       </nav>
+
+      <div className="md:ps-72 pb-safe">
+        <div className="pb-24 md:pb-0">{children}</div>
+      </div>
     </>
   );
 }
-

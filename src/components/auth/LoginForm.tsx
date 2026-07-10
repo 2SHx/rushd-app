@@ -7,7 +7,7 @@ import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 
 const inputClass =
-  'w-full glass-panel bg-black/30 px-4 py-3 text-start placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50';
+  'w-full rounded-xl border border-[var(--border-color)] bg-foreground/[0.03] px-4 py-3 text-start text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors duration-150';
 
 export default function LoginForm({ locale }: { locale: string }) {
   const t = useTranslations('Auth.login');
@@ -40,7 +40,7 @@ export default function LoginForm({ locale }: { locale: string }) {
     <div className="glass-panel p-6 space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="email" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('emailLabel')}
           </label>
           <input
@@ -53,7 +53,7 @@ export default function LoginForm({ locale }: { locale: string }) {
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="password" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('passwordLabel')}
           </label>
           <input
@@ -68,7 +68,7 @@ export default function LoginForm({ locale }: { locale: string }) {
         </div>
 
         {hasError && (
-          <p role="alert" className="text-sm text-red-400">
+          <p role="alert" className="text-sm text-down">
             {t('error')}
           </p>
         )}
@@ -76,15 +76,15 @@ export default function LoginForm({ locale }: { locale: string }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 disabled:opacity-60"
         >
           {isSubmitting ? t('submitting') : t('submit')}
         </button>
       </form>
 
       {/* Developer Bypass Mode */}
-      <div className="pt-4 border-t border-white/5 space-y-3">
-        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold text-center">
+      <div className="pt-4 border-t border-[var(--border-color)] space-y-3">
+        <p className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold text-center">
           {locale === 'ar' ? 'أدوات المطور: الدخول السريع' : 'Developer: Quick Testing Access'}
         </p>
         <div className="grid grid-cols-2 gap-2">
@@ -101,7 +101,7 @@ export default function LoginForm({ locale }: { locale: string }) {
               }
             }}
             disabled={isSubmitting}
-            className="py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold text-white transition-all disabled:opacity-60"
+            className="py-2.5 rounded-xl bg-foreground/[0.03] border border-[var(--border-color)] hover:bg-foreground/[0.06] text-xs font-semibold text-foreground transition-colors duration-150 disabled:opacity-60"
           >
             {locale === 'ar' ? 'دخول ولي الأمر' : 'Demo Parent'}
           </button>
@@ -118,16 +118,16 @@ export default function LoginForm({ locale }: { locale: string }) {
               }
             }}
             disabled={isSubmitting}
-            className="py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold text-emerald-400 transition-all disabled:opacity-60"
+            className="py-2.5 rounded-xl bg-foreground/[0.03] border border-[var(--border-color)] hover:bg-foreground/[0.06] text-xs font-semibold text-accent transition-colors duration-150 disabled:opacity-60"
           >
             {locale === 'ar' ? 'دخول الابن/الابنة' : 'Demo Child'}
           </button>
         </div>
       </div>
 
-      <p className="text-sm text-gray-400 text-center">
+      <p className="text-sm text-foreground/60 text-center">
         {t('noAccount')}{' '}
-        <Link href={`/${locale}/register`} className="text-emerald-400 hover:underline">
+        <Link href={`/${locale}/register`} className="text-accent hover:underline">
           {locale === 'ar' ? 'إنشاء حساب جديد' : 'Create an account'}
         </Link>
       </p>

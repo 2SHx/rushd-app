@@ -2,6 +2,54 @@
   "Disclaimer": {
     "banner": "Virtual money for learning only — not real money. Not investment advice."
   },
+  "ThemeToggle": {
+    "toggleTheme": "Toggle theme"
+  },
+  "LanguageSwitcher": {
+    "toggleLanguage": "Toggle language"
+  },
+  "Nav": {
+    "title": "Rushd Financial",
+    "tagline": "Simulated Banking",
+    "portfolio": "Portfolio",
+    "stocks": "Stocks",
+    "quant": "Quant Advisor",
+    "quantShort": "Quant",
+    "quizzes": "Quizzes",
+    "profile": "Profile",
+    "version": "v1.2.0 · GCC Sharia"
+  },
+  "Landing": {
+    "title": "Rushd Financial",
+    "heroKicker": "TASI + NASDAQ · AAOIFI screening · Arabic-first",
+    "heroTitlePrefix": "Grow your financial wisdom with",
+    "heroTitleAccent": "Rushd",
+    "heroSubtitle": "A Sharia-aware investment simulator and family neobanking experience for the Gulf market.",
+    "heroVisualLabel": "Illustrative market composition",
+    "ctaPrimary": "Start now as parent",
+    "ctaSecondary": "Log in",
+    "rightsReserved": "All rights reserved.",
+    "legendCompliant": "Sharia-compliant",
+    "legendScreenedOut": "Screened out",
+    "feature": {
+      "compliance": {
+        "title": "Sharia Screener",
+        "desc": "Automatic stock screening against AAOIFI standards, with trading blocked on non-compliant assets."
+      },
+      "simulator": {
+        "title": "TASI & NASDAQ Simulator",
+        "desc": "Practice trading with simulated funds in SAR and USD, priced against real market data."
+      },
+      "family": {
+        "title": "Family Supervision",
+        "desc": "Parents create child logins, set tasks and rewards, and review activity in full."
+      },
+      "learning": {
+        "title": "Gamified Learning",
+        "desc": "Complete quizzes on personal finance and investing to earn XP and level up."
+      }
+    }
+  },
   "Dashboard": {
     "title": "Rushd Financial",
     "portfolioHealth": "Portfolio Health",

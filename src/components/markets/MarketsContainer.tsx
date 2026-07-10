@@ -136,14 +136,14 @@ export default function MarketsContainer({
 
   // ── Loading skeleton ──────────────────────────────────────────
   const renderLoading = () => (
-    <div className="flex flex-col items-center justify-center h-[500px] text-gray-500 space-y-4 rounded-3xl bg-white/[0.01] border border-white/[0.04]">
+    <div className="flex flex-col items-center justify-center h-[500px] text-foreground/50 space-y-4 glass-panel rounded-3xl">
       <div className="relative">
-        <div className="w-12 h-12 border-2 border-emerald-400/20 rounded-full" />
-        <div className="absolute inset-0 w-12 h-12 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-accent/20 rounded-full" />
+        <div className="absolute inset-0 w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
       <div className="text-center">
-        <p className="text-sm font-bold text-gray-300">Syncing live data…</p>
-        <p className="text-xs text-gray-600 mt-0.5 font-mono">{activeSymbol || '—'}</p>
+        <p className="text-sm font-semibold text-foreground/70">Syncing live data…</p>
+        <p className="text-xs text-foreground/40 mt-0.5 font-mono tabular-nums">{activeSymbol || '—'}</p>
       </div>
     </div>
   );
@@ -153,32 +153,32 @@ export default function MarketsContainer({
     <div className="flex flex-col h-full gap-4">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-black text-white">
+        <h1 className="text-lg font-bold text-foreground">
           {isAr ? 'استكشاف السوق' : 'Market Explorer'}
         </h1>
-        <p className="text-[10px] text-gray-600 mt-0.5">
+        <p className="text-[10px] text-foreground/50 mt-0.5">
           {isAr ? 'تصفح وحلل الأسهم بالذكاء الاصطناعي' : 'Browse & analyse stocks with AI'}
         </p>
       </div>
 
       {/* Market Selector Info Badge */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] text-[11px] font-bold text-gray-400">
+      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-foreground/[0.02] border border-[var(--border-color)] text-[11px] font-semibold text-foreground/60">
         <span className="flex items-center gap-1.5">
           <span>🇺🇸</span>
           <span>{isAr ? 'سوق ناسداك الأمريكي' : 'US NASDAQ Market'}</span>
         </span>
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-up" />
       </div>
 
       {/* Top 5 Movers */}
-      <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] overflow-hidden">
-        <div className="flex border-b border-white/[0.05]">
+      <div className="rounded-2xl border border-[var(--border-color)] overflow-hidden">
+        <div className="flex border-b border-[var(--border-color)]">
           <button
             onClick={() => setMoversTab('gainers')}
-            className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-bold transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold transition-colors ${
               moversTab === 'gainers'
-                ? 'text-emerald-400 bg-emerald-500/5 border-b-2 border-emerald-500/40'
-                : 'text-gray-600 hover:text-gray-400'
+                ? 'text-up bg-up/5 border-b-2 border-up/40'
+                : 'text-foreground/40 hover:text-foreground/60'
             }`}
           >
             <TrendingUp className="w-3 h-3" />
@@ -186,38 +186,38 @@ export default function MarketsContainer({
           </button>
           <button
             onClick={() => setMoversTab('trending')}
-            className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-bold transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold transition-colors ${
               moversTab === 'trending'
-                ? 'text-amber-400 bg-amber-500/5 border-b-2 border-amber-500/40'
-                : 'text-gray-600 hover:text-gray-400'
+                ? 'text-accent bg-accent/5 border-b-2 border-accent/40'
+                : 'text-foreground/40 hover:text-foreground/60'
             }`}
           >
             <Flame className="w-3 h-3" />
             {isAr ? 'الأكثر حركة' : 'Hot'}
           </button>
         </div>
-        <div className="divide-y divide-white/[0.03]">
+        <div className="divide-y divide-[var(--border-color)]">
           {moversData.map((stock, i) => {
             const isUp = stock.pct >= 0;
             return (
               <button
                 key={stock.symbol}
                 onClick={() => handleSelectSymbol(stock.symbol, marketTab)}
-                className={`w-full flex items-center justify-between px-3 py-2 text-start hover:bg-white/[0.03] transition-colors ${
-                  activeSymbol === stock.symbol ? 'bg-emerald-500/5' : ''
+                className={`w-full flex items-center justify-between px-3 py-2 text-start hover:bg-foreground/[0.03] transition-colors ${
+                  activeSymbol === stock.symbol ? 'bg-accent/5' : ''
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className={`w-4 text-[9px] font-black font-mono ${i === 0 ? 'text-amber-400' : 'text-gray-700'}`}>
+                  <span className={`w-4 text-[9px] font-bold font-mono tabular-nums ${i === 0 ? 'text-accent' : 'text-foreground/30'}`}>
                     #{i + 1}
                   </span>
                   <div>
-                    <p className="text-[11px] font-bold text-white leading-tight">{stock.symbol.replace('.SR', '')}</p>
-                    <p className="text-[9px] text-gray-600 truncate max-w-[90px]">{isAr ? stock.arName : stock.name}</p>
+                    <p className="text-[11px] font-semibold text-foreground leading-tight">{stock.symbol.replace('.SR', '')}</p>
+                    <p className="text-[9px] text-foreground/50 truncate max-w-[90px]">{isAr ? stock.arName : stock.name}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md ${
-                  isUp ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
+                <div className={`flex items-center gap-1 text-[10px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded-md ${
+                  isUp ? 'text-up bg-up/10' : 'text-down bg-down/10'
                 }`}>
                   {isUp ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
                   {isUp ? '+' : ''}{stock.pct.toFixed(2)}%
@@ -252,7 +252,7 @@ export default function MarketsContainer({
   );
 
   return (
-    <div className="w-full text-white select-none relative pb-24 md:pb-8">
+    <div className="w-full text-foreground relative pb-24 md:pb-8">
 
       {/* ── Mobile ── */}
       <div className="block md:hidden max-w-xl mx-auto min-h-screen">
@@ -286,7 +286,7 @@ export default function MarketsContainer({
 
         {/* Left sidebar */}
         <div className="w-64 lg:w-72 shrink-0 sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto no-scrollbar">
-          <div className="rounded-3xl bg-[#07090f] border border-white/[0.05] p-4 shadow-xl">
+          <div className="rounded-3xl glass-panel p-4">
             {renderSidebar()}
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function MarketsContainer({
                 {/* Back to overview breadcrumb */}
                 <button
                   onClick={handleBackToOverview}
-                  className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-white transition-colors mb-4 group"
+                  className="flex items-center gap-1.5 text-[11px] text-foreground/50 hover:text-foreground transition-colors mb-4 group"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform rtl:rotate-180" />
                   <span>{isAr ? '← نظرة عامة على السوق' : '← Market Overview'}</span>

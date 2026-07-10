@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
 const inputClass =
-  'w-full glass-panel bg-black/30 px-4 py-3 text-start placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50';
+  'w-full rounded-xl border border-[var(--border-color)] bg-foreground/[0.03] px-4 py-3 text-start text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors duration-150';
 
 export default function NewChildForm() {
   const t = useTranslations('Auth.newChild');
@@ -41,12 +41,12 @@ export default function NewChildForm() {
   if (createdUsername) {
     return (
       <div className="glass-panel p-6 space-y-4 text-center">
-        <h2 className="text-xl font-bold text-emerald-400">{t('successTitle')}</h2>
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-          <p className="text-sm text-gray-400 mb-1">{t('usernameCreatedLabel')}</p>
-          <p className="text-2xl font-bold text-white">{createdUsername}</p>
+        <h2 className="text-xl font-semibold text-up">{t('successTitle')}</h2>
+        <div className="p-4 rounded-xl bg-up/10 border border-up/30">
+          <p className="text-sm text-foreground/60 mb-1">{t('usernameCreatedLabel')}</p>
+          <p className="text-2xl font-semibold text-foreground">{createdUsername}</p>
         </div>
-        <p className="text-sm text-gray-400">{t('doneNote')}</p>
+        <p className="text-sm text-foreground/60">{t('doneNote')}</p>
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function NewChildForm() {
     <div className="glass-panel p-6 space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="childName" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="childName" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('nameLabel')}
           </label>
           <input
@@ -68,7 +68,7 @@ export default function NewChildForm() {
           />
         </div>
         <div>
-          <label htmlFor="childUsername" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="childUsername" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('usernameLabel')}
           </label>
           <input
@@ -83,7 +83,7 @@ export default function NewChildForm() {
           />
         </div>
         <div>
-          <label htmlFor="childPin" className="block text-sm text-gray-400 mb-1 text-start">
+          <label htmlFor="childPin" className="block text-sm text-foreground/60 mb-1 text-start">
             {t('pinLabel')}
           </label>
           <input
@@ -101,7 +101,7 @@ export default function NewChildForm() {
         </div>
 
         {hasError && (
-          <p role="alert" className="text-sm text-red-400">
+          <p role="alert" className="text-sm text-down">
             {t('error')}
           </p>
         )}
@@ -109,7 +109,7 @@ export default function NewChildForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 font-bold text-white shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 disabled:opacity-60"
         >
           {isSubmitting ? t('submitting') : t('submit')}
         </button>

@@ -20,7 +20,7 @@ export default function ParentDashboardClient({ parentName, familyCode, children
       {/* Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-accent bg-clip-text text-transparent">
             {isAr ? 'لوحة تحكم ولي الأمر' : 'Parent Dashboard'}
           </h1>
           <p className="text-gray-400 mt-1">
@@ -41,11 +41,11 @@ export default function ParentDashboardClient({ parentName, familyCode, children
       </div>
 
       {/* Family Code Banner */}
-      <div className="glass-panel p-6 border-neonBlue/30 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-neonBlue/10 blur-3xl rounded-full" />
+      <div className="glass-panel p-6 border-accent/30 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 blur-3xl rounded-full" />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start space-x-4 rtl:space-x-reverse">
-            <div className="w-12 h-12 rounded-xl bg-neonBlue/20 flex items-center justify-center text-neonBlue shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent shrink-0">
               <Key className="w-6 h-6" />
             </div>
             <div>
@@ -125,7 +125,7 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                     </div>
 
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
-                      <div className="flex items-center space-x-2 rtl:space-x-reverse text-neonBlue">
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse text-accent">
                         <Wallet className="w-4 h-4" />
                         <span className="text-xs font-bold uppercase tracking-wider">
                           {isAr ? 'حصالة الادخار' : 'Savings Jar'}
