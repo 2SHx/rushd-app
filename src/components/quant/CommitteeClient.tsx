@@ -20,6 +20,13 @@ import {
   Database,
   History,
   Activity,
+  AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
+  Coins,
+  Check,
+  X,
+  GraduationCap,
 } from 'lucide-react';
 
 type MarketKind = 'TASI' | 'NASDAQ';
@@ -57,6 +64,24 @@ export interface PassResult {
   debateTranscript?: DebateTurn[];
 }
 
+export interface DecisionRecord {
+  id: string;
+  symbol: string;
+  market: MarketKind;
+  asOf: string;
+  proposedAction: string;
+  proposedQty: number;
+  finalAction: string;
+  finalQty: number;
+  shariaGate: ShariaGate;
+  riskAdjustments?: { capped: boolean; reason?: string };
+  debateTranscript?: DebateTurn[];
+  status: string;
+  costCents?: number;
+  createdAt: string;
+  signals: Signal[];
+}
+
 interface Position {
   symbol: string;
   name: string;
@@ -65,6 +90,7 @@ interface Position {
   price: number;
   value: number;
   weight: number;
+  complianceStatus?: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
 }
 
 interface Snapshot {
@@ -118,12 +144,137 @@ interface CommitteeClientProps {
   initialPurification: PurificationEntry[];
   initialMetrics: Metrics;
   initialTrades?: Trade[];
+  initialDecisions?: DecisionRecord[];
+  initialAutonomyTier?: 'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL';
 }
 
 const DEFAULT_SYMBOL: Record<MarketKind, string> = {
   TASI: '2222.SR',
   NASDAQ: 'AAPL',
 };
+
+function generateMockSnapshots(baseNAV: number, length = 30): Snapshot[] {
+  const navVal = baseNAV || 100000;
+  const list: Snapshot[] = [];
+  const now = new Date();
+  for (let i = length - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+    const dayFactor = length - 1 - i;
+    // simulated compound growth: strategy Nav outperforms benchmarks
+    const sNav = navVal * (1 + 0.0012 * dayFactor + Math.sin(dayFactor / 2) * 0.005 + (Math.random() - 0.5) * 0.008);
+    const spy = navVal * (1 + 0.0006 * dayFactor + Math.sin(dayFactor / 3) * 0.006 + (Math.random() - 0.5) * 0.01);
+    const spus = navVal * (1 + 0.0008 * dayFactor + Math.sin(dayFactor / 2.5) * 0.0055 + (Math.random() - 0.5) * 0.009);
+    list.push({
+      asOf: d.toISOString(),
+      nav: sNav,
+      cashVirtual: navVal * 0.1,
+      spy,
+      spus,
+    });
+  }
+  return list;
+}
+
+function generateMockDecisions(isAr: boolean): DecisionRecord[] {
+  return [
+    {
+      id: 'mock-dec-1',
+      symbol: '1120.SR',
+      market: 'TASI',
+      asOf: new Date(Date.now() - 3600000 * 2).toISOString(),
+      proposedAction: 'BUY',
+      proposedQty: 500,
+      finalAction: 'BUY',
+      finalQty: 500,
+      status: 'EXECUTED',
+      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+      shariaGate: { compliant: true },
+      riskAdjustments: { capped: false },
+      debateTranscript: [
+        {
+          side: 'BULL',
+          round: 1,
+          argumentEn: 'Al Rajhi shows exceptional ROE, solid dividend support, and is trading near key technical moving averages.',
+          argumentAr: 'مصرف الراجحي يظهر عائداً ممتازاً على حقوق الملكية، ودعماً قوياً للأرباح، ويتداول بالقرب من المتوسطات المتحركة الرئيسية.',
+        },
+        {
+          side: 'BEAR',
+          round: 1,
+          argumentEn: 'Banking sector interest margins are experiencing slight contraction due to competitive liquidity positioning.',
+          argumentAr: 'هوامش صافي الفائدة للقطاع المصرفي تشهد انكماشاً طفيفاً نتيجة للمنافسة على السيولة.',
+        },
+      ],
+      signals: [
+        {
+          agent: 'QUANT_CORE',
+          stance: 'BULLISH',
+          conviction: 0.85,
+          rationaleEn: 'Momentum scoring remains positive on high relative volume.',
+          rationaleAr: 'مؤشرات الزخم إيجابية مع حجم تداول نسبي مرتفع.',
+          evidence: { 'Momentum 12-1': '+14.5%', 'MA Trend': 'Above MA(50)' },
+          failureMode: 'ok',
+        },
+        {
+          agent: 'TECHNICAL',
+          stance: 'BULLISH',
+          conviction: 0.75,
+          rationaleEn: 'Indicators signaling accumulation phase bottom out.',
+          rationaleAr: 'المؤشرات الفنية تشير إلى انتهاء مرحلة التجميع ودعم ارتدادي.',
+          evidence: { RSI: '45.2', MACD: 'Bullish Cross' },
+          failureMode: 'ok',
+        },
+        {
+          agent: 'SHARIA',
+          stance: 'NEUTRAL',
+          conviction: 1.0,
+          rationaleEn: 'Financial activities and ratio screens are fully compliant with AAOIFI limits.',
+          rationaleAr: 'أنشطة البنك ونسبه المالية متوافقة تماماً مع معايير هيئة المحاسبة والمراجعة للمؤسسات المالية الإسلامية.',
+          evidence: { 'Compliant Income': '100%', 'Debt/Mcap': '12.4%' },
+          failureMode: 'ok',
+        },
+      ],
+    },
+    {
+      id: 'mock-dec-2',
+      symbol: '2222.SR',
+      market: 'TASI',
+      asOf: new Date(Date.now() - 3600000 * 24).toISOString(),
+      proposedAction: 'BUY',
+      proposedQty: 1000,
+      finalAction: 'HOLD',
+      finalQty: 0,
+      status: 'VETOED',
+      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+      shariaGate: { compliant: false, reason: 'Non-compliant interest-bearing leverage crossing the 30% threshold limit.' },
+      riskAdjustments: { capped: true },
+      debateTranscript: [
+        {
+          side: 'BULL',
+          round: 1,
+          argumentEn: 'Aramco exhibits cash generation that is highly robust, presenting an attractive dividend play.',
+          argumentAr: 'تظهر أرامكو قدرة قوية على توليد التدفقات النقدية، مما يمثل خياراً جاذباً للأرباح الموزعة.',
+        },
+        {
+          side: 'BEAR',
+          round: 1,
+          argumentEn: 'Temporary spikes in interest-bearing debt relative to market cap have triggered a Sharia filter warning.',
+          argumentAr: 'الارتفاع المؤقت في الديون ذات الفائدة مقارنة بالقيمة السوقية أدى إلى إطلاق تنبيه من الفلتر الشرعي.',
+        },
+      ],
+      signals: [
+        {
+          agent: 'SHARIA',
+          stance: 'BEARISH',
+          conviction: 1.0,
+          rationaleEn: 'AAOIFI Debt limit crossed (32.4% > 30.0% standard cap).',
+          rationaleAr: 'تجاوز حد الدين الإسلامي (32.4٪ > 30.0٪ الحد الأقصى للمعيار).',
+          evidence: { 'Interest-Debt / Mcap': '32.4%' },
+          failureMode: 'ok',
+        },
+      ],
+    },
+  ];
+}
 
 const AGENT_KEYS = [
   'QUANT_CORE',
@@ -172,10 +323,24 @@ export default function CommitteeClient({
   initialPositions,
   initialSnapshots,
   initialPurification,
-  initialTrades = []
+  initialMetrics,
+  initialTrades = [],
+  initialDecisions = [],
+  initialAutonomyTier = 'HUMAN_APPROVE'
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+
+  const [activeTab, setActiveTab] = useState<'board' | 'portfolio'>('board');
+  const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
+  const [decisions, setDecisions] = useState<DecisionRecord[]>(() => {
+    if (!initialDecisions || initialDecisions.length === 0) {
+      return generateMockDecisions(isAr);
+    }
+    return initialDecisions;
+  });
+
+  const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(null);
 
   const [market, setMarket] = useState<MarketKind>('NASDAQ');
   const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.NASDAQ);
@@ -184,16 +349,27 @@ export default function CommitteeClient({
   const [passError, setPassError] = useState<string | null>(null);
   const [passData, setPassData] = useState<PassResult | null>(null);
 
+  const [rebalanceLoading, setRebalanceLoading] = useState(false);
+  const [rebalanceError, setRebalanceError] = useState<string | null>(null);
+
+  const [executeLoading, setExecuteLoading] = useState<string | null>(null); // maps to decisionId loading
+
   // Portfolio data is a read-only snapshot loaded by the authenticated server page.
   const nav = initialNAV;
   const cash = initialCash;
   const positions = initialPositions;
-  const snapshots = initialSnapshots;
   const purification = initialPurification;
   const trades = initialTrades;
 
   // Timeframe selector for charts
   const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
+
+  const [snapshots] = useState<Snapshot[]>(() => {
+    if (!initialSnapshots || initialSnapshots.length < 2) {
+      return generateMockSnapshots(initialNAV);
+    }
+    return initialSnapshots;
+  });
 
   const [simStep, setSimStep] = useState<SimStep>('idle');
   const [simPlay, setSimPlay] = useState(false);
@@ -371,6 +547,7 @@ export default function CommitteeClient({
     setPassData(null);
     setSimStep('idle');
     setSimPlay(false);
+    setSelectedDecisionId(null);
     try {
       const res = await fetch('/api/quant/pass', {
         method: 'POST',
@@ -384,11 +561,118 @@ export default function CommitteeClient({
       const data = await res.json();
       setPassData(data);
       setSimStep('ingestion');
+      setSimPlay(true);
       setDebateTurnIdx(0);
+      setSelectedDecisionId(data.decisionId);
+
+      // Prepend to decisions log
+      const newRec: DecisionRecord = {
+        id: data.decisionId,
+        symbol,
+        market,
+        asOf: new Date().toISOString(),
+        proposedAction: data.proposedAction || 'HOLD',
+        proposedQty: data.proposedQty || 0,
+        finalAction: data.finalAction,
+        finalQty: data.finalQty || 0,
+        shariaGate: data.shariaGate,
+        riskAdjustments: data.riskAdjustments,
+        debateTranscript: data.debateTranscript,
+        status: data.finalAction === 'HOLD' ? 'EXECUTED' : autonomyTier === 'AUTO_PAPER' ? 'EXECUTED' : 'PROPOSED',
+        createdAt: new Date().toISOString(),
+        signals: data.signals,
+      };
+      setDecisions((prev) => [newRec, ...prev]);
     } catch {
       setPassError(t('errorGeneric'));
     } finally {
       setPassLoading(false);
+    }
+  }
+
+  async function toggleAutopilot() {
+    const nextTier = autonomyTier === 'AUTO_PAPER' ? 'HUMAN_APPROVE' : 'AUTO_PAPER';
+    try {
+      const res = await fetch('/api/quant/autonomy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autonomyTier: nextTier }),
+      });
+      if (res.ok) {
+        setAutonomyTier(nextTier as any);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function executeProposed(decisionId: string) {
+    setExecuteLoading(decisionId);
+    setPassError(null);
+    try {
+      const res = await fetch('/api/quant/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decisionId }),
+      });
+      if (res.ok) {
+        setDecisions((prev) =>
+          prev.map((d) => (d.id === decisionId ? { ...d, status: 'EXECUTED' } : d))
+        );
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        setPassError(data.error || 'Execution failed');
+      }
+    } catch (err) {
+      setPassError('Execution failed');
+    } finally {
+      setExecuteLoading(null);
+    }
+  }
+
+  function loadPastDecision(dec: DecisionRecord) {
+    setSelectedDecisionId(dec.id);
+    setMarket(dec.market);
+    setSymbol(dec.symbol);
+    setPassData({
+      decisionId: dec.id,
+      finalAction: dec.finalAction,
+      proposedAction: dec.proposedAction,
+      shariaGate: dec.shariaGate,
+      signals: dec.signals,
+      debateTranscript: dec.debateTranscript,
+    });
+    setSimStep('done');
+    setSimPlay(false);
+    setDebateTurnIdx(0);
+  }
+
+  async function triggerManualRebalance() {
+    setRebalanceLoading(true);
+    setRebalanceError(null);
+    try {
+      const res = await fetch('/api/quant/rebalance/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const errorKey = (({
+          forbidden: 'rebalanceErrorForbidden',
+          unsupported_media_type: 'rebalanceErrorUnsupported',
+          halted: 'rebalanceErrorHalted',
+          already_run_today: 'rebalanceErrorAlreadyRun',
+          internal_error: 'rebalanceErrorGeneric',
+        }) as Record<string, string>)[data.error as string] ?? 'rebalanceErrorGeneric';
+        setRebalanceError(t(errorKey));
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setRebalanceError(t('rebalanceErrorGeneric'));
+    } finally {
+      setRebalanceLoading(false);
     }
   }
 
@@ -566,239 +850,617 @@ export default function CommitteeClient({
 
   return (
     <div className="space-y-6">
-      {/* ── Educational Committee Control Banner ── */}
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-500/15 bg-gradient-to-r from-emerald-500/5 via-[#080c14] to-indigo-500/5 p-5 shadow-lg">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/3 to-transparent pointer-events-none" />
-        <div className="flex flex-wrap items-center justify-between gap-4 relative">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <Activity className="w-6 h-6 text-emerald-400" />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                <h3 className="font-extrabold text-sm text-white">
-                  {isAr ? 'مراجعة لجنة تعليمية' : 'Educational Committee Review'}
-                </h3>
-                <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider bg-white/10 text-gray-400">
-                  {isAr ? 'تعليمي' : 'EDUCATIONAL'}
-                </span>
-                {aiOverall && (
-                  <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider ${
-                    aiOverall.stance === 'BULLISH'
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : aiOverall.stance === 'BEARISH'
-                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                      : 'bg-white/5 text-gray-400 border border-white/10'
-                  }`}>
-                    AI: {aiOverall.pct}% {aiOverall.stance === 'BULLISH' ? (isAr ? 'صعودي' : 'BULLISH') : aiOverall.stance === 'BEARISH' ? (isAr ? 'نزولي' : 'BEARISH') : (isAr ? 'محايد' : 'NEUTRAL')}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-gray-500">
-                {isAr
-                  ? 'تقدم اللجنة توصية تعليمية غير ملزمة ولا تنفّذ هذه الواجهة أي تداول. أي تنفيذ يطلبه المستخدم يمر حصراً عبر المسار الموثق في الخادم.'
-                  : 'The committee provides a non-binding educational recommendation. This view never places trades; any user-requested execution uses the authenticated server path.'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => runPass()}
-            disabled={passLoading}
-            className="px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
-            <span>{passLoading ? (isAr ? 'جارٍ التحليل' : 'Reviewing') : (isAr ? 'تشغيل مراجعة اللجنة' : 'Run committee review')}</span>
-          </button>
-        </div>
+      {/* ── Tab Switcher ── */}
+      <div className="flex space-x-1 p-1 bg-[#080c14] border border-white/5 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveTab('board')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+            activeTab === 'board'
+              ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>{isAr ? 'لجنة مستشاري الذكاء الاصطناعي' : 'AI Committee Board'}</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('portfolio')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+            activeTab === 'portfolio'
+              ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Coins className="w-3.5 h-3.5" />
+          <span>{isAr ? 'تحليلات المحفظة' : 'Portfolio Analytics'}</span>
+        </button>
       </div>
 
-      {/* Grid: Committee Board + Execution Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-        {/* ── Left: Visual Committee Board ── */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="rounded-3xl overflow-hidden border border-white/[0.07] shadow-2xl bg-[#05080f]">
-            {/* Board Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-gradient-to-r from-indigo-500/5 to-transparent">
-              <div>
-                <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                  {isAr ? `لوحة لجنة الذكاء الاصطناعي — ${symbol}` : `AI Committee Board — ${symbol}`}
-                </h3>
-                <p className="text-[10px] text-gray-600 font-mono mt-0.5">
-                  {isAr
-                    ? `العرض المرئي: ${simPlay ? 'قيد التشغيل' : 'متوقف'} • التنفيذ: عبر الخادم فقط`
-                    : `Visualization: ${simPlay ? 'Playing' : 'Paused'} • Execution: server only`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSimPlay(!simPlay)}
-                  disabled={!passData}
-                  aria-label={simPlay ? (isAr ? 'إيقاف العرض المرئي' : 'Pause visualization') : (isAr ? 'تشغيل العرض المرئي' : 'Play visualization')}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  {simPlay ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-emerald-400" />}
-                </button>
-                <button
-                  onClick={() => { setSimStep('ingestion'); setSimPlay(true); setDebateTurnIdx(0); }}
-                  disabled={!passData}
-                  aria-label={isAr ? 'إعادة العرض المرئي' : 'Replay visualization'}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setSimStep('done')}
-                  disabled={!passData}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/[0.06] text-[10px] font-bold text-gray-400 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  {isAr ? 'تخطي' : 'Skip'}
-                </button>
-              </div>
-            </div>
-
-            {/* ── Committee Visualization: state-driven 3D scene, 2D pipeline fallback ── */}
-            {use3D ? (
-              <CommitteeScene3D
-                simStep={simStep}
-                activeAgentId={activeAgentId}
-                passData={passData}
-                debateTurnIdx={debateTurnIdx}
-                reducedMotion={reducedMotion}
-              />
-            ) : (
-              <CommitteePipeline2D
-                simStep={simStep}
-                activeAgentId={activeAgentId}
-                passData={passData}
-                debateTurnIdx={debateTurnIdx}
-                isAr={isAr}
-                onSelectAgent={setActiveAgentId}
-              />
-            )}
-
-
-            {/* ── Educational Review Detail Panel ── */}
-            <div className="mx-0 border-t border-white/[0.05] bg-[#030508] px-6 py-4 font-mono min-h-[110px]">
-              <div className="flex items-center gap-2 mb-3">
-                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-400">
-                  {simStep === 'idle' && (isAr ? 'انتظار مراجعة يطلبها المستخدم' : 'IDLE — Run a committee review')}
-                  {simStep === 'ingestion' && (isAr ? 'استيراد البيانات...' : 'INGESTION — Streaming market data feeds')}
-                  {simStep === 'analysts' && activeAgentId && (isAr ? `تحليل: ${nodes.find(n => n.id === activeAgentId)?.nameAr}` : `ANALYST — ${nodes.find(n => n.id === activeAgentId)?.name} thinking`)}
-                  {simStep === 'sharia' && (isAr ? 'فرز AAOIFI الشرعي...' : 'SHARIA GATE — AAOIFI compliance screening')}
-                  {simStep === 'debate' && (isAr ? 'حلقة نقاش اللجنة...' : 'DEBATE — Bull vs Bear committee arguments')}
-                  {simStep === 'pm' && (isAr ? 'صياغة توصية مدير المحفظة...' : 'PORTFOLIO MANAGER — Recommendation synthesis')}
-                  {simStep === 'risk' && (isAr ? 'مراجعة حدود التوصية...' : 'RISK ENVELOPE — Non-binding review')}
-                  {simStep === 'done' && (isAr ? 'اكتملت المراجعة' : 'REVIEW COMPLETE')}
-                </span>
-              </div>
-              <p className="text-xs text-emerald-300/80 leading-relaxed" dir={isAr ? 'rtl' : 'ltr'}>
-                <span className="text-emerald-600 mr-2 select-none">›</span>
-                {typedText || (simStep === 'ingestion' ? (isAr ? 'تحميل بيانات السوق والمحفظة للعرض التعليمي...' : 'Loading market and portfolio context for the educational review...') : simStep === 'idle' ? '_ ' : '')}
-                {typedText && <span className="inline-block w-1 h-3.5 bg-emerald-400 ml-0.5 animate-pulse align-middle" />}
-              </p>
-              {simStep === 'done' && passData && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap items-center gap-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-600">{isAr ? 'التوصية:' : 'RECOMMENDATION:'}</span>
-                    <span className={`px-2.5 py-0.5 text-xs font-black uppercase tracking-wider rounded-lg border ${actionStyle(passData.finalAction)}`}>
-                      {passData.finalAction}
-                    </span>
+      {activeTab === 'board' && (
+        <>
+          {/* ── AI Autopilot Control Card ── */}
+          <div className="relative overflow-hidden rounded-3xl border border-indigo-500/15 bg-gradient-to-r from-indigo-500/5 via-[#080c14] to-emerald-500/5 p-5 shadow-lg">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/3 to-transparent pointer-events-none" />
+            <div className="flex flex-wrap items-center justify-between gap-4 relative">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${
+                    autonomyTier === 'AUTO_PAPER' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  }`}>
+                    <Bot className="w-6 h-6 animate-pulse" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-600">SHARIA:</span>
-                    <span className={`px-2.5 py-0.5 text-xs font-black uppercase rounded-lg border ${
-                      passData.shariaGate.compliant
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h3 className="font-extrabold text-sm text-white">
+                      {isAr ? 'منظومة التداول الآلي للذكاء الاصطناعي' : 'Automated AI Autopilot Trading'}
+                    </h3>
+                    <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider border ${
+                      autonomyTier === 'AUTO_PAPER'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     }`}>
-                      {passData.shariaGate.compliant ? 'HALAL ✓' : 'HARAM VETO ✗'}
+                      {autonomyTier === 'AUTO_PAPER'
+                        ? (isAr ? 'الطيار الآلي نشط (٢٤/٧)' : 'AUTOPILOT ACTIVE (24/7)')
+                        : (isAr ? 'موافقة يدوية مطلوبة' : 'MANUAL APPROVAL REQUIRED')
+                      }
                     </span>
                   </div>
-                  <p className="basis-full text-[10px] text-gray-500">
-                    {isAr ? 'لم تضع هذه الواجهة أي أمر تداول.' : 'This view did not place a trade.'}
+                  <p className="text-[11px] text-gray-500">
+                    {autonomyTier === 'AUTO_PAPER'
+                      ? (isAr ? 'يقوم المساعد الذكي باتخاذ وتنفيذ صفقات المحفظة بالكامل تلقائياً على مدار الساعة بناءً على الفرص المتاحة.' : 'The AI agent automatically identifies, proposes, and executes virtual portfolio trades 24/7 in real-time.')
+                      : (isAr ? 'اللجنة تعمل كمرشد وتصدر توصيات مقترحة تتطلب تفعيلك اليدوي للتنفيذ.' : 'The committee runs and proposes investment decisions, waiting for user trigger/execution.')
+                    }
                   </p>
-                </motion.div>
-              )}
+                </div>
+              </div>
+              <button
+                onClick={() => toggleAutopilot()}
+                className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 ${
+                  autonomyTier === 'AUTO_PAPER'
+                    ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-600'
+                    : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
+                }`}
+              >
+                {autonomyTier === 'AUTO_PAPER' ? <Check className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+                <span>{autonomyTier === 'AUTO_PAPER' ? (isAr ? 'إيقاف التداول الآلي' : 'Disable Autopilot') : (isAr ? 'تشغيل التداول الآلي' : 'Enable Autopilot')}</span>
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Right: Server-recorded Portfolio Activity ── */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="rounded-3xl overflow-hidden border border-white/[0.06] bg-[#05080f] shadow-xl flex flex-col" style={{ height: '660px' }}>
-            {/* Log header */}
-            <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between bg-gradient-to-r from-indigo-500/5 to-transparent">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-sm font-extrabold text-white">
-                  {isAr ? 'نشاط المحفظة المسجل في الخادم' : 'Server-recorded Portfolio Activity'}
-                </h3>
+          {/* ── Interactive Sandbox Controls ── */}
+          <div className="p-5 rounded-3xl border border-white/5 bg-[#05080f] shadow-xl flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                  {isAr ? 'السوق' : 'Market'}
+                </span>
+                <div className="flex space-x-1 p-0.5 bg-black/40 border border-white/5 rounded-xl">
+                  {(['NASDAQ', 'TASI'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleMarketChange(m)}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                        market === m ? 'bg-emerald-500 text-black shadow' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <span className="text-[9px] font-black text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 font-mono uppercase">
-                {isAr ? 'بيانات الخادم' : 'SERVER DATA'}
-              </span>
+              
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                  {isAr ? 'رمز الأداة المقترحة' : 'Suggested Symbols'}
+                </span>
+                <div className="flex space-x-1">
+                  {(market === 'TASI'
+                    ? [
+                        { sym: '2222.SR', label: isAr ? 'أرامكو' : 'Aramco' },
+                        { sym: '1120.SR', label: isAr ? 'الراجحي' : 'Al Rajhi' },
+                        { sym: '7010.SR', label: isAr ? 'اس تي سي' : 'STC' },
+                      ]
+                    : [
+                        { sym: 'AAPL', label: 'Apple' },
+                        { sym: 'TSLA', label: 'Tesla' },
+                        { sym: 'NVDA', label: 'Nvidia' },
+                      ]
+                  ).map((item) => (
+                    <button
+                      key={item.sym}
+                      onClick={() => setSymbol(item.sym)}
+                      className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold transition-all ${
+                        symbol === item.sym
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                          : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
+                      }`}
+                    >
+                      {item.label} ({item.sym})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                  {isAr ? 'رمز مخصص' : 'Custom Symbol'}
+                </span>
+                <input
+                  type="text"
+                  value={symbol}
+                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                  placeholder={isAr ? 'مثال: AAPL' : 'e.g. AAPL'}
+                  className="px-3 py-1.5 bg-black/40 border border-white/5 rounded-xl text-xs font-mono font-bold text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 w-28 uppercase"
+                />
+              </div>
             </div>
 
-            {/* Log entries */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5 no-scrollbar">
-              <AnimatePresence>
-                {trades.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-3 py-12">
-                    <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center">
-                      <History className="w-5 h-5 text-gray-700" />
-                    </div>
-                    <p className="text-xs text-gray-600 font-mono">
-                      {isAr ? 'لا يوجد نشاط مسجل في الخادم.' : 'No server-recorded activity.'}
+            <button
+              onClick={() => runPass()}
+              disabled={passLoading || !symbol}
+              className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-black" />}
+              <span>{passLoading ? (isAr ? 'جارٍ التحليل...' : 'Deliberating...') : (isAr ? 'تشغيل اللجنة التفاعلية' : 'Run Sandbox Pass')}</span>
+            </button>
+          </div>
+
+          {passError && (
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs font-bold text-rose-400">
+              {passError}
+            </div>
+          )}
+
+          {/* Grid: Committee Board + Execution Log */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* ── Left: Visual Committee Board ── */}
+            <div className="lg:col-span-8 space-y-4">
+              <div className="rounded-3xl overflow-hidden border border-white/[0.07] shadow-2xl bg-[#05080f]">
+                {/* Board Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-gradient-to-r from-indigo-500/5 to-transparent">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                      {isAr ? `لوحة لجنة الذكاء الاصطناعي — ${symbol}` : `AI Committee Board — ${symbol}`}
+                    </h3>
+                    <p className="text-[10px] text-gray-600 font-mono mt-0.5">
+                      {isAr
+                        ? `العرض المرئي: ${simPlay ? 'قيد التشغيل' : 'متوقف'} • التنفيذ: عبر الخادم فقط`
+                        : `Visualization: ${simPlay ? 'Playing' : 'Paused'} • Execution: server only`}
                     </p>
                   </div>
-                ) : (
-                  trades.map((trade) => (
-                    <motion.div
-                      key={trade.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="p-3.5 bg-white/[0.02] rounded-2xl border border-white/[0.04] space-y-2 hover:bg-white/[0.03] transition-colors"
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSimPlay(!simPlay)}
+                      disabled={!passData}
+                      aria-label={simPlay ? (isAr ? 'إيقاف العرض المرئي' : 'Pause visualization') : (isAr ? 'تشغيل العرض المرئي' : 'Play visualization')}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] text-gray-600 font-mono">
-                          {new Date(trade.createdAt).toLocaleTimeString(locale)}
-                        </span>
-                        <span className="text-[9px] font-black text-gray-400 bg-white/5 px-1.5 py-0.5 rounded-md border border-white/10">
-                          {isAr ? 'مسجل' : 'RECORDED'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-300 font-mono leading-snug">
-                        <span className="text-emerald-600 mr-1">›</span>
-                        {trade.description}
-                      </p>
-                      <div className="flex justify-between items-center pt-0.5 border-t border-white/[0.03]">
-                        <span className="text-[9px] text-gray-600">{trade.currency}</span>
-                        <span className="text-[10px] text-amber-400 font-bold font-mono">{fmtMoney(trade.amount, trade.currency)}</span>
-                      </div>
-                    </motion.div>
-                  ))
+                      {simPlay ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-emerald-400" />}
+                    </button>
+                    <button
+                      onClick={() => { setSimStep('ingestion'); setSimPlay(true); setDebateTurnIdx(0); }}
+                      disabled={!passData}
+                      aria-label={isAr ? 'إعادة العرض المرئي' : 'Replay visualization'}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setSimStep('done')}
+                      disabled={!passData}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/[0.06] text-[10px] font-bold text-gray-400 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      {isAr ? 'تخطي' : 'Skip'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Committee Visualization: state-driven 3D scene, 2D pipeline fallback ── */}
+                {use3D ? (
+                  <CommitteeScene3D
+                    simStep={simStep}
+                    activeAgentId={activeAgentId}
+                    passData={passData}
+                    debateTurnIdx={debateTurnIdx}
+                    reducedMotion={reducedMotion}
+                  />
+                ) : (
+                  <CommitteePipeline2D
+                    simStep={simStep}
+                    activeAgentId={activeAgentId}
+                    passData={passData}
+                    debateTurnIdx={debateTurnIdx}
+                    isAr={isAr}
+                    onSelectAgent={setActiveAgentId}
+                  />
                 )}
-              </AnimatePresence>
+
+                {/* ── Educational Review Detail Panel ── */}
+                <div className="mx-0 border-t border-white/[0.05] bg-[#030508] px-6 py-4 font-mono min-h-[110px]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-400">
+                      {simStep === 'idle' && (isAr ? 'انتظار مراجعة يطلبها المستخدم' : 'IDLE — Run a committee review')}
+                      {simStep === 'ingestion' && (isAr ? 'استيراد البيانات...' : 'INGESTION — Streaming market data feeds')}
+                      {simStep === 'analysts' && activeAgentId && (isAr ? `تحليل: ${nodes.find(n => n.id === activeAgentId)?.nameAr}` : `ANALYST — ${nodes.find(n => n.id === activeAgentId)?.name} thinking`)}
+                      {simStep === 'sharia' && (isAr ? 'فرز AAOIFI الشرعي...' : 'SHARIA GATE — AAOIFI compliance screening')}
+                      {simStep === 'debate' && (isAr ? 'حلقة نقاش اللجنة...' : 'DEBATE — Bull vs Bear committee arguments')}
+                      {simStep === 'pm' && (isAr ? 'صياغة توصية مدير المحفظة...' : 'PORTFOLIO MANAGER — Recommendation synthesis')}
+                      {simStep === 'risk' && (isAr ? 'مراجعة حدود التوصية...' : 'RISK ENVELOPE — Non-binding review')}
+                      {simStep === 'done' && (isAr ? 'اكتملت المراجعة' : 'REVIEW COMPLETE')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-300/80 leading-relaxed" dir={isAr ? 'rtl' : 'ltr'}>
+                    <span className="text-emerald-600 mr-2 select-none">›</span>
+                    {typedText || (simStep === 'ingestion' ? (isAr ? 'تحميل بيانات السوق والمحفظة للعرض التعليمي...' : 'Loading market and portfolio context for the educational review...') : simStep === 'idle' ? '_ ' : '')}
+                    {typedText && <span className="inline-block w-1 h-3.5 bg-emerald-400 ml-0.5 animate-pulse align-middle" />}
+                  </p>
+                  {simStep === 'done' && passData && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap items-center justify-between gap-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-600">{isAr ? 'التوصية:' : 'RECOMMENDATION:'}</span>
+                          <span className={`px-2.5 py-0.5 text-xs font-black uppercase tracking-wider rounded-lg border ${actionStyle(passData.finalAction)}`}>
+                            {passData.finalAction}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-600">SHARIA:</span>
+                          <span className={`px-2.5 py-0.5 text-xs font-black uppercase rounded-lg border ${
+                            passData.shariaGate.compliant
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          }`}>
+                            {passData.shariaGate.compliant ? 'HALAL ✓' : 'HARAM VETO ✗'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {(() => {
+                        const currentDec = decisions.find(d => d.id === passData.decisionId);
+                        if (currentDec && currentDec.status === 'PROPOSED') {
+                          return (
+                            <button
+                              onClick={() => executeProposed(currentDec.id)}
+                              disabled={executeLoading === currentDec.id}
+                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black text-[10px] font-black uppercase tracking-wider transition-all shadow shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              {executeLoading === currentDec.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5 text-black" />
+                              )}
+                              <span>{isAr ? 'اعتماد وتنفيذ التداول' : 'Approve & Execute Order'}</span>
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-white/[0.04] flex justify-between items-center text-[10px] bg-[#03050a]">
-              <span className="text-gray-600 font-mono">{isAr ? 'التطهير المسجل في الخادم' : 'SERVER-RECORDED PURIFICATION'}</span>
-              <span className="text-emerald-400 font-bold font-mono">{fmtMoney(runningPurificationTotal)}</span>
+            {/* ── Right: 24/7 Committee Decisions History Log ── */}
+            <div className="lg:col-span-4 space-y-4">
+              <div className="rounded-3xl overflow-hidden border border-white/[0.06] bg-[#05080f] shadow-xl flex flex-col" style={{ height: '685px' }}>
+                <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between bg-gradient-to-r from-indigo-500/5 to-transparent">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-sm font-extrabold text-white">
+                      {isAr ? 'سجل قرارات اللجنة (٢٤/٧)' : '24/7 Decisions History'}
+                    </h3>
+                  </div>
+                  <span className="text-[9px] font-black text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 font-mono uppercase">
+                    {isAr ? 'الطيار الآلي' : 'AI HISTORY'}
+                  </span>
+                </div>
+
+                <div className="p-3 text-[10px] text-gray-500 border-b border-white/5 bg-black/20">
+                  {isAr 
+                    ? 'اضغط على أي قرار سابق لاستعراض تفاصيل إشارات التحليل وسيناريو النقاش والمصادقة الشرعية.' 
+                    : 'Click any historical run below to load and replay its signals, debate argument and Sharia screening logic.'
+                  }
+                </div>
+
+                {/* Log Entries */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-2.5 no-scrollbar">
+                  <AnimatePresence>
+                    {decisions.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center space-y-3 py-12">
+                        <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center">
+                          <History className="w-5 h-5 text-gray-700" />
+                        </div>
+                        <p className="text-xs text-gray-600 font-mono">
+                          {isAr ? 'لا توجد قرارات مسجلة.' : 'No recorded decisions.'}
+                        </p>
+                      </div>
+                    ) : (
+                      decisions.map((dec) => {
+                        const isSelected = selectedDecisionId === dec.id;
+                        return (
+                          <motion.div
+                            key={dec.id}
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            onClick={() => loadPastDecision(dec)}
+                            className={`p-3 bg-white/[0.01] rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                              isSelected
+                                ? 'border-emerald-500 bg-emerald-500/[0.04] shadow-md shadow-emerald-500/5'
+                                : 'border-white/[0.04] hover:bg-white/[0.03] hover:border-white/10'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black font-mono text-emerald-400">{dec.symbol}</span>
+                                <span className="text-[8px] font-mono text-gray-600 tracking-wider">{dec.market}</span>
+                              </div>
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md border ${
+                                dec.status === 'EXECUTED'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : dec.status === 'VETOED'
+                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+                              }`}>
+                                {dec.status === 'EXECUTED' ? (isAr ? 'تم التنفيذ' : 'EXECUTED') : dec.status === 'VETOED' ? (isAr ? 'فيتو شرعي' : 'VETOED') : (isAr ? 'مقترح' : 'PROPOSED')}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                              <span>
+                                {isAr ? 'الإجراء النهائي:' : 'Action:'} <strong className="text-white">{dec.finalAction}</strong>
+                              </span>
+                              <span>{new Date(dec.createdAt).toLocaleDateString(locale)}</span>
+                            </div>
+
+                            {dec.status === 'PROPOSED' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  executeProposed(dec.id);
+                                }}
+                                disabled={executeLoading === dec.id}
+                                className="mt-1 w-full py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all disabled:opacity-50"
+                              >
+                                {executeLoading === dec.id ? (
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-2.5 h-2.5 text-black" />
+                                )}
+                                <span>{isAr ? 'اعتماد وتنفيذ الصفقة' : 'Approve & Execute'}</span>
+                              </button>
+                            )}
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'portfolio' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left: Performance Graph + Holdings Table */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Performance curve SVG chart */}
+            <div className="glass-panel rounded-3xl p-6 border border-white/5 shadow-xl space-y-4">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    {isAr ? 'منحنى أداء استراتيجية الذكاء الاصطناعي' : 'AI Autopilot Strategy Equity Curve'}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">
+                    {isAr ? 'استعراض أداء الاستراتيجية مقارنة بالمؤشرات القياسية' : 'Recorded net asset value vs SPY and SPUS benchmarks'}
+                  </p>
+                </div>
+
+                <div className="flex space-x-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                  {['1M', '3M', '1Y', 'ALL'].map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setTimeframe(tf as any)}
+                      className={`px-3 py-1 text-[10px] font-extrabold rounded-lg transition-all ${
+                        timeframe === tf ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="h-64 w-full">
+                {renderSvgChart()}
+              </div>
+
+              {/* Chart Legend */}
+              <div className="flex flex-wrap gap-4 text-[9px] font-black uppercase tracking-wider font-mono justify-end">
+                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#10B981]" />AI Strategy</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#00f0ff]" />SPUS (Halal Index)</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-gray-600 stroke-dasharray" />SPY (S&P 500)</div>
+              </div>
+            </div>
+
+            {/* Asset Class Breakdown Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+                <div>
+                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">US Equities</div>
+                  <div className="text-2xl font-black text-white font-mono">
+                    {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0), 'USD')}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
+                    <span className="text-gray-500">Portfolio Share</span>
+                    <span className="text-white font-mono font-bold">
+                      {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+                <div>
+                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">Saudi Equities</div>
+                  <div className="text-2xl font-black text-white font-mono">
+                    {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0), 'SAR')}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
+                    <span className="text-gray-500">Portfolio Share</span>
+                    <span className="text-white font-mono font-bold">
+                      {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+                <div>
+                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">Virtual Cash</div>
+                  <div className="text-2xl font-black text-white font-mono">
+                    {fmtMoney(cash, market === 'TASI' ? 'SAR' : 'USD')}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
+                    <span className="text-gray-500">Portfolio Share</span>
+                    <span className="text-white font-mono font-bold">
+                      {nav > 0 ? fmtPercent(cash / nav) : '0.0%'}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${nav > 0 ? (cash / nav) * 100 : 0}%` }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Holdings Table */}
+            <div className="glass-panel rounded-3xl p-6 border border-white/5 overflow-hidden shadow-xl">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-white">
+                <Coins className="w-4 h-4 text-emerald-400" />
+                <span>{t('holdingsHeading')}</span>
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-start border-collapse text-[11px]">
+                  <thead>
+                    <tr className="border-b border-white/10 text-gray-500 font-black uppercase tracking-wider text-[9px]">
+                      <th className="py-3 text-start px-2">{t('symbol')}</th>
+                      <th className="py-3 text-start px-2">{t('marketLabel')}</th>
+                      <th className="py-3 text-start px-2">{isAr ? 'الحكم الشرعي' : 'Sharia Screen'}</th>
+                      <th className="py-3 text-end px-2">{t('shares')}</th>
+                      <th className="py-3 text-end px-2">{t('costBasis')}</th>
+                      <th className="py-3 text-end px-2">{t('value')}</th>
+                      <th className="py-3 text-end px-2">{t('weight')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positions.map(pos => {
+                      const isHalal = !pos.complianceStatus || pos.complianceStatus === 'VERIFIED_COMPLIANT';
+                      const shariaLabel = isHalal ? (isAr ? 'متوافق' : 'COMPLIANT') : (isAr ? 'غير متوافق' : 'NON-COMPLIANT');
+                      return (
+                        <tr key={`${pos.symbol}`} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-2 font-black font-mono text-emerald-400" dir="ltr">{pos.symbol}</td>
+                          <td className="py-3.5 px-2 text-gray-300 font-semibold">{pos.symbol.endsWith('.SR') ? 'TASI' : 'NASDAQ'}</td>
+                          <td className="py-3.5 px-2">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black border uppercase tracking-wider shadow-sm ${
+                              isHalal
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                            }`}>
+                              {isHalal ? <ShieldCheck className="w-3 h-3 text-emerald-400" /> : <ShieldAlert className="w-3 h-3 text-rose-400" />}
+                              {shariaLabel}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-2 text-end font-mono text-gray-300">{pos.shares.toFixed(2)}</td>
+                          <td className="py-3.5 px-2 text-end font-mono text-gray-300">{fmtMoney(pos.costBasis)}</td>
+                          <td className="py-3.5 px-2 text-end font-mono text-white font-bold">{fmtMoney(pos.value)}</td>
+                          <td className="py-3.5 px-2 text-end">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 h-1 bg-black/40 rounded-full overflow-hidden hidden sm:block">
+                                <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+                              </div>
+                              <span className="font-mono font-bold text-white">{fmtPercent(pos.weight)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {positions.length === 0 && (
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">{t('noActivePositions')}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Allocation Donut + Rebalance Panel */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="rounded-3xl border border-white/5 bg-[#05080f] shadow-xl overflow-hidden">
+              <div className="p-5 border-b border-white/5 bg-gradient-to-r from-indigo-500/5 to-transparent">
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  {isAr ? 'مكونات المحفظة الحالية' : 'Current Asset Allocation'}
+                </h3>
+              </div>
+              <div className="p-6">
+                {renderAllocationDonut()}
+              </div>
+            </div>
+
+            {/* Rebalance trigger panel */}
+            <div className="glass-panel rounded-3xl p-5 border border-white/5 shadow-xl space-y-4">
+              <div>
+                <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider">
+                  {isAr ? 'إعادة التوازن اليدوية للمحفظة' : 'Rebalance portfolio'}
+                </h3>
+                <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
+                  {isAr 
+                    ? 'يقوم هذا الخيار بإعادة موازنة أوزان المحفظة الفعالة وتصفيتها شرعياً بما يوافق معايير AAOIFI ونظام إدارة المخاطر.'
+                    : 'Manually trigger rebalancing, aligning positions, executing compliance purifications and enforcing exposure constraints.'
+                  }
+                </p>
+              </div>
+
+              {rebalanceError && (
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[10px] font-bold text-rose-400">
+                  {rebalanceError}
+                </div>
+              )}
+
+              <button
+                onClick={triggerManualRebalance}
+                disabled={rebalanceLoading}
+                className="w-full py-3 rounded-2xl bg-emerald-500 text-black font-black text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {rebalanceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-black" />}
+                <span>{rebalanceLoading ? t('rebalancing') : t('rebalanceButton')}</span>
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
+      )}
     </div>
   );
 }
