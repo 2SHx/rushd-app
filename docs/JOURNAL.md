@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-10 — Markets UI UX & Trade Execution Enhancement ✅
+Shipped: Wired TradeAction sheet in StockDetail; added responsive 2-column desktop grid & mobile-reach layouts; connected interactive sector breakouts in MarketSentimentPanel and treemap headers; refactored heatmap to opacity-based semantic colors.
+Decisions: Rendered TradeAction inline above tabs on mobile to avoid overlapping floating bottom nav; replaced muddy hardcoded hexes with theme opacity variables to natively support dark/light theme switching.
+Open: Ready for regulatory presentation and final parent supervision flow audits.
+
 ## 2026-07-08 — Markets UI Rebuild & Monolith Decomposition ✅
 Shipped: Decomposed MarketsClient.tsx monolith into 10 clean, sub-500-line components under src/components/markets/. Integrated dynamic 250ms debounced live stock search over the database and live universes. Connected the Sage Mentor assistant panel to /api/signals POST endpoint to fetch live AI recommendations and bilingual logic. Implemented a narrative storytelling design layer (compliance shields, biography quest stats, and custom sliders/drawers).
 Decisions: Synchronized selected stock status using window.history.pushState for immediate, shareable deep-linking. Updated incorrect English names for 8250.SR and 6060.SR.
