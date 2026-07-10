@@ -6,7 +6,6 @@ import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRigh
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
-import MarketSentimentPanel from './MarketSentimentPanel';
 import MarketSectorModal from './MarketSectorModal';
 import { YAHOO_STOCK_METRICS, type YahooStockMetric } from './yahooFinanceData';
 import type { SectorGroup, FearGreed } from './marketOverviewUtils';
@@ -199,13 +198,13 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
   // Color helper based on Yahoo Finance heatmap scale:
   // <= -3% (dark red) | -2% (red) | -1% (pinkish red) | 0% (gray) | +1% (light emerald) | +2% (emerald) | >= +3% (dark emerald)
   const getHeatColor = (pct: number) => {
-    if (pct <= -3) return 'bg-down text-white';
-    if (pct <= -1.5) return 'bg-down/70 text-white';
-    if (pct <= -0.25) return 'bg-down/20 text-down';
-    if (pct < 0.25) return 'bg-foreground/10 text-foreground/70';
-    if (pct < 1.5) return 'bg-up/20 text-up';
-    if (pct < 3) return 'bg-up/70 text-white';
-    return 'bg-up text-white';
+    if (pct <= -3) return 'bg-[#b91c1c] text-white';
+    if (pct <= -1.5) return 'bg-[#ef4444] text-white';
+    if (pct <= -0.25) return 'bg-[#fca5a5]/70 text-red-950';
+    if (pct < 0.25) return 'bg-[#374151] text-gray-300';
+    if (pct < 1.5) return 'bg-[#6ee7b7]/70 text-emerald-950';
+    if (pct < 3) return 'bg-[#10b981] text-white';
+    return 'bg-[#047857] text-white';
   };
 
   // Weight sizing helpers for cells representing stocks
@@ -240,50 +239,6 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         upPct={upPct}
         fg={fg}
       />
-
-      {/* Overview Grid with the Sector Map Summary card & Sentiment details */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        <div className="xl:col-span-8">
-          <MarketSentimentPanel
-            fg={fg}
-            sectors={sectors}
-            isAr={isAr}
-            onSelectSector={(sec) => setSelectedSector(sec)}
-          />
-        </div>
-        <div className="xl:col-span-4">
-          <div className="glass-panel p-5 rounded-3xl space-y-4">
-            <div>
-              <h4 className="font-bold text-xs uppercase tracking-wider text-foreground/50">
-                {isAr ? 'حالة تداول المؤشرات' : 'Index Breadth Summary'}
-              </h4>
-              <p className="text-[10px] text-foreground/40 mt-0.5">
-                {isAr ? 'نسبة الأسهم الصاعدة والهابطة في الجلسة الحالية' : 'Distribution of advancing and declining assets'}
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span>{isAr ? 'الأسهم الصاعدة' : 'Advancing Tickers'}</span>
-                  <span className="text-up font-mono font-bold tabular-nums">+{stats.up.length}</span>
-                </div>
-                <div className="w-full h-1.5 bg-foreground/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-up rounded-full" style={{ width: `${upPct}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span>{isAr ? 'الأسهم الهابطة' : 'Declining Tickers'}</span>
-                  <span className="text-down font-mono font-bold tabular-nums">-{stats.dn.length}</span>
-                </div>
-                <div className="w-full h-1.5 bg-foreground/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-down rounded-full" style={{ width: `${100 - upPct}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* 2. Screener Options (Yahoo Finance Styled Filter & Layout Toggles) */}
       <div className="glass-panel rounded-3xl p-6 space-y-6 border border-white/5 relative overflow-hidden">
@@ -435,14 +390,14 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
             {/* Color Legend scale */}
             <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground/50 border-b border-white/5 pb-4">
               <span>{isAr ? 'خسارة شديدة' : 'Down'}</span>
-              <div className="flex gap-1 font-mono text-[9px]">
-                <span className="w-10 h-4 bg-down rounded-md text-center text-white pt-0.5">{"<=-3%"}</span>
-                <span className="w-10 h-4 bg-down/70 rounded-md text-center text-white pt-0.5">-2%</span>
-                <span className="w-10 h-4 bg-down/20 rounded-md text-center text-down pt-0.5">-1%</span>
-                <span className="w-10 h-4 bg-foreground/10 rounded-md text-center text-foreground/70 pt-0.5">0%</span>
-                <span className="w-10 h-4 bg-up/20 rounded-md text-center text-up pt-0.5">+1%</span>
-                <span className="w-10 h-4 bg-up/70 rounded-md text-center text-white pt-0.5">+2%</span>
-                <span className="w-10 h-4 bg-up rounded-md text-center text-white pt-0.5">{">=+3%"}</span>
+              <div className="flex gap-1">
+                <span className="w-8 h-4 bg-[#b91c1c] rounded-md text-center text-white pt-0.5">{"<=-3%"}</span>
+                <span className="w-8 h-4 bg-[#ef4444] rounded-md text-center text-white pt-0.5">-2%</span>
+                <span className="w-8 h-4 bg-[#fca5a5]/70 rounded-md text-center text-red-950 pt-0.5">-1%</span>
+                <span className="w-8 h-4 bg-[#374151] rounded-md text-center text-gray-300 pt-0.5">0%</span>
+                <span className="w-8 h-4 bg-[#6ee7b7]/70 rounded-md text-center text-emerald-950 pt-0.5">+1%</span>
+                <span className="w-8 h-4 bg-[#10b981] rounded-md text-center text-white pt-0.5">+2%</span>
+                <span className="w-8 h-4 bg-[#047857] rounded-md text-center text-white pt-0.5">{">=+3%"}</span>
               </div>
               <span>{isAr ? 'ربح شديد' : 'Up'}</span>
             </div>
@@ -462,23 +417,16 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
                     key={sec.name}
                     className="border border-white/5 rounded-2xl bg-black/15 p-4 flex flex-col space-y-3"
                   >
-                    {/* Sector Title & Average Change (Interactive header zooming into details) */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSector(sec)}
-                      className="flex justify-between items-center text-xs font-extrabold border-b border-white/5 pb-2 w-full hover:text-accent transition-colors text-start group"
-                    >
-                      <span className="text-foreground uppercase tracking-wide group-hover:accent-text transition-colors flex items-center gap-1.5">
+                    {/* Sector Title & Average Change */}
+                    <div className="flex justify-between items-center text-xs font-extrabold border-b border-white/5 pb-2">
+                      <span className="text-foreground uppercase tracking-wide">
                         {isAr ? sec.nameAr : sec.name}
-                        <span className="text-[9px] text-accent/50 font-normal group-hover:text-accent/80 transition-colors">
-                          ({isAr ? 'عرض التفاصيل' : 'Zoom'})
-                        </span>
                       </span>
                       <span className={`font-mono ${sec.avgPct >= 0 ? 'text-up' : 'text-down'}`}>
                         {sec.avgPct >= 0 ? '+' : ''}
                         {sec.avgPct.toFixed(2)}%
                       </span>
-                    </button>
+                    </div>
 
                     {/* Accurate stock box mapping sized by market cap */}
                     <div className="flex flex-wrap gap-1.5 w-full">
