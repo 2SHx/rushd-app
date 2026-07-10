@@ -1,8 +1,8 @@
 // src/components/markets/MarketOverviewPanel.tsx
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
@@ -22,6 +22,16 @@ interface Props {
 type ScreenerFilter = 'most-active' | 'trending' | 'gainers' | 'losers' | 'gainers-52w' | 'losers-52w' | 'unusual-volume';
 type ViewMode = 'table' | 'heatmap';
 
+const FILTER_TABS = [
+  { id: 'most-active', en: 'Most Active', ar: 'الأكثر نشاطاً' },
+  { id: 'trending', en: 'Trending Now', ar: 'الرائج الآن' },
+  { id: 'gainers', en: 'Top Gainers', ar: 'الأعلى ارتفاعاً' },
+  { id: 'losers', en: 'Top Losers', ar: 'الأكثر انخفاضاً' },
+  { id: 'gainers-52w', en: '52-Week Gainers', ar: 'قريب من القمة السنوية' },
+  { id: 'losers-52w', en: '52-Week Losers', ar: 'قريب من القاع السنوي' },
+  { id: 'unusual-volume', en: 'Unusual Volume', ar: 'حجم تداول غير اعتيادي' },
+] as const;
+
 export default function MarketOverviewPanel({ market, locale, onSelectStock, quotes, loadingQuotes }: Props) {
   const isAr = locale === 'ar';
   const tickers = TICKERS[market];
@@ -33,6 +43,34 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
   const [activeFilter, setActiveFilter] = useState<ScreenerFilter>('most-active');
   const [viewMode, setViewMode] = useState<ViewMode>('heatmap');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const activeIndex = FILTER_TABS.findIndex((tab) => tab.id === activeFilter);
+
+  const handleLeftClick = useCallback(() => {
+    const diff = isAr ? 1 : -1;
+    const nextIndex = (activeIndex + diff + FILTER_TABS.length) % FILTER_TABS.length;
+    setActiveFilter(FILTER_TABS[nextIndex].id);
+  }, [activeIndex, isAr]);
+
+  const handleRightClick = useCallback(() => {
+    const diff = isAr ? -1 : 1;
+    const nextIndex = (activeIndex + diff + FILTER_TABS.length) % FILTER_TABS.length;
+    setActiveFilter(FILTER_TABS[nextIndex].id);
+  }, [activeIndex, isAr]);
+
+  // Keyboard navigation for filters
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+      if (e.key === 'ArrowLeft') {
+        handleLeftClick();
+      } else if (e.key === 'ArrowRight') {
+        handleRightClick();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleLeftClick, handleRightClick]);
 
   // Fetch Fear & Greed index
   useEffect(() => {
@@ -216,15 +254,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
     return 'w-[10%] h-12 lg:h-14 text-[9px]'; // Small
   };
 
-  const filterTabs = [
-    { id: 'most-active', en: 'Most Active', ar: 'الأكثر نشاطاً' },
-    { id: 'trending', en: 'Trending Now', ar: 'الرائج الآن' },
-    { id: 'gainers', en: 'Top Gainers', ar: 'الأعلى ارتفاعاً' },
-    { id: 'losers', en: 'Top Losers', ar: 'الأكثر انخفاضاً' },
-    { id: 'gainers-52w', en: '52-Week Gainers', ar: 'قريب من القمة السنوية' },
-    { id: 'losers-52w', en: '52-Week Losers', ar: 'قريب من القاع السنوي' },
-    { id: 'unusual-volume', en: 'Unusual Volume', ar: 'حجم تداول غير اعتيادي' },
-  ] as const;
+
 
   return (
     <div className="space-y-6 pb-12">
@@ -278,20 +308,38 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
 
         {/* Filters and Search row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex overflow-x-auto no-scrollbar gap-1.5 w-full lg:w-auto -mx-6 px-6 lg:mx-0 lg:px-0">
-            {filterTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveFilter(tab.id)}
-                className={`whitespace-nowrap px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  activeFilter === tab.id
-                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
-                    : 'bg-white/5 border border-white/10 text-foreground/75 hover:bg-white/10'
-                }`}
-              >
-                {isAr ? tab.ar : tab.en}
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5 w-full lg:w-auto -mx-6 px-6 lg:mx-0 lg:px-0">
+            <button
+              onClick={handleLeftClick}
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-foreground/70 hover:bg-white/10 hover:text-foreground transition-all shrink-0"
+              aria-label={isAr ? 'الفلتر التالي' : 'Previous filter'}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex overflow-x-auto no-scrollbar gap-1.5 flex-1 lg:flex-initial py-1">
+              {FILTER_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveFilter(tab.id)}
+                  className={`whitespace-nowrap px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    activeFilter === tab.id
+                      ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                      : 'bg-white/5 border border-white/10 text-foreground/75 hover:bg-white/10'
+                  }`}
+                >
+                  {isAr ? tab.ar : tab.en}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleRightClick}
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-foreground/70 hover:bg-white/10 hover:text-foreground transition-all shrink-0"
+              aria-label={isAr ? 'الفلتر السابق' : 'Next filter'}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="relative w-full lg:w-64">
