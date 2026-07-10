@@ -26,6 +26,7 @@ Any-model routing: `node scripts/dispatch.mjs <agent> "task"` runs any agent on 
 
 ## Hard rules
 - IMPORTANT: lazy-dev ladder applies to ALL code (skill: lazy-dev). New dependencies require written rung-1-to-5 justification.
+- IMPORTANT: ui-craft applies to ALL UI/component/animation changes (skill: ui-craft) — agents default to mediocre UI. Non-negotiable: ease-out enters, transform/opacity only, all four states (loading/empty/error/populated), logical RTL props, no fabricated analysis.
 - Money fields are Float — known debt. Flag it, never compound it. Migration is governed by SYSTEM_DESIGN.md.
 - Every user-facing string lands in BOTH `messages/en.json` and `messages/ar.json` in the same change.
 - SAHMK/Alpaca/Zoya are mocked; every feature must keep working with no API keys set.
