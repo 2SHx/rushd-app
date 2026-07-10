@@ -12,6 +12,21 @@ because the default was wrong. Apply them without being asked.
 **Order of operations for any UI task:** states → layout → type/number → depth → motion → a11y → RTL.
 Motion is last. Motion never rescues a bad layout.
 
+## 0. Reference aesthetic — institutional minimalism
+
+The target is **morpho.org**: a serious financial-infrastructure look. Concretely:
+- **Near-monochrome base.** Neutral greys/near-black/off-white carry the page. **One** restrained accent,
+  used sparingly for a single primary action — not sprinkled.
+- **Whitespace is the layout.** Generous vertical rhythm between sections; let content breathe. Cramped
+  density reads as amateur; calm density reads as institutional.
+- **Almost no borders.** Separation comes from spacing and soft elevation, not lines.
+- **Quiet motion.** Subtle scroll-reveals and hover states. Nothing bounces, nothing demands attention.
+- **Credibility over ornament.** No gradients-for-gradients'-sake, no decorative glow competing with data.
+
+**Applied to RUSHD: the numbers ARE the ornament.** A price, a NAV curve, an alpha figure — those are the
+most beautiful things on the page. If a decoration competes with a number, delete the decoration. Chrome
+recedes so data can lead. This is the single rule that turns a dashboard into a terminal.
+
 ---
 
 ## 1. Motion

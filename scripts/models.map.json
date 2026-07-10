@@ -17,6 +17,7 @@
     "i18n-fintech-expert":{ "runner": "codex", "model": "gpt-5.6-terra", "effort": "high",   "fallback": { "runner": "codex", "model": "gpt-5.6-luna", "effort": "low" } },
     "qa-reviewer":        { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
     "security-auditor":   { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
-    "architect":          { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } }
+    "architect":          { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } },
+    "design-reviewer":    { "runner": "codex", "model": "gpt-5.5",       "effort": "xhigh",  "fallback": { "runner": "codex", "model": "gpt-5.6-terra", "effort": "medium" } }
   }
 }

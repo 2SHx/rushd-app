@@ -59,7 +59,7 @@ OPEN: <risks/unknowns, max 3 bullets>
 1. **Explorer before expert**: if you can't fill the FILES slot with path:line refs, spend haiku tokens first, not sonnet tokens.
 2. **One goal per dispatch.** Two goals = two dispatches.
 3. **Integrate from reports**, not by re-reading every changed file; spot-check only what a report flags as risky.
-4. **Review chain**: implementation → qa-reviewer with the SAME acceptance block → (if the change touches auth, money movement, or the API surface) security-auditor. Sharia/Arabic-touching changes get an i18n-fintech-expert pass before qa-reviewer.
+4. **Review chain**: implementation → qa-reviewer with the SAME acceptance block → (if the change touches auth, money movement, or the API surface) security-auditor → (if the change touches UI, components, or animation) **design-reviewer**, graded against the `ui-craft` skill. Sharia/Arabic-touching changes get an i18n-fintech-expert pass before qa-reviewer. Reviewers ALWAYS run on a different model than the implementer — that diversity is what makes a gate catch anything.
 5. **Parallel dispatches** only for disjoint scope fences.
 6. **Escape valves**: an agent BLOCKED after 3 attempts reports the exact failing output — do not re-dispatch the same prompt; fix the dispatch. After 2 failed correction rounds on one issue, write a better dispatch from scratch. Contradictions with SYSTEM_DESIGN.md route to the architect (amend the contract), never get resolved ad-hoc.
 7. **Session hygiene**: `/clear` between unrelated tasks; cold-start from docs/JOURNAL.md + SYSTEM_DESIGN.md slices, not re-exploration.
