@@ -11,9 +11,6 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  ShieldCheck,
-  ShieldAlert,
-  AlertTriangle,
   Loader2,
   Gavel,
   Play,
@@ -21,18 +18,9 @@ import {
   RefreshCw,
   Cpu,
   Database,
-  ArrowRight,
-  HelpCircle,
-  Award,
-  Wallet,
-  Briefcase,
   History,
-  ClipboardList,
   Activity,
-  Percent,
-  Coins
 } from 'lucide-react';
-import { TICKERS } from '@/lib/tickers';
 
 type MarketKind = 'TASI' | 'NASDAQ';
 export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -184,7 +172,6 @@ export default function CommitteeClient({
   initialPositions,
   initialSnapshots,
   initialPurification,
-  initialMetrics,
   initialTrades = []
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
@@ -197,22 +184,19 @@ export default function CommitteeClient({
   const [passError, setPassError] = useState<string | null>(null);
   const [passData, setPassData] = useState<PassResult | null>(null);
 
-  // Consolidated Index Portfolio States
-  const [nav, setNav] = useState(initialNAV);
-  const [cash, setCash] = useState(initialCash);
-  const [positions, setPositions] = useState<Position[]>(initialPositions);
-  const [snapshots, setSnapshots] = useState<Snapshot[]>(initialSnapshots);
-  const [purification, setPurification] = useState<PurificationEntry[]>(initialPurification);
-  const [metrics, setMetrics] = useState<Metrics>(initialMetrics);
-  const [trades, setTrades] = useState<Trade[]>(initialTrades);
+  // Portfolio data is a read-only snapshot loaded by the authenticated server page.
+  const nav = initialNAV;
+  const cash = initialCash;
+  const positions = initialPositions;
+  const snapshots = initialSnapshots;
+  const purification = initialPurification;
+  const trades = initialTrades;
 
   // Timeframe selector for charts
   const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
 
-  // Autopilot 24/7 Engine
-  const [autoPilot, setAutoPilot] = useState(true);
   const [simStep, setSimStep] = useState<SimStep>('idle');
-  const [simPlay, setSimPlay] = useState(true);
+  const [simPlay, setSimPlay] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [typedText, setTypedText] = useState('');
   const [debateTurnIdx, setDebateTurnIdx] = useState(0);
@@ -241,10 +225,9 @@ export default function CommitteeClient({
   }, [passData]);
 
 
-  // DR-13: WebGL/reduced-motion detection gates the 3D committee scene.
-  // No WebGL (or still checking) -> 2D pipeline fallback (never a blank canvas).
-  const { webglSupported, reducedMotion } = useSceneAvailability();
-  const use3D = webglSupported === true;
+  // Forced to 2D network communication view per user request to clearly display each node, thinking, and decisions.
+  const { reducedMotion } = useSceneAvailability();
+  const use3D = false;
   const CommitteeScene3D = useMemo(
     () =>
       dynamic(() => import('./CommitteeScene3D'), {
@@ -276,31 +259,6 @@ export default function CommitteeClient({
   }, []);
 
   const simTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const autoPilotTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Visual settings loaded dynamically from DesignControlCenter
-  const [settings, setSettings] = useState({ simSpeed: 1, volatility: 1 });
-
-  useEffect(() => {
-    const speed = localStorage.getItem('rushd_simSpeed');
-    const vol = localStorage.getItem('rushd_volatility');
-    setSettings({
-      simSpeed: speed ? Number(speed) : 1,
-      volatility: vol ? Number(vol) : 1,
-    });
-
-    const handleSettingsChange = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail) {
-        setSettings({
-          simSpeed: detail.simSpeed ?? 1,
-          volatility: detail.volatility ?? 1,
-        });
-      }
-    };
-    window.addEventListener('rushd_settings_changed', handleSettingsChange);
-    return () => window.removeEventListener('rushd_settings_changed', handleSettingsChange);
-  }, []);
 
   function handleMarketChange(m: MarketKind) {
     setMarket(m);
@@ -337,9 +295,9 @@ export default function CommitteeClient({
         targetText = isAr ? pmSignal.rationaleAr : pmSignal.rationaleEn;
       }
     } else if (simStep === 'risk') {
-      targetText = isAr 
-        ? `مدير المخاطر يراجع ويطهر الأرصدة. تم تأكيد الإجراء النهائي: ${passData.finalAction}.` 
-        : `Risk Manager is executing final envelope constraints. Action validated: ${passData.finalAction}.`;
+      targetText = isAr
+        ? `مدير المخاطر يراجع حدود التوصية غير الملزمة: ${passData.finalAction}. التنفيذ، إذا طلبه المستخدم، يتم فقط عبر المسار الموثق في الخادم.`
+        : `The Risk Manager is reviewing the non-binding ${passData.finalAction} recommendation. Any user-requested execution is handled only by the authenticated server path.`;
     }
 
     setTypedText('');
@@ -367,12 +325,7 @@ export default function CommitteeClient({
       return;
     }
 
-    const delay = settings.simSpeed * 1000;
-    
-    if (settings.simSpeed === 0) {
-      setSimStep('done');
-      return;
-    }
+    const delay = 1000;
 
     const runNextStep = () => {
       if (simStep === 'ingestion') {
@@ -410,52 +363,19 @@ export default function CommitteeClient({
     return () => {
       if (simTimerRef.current) clearTimeout(simTimerRef.current);
     };
-  }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, settings.simSpeed, isVisible]);
+  }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, isVisible]);
 
-  // Autopilot loop scheduler
-  useEffect(() => {
-    if (!isVisible) {
-      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
-      return;
-    }
-    if (!autoPilot) {
-      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
-      return;
-    }
-
-    if (simStep === 'idle') {
-      // Pick a random symbol from active tickers to demonstrate 24/7 automated index trading
-      const activeTickers = market === 'TASI' ? TICKERS.TASI : TICKERS.NASDAQ;
-      const randomTicker = activeTickers[Math.floor(Math.random() * activeTickers.length)];
-      setSymbol(randomTicker.symbol);
-      runPass(randomTicker.symbol);
-    } else if (simStep === 'done' && passData) {
-      // Execute the decision, update live portfolio layout, and wait to trigger next asset rebalance loop
-      const price = TICKERS[market].find(t => t.symbol === symbol)?.price || 120.0;
-      executeAutopilotTrade(passData.finalAction, passData.shariaGate.compliant, price);
-
-      autoPilotTimerRef.current = setTimeout(() => {
-        setSimStep('idle');
-      }, 60000); // 60 seconds wait before selecting next stock (policed for cost/frequency)
-    }
-
-    return () => {
-      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simStep, autoPilot, market, isVisible]);
-
-  async function runPass(overrideSymbol?: string) {
+  async function runPass() {
     setPassLoading(true);
     setPassError(null);
     setPassData(null);
     setSimStep('idle');
-    const targetSymbol = overrideSymbol || symbol;
+    setSimPlay(false);
     try {
       const res = await fetch('/api/quant/pass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: targetSymbol, market }),
+        body: JSON.stringify({ symbol, market }),
       });
       if (!res.ok) {
         setPassError(t('errorGeneric'));
@@ -469,109 +389,6 @@ export default function CommitteeClient({
       setPassError(t('errorGeneric'));
     } finally {
       setPassLoading(false);
-    }
-  }
-
-  // Update virtual portfolio holdings dynamically in autopilot mode
-  function executeAutopilotTrade(action: string, isCompliant: boolean, currentPrice: number) {
-    if (!isCompliant || action === 'HOLD') return;
-
-    const qty = 50; // Standard simulated rebalance batch
-    const cost = currentPrice * qty;
-
-    if (action === 'BUY') {
-      if (cash >= cost) {
-        const newCash = cash - cost;
-        setCash(newCash);
-
-        let positionExists = false;
-        const updatedPositions = positions.map(pos => {
-          if (pos.symbol === symbol) {
-            positionExists = true;
-            const newShares = pos.shares + qty;
-            const newValue = newShares * currentPrice;
-            return {
-              ...pos,
-              shares: newShares,
-              price: currentPrice,
-              value: newValue,
-              costBasis: (pos.costBasis * pos.shares + cost) / newShares
-            };
-          }
-          return pos;
-        });
-
-        if (!positionExists) {
-          updatedPositions.push({
-            symbol,
-            name: symbol,
-            shares: qty,
-            price: currentPrice,
-            value: cost,
-            costBasis: currentPrice,
-            weight: 0
-          });
-        }
-
-        const newNAV = newCash + updatedPositions.reduce((sum, p) => sum + p.value, 0);
-        setNav(newNAV);
-        setPositions(updatedPositions.map(p => ({ ...p, weight: p.value / newNAV })));
-
-        // Prepend automated execution transaction log
-        const newTrade: Trade = {
-          id: `autopilot-${Date.now()}`,
-          amount: cost,
-          currency: market === 'TASI' ? 'SAR' : 'USD',
-          description: `AUTO REBALANCE: Bought ${qty} shares of ${symbol} at ${fmtMoney(currentPrice)}`,
-          createdAt: new Date().toISOString()
-        };
-        setTrades(prev => [newTrade, ...prev]);
-      }
-    } else if (action === 'SELL') {
-      const activePosition = positions.find(pos => pos.symbol === symbol);
-      if (activePosition && activePosition.shares >= qty) {
-        const newCash = cash + cost;
-        setCash(newCash);
-
-        const updatedPositions = positions.map(pos => {
-          if (pos.symbol === symbol) {
-            const newShares = pos.shares - qty;
-            return {
-              ...pos,
-              shares: newShares,
-              value: newShares * currentPrice,
-              price: currentPrice
-            };
-          }
-          return pos;
-        }).filter(pos => pos.shares > 0);
-
-        const newNAV = newCash + updatedPositions.reduce((sum, p) => sum + p.value, 0);
-        setNav(newNAV);
-        setPositions(updatedPositions.map(p => ({ ...p, weight: p.value / newNAV })));
-
-        // Prepend automated execution transaction log
-        const newTrade: Trade = {
-          id: `autopilot-${Date.now()}`,
-          amount: cost,
-          currency: market === 'TASI' ? 'SAR' : 'USD',
-          description: `AUTO REBALANCE: Sold ${qty} shares of ${symbol} at ${fmtMoney(currentPrice)}`,
-          createdAt: new Date().toISOString()
-        };
-        setTrades(prev => [newTrade, ...prev]);
-
-        // Dynamic Sharia purification logic
-        const purificationOwed = cost * 0.05 * 0.02; // Purification fee math
-        const newPurificationEntry: PurificationEntry = {
-          id: `purify-${Date.now()}`,
-          symbol,
-          amount: purificationOwed,
-          ratio: 0.001,
-          profit: cost * 0.05,
-          createdAt: new Date().toISOString()
-        };
-        setPurification(prev => [newPurificationEntry, ...prev]);
-      }
     }
   }
 
@@ -589,10 +406,10 @@ export default function CommitteeClient({
     return new Date(s.asOf).getTime() >= cutoff;
   });
 
-  const fmtMoney = (val: number) => {
+  const fmtMoney = (val: number, currency = market === 'TASI' ? 'SAR' : 'USD') => {
     return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
       style: 'currency',
-      currency: market === 'TASI' ? 'SAR' : 'USD'
+      currency
     }).format(val);
   };
 
@@ -749,7 +566,7 @@ export default function CommitteeClient({
 
   return (
     <div className="space-y-6">
-      {/* ── Autopilot Control Banner ── */}
+      {/* ── Educational Committee Control Banner ── */}
       <div className="relative overflow-hidden rounded-3xl border border-emerald-500/15 bg-gradient-to-r from-emerald-500/5 via-[#080c14] to-indigo-500/5 p-5 shadow-lg">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/3 to-transparent pointer-events-none" />
         <div className="flex flex-wrap items-center justify-between gap-4 relative">
@@ -758,21 +575,14 @@ export default function CommitteeClient({
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                 <Activity className="w-6 h-6 text-emerald-400" />
               </div>
-              {autoPilot && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#080c14]">
-                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
-                </span>
-              )}
             </div>
             <div>
               <div className="flex items-center gap-2 mb-0.5">
                 <h3 className="font-extrabold text-sm text-white">
-                  {isAr ? 'المحفظة المؤتمتة 24/7' : 'Automated 24/7 Portfolio'}
+                  {isAr ? 'مراجعة لجنة تعليمية' : 'Educational Committee Review'}
                 </h3>
-                <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider ${
-                  autoPilot ? 'bg-emerald-400 text-black' : 'bg-white/10 text-gray-400'
-                }`}>
-                  {autoPilot ? (isAr ? 'نشط' : 'LIVE') : (isAr ? 'متوقف' : 'PAUSED')}
+                <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider bg-white/10 text-gray-400">
+                  {isAr ? 'تعليمي' : 'EDUCATIONAL'}
                 </span>
                 {aiOverall && (
                   <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider ${
@@ -788,21 +598,18 @@ export default function CommitteeClient({
               </div>
               <p className="text-[11px] text-gray-500">
                 {isAr
-                  ? 'لجنة الذكاء الاصطناعي تقيّم الأصول وتنفّذ التداولات تلقائياً وفق معايير الشريعة'
-                  : '8 AI agents evaluate assets, run Sharia screening, debate, and auto-execute rebalances'}
+                  ? 'تقدم اللجنة توصية تعليمية غير ملزمة ولا تنفّذ هذه الواجهة أي تداول. أي تنفيذ يطلبه المستخدم يمر حصراً عبر المسار الموثق في الخادم.'
+                  : 'The committee provides a non-binding educational recommendation. This view never places trades; any user-requested execution uses the authenticated server path.'}
               </p>
             </div>
           </div>
           <button
-            onClick={() => setAutoPilot(!autoPilot)}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 ${
-              autoPilot
-                ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/20'
-                : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-            }`}
+            onClick={() => runPass()}
+            disabled={passLoading}
+            className="px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {autoPilot ? <Pause className="w-3.5 h-3.5 text-black" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
-            <span>{autoPilot ? (isAr ? 'إيقاف مؤقت' : 'PAUSE') : (isAr ? 'تشغيل' : 'RESUME')}</span>
+            {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+            <span>{passLoading ? (isAr ? 'جارٍ التحليل' : 'Reviewing') : (isAr ? 'تشغيل مراجعة اللجنة' : 'Run committee review')}</span>
           </button>
         </div>
       </div>
@@ -821,25 +628,32 @@ export default function CommitteeClient({
                   {isAr ? `لوحة لجنة الذكاء الاصطناعي — ${symbol}` : `AI Committee Board — ${symbol}`}
                 </h3>
                 <p className="text-[10px] text-gray-600 font-mono mt-0.5">
-                  Speed: {settings.simSpeed}s • Volatility: {settings.volatility}x • Loop: {autoPilot ? (isAr ? 'نشط' : 'Active') : (isAr ? 'متوقف' : 'Paused')}
+                  {isAr
+                    ? `العرض المرئي: ${simPlay ? 'قيد التشغيل' : 'متوقف'} • التنفيذ: عبر الخادم فقط`
+                    : `Visualization: ${simPlay ? 'Playing' : 'Paused'} • Execution: server only`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSimPlay(!simPlay)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95"
+                  disabled={!passData}
+                  aria-label={simPlay ? (isAr ? 'إيقاف العرض المرئي' : 'Pause visualization') : (isAr ? 'تشغيل العرض المرئي' : 'Play visualization')}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   {simPlay ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-emerald-400" />}
                 </button>
                 <button
                   onClick={() => { setSimStep('ingestion'); setSimPlay(true); setDebateTurnIdx(0); }}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95"
+                  disabled={!passData}
+                  aria-label={isAr ? 'إعادة العرض المرئي' : 'Replay visualization'}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setSimStep('done')}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/[0.06] text-[10px] font-bold text-gray-400 hover:text-white transition-colors"
+                  disabled={!passData}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/[0.06] text-[10px] font-bold text-gray-400 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   {isAr ? 'تخطي' : 'Skip'}
                 </button>
@@ -867,24 +681,24 @@ export default function CommitteeClient({
             )}
 
 
-            {/* ── Live Terminal Panel ── */}
+            {/* ── Educational Review Detail Panel ── */}
             <div className="mx-0 border-t border-white/[0.05] bg-[#030508] px-6 py-4 font-mono min-h-[110px]">
               <div className="flex items-center gap-2 mb-3">
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-400">
-                  {simStep === 'idle' && (isAr ? 'انتظار...' : 'IDLE — Waiting for next cycle')}
+                  {simStep === 'idle' && (isAr ? 'انتظار مراجعة يطلبها المستخدم' : 'IDLE — Run a committee review')}
                   {simStep === 'ingestion' && (isAr ? 'استيراد البيانات...' : 'INGESTION — Streaming market data feeds')}
                   {simStep === 'analysts' && activeAgentId && (isAr ? `تحليل: ${nodes.find(n => n.id === activeAgentId)?.nameAr}` : `ANALYST — ${nodes.find(n => n.id === activeAgentId)?.name} thinking`)}
                   {simStep === 'sharia' && (isAr ? 'فرز AAOIFI الشرعي...' : 'SHARIA GATE — AAOIFI compliance screening')}
                   {simStep === 'debate' && (isAr ? 'حلقة نقاش اللجنة...' : 'DEBATE — Bull vs Bear committee arguments')}
-                  {simStep === 'pm' && (isAr ? 'قرار مدير المحفظة...' : 'PORTFOLIO MANAGER — Final decision synthesis')}
-                  {simStep === 'risk' && (isAr ? 'مراجعة المخاطر...' : 'RISK ENVELOPE — Constraint validation')}
-                  {simStep === 'done' && (isAr ? 'اكتملت الدورة' : 'CYCLE COMPLETE')}
+                  {simStep === 'pm' && (isAr ? 'صياغة توصية مدير المحفظة...' : 'PORTFOLIO MANAGER — Recommendation synthesis')}
+                  {simStep === 'risk' && (isAr ? 'مراجعة حدود التوصية...' : 'RISK ENVELOPE — Non-binding review')}
+                  {simStep === 'done' && (isAr ? 'اكتملت المراجعة' : 'REVIEW COMPLETE')}
                 </span>
               </div>
               <p className="text-xs text-emerald-300/80 leading-relaxed" dir={isAr ? 'rtl' : 'ltr'}>
                 <span className="text-emerald-600 mr-2 select-none">›</span>
-                {typedText || (simStep === 'ingestion' ? 'Streaming bars, cash balances, sector data and sentiment catalog...' : simStep === 'idle' ? '_ ' : '')}
+                {typedText || (simStep === 'ingestion' ? (isAr ? 'تحميل بيانات السوق والمحفظة للعرض التعليمي...' : 'Loading market and portfolio context for the educational review...') : simStep === 'idle' ? '_ ' : '')}
                 {typedText && <span className="inline-block w-1 h-3.5 bg-emerald-400 ml-0.5 animate-pulse align-middle" />}
               </p>
               {simStep === 'done' && passData && (
@@ -894,7 +708,7 @@ export default function CommitteeClient({
                   className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap items-center gap-4"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-600">ACTION:</span>
+                    <span className="text-[10px] text-gray-600">{isAr ? 'التوصية:' : 'RECOMMENDATION:'}</span>
                     <span className={`px-2.5 py-0.5 text-xs font-black uppercase tracking-wider rounded-lg border ${actionStyle(passData.finalAction)}`}>
                       {passData.finalAction}
                     </span>
@@ -909,13 +723,16 @@ export default function CommitteeClient({
                       {passData.shariaGate.compliant ? 'HALAL ✓' : 'HARAM VETO ✗'}
                     </span>
                   </div>
+                  <p className="basis-full text-[10px] text-gray-500">
+                    {isAr ? 'لم تضع هذه الواجهة أي أمر تداول.' : 'This view did not place a trade.'}
+                  </p>
                 </motion.div>
               )}
             </div>
           </div>
         </div>
 
-        {/* ── Right: Execution Log ── */}
+        {/* ── Right: Server-recorded Portfolio Activity ── */}
         <div className="lg:col-span-4 space-y-4">
           <div className="rounded-3xl overflow-hidden border border-white/[0.06] bg-[#05080f] shadow-xl flex flex-col" style={{ height: '660px' }}>
             {/* Log header */}
@@ -923,11 +740,11 @@ export default function CommitteeClient({
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-indigo-400" />
                 <h3 className="text-sm font-extrabold text-white">
-                  {isAr ? 'سجل التداول الآلي' : 'Autopilot Trade Log'}
+                  {isAr ? 'نشاط المحفظة المسجل في الخادم' : 'Server-recorded Portfolio Activity'}
                 </h3>
               </div>
-              <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono uppercase">
-                LIVE
+              <span className="text-[9px] font-black text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 font-mono uppercase">
+                {isAr ? 'بيانات الخادم' : 'SERVER DATA'}
               </span>
             </div>
 
@@ -940,7 +757,7 @@ export default function CommitteeClient({
                       <History className="w-5 h-5 text-gray-700" />
                     </div>
                     <p className="text-xs text-gray-600 font-mono">
-                      {isAr ? 'في انتظار أول عملية تداول...' : 'Awaiting first rebalance pass...'}
+                      {isAr ? 'لا يوجد نشاط مسجل في الخادم.' : 'No server-recorded activity.'}
                     </p>
                   </div>
                 ) : (
@@ -955,8 +772,8 @@ export default function CommitteeClient({
                         <span className="text-[9px] text-gray-600 font-mono">
                           {new Date(trade.createdAt).toLocaleTimeString(locale)}
                         </span>
-                        <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/15">
-                          ✓ OK
+                        <span className="text-[9px] font-black text-gray-400 bg-white/5 px-1.5 py-0.5 rounded-md border border-white/10">
+                          {isAr ? 'مسجل' : 'RECORDED'}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-300 font-mono leading-snug">
@@ -964,8 +781,8 @@ export default function CommitteeClient({
                         {trade.description}
                       </p>
                       <div className="flex justify-between items-center pt-0.5 border-t border-white/[0.03]">
-                        <span className="text-[9px] text-gray-600">50 shares batch</span>
-                        <span className="text-[10px] text-amber-400 font-bold font-mono">{fmtMoney(trade.amount)}</span>
+                        <span className="text-[9px] text-gray-600">{trade.currency}</span>
+                        <span className="text-[10px] text-amber-400 font-bold font-mono">{fmtMoney(trade.amount, trade.currency)}</span>
                       </div>
                     </motion.div>
                   ))
@@ -975,8 +792,8 @@ export default function CommitteeClient({
 
             {/* Footer */}
             <div className="px-5 py-3 border-t border-white/[0.04] flex justify-between items-center text-[10px] bg-[#03050a]">
-              <span className="text-gray-600 font-mono">PURIFICATION RATIO: 0.1%</span>
-              <span className="text-emerald-400 font-bold font-mono">PURIFIED: {fmtMoney(runningPurificationTotal)}</span>
+              <span className="text-gray-600 font-mono">{isAr ? 'التطهير المسجل في الخادم' : 'SERVER-RECORDED PURIFICATION'}</span>
+              <span className="text-emerald-400 font-bold font-mono">{fmtMoney(runningPurificationTotal)}</span>
             </div>
           </div>
         </div>
