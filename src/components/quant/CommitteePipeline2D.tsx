@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, ShieldCheck, ShieldAlert, Gavel, Database } from 'lucide-react';
@@ -28,6 +29,20 @@ const NODES: CommitteeNode[] = [
   { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '69%', y: '75%', type: 'pm', icon: Bot },
   { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '88%', y: '50%', type: 'risk', icon: Gavel },
 ];
+
+const AVATARS: Record<string, string> = {
+  ingest: '/avatars/quant_core.png',
+  QUANT_CORE: '/avatars/quant_core.png',
+  TECHNICAL: '/avatars/technical.png',
+  PATTERN_ANALOG: '/avatars/technical.png',
+  NEWS_CATALYST: '/avatars/quant_core.png',
+  FUNDAMENTAL: '/avatars/pm.png',
+  RESEARCH: '/avatars/quant_core.png',
+  SHARIA: '/avatars/sharia.png',
+  debate: '/avatars/pm.png',
+  PORTFOLIO_MANAGER: '/avatars/pm.png',
+  risk: '/avatars/sharia.png',
+};
 
 export interface CommitteePipeline2DProps {
   simStep: SimStep;
@@ -264,9 +279,9 @@ export default function CommitteePipeline2D({
           <motion.div
             key={node.id}
             style={{ left: node.x, top: node.y, position: 'absolute' }}
-            className="-translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center cursor-pointer"
+            className="-translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center cursor-pointer group"
             initial={{ scale: 0.7, opacity: 0 }}
-            animate={{ scale: isActive ? 1.12 : 1, opacity: 1, zIndex: isActive ? 40 : 10 }}
+            animate={{ scale: isActive ? 1.08 : 1, opacity: 1, zIndex: isActive ? 40 : 10 }}
             transition={{ duration: 0.4, type: 'spring', stiffness: 200 }}
             onClick={() => { if (agentSignal) onSelectAgent?.(node.id); }}
           >
@@ -275,7 +290,7 @@ export default function CommitteePipeline2D({
               <div
                 className="absolute rounded-full border-2 animate-spin"
                 style={{
-                  width: '72px', height: '72px',
+                  width: '84px', height: '84px',
                   top: '50%', left: '50%',
                   transform: 'translate(-50%, -50%)',
                   borderColor: pColor.ring,
@@ -290,8 +305,8 @@ export default function CommitteePipeline2D({
             <div
               className="absolute rounded-full blur-md pointer-events-none"
               style={{
-                width: isActive ? '56px' : '40px',
-                height: isActive ? '56px' : '40px',
+                width: isActive ? '68px' : '52px',
+                height: isActive ? '68px' : '52px',
                 top: '50%', left: '50%',
                 transform: 'translate(-50%, -50%)',
                 background: pColor.glow,
@@ -299,62 +314,69 @@ export default function CommitteePipeline2D({
               }}
             />
 
-            {/* Planet card */}
-            <div className={`relative w-[140px] p-3 rounded-2xl border flex flex-col gap-1.5 transition-all duration-300 ${
-              isActive
-                ? 'border-emerald-400/60 bg-[#06150f]/90 shadow-[0_0_24px_rgba(16,185,129,0.25)]'
-                : sStyle
-                ? 'border-white/10 bg-[#08091a]/85'
-                : 'border-white/[0.06] bg-[#06080f]/80'
-            }`} style={{ backdropFilter: 'blur(12px)' }}>
-              {/* Planet sphere + status */}
-              <div className="flex items-center justify-between">
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center border-2 shrink-0"
-                  style={{
-                    background: `radial-gradient(circle at 35% 35%, ${pColor.ring}, ${pColor.core})`,
-                    borderColor: isActive ? pColor.ring : 'rgba(255,255,255,0.1)',
-                    boxShadow: isActive ? `0 0 14px ${pColor.glow}` : `0 0 6px ${pColor.glow}`,
-                  }}
-                >
-                  {node.icon ? (
-                    <node.icon className="w-4 h-4 text-white" />
-                  ) : node.id === 'SHARIA' ? (
-                    passData?.shariaGate.compliant
-                      ? <ShieldCheck className="w-4 h-4 text-white" />
-                      : <ShieldAlert className="w-4 h-4 text-white" />
+            {/* Compact circular avatar container */}
+            <div
+              className={`relative w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 shadow-md ${
+                isActive
+                  ? 'border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.3)] scale-105'
+                  : sStyle && agentSignal
+                  ? agentSignal.stance === 'BULLISH'
+                    ? 'border-emerald-500/60'
+                    : agentSignal.stance === 'BEARISH'
+                    ? 'border-rose-500/60'
+                    : 'border-white/20'
+                  : 'border-white/10 hover:border-white/30'
+              }`}
+            >
+              <Image
+                src={AVATARS[node.id] || '/avatars/quant_core.png'}
+                alt=""
+                fill
+                sizes="64px"
+                className="object-cover rounded-full pointer-events-none"
+              />
+              
+              {/* Overlay Badge at Bottom Right */}
+              <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border flex items-center justify-center text-white ${
+                isActive 
+                  ? 'bg-emerald-500 border-emerald-400 shadow-sm'
+                  : sStyle && agentSignal?.stance === 'BULLISH'
+                  ? 'bg-emerald-600 border-emerald-500'
+                  : sStyle && agentSignal?.stance === 'BEARISH'
+                  ? 'bg-rose-600 border-rose-500'
+                  : 'bg-[#0f111a] border-white/10'
+              }`}>
+                {node.icon ? (
+                  <node.icon className="w-2.5 h-2.5" />
+                ) : node.id === 'SHARIA' ? (
+                  passData?.shariaGate.compliant ?? true ? (
+                    <ShieldCheck className="w-2.5 h-2.5 text-white" />
                   ) : (
-                    <Bot className="w-4 h-4 text-white" />
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  {isActive && (
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: pColor.ring }} />
-                      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: pColor.ring }} />
-                    </span>
-                  )}
-                  {!isActive && agentSignal && simStep !== 'ingestion' && (
-                    <span className={`text-[7px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-md border ${sStyle?.bg} ${sStyle?.color} ${sStyle?.border}`}>
-                      {agentSignal.stance}
-                    </span>
-                  )}
-                </div>
+                    <ShieldAlert className="w-2.5 h-2.5 text-white" />
+                  )
+                ) : (
+                  <Bot className="w-2.5 h-2.5" />
+                )}
               </div>
+            </div>
 
-              {/* Node name */}
-              <span className="text-[10px] font-bold text-gray-100 truncate leading-tight">
+            {/* Label below the circle */}
+            <span className="text-[10px] font-extrabold text-gray-300 mt-1.5 whitespace-nowrap text-center drop-shadow-md transition-colors group-hover:text-white">
+              {isAr ? node.nameAr : node.name}
+            </span>
+
+            {/* Hover Tooltip Card */}
+            <div className="absolute top-[105%] left-1/2 -translate-x-1/2 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 w-[150px] p-2.5 rounded-xl border border-white/10 bg-[#080c14]/95 backdrop-blur-md shadow-2xl flex flex-col gap-1 text-start">
+              <span className="text-[10px] font-bold text-gray-100">
                 {isAr ? node.nameAr : node.name}
               </span>
-
-              {/* Conviction bar */}
               {agentSignal && simStep !== 'ingestion' && (
-                <div>
-                  <div className="flex justify-between items-center mb-0.5">
-                    <span className="text-[8px] text-gray-500">Conv</span>
-                    <span className="text-[8px] font-mono text-gray-400">{pct(Number(agentSignal.conviction))}</span>
+                <div className="flex flex-col gap-1 mt-1">
+                  <div className="flex justify-between items-center text-[8px]">
+                    <span className="text-gray-500">Conviction</span>
+                    <span className="font-mono text-gray-400">{pct(Number(agentSignal.conviction))}</span>
                   </div>
-                  <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -363,15 +385,16 @@ export default function CommitteePipeline2D({
                       }}
                     />
                   </div>
+                  <span className={`text-[8px] font-bold uppercase mt-1 px-1.5 py-0.5 rounded-md border text-center ${sStyle?.bg} ${sStyle?.color} ${sStyle?.border}`}>
+                    {agentSignal.stance}
+                  </span>
                 </div>
               )}
-
-              {/* Sharia verdict */}
-              {node.id === 'SHARIA' && simStep !== 'ingestion' && simStep !== 'analysts' && passData && (
-                <span className={`text-[8px] font-black uppercase ${
+              {node.id === 'SHARIA' && simStep !== 'ingestion' && passData && (
+                <span className={`text-[8px] font-black uppercase text-center mt-1 ${
                   passData.shariaGate.compliant ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
-                  {passData.shariaGate.compliant ? '✓ HALAL CLEARED' : '✗ SHARIA VETO'}
+                  {passData.shariaGate.compliant ? '✓ HALAL' : '✗ HARAM'}
                 </span>
               )}
             </div>
