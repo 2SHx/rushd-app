@@ -134,9 +134,9 @@ export default function PortfolioClient({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/quant/rebalance?secret=dev-cron-secret', {
+      const res = await fetch('/api/quant/rebalance/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       if (!res.ok) {

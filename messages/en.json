@@ -115,6 +115,7 @@
     "portfolioTitle": "Halal Index-Beating Portfolio",
     "portfolioSubtitle": "Automated halal multi-asset index tracking & factor portfolio rebalancer.",
     "portfolioNav": "Portfolio NAV",
+    "portfolioPricingIncomplete": "Portfolio value excludes holdings without a fresh persisted real-market price: {symbols}.",
     "cashVirtual": "Virtual Cash",
     "rebalanceButton": "Trigger Rebalance",
     "rebalancing": "Rebalancing portfolio...",
