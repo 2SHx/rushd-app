@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
@@ -21,6 +21,11 @@ interface Props {
 
 type ScreenerFilter = 'most-active' | 'trending' | 'gainers' | 'losers' | 'gainers-52w' | 'losers-52w' | 'unusual-volume';
 type ViewMode = 'table' | 'heatmap';
+
+const isShariaCompliant = (symbol: string) => {
+  const sym = symbol.toUpperCase().replace('.SR', '');
+  return sym !== 'TSLA' && sym !== 'META';
+};
 
 const FILTER_TABS = [
   { id: 'most-active', en: 'Most Active', ar: 'الأكثر نشاطاً' },
@@ -398,7 +403,14 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
                       className="hover:bg-white/[0.03] cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3.5 font-extrabold text-foreground font-mono text-emerald-400">
-                        {stock.symbol.replace('.SR', '')}
+                        <div className="flex items-center gap-1.5">
+                          <span>{stock.symbol.replace('.SR', '')}</span>
+                          {isShariaCompliant(stock.symbol) ? (
+                            <ShieldCheck className="w-3.5 h-3.5 text-up" title={isAr ? 'متوافق مع الشريعة' : 'Sharia Compliant'} />
+                          ) : (
+                            <ShieldAlert className="w-3.5 h-3.5 text-noncompliant" title={isAr ? 'غير متوافق' : 'Non-Compliant'} />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 font-medium text-foreground/70 truncate max-w-[140px]">
                         {isAr ? stock.arName : stock.name}
@@ -477,8 +489,13 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
                               stock.pct
                             )}`}
                           >
-                            <span className="font-extrabold tracking-tight block">
-                              {stock.symbol.replace('.SR', '')}
+                            <span className="font-extrabold tracking-tight flex items-center justify-center gap-0.5">
+                              <span>{stock.symbol.replace('.SR', '')}</span>
+                              {isShariaCompliant(stock.symbol) ? (
+                                <ShieldCheck className="w-2.5 h-2.5 shrink-0 opacity-80" title={isAr ? 'متوافق' : 'Compliant'} />
+                              ) : (
+                                <ShieldAlert className="w-2.5 h-2.5 shrink-0 opacity-80" title={isAr ? 'غير متوافق' : 'Non-Compliant'} />
+                              )}
                             </span>
                             <span className="font-mono text-[10px] tabular-nums block opacity-90">
                               {isUp ? '+' : ''}
