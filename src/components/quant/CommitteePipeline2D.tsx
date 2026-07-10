@@ -78,15 +78,37 @@ export default function CommitteePipeline2D({
       {/* Nebula clouds */}
       <div className="absolute top-[15%] left-[40%] w-32 h-32 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none" />
       <div className="absolute bottom-[20%] right-[25%] w-24 h-24 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
-      {/* ─ Orbital connection paths ─ */}
+      {/* ── Orbital connection paths ─ */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none z-[1]">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes laser-flow {
+            from {
+              stroke-dashoffset: 40;
+            }
+            to {
+              stroke-dashoffset: 0;
+            }
+          }
+          .laser-path-flow {
+            stroke-dasharray: 6 12;
+            animation: laser-flow 2.5s linear infinite;
+          }
+          .laser-path-flow-active {
+            stroke-dasharray: 8 8;
+            animation: laser-flow 1s linear infinite;
+          }
+        `}} />
         <defs>
           <filter id="glow-green">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
           <filter id="glow-cyan">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="glow-red">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
           <linearGradient id="flow-gradient-h" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -95,50 +117,118 @@ export default function CommitteePipeline2D({
             <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* Ingest → Analysts */}
-        {NODES.filter((n) => n.type === 'analyst').map((node) => (
-          <line
-            key={`line-ingest-${node.id}`}
-            x1="10%" y1="50%" x2={node.x} y2={node.y}
-            stroke={simStep === 'ingestion' ? '#10B981' : 'rgba(255,255,255,0.06)'}
-            strokeWidth={simStep === 'ingestion' ? 1.5 : 1}
-            filter={simStep === 'ingestion' ? 'url(#glow-green)' : undefined}
-            className={simStep === 'ingestion' ? 'laser-path' : ''}
-          />
-        ))}
+
+        {/* Ingest → Analysts & Gate */}
+        {NODES.filter((n) => n.type === 'analyst' || n.type === 'gate').map((node) => {
+          const active = simStep === 'ingestion';
+          return (
+            <g key={`group-ingest-${node.id}`}>
+              {/* Background Wireframe (always visible) */}
+              <line
+                x1="10%" y1="50%" x2={node.x} y2={node.y}
+                stroke={active ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.15)'}
+                strokeWidth={1.2}
+              />
+              {/* Flow Overlay */}
+              <line
+                x1="10%" y1="50%" x2={node.x} y2={node.y}
+                stroke={active ? '#10B981' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={active ? 2.5 : 1.2}
+                filter={active ? 'url(#glow-green)' : undefined}
+                className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
+              />
+            </g>
+          );
+        })}
+
         {/* Analysts/Gate → Debate/PM */}
         {NODES.filter((n) => n.type === 'analyst' || n.type === 'gate').map((node) => {
           const toX = node.id === 'SHARIA' ? '78%' : '78%';
           const toY = node.id === 'SHARIA' ? '75%' : '30%';
-          const active = node.id === 'SHARIA' ? simStep === 'sharia' : (simStep === 'analysts' || simStep === 'debate');
-          const color = node.id === 'SHARIA'
-            ? (passData?.shariaGate.compliant ? '#10B981' : '#EF4444')
+          const active = node.id === 'SHARIA'
+            ? (simStep === 'sharia' || simStep === 'pm' || simStep === 'risk' || simStep === 'done')
+            : (simStep === 'analysts' || simStep === 'debate');
+          
+          const agentSignal = passData?.signals.find((s) => s.agent === node.id);
+          const activeColor = node.id === 'SHARIA'
+            ? (passData?.shariaGate.compliant ?? true ? '#10B981' : '#EF4444')
+            : agentSignal?.stance === 'BULLISH'
+            ? '#10B981'
+            : agentSignal?.stance === 'BEARISH'
+            ? '#EF4444'
             : '#00F0FF';
+
+          const glowFilter = activeColor === '#10B981'
+            ? 'url(#glow-green)'
+            : activeColor === '#EF4444'
+            ? 'url(#glow-red)'
+            : 'url(#glow-cyan)';
+
           return (
-            <line
-              key={`line-debate-${node.id}`}
-              x1={node.x} y1={node.y} x2={toX} y2={toY}
-              stroke={active ? color : 'rgba(255,255,255,0.05)'}
-              strokeWidth={active ? 1.5 : 0.8}
-              filter={active ? (node.id === 'SHARIA' ? 'url(#glow-green)' : 'url(#glow-cyan)') : undefined}
-              className={active ? 'laser-path' : ''}
-            />
+            <g key={`group-debate-${node.id}`}>
+              {/* Background Wireframe (always visible) */}
+              <line
+                x1={node.x} y1={node.y} x2={toX} y2={toY}
+                stroke={active ? `${activeColor}22` : 'rgba(99,102,241,0.15)'}
+                strokeWidth={1}
+              />
+              {/* Flow Overlay */}
+              <line
+                x1={node.x} y1={node.y} x2={toX} y2={toY}
+                stroke={active ? activeColor : 'rgba(99,102,241,0.25)'}
+                strokeWidth={active ? 2.2 : 1}
+                filter={active ? glowFilter : undefined}
+                className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
+              />
+            </g>
           );
         })}
+
         {/* Debate → PM */}
-        <line x1="78%" y1="30%" x2="78%" y2="75%"
-          stroke={simStep === 'debate' ? '#00F0FF' : 'rgba(255,255,255,0.05)'}
-          strokeWidth={simStep === 'debate' ? 2 : 0.8}
-          filter={simStep === 'debate' ? 'url(#glow-cyan)' : undefined}
-          className={simStep === 'debate' ? 'laser-path' : ''}
-        />
+        {(() => {
+          const active = simStep === 'debate' || simStep === 'pm' || simStep === 'risk' || simStep === 'done';
+          return (
+            <g>
+              {/* Background Wireframe */}
+              <line
+                x1="78%" y1="30%" x2="78%" y2="75%"
+                stroke={active ? 'rgba(0,240,255,0.2)' : 'rgba(99,102,241,0.15)'}
+                strokeWidth={1.5}
+              />
+              {/* Flow Overlay */}
+              <line
+                x1="78%" y1="30%" x2="78%" y2="75%"
+                stroke={active ? '#00F0FF' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={active ? 2.5 : 1.2}
+                filter={active ? 'url(#glow-cyan)' : undefined}
+                className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
+              />
+            </g>
+          );
+        })()}
+
         {/* PM → Risk */}
-        <line x1="78%" y1="75%" x2="92%" y2="50%"
-          stroke={simStep === 'pm' ? '#10B981' : 'rgba(255,255,255,0.05)'}
-          strokeWidth={simStep === 'pm' ? 2 : 0.8}
-          filter={simStep === 'pm' ? 'url(#glow-green)' : undefined}
-          className={simStep === 'pm' ? 'laser-path' : ''}
-        />
+        {(() => {
+          const active = simStep === 'pm' || simStep === 'risk' || simStep === 'done';
+          return (
+            <g>
+              {/* Background Wireframe */}
+              <line
+                x1="78%" y1="75%" x2="92%" y2="50%"
+                stroke={active ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.15)'}
+                strokeWidth={1.5}
+              />
+              {/* Flow Overlay */}
+              <line
+                x1="78%" y1="75%" x2="92%" y2="50%"
+                stroke={active ? '#10B981' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={active ? 2.5 : 1.2}
+                filter={active ? 'url(#glow-green)' : undefined}
+                className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
+              />
+            </g>
+          );
+        })()}
       </svg>
 
       {/* ─ Agent Nodes as Planetary Spheres ─ */}
