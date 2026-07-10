@@ -13,6 +13,8 @@ interface StockListProps {
   selectedSymbol: string | null;
   locale: string;
   onSelectStock: (symbol: string) => void;
+  quotes: Record<string, { price: number; change: number; pct: number }>;
+  loadingQuotes: boolean;
 }
 
 export default function StockList({
@@ -21,7 +23,9 @@ export default function StockList({
   searchingOnline,
   selectedSymbol,
   locale,
-  onSelectStock
+  onSelectStock,
+  quotes,
+  loadingQuotes,
 }: StockListProps) {
   const t = useTranslations('Markets');
   const [category, setCategory] = useState<'all' | 'sharia'>('all');
@@ -94,6 +98,8 @@ export default function StockList({
               locale={locale}
               isSelected={selectedSymbol === stock.symbol}
               onSelect={() => onSelectStock(stock.symbol)}
+              priceData={quotes[stock.symbol]}
+              loading={loadingQuotes}
             />
           ))
         ) : (

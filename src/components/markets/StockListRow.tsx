@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
 
@@ -12,6 +11,8 @@ interface StockListRowProps {
   locale: string;
   isSelected: boolean;
   onSelect: () => void;
+  priceData?: { price: number; change: number; pct: number } | null;
+  loading?: boolean;
 }
 
 export default function StockListRow({
@@ -21,39 +22,14 @@ export default function StockListRow({
   market,
   locale,
   isSelected,
-  onSelect
+  onSelect,
+  priceData,
+  loading = false,
 }: StockListRowProps) {
   const t = useTranslations('Markets');
   const isAr = locale === 'ar';
   const cleanSymbol = symbol.replace('.SR', '');
   const displayName = isAr && arName ? arName : name;
-
-  const [priceData, setPriceData] = useState<{ price: number; change: number; pct: number } | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const fetchQuote = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/market-data?symbol=${symbol}&market=${market}`);
-        if (res.ok && active) {
-          const data = await res.json();
-          const hist = data.history || [];
-          const prev = hist.length > 1 ? hist[hist.length - 2]?.close : (hist[0]?.close ?? data.price);
-          const change = data.price - prev;
-          const pct = prev > 0 ? (change / prev) * 100 : 0;
-          setPriceData({ price: data.price, change, pct });
-        }
-      } catch (err) {
-        console.error(`Failed to fetch lazy row quote for ${symbol}:`, err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    fetchQuote();
-    return () => { active = false; };
-  }, [symbol, market]);
 
   const isUp = priceData && priceData.change > 0;
   const isDown = priceData && priceData.change < 0;

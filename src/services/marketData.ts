@@ -516,7 +516,7 @@ export async function getCachedCandles(provider: MarketDataProvider, symbol: str
 
   try {
     const candles = await provider.getCandles(symbol, market, days);
-    candlesCache.set(key, { candles, expiresAt: getEndOfDayTime() }); // End of day TTL
+    candlesCache.set(key, { candles, expiresAt: now + 4 * 60 * 60 * 1000 }); // 4 hours TTL
     return candles;
   } catch (err) {
     console.error(`Error fetching candles for ${key}:`, err);

@@ -44,6 +44,40 @@ export default function MarketsContainer({
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [searchingOnline, setSearchingOnline] = useState(false);
 
+  // Batch quotes states and fetching hook
+  const [quotes, setQuotes] = useState<Record<string, { price: number; change: number; pct: number }>>({});
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+
+  const visibleSymbols = useMemo(() => {
+    const list = searchResults !== null ? searchResults : TICKERS[marketTab];
+    return list.map((item: any) => item.symbol);
+  }, [searchResults, marketTab]);
+
+  useEffect(() => {
+    if (visibleSymbols.length === 0) return;
+    let active = true;
+    const fetchBatch = async () => {
+      setLoadingQuotes(true);
+      try {
+        const symbolsQuery = visibleSymbols.join(',');
+        const res = await fetch(`/api/stocks/quotes?symbols=${symbolsQuery}&market=${marketTab}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          setQuotes(prev => ({
+            ...prev,
+            ...data.quotes
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to batch fetch stock quotes:', err);
+      } finally {
+        if (active) setLoadingQuotes(false);
+      }
+    };
+    fetchBatch();
+    return () => { active = false; };
+  }, [visibleSymbols, marketTab]);
+
   useEffect(() => {
     if (currentData) {
       // Only update active symbol if one was passed from server
@@ -210,6 +244,8 @@ export default function MarketsContainer({
           selectedSymbol={activeSymbol}
           locale={locale}
           onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
+          quotes={quotes}
+          loadingQuotes={loadingQuotes}
         />
       </div>
     </div>

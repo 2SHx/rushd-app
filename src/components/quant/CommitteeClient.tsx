@@ -238,6 +238,18 @@ export default function CommitteeClient({
   }, [passData]);
 
 
+  const [isVisible, setIsVisible] = useState(true);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      setIsVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   const simTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoPilotTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -286,7 +298,7 @@ export default function CommitteeClient({
       targetText = passData.shariaGate.compliant
         ? (isAr ? 'توافق شرعي كامل. معايير أنشطة و نسب مالية مقبولة.' : 'Sharia compliant. Sector filters and leverage ratios are fully within limits.')
         : (isAr ? `تنبيه غير متوافق: ${passData.shariaGate.reason || 'محظور التداول'}` : `Non-compliant Veto: ${passData.shariaGate.reason || 'Trading blocked'}`);
-    } else if (simStep === 'analysts' && activeAgentId) {
+    } else if (simStep === 'analysts') {
       const signal = passData.signals.find(s => s.agent === activeAgentId);
       if (signal) {
         targetText = isAr ? signal.rationaleAr : signal.rationaleEn;
@@ -321,6 +333,10 @@ export default function CommitteeClient({
 
   // Simulation Sequence Engine
   useEffect(() => {
+    if (!isVisible) {
+      if (simTimerRef.current) clearTimeout(simTimerRef.current);
+      return;
+    }
     if (!simPlay || !passData || simStep === 'idle' || simStep === 'done') {
       if (simTimerRef.current) clearTimeout(simTimerRef.current);
       return;
@@ -369,10 +385,14 @@ export default function CommitteeClient({
     return () => {
       if (simTimerRef.current) clearTimeout(simTimerRef.current);
     };
-  }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, settings.simSpeed]);
+  }, [simStep, simPlay, activeAgentId, debateTurnIdx, passData, settings.simSpeed, isVisible]);
 
   // Autopilot loop scheduler
   useEffect(() => {
+    if (!isVisible) {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+      return;
+    }
     if (!autoPilot) {
       if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
       return;
@@ -391,14 +411,14 @@ export default function CommitteeClient({
 
       autoPilotTimerRef.current = setTimeout(() => {
         setSimStep('idle');
-      }, 5000); // 5 seconds wait before selecting next stock
+      }, 60000); // 60 seconds wait before selecting next stock (policed for cost/frequency)
     }
 
     return () => {
       if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simStep, autoPilot, market]);
+  }, [simStep, autoPilot, market, isVisible]);
 
   async function runPass(overrideSymbol?: string) {
     setPassLoading(true);

@@ -39,7 +39,18 @@ export async function requireUltraTier(): Promise<SessionUser> {
 
 /** Validates parent tier limits (BASIC=1 child, PREMIUM=3 children, ULTRA=unlimited). */
 export async function validateChildCreationLimit(parentId: string, parentTier: string): Promise<void> {
-  return; // Bypass child count limit checks
+  if (parentTier === 'ULTRA') {
+    return;
+  }
+  const count = await prisma.user.count({
+    where: { parentId },
+  });
+  if (parentTier === 'BASIC' && count >= 1) {
+    throw new AuthzError(NextResponse.json({ error: 'tier_limit_exceeded', limit: 1 }, { status: 403 }));
+  }
+  if (parentTier === 'PREMIUM' && count >= 3) {
+    throw new AuthzError(NextResponse.json({ error: 'tier_limit_exceeded', limit: 3 }, { status: 403 }));
+  }
 }
 
 /** Authorizes access: child accessing self, or parent supervising their own child. */
