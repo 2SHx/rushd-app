@@ -82,6 +82,49 @@ export default function LoginForm({ locale }: { locale: string }) {
         </button>
       </form>
 
+      {/* Developer Bypass Mode */}
+      <div className="pt-4 border-t border-white/5 space-y-3">
+        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold text-center">
+          {locale === 'ar' ? 'أدوات المطور: الدخول السريع' : 'Developer: Quick Testing Access'}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={async () => {
+              setIsSubmitting(true);
+              setHasError(false);
+              const res = await signIn('credentials', { email: 'parent@rushd.com', password: 'password', redirect: false });
+              if (res && !res.error) {
+                router.push(`/${locale}/dashboard`);
+              } else {
+                setHasError(true);
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting}
+            className="py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold text-white transition-all disabled:opacity-60"
+          >
+            {locale === 'ar' ? 'دخول ولي الأمر' : 'Demo Parent'}
+          </button>
+          <button
+            onClick={async () => {
+              setIsSubmitting(true);
+              setHasError(false);
+              const res = await signIn('credentials', { username: 'child', familyCode: 'RUSHD123', redirect: false });
+              if (res && !res.error) {
+                router.push(`/${locale}/dashboard`);
+              } else {
+                setHasError(true);
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting}
+            className="py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold text-emerald-400 transition-all disabled:opacity-60"
+          >
+            {locale === 'ar' ? 'دخول الابن/الابنة' : 'Demo Child'}
+          </button>
+        </div>
+      </div>
+
       <p className="text-sm text-gray-400 text-center">
         {t('noAccount')}{' '}
         <Link href={`/${locale}/register`} className="text-emerald-400 hover:underline">

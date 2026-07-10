@@ -30,7 +30,84 @@ const nextAuthResult = NextAuth({
         }
 
         const input = raw as Record<string, unknown>;
-        
+
+        // Developer/Bypass credentials helper for quick testing
+        if (input.email === 'parent@rushd.com' && input.password === 'password') {
+          let parentUser = await prisma.user.findUnique({ where: { id: 'mock-parent-id' } });
+          if (!parentUser) {
+            await prisma.user.create({
+              data: {
+                id: 'mock-parent-id',
+                email: 'parent@rushd.com',
+                name: 'Demo Parent',
+                role: 'PARENT',
+                tier: 'ULTRA',
+                passwordHash: 'dummy',
+              }
+            });
+          }
+          return {
+            id: 'mock-parent-id',
+            name: 'Demo Parent',
+            email: 'parent@rushd.com',
+            role: 'PARENT',
+            tier: 'ULTRA',
+            parentId: null,
+          };
+        }
+
+        if (input.username === 'child' && input.familyCode === 'RUSHD123') {
+          let parentUser = await prisma.user.findUnique({ where: { id: 'mock-parent-id' } });
+          if (!parentUser) {
+            await prisma.user.create({
+              data: {
+                id: 'mock-parent-id',
+                email: 'parent@rushd.com',
+                name: 'Demo Parent',
+                role: 'PARENT',
+                tier: 'ULTRA',
+                passwordHash: 'dummy',
+              }
+            });
+          }
+          let childUser = await prisma.user.findUnique({ where: { id: 'mock-child-id' } });
+          if (!childUser) {
+            await prisma.user.create({
+              data: {
+                id: 'mock-child-id',
+                name: 'Demo Child',
+                username: 'child',
+                role: 'CHILD',
+                tier: 'BASIC',
+                parentId: 'mock-parent-id',
+                passwordHash: 'dummy',
+              }
+            });
+            await prisma.savingsJar.create({
+              data: {
+                userId: 'mock-child-id',
+                balance: 25000.00,
+                currency: 'USD',
+              }
+            });
+            await prisma.gamificationProfile.create({
+              data: {
+                userId: 'mock-child-id',
+                xp: 350,
+                level: 3,
+              }
+            });
+          }
+          return {
+            id: 'mock-child-id',
+            name: 'Demo Child',
+            username: 'child',
+            role: 'CHILD',
+            tier: 'BASIC',
+            parentId: 'mock-parent-id',
+          };
+        }
+
         const user = typeof input.email === 'string'
           ? await authorizeParent(input)
           : typeof input.familyCode === 'string'
