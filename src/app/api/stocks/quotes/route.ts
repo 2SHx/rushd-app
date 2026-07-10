@@ -8,14 +8,14 @@ const limiters = new Map<string, TokenBucket>();
 function limiterFor(userId: string): TokenBucket {
   let bucket = limiters.get(userId);
   if (!bucket) {
-    bucket = new TokenBucket(15, 2); // 15 burst, refills 2/sec
+    bucket = new TokenBucket(60, 10); // 60 burst, refills 10/sec
     limiters.set(userId, bucket);
   }
   return bucket;
 }
 
 const QuerySchema = z.object({
-  symbols: z.string().min(1).max(2000),
+  symbols: z.string().min(1).max(3000),
   market: z.enum(['TASI', 'NASDAQ']),
 });
 

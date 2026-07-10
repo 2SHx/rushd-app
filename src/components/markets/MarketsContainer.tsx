@@ -10,6 +10,9 @@ import StockList from './StockList';
 import StockDetail from './StockDetail';
 import MarketOverviewPanel from './MarketOverviewPanel';
 
+import { YAHOO_STOCK_METRICS } from './yahooFinanceData';
+import { TASI_UNIVERSE } from '@/lib/stockUniverse';
+
 interface MarketsContainerProps {
   currentData: any;
   locale: string;
@@ -48,18 +51,26 @@ export default function MarketsContainer({
   const [quotes, setQuotes] = useState<Record<string, { price: number; change: number; pct: number }>>({});
   const [loadingQuotes, setLoadingQuotes] = useState(false);
 
+  const allMarketSymbols = useMemo(() => {
+    if (marketTab === 'NASDAQ') {
+      return Object.keys(YAHOO_STOCK_METRICS);
+    } else {
+      return TASI_UNIVERSE.map(u => u.symbol);
+    }
+  }, [marketTab]);
+
   const visibleSymbols = useMemo(() => {
     const list = searchResults !== null ? searchResults : TICKERS[marketTab];
     return list.map((item: any) => item.symbol);
   }, [searchResults, marketTab]);
 
   useEffect(() => {
-    if (visibleSymbols.length === 0) return;
+    if (allMarketSymbols.length === 0) return;
     let active = true;
     const fetchBatch = async () => {
       setLoadingQuotes(true);
       try {
-        const symbolsQuery = visibleSymbols.join(',');
+        const symbolsQuery = allMarketSymbols.join(',');
         const res = await fetch(`/api/stocks/quotes?symbols=${symbolsQuery}&market=${marketTab}`);
         if (res.ok && active) {
           const data = await res.json();
@@ -76,7 +87,7 @@ export default function MarketsContainer({
     };
     fetchBatch();
     return () => { active = false; };
-  }, [visibleSymbols, marketTab]);
+  }, [allMarketSymbols, marketTab]);
 
   useEffect(() => {
     if (currentData) {
@@ -312,6 +323,8 @@ export default function MarketsContainer({
                   market={marketTab}
                   locale={locale}
                   onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
+                  quotes={quotes}
+                  loadingQuotes={loadingQuotes}
                 />
               </motion.div>
 
