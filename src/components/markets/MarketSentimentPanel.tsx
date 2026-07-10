@@ -81,35 +81,7 @@ export default function MarketSentimentPanel({ fg, sectors, isAr }: Props) {
         )}
       </div>
 
-      <div className="glass-panel rounded-3xl p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60 mb-3.5">
-          {isAr ? 'قوة القطاعات اليومية' : 'Daily Sector Strength'}
-        </p>
-        <div className="space-y-3.5">
-          {sectors.map((s) => {
-            const sVal = Math.min(Math.max(Math.abs(s.avgPct) * 15, 8), 100);
-            return (
-              <div key={s.name} className="space-y-1">
-                <div className="flex justify-between text-[11px] font-medium">
-                  <span className="text-foreground/70">{isAr ? s.nameAr : s.name}</span>
-                  <span className={`font-mono tabular-nums font-semibold ${s.avgPct >= 0 ? 'text-up' : 'text-down'}`}>
-                    {s.avgPct >= 0 ? '+' : ''}
-                    {s.avgPct.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-foreground/5 rounded-full overflow-hidden">
-                  <motion.div
-                    className={`h-full rounded-full ${s.avgPct >= 0 ? 'bg-up' : 'bg-down'}`}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${sVal}%` }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Daily Sector Strength removed in favor of Screener Heatmap */}
     </div>
   );
 }

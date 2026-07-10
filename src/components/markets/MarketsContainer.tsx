@@ -164,11 +164,11 @@ export default function MarketsContainer({
     <div className="flex flex-col h-full gap-4">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-bold text-foreground">
-          {isAr ? 'استكشاف السوق' : 'Market Explorer'}
+        <h1 className="text-base font-extrabold text-foreground tracking-tight">
+          {isAr ? 'دليل أسهم ناسداك' : 'NASDAQ Ticker Directory'}
         </h1>
         <p className="text-[10px] text-foreground/50 mt-0.5">
-          {isAr ? 'تصفح وحلل الأسهم بالذكاء الاصطناعي' : 'Browse & analyse stocks with AI'}
+          {isAr ? 'فرز وتحليل الأسهم بالذكاء الاصطناعي' : 'Real-time quotes & deep AI analysis'}
         </p>
       </div>
 
