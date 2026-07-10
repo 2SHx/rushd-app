@@ -418,17 +418,17 @@ export default function CommitteeClient({
   };
 
   const nodes = [
-    { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '10%', y: '50%', type: 'data', icon: Database },
-    { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '32%', y: '16%', type: 'analyst' },
-    { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '32%', y: '39%', type: 'analyst' },
-    { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '32%', y: '61%', type: 'analyst' },
-    { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '32%', y: '84%', type: 'analyst' },
-    { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '55%', y: '20%', type: 'analyst' },
-    { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '55%', y: '45%', type: 'analyst' },
-    { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '55%', y: '75%', type: 'gate' },
-    { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '78%', y: '30%', type: 'debate', icon: Gavel },
-    { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '78%', y: '75%', type: 'pm', icon: Bot },
-    { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '92%', y: '50%', type: 'risk', icon: Gavel }
+    { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '12%', y: '50%', type: 'data', icon: Database },
+    { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '31%', y: '16%', type: 'analyst' },
+    { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '31%', y: '39%', type: 'analyst' },
+    { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '31%', y: '61%', type: 'analyst' },
+    { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '31%', y: '84%', type: 'analyst' },
+    { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '20%', type: 'analyst' },
+    { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '45%', type: 'analyst' },
+    { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '75%', type: 'gate' },
+    { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '69%', y: '30%', type: 'debate', icon: Gavel },
+    { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '69%', y: '75%', type: 'pm', icon: Bot },
+    { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '88%', y: '50%', type: 'risk', icon: Gavel }
   ];
 
   function renderSvgChart() {

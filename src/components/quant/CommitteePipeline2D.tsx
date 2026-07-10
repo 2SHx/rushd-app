@@ -16,17 +16,17 @@ interface CommitteeNode {
 }
 
 const NODES: CommitteeNode[] = [
-  { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '10%', y: '50%', type: 'data', icon: Database },
-  { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '32%', y: '16%', type: 'analyst' },
-  { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '32%', y: '39%', type: 'analyst' },
-  { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '32%', y: '61%', type: 'analyst' },
-  { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '32%', y: '84%', type: 'analyst' },
-  { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '55%', y: '20%', type: 'analyst' },
-  { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '55%', y: '45%', type: 'analyst' },
-  { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '55%', y: '75%', type: 'gate' },
-  { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '78%', y: '30%', type: 'debate', icon: Gavel },
-  { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '78%', y: '75%', type: 'pm', icon: Bot },
-  { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '92%', y: '50%', type: 'risk', icon: Gavel },
+  { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '12%', y: '50%', type: 'data', icon: Database },
+  { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '31%', y: '16%', type: 'analyst' },
+  { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '31%', y: '39%', type: 'analyst' },
+  { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '31%', y: '61%', type: 'analyst' },
+  { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '31%', y: '84%', type: 'analyst' },
+  { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '20%', type: 'analyst' },
+  { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '45%', type: 'analyst' },
+  { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '75%', type: 'gate' },
+  { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '69%', y: '30%', type: 'debate', icon: Gavel },
+  { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '69%', y: '75%', type: 'pm', icon: Bot },
+  { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '88%', y: '50%', type: 'risk', icon: Gavel },
 ];
 
 export interface CommitteePipeline2DProps {
@@ -125,15 +125,15 @@ export default function CommitteePipeline2D({
             <g key={`group-ingest-${node.id}`}>
               {/* Background Wireframe (always visible) */}
               <line
-                x1="10%" y1="50%" x2={node.x} y2={node.y}
-                stroke={active ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.15)'}
-                strokeWidth={1.2}
+                x1="12%" y1="50%" x2={node.x} y2={node.y}
+                stroke={active ? 'rgba(16,185,129,0.35)' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={1.8}
               />
               {/* Flow Overlay */}
               <line
-                x1="10%" y1="50%" x2={node.x} y2={node.y}
-                stroke={active ? '#10B981' : 'rgba(99,102,241,0.3)'}
-                strokeWidth={active ? 2.5 : 1.2}
+                x1="12%" y1="50%" x2={node.x} y2={node.y}
+                stroke={active ? '#10B981' : 'rgba(99,102,241,0.45)'}
+                strokeWidth={active ? 3.5 : 1.8}
                 filter={active ? 'url(#glow-green)' : undefined}
                 className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
               />
@@ -143,7 +143,7 @@ export default function CommitteePipeline2D({
 
         {/* Analysts/Gate → Debate/PM */}
         {NODES.filter((n) => n.type === 'analyst' || n.type === 'gate').map((node) => {
-          const toX = node.id === 'SHARIA' ? '78%' : '78%';
+          const toX = '69%';
           const toY = node.id === 'SHARIA' ? '75%' : '30%';
           const active = node.id === 'SHARIA'
             ? (simStep === 'sharia' || simStep === 'pm' || simStep === 'risk' || simStep === 'done')
@@ -169,14 +169,14 @@ export default function CommitteePipeline2D({
               {/* Background Wireframe (always visible) */}
               <line
                 x1={node.x} y1={node.y} x2={toX} y2={toY}
-                stroke={active ? `${activeColor}22` : 'rgba(99,102,241,0.15)'}
-                strokeWidth={1}
+                stroke={active ? `${activeColor}44` : 'rgba(99,102,241,0.25)'}
+                strokeWidth={1.5}
               />
               {/* Flow Overlay */}
               <line
                 x1={node.x} y1={node.y} x2={toX} y2={toY}
-                stroke={active ? activeColor : 'rgba(99,102,241,0.25)'}
-                strokeWidth={active ? 2.2 : 1}
+                stroke={active ? activeColor : 'rgba(99,102,241,0.4)'}
+                strokeWidth={active ? 3.2 : 1.5}
                 filter={active ? glowFilter : undefined}
                 className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
               />
@@ -191,15 +191,15 @@ export default function CommitteePipeline2D({
             <g>
               {/* Background Wireframe */}
               <line
-                x1="78%" y1="30%" x2="78%" y2="75%"
-                stroke={active ? 'rgba(0,240,255,0.2)' : 'rgba(99,102,241,0.15)'}
-                strokeWidth={1.5}
+                x1="69%" y1="30%" x2="69%" y2="75%"
+                stroke={active ? 'rgba(0,240,255,0.35)' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={2}
               />
               {/* Flow Overlay */}
               <line
-                x1="78%" y1="30%" x2="78%" y2="75%"
-                stroke={active ? '#00F0FF' : 'rgba(99,102,241,0.3)'}
-                strokeWidth={active ? 2.5 : 1.2}
+                x1="69%" y1="30%" x2="69%" y2="75%"
+                stroke={active ? '#00F0FF' : 'rgba(99,102,241,0.45)'}
+                strokeWidth={active ? 3.5 : 2}
                 filter={active ? 'url(#glow-cyan)' : undefined}
                 className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
               />
@@ -214,15 +214,15 @@ export default function CommitteePipeline2D({
             <g>
               {/* Background Wireframe */}
               <line
-                x1="78%" y1="75%" x2="92%" y2="50%"
-                stroke={active ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.15)'}
-                strokeWidth={1.5}
+                x1="69%" y1="75%" x2="88%" y2="50%"
+                stroke={active ? 'rgba(16,185,129,0.35)' : 'rgba(99,102,241,0.3)'}
+                strokeWidth={2}
               />
               {/* Flow Overlay */}
               <line
-                x1="78%" y1="75%" x2="92%" y2="50%"
-                stroke={active ? '#10B981' : 'rgba(99,102,241,0.3)'}
-                strokeWidth={active ? 2.5 : 1.2}
+                x1="69%" y1="75%" x2="88%" y2="50%"
+                stroke={active ? '#10B981' : 'rgba(99,102,241,0.45)'}
+                strokeWidth={active ? 3.5 : 2}
                 filter={active ? 'url(#glow-green)' : undefined}
                 className={active ? 'laser-path-flow-active' : 'laser-path-flow'}
               />
