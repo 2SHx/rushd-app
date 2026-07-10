@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
@@ -33,6 +33,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
   // Tab & View selections
   const [activeFilter, setActiveFilter] = useState<ScreenerFilter>('most-active');
   const [viewMode, setViewMode] = useState<ViewMode>('heatmap');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch Fear & Greed index
   useEffect(() => {
@@ -131,10 +132,22 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
     }
   }, [screenerStocks, activeFilter]);
 
+  const searchedStocks = useMemo(() => {
+    const list = filteredStocks;
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter(
+      (s) =>
+        s.symbol.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.arName.toLowerCase().includes(q)
+    );
+  }, [filteredStocks, searchQuery]);
+
   // Group all screener stocks by sector for the Heatmap sector mapping
   const sectors = useMemo((): SectorGroup[] => {
-    const map = new Map<string, typeof screenerStocks>();
-    screenerStocks.forEach((stock) => {
+    const map = new Map<string, typeof searchedStocks>();
+    searchedStocks.forEach((stock) => {
       const sec = stock.sector;
       if (!map.has(sec)) map.set(sec, []);
       map.get(sec)!.push(stock);
@@ -158,7 +171,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         })),
       };
     }).sort((a, b) => b.stocks.length - a.stocks.length);
-  }, [screenerStocks]);
+  }, [searchedStocks]);
 
   const stats = useMemo(() => {
     const up = screenerStocks.filter((t) => t.pct > 0);
@@ -303,21 +316,42 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
           </div>
         </div>
 
-        {/* Tab Filters */}
-        <div className="flex overflow-x-auto no-scrollbar gap-1.5 -mx-6 px-6 md:mx-0 md:px-0">
-          {filterTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
-              className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                activeFilter === tab.id
-                  ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
-                  : 'bg-white/5 border border-white/10 text-foreground/75 hover:bg-white/10'
-              }`}
-            >
-              {isAr ? tab.ar : tab.en}
-            </button>
-          ))}
+        {/* Filters and Search row */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="flex overflow-x-auto no-scrollbar gap-1.5 w-full lg:w-auto -mx-6 px-6 lg:mx-0 lg:px-0">
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveFilter(tab.id)}
+                className={`whitespace-nowrap px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  activeFilter === tab.id
+                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                    : 'bg-white/5 border border-white/10 text-foreground/75 hover:bg-white/10'
+                }`}
+              >
+                {isAr ? tab.ar : tab.en}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative w-full lg:w-64">
+            <Search className="w-4 h-4 text-foreground/45 absolute start-4 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isAr ? 'ابحث عن اسم السهم أو رمزه...' : 'Search ticker or name...'}
+              className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/40 rounded-xl py-2 ps-11 pe-4 text-xs text-foreground placeholder:text-foreground/40 outline-none transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute end-4 top-1/2 -translate-y-1/2 text-xs text-foreground/40 hover:text-foreground"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {loadingQuotes && (
