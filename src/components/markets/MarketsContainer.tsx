@@ -162,15 +162,7 @@ export default function MarketsContainer({
   // ── Left sidebar ──────────────────────────────────────────────
   const renderSidebar = () => (
     <div className="flex flex-col h-full gap-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-base font-extrabold text-foreground tracking-tight">
-          {isAr ? 'دليل أسهم ناسداك' : 'NASDAQ Ticker Directory'}
-        </h1>
-        <p className="text-[10px] text-foreground/50 mt-0.5">
-          {isAr ? 'فرز وتحليل الأسهم بالذكاء الاصطناعي' : 'Real-time quotes & deep AI analysis'}
-        </p>
-      </div>
+
 
       {/* Market Selector Info Badge */}
       <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-foreground/[0.02] border border-[var(--border-color)] text-[11px] font-semibold text-foreground/60">
