@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-11 — Portfolio truthfulness and rebalance integrity ✅
+Shipped: Hardened manual/cron rebalancing with Bearer auth, fresh marks, stable Alpaca client IDs, bounded fills, validated broker results, signed audit rows, deterministic portfolio views, and expanded regression coverage.
+Decisions: A shared non-expiring per-user execution lock serializes every trade path; unlabeled `cashVirtual` is never assigned a currency or combined into NAV; mock Sharia screens remain explicitly unverified/demo-qualified.
+Open: A crashed worker can strand the execution lock and needs operator cleanup; persist an owner-token lease only through a generated migration when recovery automation is required. Complete the outstanding DR-12 visual-token/accessibility cleanup separately.
+
 ## 2026-07-08 — Markets UI Rebuild & Monolith Decomposition ✅
 Shipped: Decomposed MarketsClient.tsx monolith into 10 clean, sub-500-line components under src/components/markets/. Integrated dynamic 250ms debounced live stock search over the database and live universes. Connected the Sage Mentor assistant panel to /api/signals POST endpoint to fetch live AI recommendations and bilingual logic. Implemented a narrative storytelling design layer (compliance shields, biography quest stats, and custom sliders/drawers).
 Decisions: Synchronized selected stock status using window.history.pushState for immediate, shareable deep-linking. Updated incorrect English names for 8250.SR and 6060.SR.

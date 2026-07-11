@@ -48,7 +48,29 @@ export class AlpacaPaperBroker implements BrokerAdapter {
     };
   }
 
+  private mapOrder(j: Record<string, unknown>, fallbackPrice = new D(0)): OrderResult {
+    return {
+      brokerRef: String(j.id),
+      status: mapStatus(String(j.status)),
+      filledQty: new D(String(j.filled_qty ?? '0')),
+      avgFillPrice: new D(String(j.filled_avg_price ?? fallbackPrice.toString())),
+    };
+  }
+
+  private async getOrderByClientId(clientOrderId: string): Promise<OrderResult | null> {
+    const url = `${this.baseUrl}/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Alpaca getOrderByClientId failed: ${res.status}`);
+    return this.mapOrder((await res.json()) as Record<string, unknown>);
+  }
+
   async submitOrder(o: OrderRequest): Promise<OrderResult> {
+    if (o.clientOrderId) {
+      const existing = await this.getOrderByClientId(o.clientOrderId);
+      if (existing) return existing;
+    }
+
     const res = await fetch(`${this.baseUrl}/v2/orders`, {
       method: 'POST',
       headers: this.headers(),
@@ -56,30 +78,28 @@ export class AlpacaPaperBroker implements BrokerAdapter {
         symbol: o.symbol,
         qty: o.qty.toString(),
         side: o.side.toLowerCase(),
-        type: 'market',
+        type: o.limitPrice ? 'limit' : 'market',
+        ...(o.limitPrice ? { limit_price: o.limitPrice.toString() } : {}),
         time_in_force: 'day',
+        ...(o.clientOrderId ? { client_order_id: o.clientOrderId } : {}),
       }),
     });
-    if (!res.ok) throw new Error(`Alpaca order failed: ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 422 && o.clientOrderId) {
+        const existing = await this.getOrderByClientId(o.clientOrderId);
+        if (existing) return existing;
+      }
+      throw new Error(`Alpaca order failed: ${res.status}`);
+    }
     const j = (await res.json()) as Record<string, unknown>;
-    return {
-      brokerRef: String(j.id),
-      status: mapStatus(String(j.status)),
-      filledQty: new D(String(j.filled_qty ?? '0')),
-      avgFillPrice: new D(String(j.filled_avg_price ?? o.refPrice.toString())),
-    };
+    return this.mapOrder(j, o.refPrice);
   }
 
   async getOrder(ref: string): Promise<OrderResult> {
     const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`Alpaca getOrder failed: ${res.status}`);
     const j = (await res.json()) as Record<string, unknown>;
-    return {
-      brokerRef: String(j.id),
-      status: mapStatus(String(j.status)),
-      filledQty: new D(String(j.filled_qty ?? '0')),
-      avgFillPrice: new D(String(j.filled_avg_price ?? '0')),
-    };
+    return this.mapOrder(j);
   }
 
   async cancelOrder(ref: string): Promise<void> {

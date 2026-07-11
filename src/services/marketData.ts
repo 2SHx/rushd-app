@@ -15,6 +15,7 @@ export interface Quote {
   price: number;
   currency: 'SAR' | 'USD';
   asOf: Date;
+  source: 'live' | 'delayed' | 'mock';
 }
 
 export interface MarketData {
@@ -23,6 +24,8 @@ export interface MarketData {
   price: number;
   history: Candle[];
   isShariaCompliant: boolean;
+  shariaSource: 'mock' | 'zoya';
+  marketDataSource: 'live' | 'delayed' | 'mock';
   purificationRatioBps?: number;
   analystRatings?: { buy: number; sell: number; hold: number };
   earningsHistory?: { quarter: string; actual: number; expected: number }[];
@@ -125,6 +128,7 @@ export class MockProvider implements MarketDataProvider {
       price,
       currency: market === 'TASI' ? 'SAR' : 'USD',
       asOf: new Date(),
+      source: 'mock',
     };
   }
 
@@ -161,6 +165,7 @@ export class SahmkAdapter implements MarketDataProvider {
       price: 135.5, // Distinct price to confirm Sahmk routing
       currency: 'SAR',
       asOf: new Date(),
+      source: 'mock',
     };
   }
 
@@ -206,6 +211,7 @@ export class AlpacaAdapter implements MarketDataProvider {
       price: trade.p,
       currency: 'USD',
       asOf: new Date(trade.t),
+      source: 'live',
     };
   }
 
@@ -305,6 +311,7 @@ export class YahooFinanceProvider implements MarketDataProvider {
       price,
       currency,
       asOf: new Date(),
+      source: 'delayed',
     };
   }
 
@@ -716,6 +723,8 @@ export async function fetchMarketData(symbol: string, market: 'TASI' | 'NASDAQ')
     price: quote.price,
     history,
     isShariaCompliant: verdict.compliant,
+    shariaSource: verdict.source,
+    marketDataSource: quote.source,
     ...stats
   };
 }

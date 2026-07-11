@@ -161,9 +161,9 @@ function generateMockSnapshots(baseNAV: number, length = 30): Snapshot[] {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
     const dayFactor = length - 1 - i;
     // simulated compound growth: strategy Nav outperforms benchmarks
-    const sNav = navVal * (1 + 0.0012 * dayFactor + Math.sin(dayFactor / 2) * 0.005 + (Math.random() - 0.5) * 0.008);
-    const spy = navVal * (1 + 0.0006 * dayFactor + Math.sin(dayFactor / 3) * 0.006 + (Math.random() - 0.5) * 0.01);
-    const spus = navVal * (1 + 0.0008 * dayFactor + Math.sin(dayFactor / 2.5) * 0.0055 + (Math.random() - 0.5) * 0.009);
+    const sNav = navVal * (1 + 0.0012 * dayFactor + Math.sin(dayFactor / 2) * 0.005 + Math.cos(dayFactor * 1.7) * 0.004);
+    const spy = navVal * (1 + 0.0006 * dayFactor + Math.sin(dayFactor / 3) * 0.006 + Math.cos(dayFactor * 1.3) * 0.005);
+    const spus = navVal * (1 + 0.0008 * dayFactor + Math.sin(dayFactor / 2.5) * 0.0055 + Math.cos(dayFactor * 1.5) * 0.0045);
     list.push({
       asOf: d.toISOString(),
       nav: sNav,

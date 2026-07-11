@@ -4,16 +4,12 @@ const h = vi.hoisted(() => ({
   requireSession: vi.fn(),
   isHalted: vi.fn(),
   findStrategies: vi.fn(),
-  createClaim: vi.fn(),
   rebalance: vi.fn(),
 }));
 
 vi.mock('@/lib/authz', () => ({ requireSession: h.requireSession }));
 vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    strategy: { findMany: h.findStrategies },
-    autoRunClaim: { create: h.createClaim },
-  },
+  prisma: { strategy: { findMany: h.findStrategies } },
 }));
 vi.mock('@/quant/automation/control', () => ({ isHalted: h.isHalted }));
 vi.mock('@/quant/portfolio/rebalancer', () => ({
@@ -22,12 +18,19 @@ vi.mock('@/quant/portfolio/rebalancer', () => ({
 
 import { POST } from './route';
 
-function request() {
+function request(contentType = 'application/json') {
   return new Request('http://localhost/api/quant/rebalance/manual', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': contentType },
   });
 }
+
+const successLog = {
+  rebalanced: true,
+  nav: 100000,
+  tradesPlaced: 1,
+  purificationOwed: 0,
+};
 
 describe('POST /api/quant/rebalance/manual', () => {
   beforeEach(() => {
@@ -37,13 +40,7 @@ describe('POST /api/quant/rebalance/manual', () => {
     h.requireSession.mockResolvedValue({ id: 'user-1', role: 'PARENT', tier: 'ULTRA' });
     h.isHalted.mockResolvedValue(false);
     h.findStrategies.mockResolvedValue([{ id: 'strategy-1' }]);
-    h.createClaim.mockResolvedValue({ key: 'claim' });
-    h.rebalance.mockResolvedValue({
-      rebalanced: true,
-      nav: 100000,
-      tradesPlaced: 1,
-      purificationOwed: 0,
-    });
+    h.rebalance.mockResolvedValue(successLog);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -68,7 +65,15 @@ describe('POST /api/quant/rebalance/manual', () => {
     expect(h.findStrategies).not.toHaveBeenCalled();
   });
 
-  it('scopes enabled strategies to the session owner', async () => {
+  it('accepts application/json with charset and rejects non-JSON media types', async () => {
+    const accepted = await POST(request('application/json; charset=utf-8'));
+    const rejected = await POST(request('text/plain; charset=utf-8'));
+
+    expect(accepted.status).toBe(200);
+    expect(rejected.status).toBe(415);
+  });
+
+  it('scopes enabled NASDAQ strategies to the session owner', async () => {
     await POST(request());
 
     expect(h.findStrategies).toHaveBeenCalledWith({
@@ -78,38 +83,58 @@ describe('POST /api/quant/rebalance/manual', () => {
     expect(h.rebalance).toHaveBeenCalledWith('user-1', 'strategy-1', expect.any(Date));
   });
 
-  it('honors QuantControl halt before claiming or delegating', async () => {
+  it('honors QuantControl halt before delegating', async () => {
     h.isHalted.mockResolvedValue(true);
 
     const response = await POST(request());
 
     expect(response.status).toBe(503);
-    expect(h.createClaim).not.toHaveBeenCalled();
     expect(h.rebalance).not.toHaveBeenCalled();
   });
 
-  it('returns 409 when the user/day claim already exists', async () => {
-    h.createClaim.mockRejectedValue({ code: 'P2002' });
-
-    const response = await POST(request());
-
-    expect(response.status).toBe(409);
-    expect(h.createClaim).toHaveBeenCalledWith({
-      data: { key: 'manual-rebalance:user-1:2026-07-10' },
-    });
-    expect(h.rebalance).not.toHaveBeenCalled();
-  });
-
-  it('delegates each owned enabled strategy after a successful claim', async () => {
+  it('has no user/day claim that can strand later strategies after a partial failure', async () => {
     h.findStrategies.mockResolvedValue([{ id: 'strategy-1' }, { id: 'strategy-2' }]);
+    h.rebalance
+      .mockResolvedValueOnce(successLog)
+      .mockRejectedValueOnce(new Error('strategy-2 database failure'));
+
+    const first = await POST(request());
+    const firstBody = await first.json();
+
+    expect(first.status).toBe(500);
+    expect(firstBody.logs['strategy-1'].rebalanced).toBe(true);
+    expect(firstBody.logs['strategy-2']).toEqual({
+      rebalanced: false,
+      error: 'rebalance_failed',
+    });
+    expect(h.rebalance).toHaveBeenCalledTimes(2);
+
+    h.rebalance.mockReset();
+    h.rebalance
+      .mockResolvedValueOnce({ ...successLog, rebalanced: false, tradesPlaced: 0 })
+      .mockResolvedValueOnce(successLog);
+
+    const retry = await POST(request());
+    const retryBody = await retry.json();
+
+    expect(retry.status).toBe(200);
+    expect(retryBody.success).toBe(true);
+    expect(h.rebalance).toHaveBeenNthCalledWith(1, 'user-1', 'strategy-1', expect.any(Date));
+    expect(h.rebalance).toHaveBeenNthCalledWith(2, 'user-1', 'strategy-2', expect.any(Date));
+  });
+
+  it('stops between strategies if QuantControl is engaged mid-request', async () => {
+    h.findStrategies.mockResolvedValue([{ id: 'strategy-1' }, { id: 'strategy-2' }]);
+    h.isHalted
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
 
     const response = await POST(request());
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
-    expect(h.rebalance).toHaveBeenCalledTimes(2);
-    expect(h.rebalance).toHaveBeenNthCalledWith(1, 'user-1', 'strategy-1', expect.any(Date));
-    expect(h.rebalance).toHaveBeenNthCalledWith(2, 'user-1', 'strategy-2', expect.any(Date));
+    expect(response.status).toBe(503);
+    expect(h.rebalance).toHaveBeenCalledTimes(1);
+    expect(body.logs['strategy-1'].rebalanced).toBe(true);
   });
 });

@@ -21,6 +21,17 @@ export class InternalSimBroker implements BrokerAdapter {
     // BUY pays up (slippage + commission both raise cost); SELL receives less.
     const fill =
       o.side === 'BUY' ? o.refPrice.plus(slip).plus(comm) : o.refPrice.minus(slip).minus(comm);
+    if (
+      o.limitPrice
+      && ((o.side === 'BUY' && fill.gt(o.limitPrice)) || (o.side === 'SELL' && fill.lt(o.limitPrice)))
+    ) {
+      return {
+        brokerRef: `sim:${o.market}:${o.symbol}:${o.side}:rejected`,
+        status: 'REJECTED',
+        filledQty: new D(0),
+        avgFillPrice: new D(0),
+      };
+    }
     return {
       brokerRef: `sim:${o.market}:${o.symbol}:${o.side}:${o.qty.toString()}`,
       status: 'FILLED',

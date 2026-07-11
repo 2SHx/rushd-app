@@ -1,9 +1,15 @@
 import { Prisma } from '@prisma/client';
+import type { BrokerKind, DecisionMode, OrderSide, OrderStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { constructHalalPortfolio } from './construction';
+import { isHalted } from '../automation/control';
+import { validateOrderFill, type BrokerAdapter, type OrderResult } from '../execution/broker';
 import { selectBroker } from '../execution/registry';
+import { acquireUserExecutionLock, releaseUserExecutionLock } from '../execution/userLock';
+import { constructHalalPortfolio } from './construction';
 
 const D = Prisma.Decimal;
+const MAX_MARK_AGE_MS = 5 * 24 * 60 * 60 * 1000;
+const MAX_BUY_SLIPPAGE = new D('1.01');
 
 export interface RebalanceLog {
   rebalanced: boolean;
@@ -12,394 +18,583 @@ export interface RebalanceLog {
   purificationOwed: number;
 }
 
-function isUniqueViolation(e: unknown): boolean {
-  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-/** Release AutoRunClaim rows a (failed) pass created, so a retry can re-claim them. */
-async function releaseClaims(keys: string[]): Promise<void> {
-  if (keys.length === 0) return;
-  await prisma.autoRunClaim.deleteMany({ where: { key: { in: keys } } });
+function dayStart(day: string): Date {
+  return new Date(`${day}T00:00:00.000Z`);
 }
 
-/**
- * Executes a simulated or paper rebalance pass for a user, diffing current positions
- * against target optimized weights and writing purification ledger entries.
- *
- * Crash-safety: every order is claimed (unique AutoRunClaim key) BEFORE the broker call —
- * mirrors executeDecision's Order@@unique[decisionId] claim-before-submit pattern. If
- * anything in the pass throws (broker failure, DB error), every claim this pass created
- * (the day/strategy claim + any per-order claims) is released so a retry can re-attempt
- * cleanly; the diff-based design makes retries naturally idempotent (already-settled
- * symbols simply show no further diff).
- */
-export async function executePortfolioRebalance(
-  userId: string,
-  strategyId: string,
-  asOf = new Date()
-): Promise<RebalanceLog> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { portfolioItems: true }
+async function releaseClaim(key: string): Promise<void> {
+  await prisma.autoRunClaim.deleteMany({ where: { key } });
+}
+
+async function loadFreshNasdaqMark(symbol: string, asOf: Date): Promise<Prisma.Decimal> {
+  const freshAfter = new Date(asOf.getTime() - MAX_MARK_AGE_MS);
+  const bar = await prisma.marketBar.findFirst({
+    where: {
+      symbol,
+      market: 'NASDAQ',
+      interval: 'DAY',
+      ts: { gte: freshAfter, lte: asOf },
+    },
+    orderBy: { ts: 'desc' },
   });
 
-  if (!user) {
-    throw new Error('User not found');
+  if (
+    !bar
+    || bar.ts < freshAfter
+    || bar.ts > asOf
+    || !bar.close.isPositive()
+  ) {
+    throw new Error(`Missing or stale NASDAQ mark for ${symbol}`);
   }
+  return bar.close;
+}
 
-  // Tier-gate authorization check: rebalancing requires ULTRA tier.
-  if (user.tier !== 'ULTRA') {
-    throw new Error('Unauthorized: Strategy owner must be ULTRA tier');
+async function loadHistoricalNasdaqMark(symbol: string, asOf: Date): Promise<Prisma.Decimal> {
+  const bar = await prisma.marketBar.findFirst({
+    where: { symbol, market: 'NASDAQ', interval: 'DAY', ts: { lte: asOf } },
+    orderBy: { ts: 'desc' },
+  });
+  if (!bar || !bar.close.isPositive()) {
+    throw new Error(`Missing historical NASDAQ mark for ${symbol} at ${asOf.toISOString()}`);
   }
-
-  // Idempotency and Race-safety guard: ensure rebalance is executed at most once per strategy per day
-  const todayStr = asOf.toISOString().slice(0, 10);
-  const claimKey = `rebalance-${strategyId}-${todayStr}`;
-  try {
-    await prisma.autoRunClaim.create({ data: { key: claimKey } });
-  } catch (err) {
-    if (!isUniqueViolation(err)) throw err; // a dropped connection etc. must propagate, not be reported as success
-
-    console.log(`Rebalance already executed or in progress for strategy ${strategyId} on ${todayStr}. Skipping.`);
-
-    // Fetch latest snapshot to return correct NAV
-    const lastSnap = await prisma.portfolioSnapshot.findFirst({
-      where: { userId, strategyId },
-      orderBy: { asOf: 'desc' }
-    });
-    return {
-      rebalanced: false,
-      nav: lastSnap ? lastSnap.nav.toNumber() : 100000,
-      tradesPlaced: 0,
-      purificationOwed: 0
-    };
-  }
-
-  const claimedKeys: string[] = [claimKey];
-
-  try {
-    return await runRebalancePass(user, strategyId, asOf, todayStr, claimedKeys);
-  } catch (err) {
-    // Crash-safety: release every claim this pass made so a retry is possible today,
-    // instead of being locked out until the next UTC day.
-    await releaseClaims(claimedKeys);
-    throw err;
-  }
+  return bar.close;
 }
 
 type UserWithPortfolio = Prisma.UserGetPayload<{ include: { portfolioItems: true } }>;
 
+interface RebalanceUnit {
+  key: string;
+  isNew: boolean;
+  decision: {
+    id: string;
+    status: string;
+  };
+  order: {
+    id: string;
+    brokerRef: string | null;
+    status: OrderStatus;
+    qty: Prisma.Decimal;
+    filledQty: Prisma.Decimal;
+    avgFillPrice: Prisma.Decimal;
+  };
+}
+
+async function claimRebalanceUnit(args: {
+  key: string;
+  userId: string;
+  strategyId: string;
+  symbol: string;
+  side: OrderSide;
+  qty: Prisma.Decimal;
+  asOf: Date;
+  mode: DecisionMode;
+  broker: BrokerKind;
+}): Promise<RebalanceUnit> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.autoRunClaim.create({ data: { key: args.key } });
+      const decision = await tx.decision.create({
+        data: {
+          strategyId: args.strategyId,
+          userId: args.userId,
+          symbol: args.symbol,
+          market: 'NASDAQ',
+          asOf: args.asOf,
+          proposedAction: args.side,
+          proposedQty: args.qty,
+          finalAction: args.side,
+          finalQty: args.qty,
+          shariaGate: { compliant: true, source: 'portfolio-construction' },
+          riskAdjustments: { source: 'portfolio-rebalance' },
+          debateTranscript: [],
+          temperature: new D(0),
+          seed: 0,
+          mode: args.mode,
+          status: 'APPROVED',
+        },
+      });
+      const order = await tx.order.create({
+        data: {
+          decisionId: decision.id,
+          symbol: args.symbol,
+          market: 'NASDAQ',
+          side: args.side,
+          qty: args.qty,
+          filledQty: new D(0),
+          avgFillPrice: new D(0),
+          status: 'NEW',
+          broker: args.broker,
+        },
+      });
+      return { key: args.key, isNew: true, decision, order };
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+
+    const decision = await prisma.decision.findFirst({
+      where: {
+        strategyId: args.strategyId,
+        userId: args.userId,
+        symbol: args.symbol,
+        asOf: args.asOf,
+        finalAction: args.side,
+      },
+      include: { order: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!decision?.order) {
+      throw new Error(`Rebalance unit ${args.key} is already in progress`);
+    }
+    return { key: args.key, isNew: false, decision, order: decision.order };
+  }
+}
+
+async function closeUnsubmittedUnit(
+  unit: RebalanceUnit,
+  status: Extract<OrderStatus, 'CANCELLED' | 'REJECTED'>,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({ where: { id: unit.order.id }, data: { status } });
+    await tx.decision.update({ where: { id: unit.decision.id }, data: { status: 'REJECTED' } });
+    await tx.autoRunClaim.delete({ where: { key: unit.key } });
+  });
+}
+
+async function persistBrokerResult(
+  orderId: string,
+  requestedQty: Prisma.Decimal,
+  fill: OrderResult,
+): Promise<OrderResult> {
+  validateOrderFill(fill, requestedQty);
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      brokerRef: fill.brokerRef,
+      status: fill.status,
+      filledQty: fill.filledQty,
+      avgFillPrice: fill.avgFillPrice,
+    },
+  });
+  return fill;
+}
+
+async function obtainFinalFill(args: {
+  unit: RebalanceUnit;
+  broker: BrokerAdapter;
+  request: {
+    symbol: string;
+    side: OrderSide;
+    qty: Prisma.Decimal;
+    refPrice: Prisma.Decimal;
+    limitPrice?: Prisma.Decimal;
+  };
+}): Promise<OrderResult | null> {
+  const { unit, broker, request } = args;
+  if (unit.decision.status === 'EXECUTED') return null;
+
+  let fill: OrderResult;
+  const brokerRequest = {
+    ...request,
+    qty: unit.order.qty,
+    market: 'NASDAQ' as const,
+    clientOrderId: `rushd-${unit.order.id}`,
+  };
+  if (unit.isNew) {
+    // This is intentionally adjacent to submitOrder: QuantControl can halt between units.
+    if (await isHalted()) {
+      await closeUnsubmittedUnit(unit, 'CANCELLED');
+      throw new Error('Quant execution halted before broker submission');
+    }
+
+    try {
+      fill = await broker.submitOrder(brokerRequest);
+    } catch (error) {
+      // InternalSim has no remote ambiguity: a throw means no order was accepted. A remote
+      // timeout may have been accepted by the broker, so retain its NEW Order + unit claim
+      // for operator reconciliation instead of risking a duplicate submission on retry.
+      if (broker.kind === 'INTERNAL_SIM') {
+        await closeUnsubmittedUnit(unit, 'REJECTED');
+      }
+      throw error;
+    }
+    fill = await persistBrokerResult(unit.order.id, unit.order.qty, fill);
+  } else {
+    if (!unit.order.brokerRef) {
+      if (await isHalted()) {
+        throw new Error(`Rebalance order ${unit.order.id} requires broker reconciliation while halted`);
+      }
+      fill = await broker.submitOrder(brokerRequest);
+      fill = await persistBrokerResult(unit.order.id, unit.order.qty, fill);
+    } else {
+      fill = {
+        brokerRef: unit.order.brokerRef,
+        status: unit.order.status,
+        filledQty: unit.order.filledQty,
+        avgFillPrice: unit.order.avgFillPrice,
+      };
+      if (fill.status === 'NEW' || fill.status === 'PARTIAL') {
+        fill = await persistBrokerResult(unit.order.id, unit.order.qty, await broker.getOrder(fill.brokerRef));
+      }
+    }
+  }
+
+  if (fill.status === 'NEW' || fill.status === 'PARTIAL') {
+    // Freeze cumulative quantity before settlement. If cancellation/reconciliation is not
+    // terminal yet, the persisted Order remains the recoverable audit root for a later retry.
+    await broker.cancelOrder(fill.brokerRef);
+    fill = await persistBrokerResult(unit.order.id, unit.order.qty, await broker.getOrder(fill.brokerRef));
+  }
+
+  if (fill.status === 'NEW' || fill.status === 'PARTIAL') {
+    throw new Error(`Rebalance order ${unit.order.id} is pending broker reconciliation`);
+  }
+  if (fill.filledQty.lte(0)) {
+    if (fill.status === 'CANCELLED' || fill.status === 'REJECTED') {
+      await closeUnsubmittedUnit(unit, fill.status);
+    }
+    throw new Error(`Rebalance order ${unit.order.id} completed without a fill`);
+  }
+  return fill;
+}
+
+/**
+ * Executes a paper rebalance for one NASDAQ strategy.
+ *
+ * The strategy/day claim prevents concurrent passes. Each symbol/side unit separately owns
+ * an AutoRunClaim + Decision + Order created atomically before broker submission. Broker
+ * status is persisted before the money transaction, so a database settlement failure can be
+ * retried from the Order without submitting twice. The broker call itself is external and is
+ * deliberately not described or treated as transactionally atomic with PostgreSQL.
+ */
+export async function executePortfolioRebalance(
+  userId: string,
+  strategyId: string,
+  asOf = new Date(),
+): Promise<RebalanceLog> {
+  const [initialUser, strategy] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      include: { portfolioItems: { where: { market: 'NASDAQ' } } },
+    }),
+    prisma.strategy.findFirst({
+      where: { id: strategyId, ownerUserId: userId, market: 'NASDAQ' },
+      select: { autonomyTier: true },
+    }),
+  ]);
+
+  if (!initialUser) throw new Error('User not found');
+  if (!strategy) throw new Error('NASDAQ strategy not found for user');
+  if (initialUser.tier !== 'ULTRA') {
+    throw new Error('Unauthorized: Strategy owner must be ULTRA tier');
+  }
+
+  const today = asOf.toISOString().slice(0, 10);
+  await acquireUserExecutionLock(userId);
+  const passClaimKey = `rebalance-${strategyId}-${today}`;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { portfolioItems: { where: { market: 'NASDAQ' } } },
+    });
+    if (!user) throw new Error('User not found after execution lock');
+    try {
+      await prisma.autoRunClaim.create({ data: { key: passClaimKey } });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const lastSnapshot = await prisma.portfolioSnapshot.findFirst({
+        where: { userId, strategyId },
+        orderBy: { asOf: 'desc' },
+      });
+      return {
+        rebalanced: false,
+        nav: (lastSnapshot?.nav ?? user.cashVirtual).toNumber(),
+        tradesPlaced: 0,
+        purificationOwed: 0,
+      };
+    }
+
+    try {
+      return await runRebalancePass(
+        user,
+        strategyId,
+        strategy.autonomyTier,
+        asOf,
+        today,
+      );
+    } catch (error) {
+      // Release only the strategy/day pass. Per-order claims survive ambiguous or filled
+      // broker outcomes and are the reconciliation key used by the retry.
+      await releaseClaim(passClaimKey);
+      throw error;
+    }
+  } finally {
+    await releaseUserExecutionLock(userId);
+  }
+}
+
 async function runRebalancePass(
   user: UserWithPortfolio,
   strategyId: string,
+  mode: DecisionMode,
   asOf: Date,
-  todayStr: string,
-  claimedKeys: string[]
+  today: string,
 ): Promise<RebalanceLog> {
   const userId = user.id;
-
-  // 1. Calculate current total NAV
+  const currentPrices = new Map<string, Prisma.Decimal>();
   let totalHoldingsValue = new D(0);
-  const currentPrices: Record<string, Prisma.Decimal> = {};
 
-  for (const item of user.portfolioItems) {
-    const bar = await prisma.marketBar.findFirst({
-      where: { symbol: item.symbol, market: 'NASDAQ' },
-      orderBy: { ts: 'desc' }
-    });
-    const price = bar ? bar.close : new D(1);
-    currentPrices[item.symbol] = price;
+  // Only NASDAQ positions are admitted to this pass, even if a mock/caller bypasses the
+  // relation filter above. TASI positions never enter NAV, order generation, or snapshots.
+  const currentItems = user.portfolioItems.filter((item) => item.market === 'NASDAQ');
+  for (const item of currentItems) {
+    const price = await loadFreshNasdaqMark(item.symbol, asOf);
+    currentPrices.set(item.symbol, price);
     totalHoldingsValue = totalHoldingsValue.plus(item.shares.mul(price));
   }
-
   const currentNAV = user.cashVirtual.plus(totalHoldingsValue);
 
-  // 2. Fetch target optimized portfolio weights
   const proposal = await constructHalalPortfolio('NASDAQ', asOf);
+  const targetHoldings = new Map<string, { qty: Prisma.Decimal; ratio: number }>();
+  for (const target of proposal.weights) {
+    const price = currentPrices.get(target.symbol) ?? await loadFreshNasdaqMark(target.symbol, asOf);
+    currentPrices.set(target.symbol, price);
+    const targetQty = currentNAV.mul(target.weight.toString()).div(price);
+    targetHoldings.set(target.symbol, { qty: targetQty, ratio: target.purificationRatio });
+  }
 
-  // 3. Diff and generate orders
+  // Snapshot dependencies are also validated before the first broker call. This prevents a
+  // successful fill followed by a late snapshot failure caused by a fabricated benchmark.
+  const [spyPrice, spusPrice, lastSnapshot] = await Promise.all([
+    loadFreshNasdaqMark('SPY', asOf),
+    loadFreshNasdaqMark('SPUS', asOf),
+    prisma.portfolioSnapshot.findFirst({
+      where: { userId, strategyId },
+      orderBy: { asOf: 'desc' },
+    }),
+  ]);
+  let spyNav = spyPrice;
+  let spusNav = spusPrice;
+  if (lastSnapshot) {
+    const [previousSpyPrice, previousSpusPrice] = await Promise.all([
+      loadHistoricalNasdaqMark('SPY', lastSnapshot.asOf),
+      loadHistoricalNasdaqMark('SPUS', lastSnapshot.asOf),
+    ]);
+    spyNav = lastSnapshot.benchmarkNavSpy.mul(spyPrice).div(previousSpyPrice);
+    spusNav = lastSnapshot.benchmarkNavSpus.mul(spusPrice).div(previousSpusPrice);
+  }
+
+  const broker = selectBroker('NASDAQ');
+  const unitAsOf = dayStart(today);
   let tradesPlaced = 0;
   let purificationOwed = new D(0);
 
-  // Track target allocations
-  const targetHoldings: Record<string, { qty: Prisma.Decimal; ratio: number }> = {};
-  for (const target of proposal.weights) {
-    const bar = await prisma.marketBar.findFirst({
-      where: { symbol: target.symbol, market: 'NASDAQ' },
-      orderBy: { ts: 'desc' }
+  // SELL first to free virtual cash.
+  for (const item of currentItems) {
+    const target = targetHoldings.get(item.symbol);
+    const targetQty = target?.qty ?? new D(0);
+    if (!item.shares.gt(targetQty)) continue;
+
+    const sellQty = item.shares.minus(targetQty);
+    const price = currentPrices.get(item.symbol);
+    if (!price) throw new Error(`Missing NASDAQ mark for ${item.symbol}`);
+    const key = `rebalance-order-${strategyId}-${today}-${item.symbol}-SELL`;
+    const unit = await claimRebalanceUnit({
+      key,
+      userId,
+      strategyId,
+      symbol: item.symbol,
+      side: 'SELL',
+      qty: sellQty,
+      asOf: unitAsOf,
+      mode,
+      broker: broker.kind,
     });
-    const price = bar ? bar.close : new D(1);
-    currentPrices[target.symbol] = price;
+    const fill = await obtainFinalFill({
+      unit,
+      broker,
+      request: { symbol: item.symbol, side: 'SELL', qty: sellQty, refPrice: price },
+    });
+    if (!fill) continue;
 
-    const targetVal = currentNAV.mul(target.weight);
-    const targetQty = price.gt(0) ? targetVal.div(price) : new D(0);
-    targetHoldings[target.symbol] = { qty: targetQty, ratio: target.purificationRatio };
-  }
+    const notional = fill.filledQty.mul(fill.avgFillPrice);
+    const costBasis = item.costBasis ?? price;
+    const profit = D.max(0, fill.avgFillPrice.minus(costBasis).mul(fill.filledQty));
+    const ratio = target?.ratio ?? 0.005;
+    const purification = profit.mul(ratio.toString());
 
-  // Broker selection
-  const broker = selectBroker('NASDAQ');
-
-  // We execute SELL orders first to free up virtual cash
-  for (const item of user.portfolioItems) {
-    const currentQty = item.shares;
-    const target = targetHoldings[item.symbol];
-    const targetQty = target ? target.qty : new D(0);
-
-    if (currentQty.gt(targetQty)) {
-      // We sell the difference
-      const sellQty = currentQty.minus(targetQty);
-      const price = currentPrices[item.symbol] || new D(1);
-
-      // Claim this order BEFORE calling the broker (mirrors executeDecision's Order claim).
-      const orderClaimKey = `rebalance-order-${strategyId}-${todayStr}-${item.symbol}-SELL`;
-      try {
-        await prisma.autoRunClaim.create({ data: { key: orderClaimKey } });
-      } catch (err) {
-        if (isUniqueViolation(err)) continue; // already claimed this pass — skip, don't double-submit
-        throw err;
-      }
-      claimedKeys.push(orderClaimKey);
-
-      // Submit order via broker
-      const fill = await broker.submitOrder({
-        symbol: item.symbol,
-        market: 'NASDAQ',
-        side: 'SELL',
-        qty: sellQty,
-        refPrice: price
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: notional,
+          currency: 'USD',
+          type: 'TRADE',
+          description: `SELL REBALANCE ${fill.filledQty.toString()} ${item.symbol} @ ${fill.avgFillPrice.toString()}`,
+        },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: { cashVirtual: { increment: notional } },
       });
 
-      tradesPlaced++;
+      const holdingUpdate = await tx.portfolioItem.updateMany({
+        where: { id: item.id, shares: { gte: fill.filledQty } },
+        data: { shares: { decrement: fill.filledQty } },
+      });
+      if (holdingUpdate.count !== 1) {
+        throw new Error(`Insufficient shares to settle ${item.symbol} rebalance`);
+      }
+      await tx.portfolioItem.deleteMany({ where: { id: item.id, shares: { lte: 0 } } });
 
-      // Settle SELL transaction in database
-      const filledNotional = fill.filledQty.mul(fill.avgFillPrice);
-
-      // Calculate purification if there was realized profit (simplified cost basis tracking)
-      // costBasis is stored as Decimal on PortfolioItem. We fallback to 80% of price if empty.
-      const costBasis = item.costBasis ?? price.mul(0.8);
-      const profit = D.max(0, price.minus(costBasis).mul(sellQty));
-      const ratio = target ? target.ratio : 0.005; // default 0.5%
-      const purifyAmt = profit.mul(ratio);
-
-      await prisma.$transaction(async (tx) => {
-        // Log transaction
+      if (purification.gt(0)) {
+        await tx.purificationEntry.create({
+          data: {
+            userId,
+            symbol: item.symbol,
+            amount: purification,
+            ratio: new D(ratio.toString()),
+            profit,
+          },
+        });
         await tx.transaction.create({
           data: {
             userId,
-            amount: filledNotional,
+            amount: purification,
             currency: 'USD',
-            type: 'TRADE',
-            description: `SELL REBALANCE ${fill.filledQty.toString()} ${item.symbol} @ ${fill.avgFillPrice.toString()}`
-          }
-        });
-
-        // Update User cash
-        await tx.user.update({
-          where: { id: userId },
-          data: { cashVirtual: { increment: filledNotional } }
-        });
-
-        // Update or remove PortfolioItem
-        if (targetQty.lte(0)) {
-          await tx.portfolioItem.delete({ where: { id: item.id } });
-        } else {
-          await tx.portfolioItem.update({
-            where: { id: item.id },
-            data: { shares: { decrement: fill.filledQty } }
-          });
-        }
-
-        // Record purification ledger entry if profit realized
-        if (purifyAmt.gt(0)) {
-          purificationOwed = purificationOwed.plus(purifyAmt);
-          await tx.purificationEntry.create({
-            data: {
-              userId,
-              symbol: item.symbol,
-              amount: purifyAmt,
-              ratio: new D(ratio),
-              profit
-            }
-          });
-
-          // Log audit transaction of type PROFIT_SHARE
-          await tx.transaction.create({
-            data: {
-              userId,
-              amount: purifyAmt,
-              currency: 'USD',
-              type: 'PROFIT_SHARE',
-              description: `Purification fee logged for realized gains on ${item.symbol}`
-            }
-          });
-        }
-      });
-    }
-  }
-
-  // Execute BUY orders next
-  for (const [symbol, target] of Object.entries(targetHoldings)) {
-    const currentItem = user.portfolioItems.find(i => i.symbol === symbol);
-    const currentQty = currentItem ? currentItem.shares : new D(0);
-
-    if (target.qty.gt(currentQty)) {
-      // Buy difference
-      const buyQty = target.qty.minus(currentQty);
-      const price = currentPrices[symbol] || new D(1);
-      const notional = buyQty.mul(price);
-
-      // Ensure user has sufficient funds (safety constraint)
-      const currentUser = await prisma.user.findUnique({ where: { id: userId } });
-      const currentCash = currentUser?.cashVirtual ?? new D(0);
-
-      if (currentCash.gte(notional) && buyQty.gt(0)) {
-        // Claim this order BEFORE calling the broker.
-        const orderClaimKey = `rebalance-order-${strategyId}-${todayStr}-${symbol}-BUY`;
-        try {
-          await prisma.autoRunClaim.create({ data: { key: orderClaimKey } });
-        } catch (err) {
-          if (isUniqueViolation(err)) continue; // already claimed this pass — skip
-          throw err;
-        }
-        claimedKeys.push(orderClaimKey);
-
-        const fill = await broker.submitOrder({
-          symbol,
-          market: 'NASDAQ',
-          side: 'BUY',
-          qty: buyQty,
-          refPrice: price
-        });
-
-        tradesPlaced++;
-
-        const filledNotional = fill.filledQty.mul(fill.avgFillPrice);
-
-        await prisma.$transaction(async (tx) => {
-          await tx.transaction.create({
-            data: {
-              userId,
-              amount: filledNotional,
-              currency: 'USD',
-              type: 'TRADE',
-              description: `BUY REBALANCE ${fill.filledQty.toString()} ${symbol} @ ${fill.avgFillPrice.toString()}`
-            }
-          });
-
-          await tx.user.update({
-            where: { id: userId },
-            data: { cashVirtual: { decrement: filledNotional } }
-          });
-
-          // Weighted-average cost basis on BUY (never overwrite — misstates realized
-          // profit, and therefore the purification/تطهير amount owed on the next SELL).
-          const existing = await tx.portfolioItem.findUnique({
-            where: { userId_symbol: { userId, symbol } }
-          });
-          const oldQty = existing?.shares ?? new D(0);
-          const oldBasis = existing?.costBasis ?? fill.avgFillPrice;
-          const newQty = oldQty.plus(fill.filledQty);
-          const newCostBasis = newQty.gt(0)
-            ? oldQty.mul(oldBasis).plus(fill.filledQty.mul(fill.avgFillPrice)).div(newQty)
-            : fill.avgFillPrice;
-
-          await tx.portfolioItem.upsert({
-            where: { userId_symbol: { userId, symbol } },
-            create: {
-              userId,
-              symbol,
-              shares: fill.filledQty,
-              market: 'NASDAQ',
-              currency: 'USD',
-              costBasis: fill.avgFillPrice
-            },
-            update: {
-              shares: newQty,
-              costBasis: newCostBasis
-            }
-          });
+            type: 'PROFIT_SHARE',
+            description: `Purification fee logged for realized gains on ${item.symbol}`,
+          },
         });
       }
+      await tx.decision.update({ where: { id: unit.decision.id }, data: { status: 'EXECUTED' } });
+    });
+    purificationOwed = purificationOwed.plus(purification);
+    tradesPlaced += 1;
+  }
+
+  // BUY second.
+  for (const [symbol, target] of Array.from(targetHoldings.entries())) {
+    const currentItem = currentItems.find((item) => item.symbol === symbol);
+    const currentQty = currentItem?.shares ?? new D(0);
+    if (!target.qty.gt(currentQty)) continue;
+
+    const requestedQty = target.qty.minus(currentQty);
+    const price = currentPrices.get(symbol);
+    if (!price) throw new Error(`Missing NASDAQ mark for ${symbol}`);
+    const maxFillPrice = price.mul(MAX_BUY_SLIPPAGE);
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    const currentCash = currentUser?.cashVirtual ?? new D(0);
+    const buyQty = D.min(requestedQty, currentCash.div(maxFillPrice));
+    if (buyQty.lte(0)) continue;
+
+    const key = `rebalance-order-${strategyId}-${today}-${symbol}-BUY`;
+    const unit = await claimRebalanceUnit({
+      key,
+      userId,
+      strategyId,
+      symbol,
+      side: 'BUY',
+      qty: buyQty,
+      asOf: unitAsOf,
+      mode,
+      broker: broker.kind,
+    });
+    const fill = await obtainFinalFill({
+      unit,
+      broker,
+      request: { symbol, side: 'BUY', qty: buyQty, refPrice: price, limitPrice: maxFillPrice },
+    });
+    if (!fill) continue;
+
+    const notional = fill.filledQty.mul(fill.avgFillPrice);
+    if (fill.avgFillPrice.gt(maxFillPrice) || notional.gt(currentCash)) {
+      throw new Error(`BUY fill exceeded reserved cash for ${symbol}`);
     }
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: notional.negated(),
+          currency: 'USD',
+          type: 'TRADE',
+          description: `BUY REBALANCE ${fill.filledQty.toString()} ${symbol} @ ${fill.avgFillPrice.toString()}`,
+        },
+      });
+      const cashUpdate = await tx.user.updateMany({
+        where: { id: userId, cashVirtual: { gte: notional } },
+        data: { cashVirtual: { decrement: notional } },
+      });
+      if (cashUpdate.count !== 1) {
+        throw new Error(`Insufficient cash to settle ${symbol} rebalance`);
+      }
+
+      const existing = await tx.portfolioItem.findUnique({
+        where: { userId_symbol: { userId, symbol } },
+      });
+      const oldQty = existing?.shares ?? new D(0);
+      const oldBasis = existing?.costBasis ?? fill.avgFillPrice;
+      const newQty = oldQty.plus(fill.filledQty);
+      const newCostBasis = oldQty.mul(oldBasis)
+        .plus(fill.filledQty.mul(fill.avgFillPrice))
+        .div(newQty);
+
+      await tx.portfolioItem.upsert({
+        where: { userId_symbol: { userId, symbol } },
+        create: {
+          userId,
+          symbol,
+          shares: fill.filledQty,
+          market: 'NASDAQ',
+          currency: 'USD',
+          costBasis: fill.avgFillPrice,
+        },
+        update: { shares: newQty, costBasis: newCostBasis },
+      });
+      await tx.decision.update({ where: { id: unit.decision.id }, data: { status: 'EXECUTED' } });
+    });
+    tradesPlaced += 1;
   }
 
-  // 4. Capture current normalized benchmark values for the snapshot
-  const latestSpy = await prisma.marketBar.findFirst({
-    where: { symbol: 'SPY', market: 'NASDAQ' },
-    orderBy: { ts: 'desc' }
+  const finalHoldings = await prisma.portfolioItem.findMany({
+    where: { userId, market: 'NASDAQ' },
   });
-  const latestSpus = await prisma.marketBar.findFirst({
-    where: { symbol: 'SPUS', market: 'NASDAQ' },
-    orderBy: { ts: 'desc' }
-  });
-
-  const spyPrice = latestSpy ? latestSpy.close : new D(500);
-  const spusPrice = latestSpus ? latestSpus.close : new D(40);
-
-  // Retrieve last snapshot to scale benchmark NAVs proportionally
-  const lastSnapshot = await prisma.portfolioSnapshot.findFirst({
-    where: { userId, strategyId },
-    orderBy: { asOf: 'desc' }
-  });
-
-  let spyNav = new D(100);
-  let spusNav = new D(100);
-
-  if (lastSnapshot) {
-    // Find the symbol price at the last snapshot's date (or fallback)
-    const prevSpy = await prisma.marketBar.findFirst({
-      where: { symbol: 'SPY', market: 'NASDAQ', ts: { lte: lastSnapshot.asOf } },
-      orderBy: { ts: 'desc' }
-    });
-    const prevSpus = await prisma.marketBar.findFirst({
-      where: { symbol: 'SPUS', market: 'NASDAQ', ts: { lte: lastSnapshot.asOf } },
-      orderBy: { ts: 'desc' }
-    });
-
-    const prevSpyPrice = prevSpy ? prevSpy.close : spyPrice;
-    const prevSpusPrice = prevSpus ? prevSpus.close : spusPrice;
-
-    spyNav = prevSpyPrice.gt(0) ? lastSnapshot.benchmarkNavSpy.mul(spyPrice).div(prevSpyPrice) : lastSnapshot.benchmarkNavSpy;
-    spusNav = prevSpusPrice.gt(0) ? lastSnapshot.benchmarkNavSpus.mul(spusPrice).div(prevSpusPrice) : lastSnapshot.benchmarkNavSpus;
-  }
-
-  // Save PortfolioSnapshot
-  const finalHoldings = await prisma.portfolioItem.findMany({ where: { userId } });
-  const positionsJson: Record<string, any> = {};
+  const positionsJson: Record<string, { qty: number; costBasis: number | null }> = {};
   let finalHoldingsValue = new D(0);
-
-  finalHoldings.forEach(item => {
-    const price = currentPrices[item.symbol] || new D(1);
-    // JSON can't store Decimal — this is the display/serialization boundary, not arithmetic.
+  for (const item of finalHoldings) {
+    const price = currentPrices.get(item.symbol);
+    if (!price) throw new Error(`Missing NASDAQ mark for final position ${item.symbol}`);
     positionsJson[item.symbol] = {
       qty: item.shares.toNumber(),
-      costBasis: item.costBasis ? item.costBasis.toNumber() : price.toNumber()
+      costBasis: item.costBasis?.toNumber() ?? null,
     };
     finalHoldingsValue = finalHoldingsValue.plus(item.shares.mul(price));
-  });
+  }
 
   const finalUser = await prisma.user.findUnique({ where: { id: userId } });
-  const finalCash = finalUser?.cashVirtual ?? new D(0);
-  const finalNAV = finalCash.plus(finalHoldingsValue);
-
+  if (!finalUser) throw new Error('User not found after rebalance');
+  const finalNAV = finalUser.cashVirtual.plus(finalHoldingsValue);
   await prisma.portfolioSnapshot.create({
     data: {
       strategyId,
       userId,
       asOf,
-      cashVirtual: finalCash,
+      cashVirtual: finalUser.cashVirtual,
       currency: 'USD',
-      positions: positionsJson as any,
+      positions: positionsJson,
       nav: finalNAV,
       benchmarkNavSpy: spyNav,
-      benchmarkNavSpus: spusNav
-    }
+      benchmarkNavSpus: spusNav,
+    },
   });
 
   return {
     rebalanced: true,
     nav: finalNAV.toNumber(),
     tradesPlaced,
-    purificationOwed: purificationOwed.toNumber()
+    purificationOwed: purificationOwed.toNumber(),
   };
 }

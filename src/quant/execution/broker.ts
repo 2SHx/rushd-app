@@ -12,6 +12,10 @@ export interface OrderRequest {
   qty: Prisma.Decimal;
   /** Reference price the sim fills around (latest close); Alpaca ignores it and fills live. */
   refPrice: Prisma.Decimal;
+  /** Optional worst acceptable fill price; adapters must reject fills beyond it. */
+  limitPrice?: Prisma.Decimal;
+  /** Stable broker-side idempotency key for safely reconciling remote retries. */
+  clientOrderId?: string;
 }
 
 export interface OrderResult {
@@ -19,6 +23,19 @@ export interface OrderResult {
   status: OrderStatus;
   filledQty: Prisma.Decimal;
   avgFillPrice: Prisma.Decimal;
+}
+
+export function validateOrderFill(fill: OrderResult, requestedQty: Prisma.Decimal): OrderResult {
+  if (fill.filledQty.isNegative() || fill.filledQty.gt(requestedQty)) {
+    throw new Error('Broker returned an invalid filled quantity');
+  }
+  if (fill.filledQty.gt(0) && !fill.avgFillPrice.isPositive()) {
+    throw new Error('Broker returned an invalid fill price');
+  }
+  if (fill.status === 'FILLED' && !fill.filledQty.eq(requestedQty)) {
+    throw new Error('Broker marked a non-complete quantity as filled');
+  }
+  return fill;
 }
 
 export interface Position {

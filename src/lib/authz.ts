@@ -34,7 +34,10 @@ export async function requireParent(): Promise<SessionUser> {
 /** Throws AuthzError(403) if the parent or user does not have an ULTRA tier subscription. */
 export async function requireUltraTier(): Promise<SessionUser> {
   const user = await requireSession();
-  return user; // Bypass subscription tier check
+  if (user.tier !== 'ULTRA') {
+    throw new AuthzError(NextResponse.json({ error: 'forbidden' }, { status: 403 }));
+  }
+  return user;
 }
 
 /** Validates parent tier limits (BASIC=1 child, PREMIUM=3 children, ULTRA=unlimited). */

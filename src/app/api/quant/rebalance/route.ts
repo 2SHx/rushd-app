@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isHalted } from '@/quant/automation/control';
 import { executePortfolioRebalance } from '@/quant/portfolio/rebalancer';
 
 // Constant-time string compare to mitigate timing attacks
@@ -14,9 +15,9 @@ function constantTimeCompare(a: string, b: string): boolean {
 
 export async function POST(req: Request) {
   try {
-    // 1. Cron Secret Authorization
-    const { searchParams } = new URL(req.url);
-    const secret = searchParams.get('secret') || req.headers.get('x-cron-secret');
+    // Legacy signed cron contract: the secret is accepted only as Authorization: Bearer.
+    const authorization = req.headers.get('authorization');
+    const bearer = authorization?.match(/^Bearer ([^\s]+)$/i)?.[1];
     const systemSecret = process.env.CRON_SECRET;
 
     if (!systemSecret) {
@@ -24,26 +25,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'misconfigured' }, { status: 500 });
     }
 
-    if (!secret || !constantTimeCompare(secret, systemSecret)) {
+    if (!bearer || !constantTimeCompare(bearer, systemSecret)) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    // 2. Quant Control Kill-Switch
-    const ctrl = await prisma.quantControl.findUnique({ where: { id: 'singleton' } });
-    if (ctrl?.halted) {
-      return NextResponse.json({ error: 'halted', reason: ctrl.reason }, { status: 503 });
+    if (await isHalted()) {
+      return NextResponse.json({ error: 'halted' }, { status: 503 });
     }
 
-    // 3. Race-safety run claim for the rebalance pass (runs at most once per day)
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const claimKey = `rebalance-nasdaq-${todayStr}`;
-    try {
-      await prisma.autoRunClaim.create({ data: { key: claimKey } });
-    } catch {
-      return NextResponse.json({ error: 'already_run_today' }, { status: 409 });
-    }
-
-    // 4. Fetch all active NASDAQ strategies owned by ULTRA tier users
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
     const strategies = await prisma.strategy.findMany({
       where: {
         enabled: true,
@@ -52,23 +43,37 @@ export async function POST(req: Request) {
       }
     });
 
-    const logs: Record<string, any> = {};
+    const logs: Record<string, Awaited<ReturnType<typeof executePortfolioRebalance>> | {
+      rebalanced: false;
+      error: string;
+    }> = {};
+    let failed = false;
 
     for (const strategy of strategies) {
+      if (await isHalted()) {
+        return NextResponse.json({ error: 'halted', logs }, { status: 503 });
+      }
       try {
         const log = await executePortfolioRebalance(
           strategy.ownerUserId,
           strategy.id,
-          new Date()
+          now,
         );
         logs[strategy.id] = log;
-      } catch (err: any) {
-        console.error(`Rebalance failed for strategy ${strategy.id}:`, err);
-        logs[strategy.id] = { rebalanced: false, error: err.message };
+      } catch (error) {
+        console.error(`Rebalance failed for strategy ${strategy.id}:`, error);
+        failed = true;
+        logs[strategy.id] = {
+          rebalanced: false,
+          error: 'rebalance_failed',
+        };
       }
     }
 
-    return NextResponse.json({ success: true, rebalanceDate: todayStr, logs });
+    return NextResponse.json(
+      { success: !failed, rebalanceDate: todayStr, logs },
+      { status: failed ? 500 : 200 },
+    );
   } catch (error) {
     console.error('Error in rebalance cron handler:', error);
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });

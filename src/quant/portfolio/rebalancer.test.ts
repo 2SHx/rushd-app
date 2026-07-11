@@ -1,216 +1,397 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 
 const D = Prisma.Decimal;
 
 function uniqueViolation() {
-  return new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: '5' });
+  return new Prisma.PrismaClientKnownRequestError('dup', {
+    code: 'P2002',
+    clientVersion: '5',
+  });
 }
 
-// A tiny fake DB-backed claim store: create() throws P2002 if the key is already held,
-// deleteMany() releases keys — this mirrors the real AutoRunClaim unique-constraint
-// semantics closely enough to prove claim/release/retry behavior deterministically.
 const h = vi.hoisted(() => ({
   claimSet: new Set<string>(),
-  tx: {
-    transaction: { create: vi.fn() },
-    user: { update: vi.fn() },
-    portfolioItem: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    purificationEntry: { create: vi.fn() },
-  },
-  submitOrder: vi.fn(),
-  selectBroker: vi.fn(),
-  constructHalalPortfolio: vi.fn(),
+  decisions: [] as any[],
+  orders: [] as any[],
+  nextId: 1,
+  autoRunClaimCreate: vi.fn(),
+  autoRunClaimDeleteMany: vi.fn(),
+  strategyFindFirst: vi.fn(),
   userFindUnique: vi.fn(),
   marketBarFindFirst: vi.fn(),
-  autoRunClaimDeleteMany: vi.fn(),
   portfolioSnapshotFindFirst: vi.fn(),
   portfolioSnapshotCreate: vi.fn(),
   portfolioItemFindMany: vi.fn(),
-  transactionFn: vi.fn(async (cb: any) => cb(h.tx)),
+  decisionFindFirst: vi.fn(),
+  orderUpdate: vi.fn(),
+  transactionFn: vi.fn(),
+  submitOrder: vi.fn(),
+  getOrder: vi.fn(),
+  cancelOrder: vi.fn(),
+  selectBroker: vi.fn(),
+  constructHalalPortfolio: vi.fn(),
+  isHalted: vi.fn(),
+  tx: {
+    autoRunClaim: { create: vi.fn(), delete: vi.fn() },
+    decision: { create: vi.fn(), update: vi.fn() },
+    order: { create: vi.fn(), update: vi.fn() },
+    transaction: { create: vi.fn() },
+    user: { update: vi.fn(), updateMany: vi.fn() },
+    portfolioItem: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    purificationEntry: { create: vi.fn() },
+  },
 }));
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    user: { findUnique: (...a: any[]) => h.userFindUnique(...a) },
-    marketBar: { findFirst: (...a: any[]) => h.marketBarFindFirst(...a) },
+    user: { findUnique: (...args: any[]) => h.userFindUnique(...args) },
+    strategy: { findFirst: (...args: any[]) => h.strategyFindFirst(...args) },
+    marketBar: { findFirst: (...args: any[]) => h.marketBarFindFirst(...args) },
     autoRunClaim: {
-      create: vi.fn(async ({ data }: any) => {
-        if (h.claimSet.has(data.key)) throw uniqueViolation();
-        h.claimSet.add(data.key);
-        return { key: data.key };
-      }),
-      deleteMany: (...a: any[]) => {
-        const [{ where }] = a;
-        (where.key.in as string[]).forEach((k) => h.claimSet.delete(k));
-        return h.autoRunClaimDeleteMany(...a);
-      },
+      create: (...args: any[]) => h.autoRunClaimCreate(...args),
+      deleteMany: (...args: any[]) => h.autoRunClaimDeleteMany(...args),
     },
+    decision: { findFirst: (...args: any[]) => h.decisionFindFirst(...args) },
+    order: { update: (...args: any[]) => h.orderUpdate(...args) },
     portfolioSnapshot: {
-      findFirst: (...a: any[]) => h.portfolioSnapshotFindFirst(...a),
-      create: (...a: any[]) => h.portfolioSnapshotCreate(...a),
+      findFirst: (...args: any[]) => h.portfolioSnapshotFindFirst(...args),
+      create: (...args: any[]) => h.portfolioSnapshotCreate(...args),
     },
-    portfolioItem: { findMany: (...a: any[]) => h.portfolioItemFindMany(...a) },
-    $transaction: (cb: any) => h.transactionFn(cb),
+    portfolioItem: { findMany: (...args: any[]) => h.portfolioItemFindMany(...args) },
+    $transaction: (callback: any) => h.transactionFn(callback),
   },
 }));
-vi.mock('./construction', () => ({
-  constructHalalPortfolio: (...a: any[]) => h.constructHalalPortfolio(...a),
-}));
+vi.mock('../automation/control', () => ({ isHalted: h.isHalted }));
 vi.mock('../execution/registry', () => ({
-  selectBroker: (...a: any[]) => h.selectBroker(...a),
+  selectBroker: (...args: any[]) => h.selectBroker(...args),
+}));
+vi.mock('./construction', () => ({
+  constructHalalPortfolio: (...args: any[]) => h.constructHalalPortfolio(...args),
 }));
 
 import { executePortfolioRebalance } from './rebalancer';
 
 const USER_ID = 'user-1';
-const STRATEGY_ID = 'strat-1';
+const STRATEGY_ID = 'strategy-1';
+const AS_OF = new Date('2026-07-10T12:00:00.000Z');
 
-function user(overrides: Record<string, unknown> = {}) {
+function portfolioItem(symbol: string, market: 'NASDAQ' | 'TASI', overrides: Record<string, unknown> = {}) {
   return {
-    id: USER_ID,
-    tier: 'ULTRA',
-    cashVirtual: new D(100000),
-    portfolioItems: [],
+    id: `position-${symbol}`,
+    userId: USER_ID,
+    symbol,
+    market,
+    currency: market === 'NASDAQ' ? 'USD' : 'SAR',
+    shares: new D(10),
+    costBasis: new D(200),
+    createdAt: AS_OF,
+    updatedAt: AS_OF,
     ...overrides,
   };
 }
 
-describe('executePortfolioRebalance — crash-safety, idempotency, cost basis, purification', () => {
+function user(portfolioItems: any[] = []) {
+  return {
+    id: USER_ID,
+    tier: 'ULTRA',
+    cashVirtual: new D(100000),
+    portfolioItems,
+  };
+}
+
+function filled(qty = '10', price = '300') {
+  return {
+    brokerRef: 'sim:fill',
+    status: 'FILLED' as const,
+    filledQty: new D(qty),
+    avgFillPrice: new D(price),
+  };
+}
+
+describe('executePortfolioRebalance execution safety', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.claimSet.clear();
-    h.selectBroker.mockReturnValue({ kind: 'INTERNAL_SIM', submitOrder: h.submitOrder });
-    h.constructHalalPortfolio.mockResolvedValue({ asOf: new Date(), weights: [], cashWeight: 1, contributorTrace: {} });
-    h.marketBarFindFirst.mockResolvedValue({ close: new D(300) });
-    h.portfolioSnapshotFindFirst.mockResolvedValue(null);
-    h.portfolioItemFindMany.mockResolvedValue([]);
-    h.portfolioSnapshotCreate.mockResolvedValue({});
-    h.userFindUnique.mockImplementation(async () => user());
-    h.tx.portfolioItem.findUnique.mockResolvedValue(null);
-  });
+    h.decisions.length = 0;
+    h.orders.length = 0;
+    h.nextId = 1;
 
-  it('(a) a broker failure mid-rebalance leaves no partial mutation and releases the claim so a retry succeeds', async () => {
-    const asOf = new Date('2026-07-08');
-    const held = user({ portfolioItems: [{ id: 'pi-1', symbol: 'MSFT', shares: new D(100), costBasis: new D(250) }] });
-    h.userFindUnique.mockImplementation(async () => held);
-
-    h.submitOrder
-      .mockRejectedValueOnce(new Error('broker offline'))
-      .mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(100), avgFillPrice: new D(300) });
-
-    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf)).rejects.toThrow('broker offline');
-
-    // No DB mutation was ever committed (the transaction is only entered after the broker call).
-    expect(h.transactionFn).not.toHaveBeenCalled();
-    // Both the day claim and the per-order claim were released.
-    expect(h.autoRunClaimDeleteMany).toHaveBeenCalledTimes(1);
-    const released = h.autoRunClaimDeleteMany.mock.calls[0][0].where.key.in;
-    expect(released).toEqual(
-      expect.arrayContaining([`rebalance-${STRATEGY_ID}-2026-07-08`, `rebalance-order-${STRATEGY_ID}-2026-07-08-MSFT-SELL`])
-    );
-    expect(h.claimSet.size).toBe(0);
-
-    // Retry with a working broker succeeds.
-    const res = await executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf);
-    expect(res.rebalanced).toBe(true);
-    expect(res.tradesPlaced).toBe(1);
-    expect(h.transactionFn).toHaveBeenCalledTimes(1);
-  });
-
-  it('(b) a double-invocation does not double-execute (second call skips, no broker/tx calls)', async () => {
-    const asOf = new Date('2026-07-08');
-    h.submitOrder.mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(0), avgFillPrice: new D(0) });
-
-    const first = await executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf);
-    expect(first.rebalanced).toBe(true);
-
-    const second = await executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf);
-    expect(second).toEqual({ rebalanced: false, nav: 100000, tradesPlaced: 0, purificationOwed: 0 });
-    expect(h.submitOrder).not.toHaveBeenCalled(); // no orders placed in the first pass (no holdings/targets) — 2nd just short-circuits
-    expect(h.transactionFn).not.toHaveBeenCalled();
-  });
-
-  it('(c) a non-P2002 DB error on the claim propagates instead of returning success', async () => {
-    const asOf = new Date('2026-07-08');
-    (h.userFindUnique as any).mockImplementation(async () => user());
-    // Force the underlying autoRunClaim.create mock (not our stateful wrapper) to throw a generic error once.
-    const { prisma } = await import('@/lib/prisma');
-    (prisma.autoRunClaim.create as any).mockRejectedValueOnce(new Error('connection dropped'));
-
-    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf)).rejects.toThrow('connection dropped');
-    expect(h.portfolioSnapshotFindFirst).not.toHaveBeenCalled(); // never falls into the "already ran" skip path
-  });
-
-  it('(d) costBasis after two BUYs at different prices is the weighted average', async () => {
-    h.constructHalalPortfolio.mockResolvedValue({
-      asOf: new Date(),
-      weights: [{ symbol: 'MSFT', weight: 1, purificationRatio: 0.005 }],
-      cashWeight: 0,
-      contributorTrace: {},
+    h.autoRunClaimCreate.mockImplementation(async ({ data }: any) => {
+      if (h.claimSet.has(data.key)) throw uniqueViolation();
+      h.claimSet.add(data.key);
+      return { key: data.key };
+    });
+    h.autoRunClaimDeleteMany.mockImplementation(async ({ where }: any) => {
+      if (typeof where.key === 'string') h.claimSet.delete(where.key);
+      return { count: 1 };
+    });
+    h.tx.autoRunClaim.create.mockImplementation((args: any) => h.autoRunClaimCreate(args));
+    h.tx.autoRunClaim.delete.mockImplementation(async ({ where }: any) => {
+      h.claimSet.delete(where.key);
+      return { key: where.key };
     });
 
-    // --- First BUY: 10 shares @ 100, no prior position ---
-    const day1 = new Date('2026-07-08');
-    h.userFindUnique.mockImplementation(async () => user({ portfolioItems: [] }));
-    h.marketBarFindFirst.mockResolvedValue({ close: new D(100) });
-    h.submitOrder.mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D(100) });
+    h.tx.decision.create.mockImplementation(async ({ data }: any) => {
+      const decision = {
+        id: `decision-${h.nextId++}`,
+        status: data.status,
+        createdAt: new Date(),
+        ...data,
+        order: null,
+      };
+      h.decisions.push(decision);
+      return decision;
+    });
+    h.tx.order.create.mockImplementation(async ({ data }: any) => {
+      const order = {
+        id: `order-${h.nextId++}`,
+        brokerRef: null,
+        ...data,
+      };
+      h.orders.push(order);
+      const decision = h.decisions.find((row) => row.id === data.decisionId);
+      if (decision) decision.order = order;
+      return order;
+    });
+    h.decisionFindFirst.mockImplementation(async () => h.decisions.at(-1) ?? null);
+    h.orderUpdate.mockImplementation(async ({ where, data }: any) => {
+      const order = h.orders.find((row) => row.id === where.id);
+      Object.assign(order, data);
+      return order;
+    });
+    h.tx.order.update.mockImplementation((args: any) => h.orderUpdate(args));
+    h.tx.decision.update.mockImplementation(async ({ where, data }: any) => {
+      const decision = h.decisions.find((row) => row.id === where.id);
+      Object.assign(decision, data);
+      return decision;
+    });
+    h.transactionFn.mockImplementation(async (callback: any) => callback(h.tx));
+
+    h.strategyFindFirst.mockResolvedValue({ autonomyTier: 'HUMAN_APPROVE' });
+    h.userFindUnique.mockResolvedValue(user());
+    h.marketBarFindFirst.mockImplementation(async ({ where }: any) => ({
+      symbol: where.symbol,
+      market: 'NASDAQ',
+      ts: where.ts?.lte ?? AS_OF,
+      close: new D(300),
+    }));
+    h.portfolioSnapshotFindFirst.mockResolvedValue(null);
+    h.portfolioSnapshotCreate.mockResolvedValue({});
+    h.portfolioItemFindMany.mockResolvedValue([]);
+    h.constructHalalPortfolio.mockResolvedValue({
+      asOf: AS_OF,
+      weights: [],
+      cashWeight: 1,
+      contributorTrace: {},
+    });
+    h.isHalted.mockResolvedValue(false);
+    h.tx.transaction.create.mockResolvedValue({});
+    h.tx.user.update.mockResolvedValue({});
+    h.tx.user.updateMany.mockResolvedValue({ count: 1 });
     h.tx.portfolioItem.findUnique.mockResolvedValue(null);
-
-    const res1 = await executePortfolioRebalance(USER_ID, STRATEGY_ID, day1);
-    expect(res1.tradesPlaced).toBe(1);
-    expect(h.tx.portfolioItem.upsert.mock.calls[0][0].update.costBasis.toString()).toBe('100');
-
-    // --- Second BUY: existing 10@100, buy 10 more @ 200 -> weighted avg = 150 ---
-    const day2 = new Date('2026-07-09');
-    h.userFindUnique.mockImplementation(async () =>
-      user({ portfolioItems: [{ id: 'pi-1', symbol: 'MSFT', shares: new D(10), costBasis: new D(100) }] })
-    );
-    h.marketBarFindFirst.mockResolvedValue({ close: new D(200) });
-    h.submitOrder.mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D(200) });
-    h.tx.portfolioItem.findUnique.mockResolvedValue({ shares: new D(10), costBasis: new D(100) });
-
-    const res2 = await executePortfolioRebalance(USER_ID, STRATEGY_ID, day2);
-    expect(res2.tradesPlaced).toBe(1);
-    const secondUpsert = h.tx.portfolioItem.upsert.mock.calls[1][0];
-    expect(secondUpsert.update.shares.toString()).toBe('20');
-    expect(secondUpsert.update.costBasis.toString()).toBe('150'); // (10*100 + 10*200) / 20
+    h.tx.portfolioItem.upsert.mockResolvedValue({});
+    h.tx.portfolioItem.update.mockResolvedValue({});
+    h.tx.portfolioItem.updateMany.mockResolvedValue({ count: 1 });
+    h.tx.portfolioItem.delete.mockResolvedValue({});
+    h.tx.portfolioItem.deleteMany.mockResolvedValue({ count: 1 });
+    h.tx.purificationEntry.create.mockResolvedValue({});
+    h.submitOrder.mockResolvedValue(filled());
+    h.getOrder.mockResolvedValue(filled());
+    h.cancelOrder.mockResolvedValue(undefined);
+    h.selectBroker.mockReturnValue({
+      kind: 'INTERNAL_SIM',
+      submitOrder: h.submitOrder,
+      getOrder: h.getOrder,
+      cancelOrder: h.cancelOrder,
+      getPositions: vi.fn(),
+      getCash: vi.fn(),
+    });
   });
 
-  it('(e) purification amount = max(0, realizedProfit) * ratio, computed on the (averaged) cost basis', async () => {
-    const asOf = new Date('2026-07-08');
-    h.marketBarFindFirst.mockResolvedValue({ close: new D(300) });
-    h.submitOrder.mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(20), avgFillPrice: new D(300) });
+  it('fails closed on a missing or stale mark before creating an order or calling the broker', async () => {
+    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    h.marketBarFindFirst.mockImplementation(async ({ where }: any) => ({
+      symbol: where.symbol,
+      ts: where.symbol === 'MSFT' ? new Date('2026-06-01') : AS_OF,
+      close: new D(300),
+    }));
 
-    // Profit case: averaged costBasis 150, sell all 20 @ 300 -> profit = (300-150)*20 = 3000; ratio default 0.005 -> 15.
-    h.userFindUnique.mockImplementation(async () =>
-      user({ portfolioItems: [{ id: 'pi-1', symbol: 'MSFT', shares: new D(20), costBasis: new D(150) }] })
-    );
-    const res = await executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf);
-    expect(res.rebalanced).toBe(true);
-    expect(h.tx.purificationEntry.create).toHaveBeenCalledTimes(1);
-    const entry = h.tx.purificationEntry.create.mock.calls[0][0].data;
-    expect(entry.profit.toString()).toBe('3000');
-    expect(entry.amount.toString()).toBe('15');
-    expect(res.purificationOwed).toBeCloseTo(15);
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('Missing or stale NASDAQ mark for MSFT');
 
-    // Loss case: no purification entry when there's no realized profit.
-    vi.clearAllMocks();
-    h.claimSet.clear();
-    h.selectBroker.mockReturnValue({ kind: 'INTERNAL_SIM', submitOrder: h.submitOrder });
-    h.constructHalalPortfolio.mockResolvedValue({ asOf: new Date(), weights: [], cashWeight: 1, contributorTrace: {} });
-    h.marketBarFindFirst.mockResolvedValue({ close: new D(300) });
-    h.portfolioSnapshotFindFirst.mockResolvedValue(null);
-    h.portfolioItemFindMany.mockResolvedValue([]);
-    h.submitOrder.mockResolvedValue({ brokerRef: 'sim', status: 'FILLED', filledQty: new D(20), avgFillPrice: new D(300) });
-    h.userFindUnique.mockImplementation(async () =>
-      user({ portfolioItems: [{ id: 'pi-1', symbol: 'MSFT', shares: new D(20), costBasis: new D(350) }] })
-    );
+    expect(h.orders).toHaveLength(0);
+    expect(h.submitOrder).not.toHaveBeenCalled();
+    expect(h.claimSet.size).toBe(0);
+  });
 
-    const asOf2 = new Date('2026-07-09');
-    const res2 = await executePortfolioRebalance(USER_ID, STRATEGY_ID, asOf2);
-    expect(res2.rebalanced).toBe(true);
-    expect(h.tx.purificationEntry.create).not.toHaveBeenCalled();
-    expect(res2.purificationOwed).toBe(0);
+  it('does not invent a target price when a target mark is missing', async () => {
+    h.constructHalalPortfolio.mockResolvedValue({
+      asOf: AS_OF,
+      weights: [{ symbol: 'NVDA', weight: 0.03, purificationRatio: 0.005 }],
+      cashWeight: 0.97,
+      contributorTrace: {},
+    });
+    h.marketBarFindFirst.mockImplementation(async ({ where }: any) => (
+      where.symbol === 'NVDA' ? null : { symbol: where.symbol, ts: AS_OF, close: new D(300) }
+    ));
+
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('Missing or stale NASDAQ mark for NVDA');
+    expect(h.submitOrder).not.toHaveBeenCalled();
+  });
+
+  it('checks QuantControl immediately before submit and releases the definitively unsubmitted unit', async () => {
+    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    h.isHalted.mockResolvedValue(true);
+
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('halted before broker submission');
+
+    expect(h.submitOrder).not.toHaveBeenCalled();
+    expect(h.orders[0].status).toBe('CANCELLED');
+    expect(h.claimSet.size).toBe(0);
+  });
+
+  it('keeps TASI positions out of NASDAQ NAV, marks, orders, and snapshots', async () => {
+    h.userFindUnique.mockResolvedValue(user([
+      portfolioItem('2222', 'TASI'),
+      portfolioItem('MSFT', 'NASDAQ'),
+    ]));
+
+    await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+
+    expect(h.marketBarFindFirst.mock.calls.some(([arg]) => arg.where.symbol === '2222')).toBe(false);
+    expect(h.submitOrder).toHaveBeenCalledTimes(1);
+    expect(h.submitOrder.mock.calls[0][0]).toMatchObject({ symbol: 'MSFT', market: 'NASDAQ' });
+    expect(h.tx.portfolioItem.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'position-MSFT', shares: { lte: 0 } },
+    });
+    expect(h.portfolioItemFindMany).toHaveBeenCalledWith({
+      where: { userId: USER_ID, market: 'NASDAQ' },
+    });
+    expect(h.portfolioSnapshotCreate.mock.calls[0][0].data.positions).not.toHaveProperty('2222');
+  });
+
+  it('releases a failed InternalSim unit so a retry creates a new audited attempt', async () => {
+    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    h.submitOrder.mockRejectedValueOnce(new Error('broker offline')).mockResolvedValue(filled());
+
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('broker offline');
+    expect(h.orders[0].status).toBe('REJECTED');
+    expect(h.claimSet.size).toBe(0);
+
+    const retry = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+    expect(retry.tradesPlaced).toBe(1);
+    expect(h.submitOrder).toHaveBeenCalledTimes(2);
+    expect(h.orders).toHaveLength(2);
+    expect(h.orders[1].status).toBe('FILLED');
+    expect(h.tx.transaction.create).toHaveBeenCalled();
+  });
+
+  it('reconciles a filled Order after DB settlement failure without a second broker submit', async () => {
+    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    h.tx.transaction.create.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('database unavailable');
+    expect(h.submitOrder).toHaveBeenCalledTimes(1);
+    expect(h.orders[0]).toMatchObject({
+      brokerRef: 'sim:fill',
+      status: 'FILLED',
+    });
+    expect(h.decisions[0].status).toBe('APPROVED');
+    expect(h.claimSet.has(`rebalance-order-${STRATEGY_ID}-2026-07-10-MSFT-SELL`)).toBe(true);
+
+    const retry = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+    expect(retry.tradesPlaced).toBe(1);
+    expect(h.submitOrder).toHaveBeenCalledTimes(1);
+    expect(h.getOrder).not.toHaveBeenCalled();
+    expect(h.decisions[0].status).toBe('EXECUTED');
+    // First TRADE audit fails; retry writes TRADE + purification audit in one DB transaction.
+    expect(h.tx.transaction.create).toHaveBeenCalledTimes(3);
+  });
+
+  it('reconciles an ambiguous remote failure with the same client order ID', async () => {
+    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    h.selectBroker.mockReturnValue({
+      kind: 'ALPACA_PAPER',
+      submitOrder: h.submitOrder,
+      getOrder: h.getOrder,
+      cancelOrder: h.cancelOrder,
+      getPositions: vi.fn(),
+      getCash: vi.fn(),
+    });
+    h.submitOrder.mockRejectedValueOnce(new Error('network timeout')).mockResolvedValue(filled());
+
+    await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
+      .rejects.toThrow('network timeout');
+    const retry = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+
+    expect(retry.tradesPlaced).toBe(1);
+    expect(h.submitOrder).toHaveBeenCalledTimes(2);
+    expect(h.submitOrder.mock.calls[0][0].clientOrderId).toBe(h.submitOrder.mock.calls[1][0].clientOrderId);
+    expect(h.orders).toHaveLength(1);
+    expect(h.orders[0].status).toBe('FILLED');
+  });
+
+  it('caps BUY fills, prevents negative cash, and records a signed ledger outflow', async () => {
+    h.constructHalalPortfolio.mockResolvedValue({
+      asOf: AS_OF,
+      weights: [{ symbol: 'NVDA', weight: 0.03, purificationRatio: 0.005 }],
+      cashWeight: 0.97,
+      contributorTrace: {},
+    });
+    h.submitOrder.mockResolvedValue(filled('10', '300'));
+
+    const result = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+
+    expect(result.tradesPlaced).toBe(1);
+    expect(h.submitOrder.mock.calls[0][0].limitPrice.toString()).toBe('303');
+    expect(h.tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: USER_ID, cashVirtual: { gte: new D(3000) } },
+      data: { cashVirtual: { decrement: new D(3000) } },
+    });
+    expect(h.tx.transaction.create.mock.calls[0][0].data.amount.toString()).toBe('-3000');
+  });
+
+  it('keeps the strategy/day claim after success so a concurrent or duplicate call cannot resubmit', async () => {
+    const first = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+    const second = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+
+    expect(first.rebalanced).toBe(true);
+    expect(second).toEqual({
+      rebalanced: false,
+      nav: 100000,
+      tradesPlaced: 0,
+      purificationOwed: 0,
+    });
+    expect(h.submitOrder).not.toHaveBeenCalled();
+    expect(h.portfolioSnapshotCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses Decimal fill values for realized profit and purification audit', async () => {
+    h.userFindUnique.mockResolvedValue(user([
+      portfolioItem('MSFT', 'NASDAQ', { shares: new D(10), costBasis: new D(200) }),
+    ]));
+    h.submitOrder.mockResolvedValue(filled('10', '300'));
+
+    const result = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
+
+    expect(result.purificationOwed).toBe(5);
+    expect(h.tx.purificationEntry.create.mock.calls[0][0].data).toMatchObject({
+      userId: USER_ID,
+      symbol: 'MSFT',
+    });
+    expect(h.tx.purificationEntry.create.mock.calls[0][0].data.profit.toString()).toBe('1000');
+    expect(h.tx.purificationEntry.create.mock.calls[0][0].data.amount.toString()).toBe('5');
   });
 });

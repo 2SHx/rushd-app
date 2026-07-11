@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { pickBrokerKind } from './broker';
 import { InternalSimBroker } from './internalSim';
@@ -61,6 +61,81 @@ describe('AlpacaPaperBroker enforces the live gate at construction', () => {
     expect(() => new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets')).not.toThrow();
     // a live URL with no flags is blocked — real orders cannot be reached
     expect(() => new AlpacaPaperBroker('k', 's', 'https://api.alpaca.markets')).toThrow(LiveExecutionBlocked);
+  });
+});
+
+describe('AlpacaPaperBroker client-order idempotency', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reconciles a retry by client order ID without submitting a second order', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'alpaca-order-1',
+        status: 'filled',
+        filled_qty: '10',
+        filled_avg_price: '101.25',
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'alpaca-order-1',
+        status: 'filled',
+        filled_qty: '10',
+        filled_avg_price: '101.25',
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    const order = {
+      symbol: 'AAPL',
+      market: 'NASDAQ' as const,
+      side: 'BUY' as const,
+      qty: new D(10),
+      refPrice: new D(100),
+      clientOrderId: 'rushd-strategy-1-2026-07-10-AAPL-BUY',
+    };
+
+    const first = await broker.submitOrder(order);
+    const retry = await broker.submitOrder(order);
+
+    expect(first).toEqual(retry);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(String(posts[0][1]?.body))).toMatchObject({
+      client_order_id: order.clientOrderId,
+    });
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      `https://paper-api.alpaca.markets/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(order.clientOrderId)}`,
+    );
+  });
+
+  it('looks up the accepted order after Alpaca rejects a duplicate submission', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 422 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'alpaca-order-raced',
+        status: 'new',
+        filled_qty: '0',
+        filled_avg_price: null,
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+
+    const result = await broker.submitOrder({
+      symbol: 'MSFT',
+      market: 'NASDAQ',
+      side: 'SELL',
+      qty: new D(4),
+      refPrice: new D(300),
+      clientOrderId: 'rushd-strategy-1-2026-07-10-MSFT-SELL',
+    });
+
+    expect(result).toMatchObject({
+      brokerRef: 'alpaca-order-raced',
+      status: 'NEW',
+    });
+    expect(result.avgFillPrice.isZero()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -2,7 +2,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
@@ -22,11 +23,6 @@ interface Props {
 type ScreenerFilter = 'most-active' | 'trending' | 'gainers' | 'losers' | 'gainers-52w' | 'losers-52w' | 'unusual-volume';
 type ViewMode = 'table' | 'heatmap';
 
-const isShariaCompliant = (symbol: string) => {
-  const sym = symbol.toUpperCase().replace('.SR', '');
-  return sym !== 'TSLA' && sym !== 'META';
-};
-
 const FILTER_TABS = [
   { id: 'most-active', en: 'Most Active', ar: 'الأكثر نشاطاً' },
   { id: 'trending', en: 'Trending Now', ar: 'الرائج الآن' },
@@ -38,6 +34,7 @@ const FILTER_TABS = [
 ] as const;
 
 export default function MarketOverviewPanel({ market, locale, onSelectStock, quotes, loadingQuotes }: Props) {
+  const t = useTranslations('Markets');
   const isAr = locale === 'ar';
   const tickers = TICKERS[market];
 
@@ -284,9 +281,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
               <Zap className="w-4 h-4 text-emerald-400" />
               {isAr ? 'شاشة أسهم رشد' : 'Rushd Ticker Screener'}
             </h2>
-            <p className="text-xs text-foreground/50 mt-0.5">
-              {isAr ? 'شاشة فرز فورية تدعم جميع القطاعات والفلترة المتقدمة' : 'Real-time screener supporting all sectors and core filters'}
-            </p>
+            <p className="text-xs text-foreground/50 mt-0.5">{t('screenerSubtitle')}</p>
           </div>
 
           <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/5 self-end md:self-auto">
@@ -373,6 +368,9 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
             <span>Syncing live quotes...</span>
           </div>
         )}
+        <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-foreground/70">
+          {t('screenerDemoNote')}
+        </p>
 
         {/* View Mode Rendering */}
         {viewMode === 'table' ? (
@@ -397,19 +395,16 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
                 {filteredStocks.map((stock) => {
                   const isUp = stock.pct >= 0;
                   return (
-                    <tr
-                      key={stock.symbol}
-                      onClick={() => onSelectStock(stock.symbol)}
-                      className="hover:bg-white/[0.03] cursor-pointer transition-colors"
-                    >
+                    <tr key={stock.symbol} className="hover:bg-white/[0.03] transition-colors">
                       <td className="px-4 py-3.5 font-extrabold text-foreground font-mono text-emerald-400">
                         <div className="flex items-center gap-1.5">
-                          <span>{stock.symbol.replace('.SR', '')}</span>
-                          {isShariaCompliant(stock.symbol) ? (
-                            <ShieldCheck className="w-3.5 h-3.5 text-up" title={isAr ? 'متوافق مع الشريعة' : 'Sharia Compliant'} />
-                          ) : (
-                            <ShieldAlert className="w-3.5 h-3.5 text-noncompliant" title={isAr ? 'غير متوافق' : 'Non-Compliant'} />
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => onSelectStock(stock.symbol)}
+                            className="rounded text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                          >
+                            {stock.symbol.replace('.SR', '')}
+                          </button>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 font-medium text-foreground/70 truncate max-w-[140px]">
@@ -491,11 +486,6 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
                           >
                             <span className="font-extrabold tracking-tight flex items-center justify-center gap-0.5">
                               <span>{stock.symbol.replace('.SR', '')}</span>
-                              {isShariaCompliant(stock.symbol) ? (
-                                <ShieldCheck className="w-2.5 h-2.5 shrink-0 opacity-80" title={isAr ? 'متوافق' : 'Compliant'} />
-                              ) : (
-                                <ShieldAlert className="w-2.5 h-2.5 shrink-0 opacity-80" title={isAr ? 'غير متوافق' : 'Non-Compliant'} />
-                              )}
                             </span>
                             <span className="font-mono text-[10px] tabular-nums block opacity-90">
                               {isUp ? '+' : ''}

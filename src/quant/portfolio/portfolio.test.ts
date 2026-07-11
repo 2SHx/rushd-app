@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { getHalalUniverse } from '../data/universe';
@@ -6,6 +7,7 @@ import { computePortfolioMetrics } from '../backtest/portfolioEngine';
 import { executePortfolioRebalance } from './rebalancer';
 
 describe('Halal Quant Portfolio Tests', () => {
+  const D = Prisma.Decimal;
   const userId = 'test-user-portfolio-id';
   const strategyId = 'test-strategy-portfolio-id';
 
@@ -39,6 +41,25 @@ describe('Halal Quant Portfolio Tests', () => {
         market: 'NASDAQ',
         config: {}
       }
+    });
+
+    // Rebalancing fails closed unless both benchmark marks are current; seed real marks
+    // instead of relying on the old synthetic SPY/SPUS price fallbacks.
+    const markTs = new Date();
+    await prisma.marketBar.deleteMany({ where: { symbol: { in: ['SPY', 'SPUS'] }, market: 'NASDAQ' } });
+    await prisma.marketBar.createMany({
+      data: [
+        {
+          symbol: 'SPY', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+          open: new D(500), high: new D(500), low: new D(500), close: new D(500),
+          volume: new D(1000000), source: 'MOCK'
+        },
+        {
+          symbol: 'SPUS', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+          open: new D(40), high: new D(40), low: new D(40), close: new D(40),
+          volume: new D(1000000), source: 'MOCK'
+        }
+      ]
     });
   });
 

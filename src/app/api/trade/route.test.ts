@@ -14,6 +14,8 @@ const portfolioFindUnique = vi.fn();
 const portfolioDelete = vi.fn();
 const portfolioUpdate = vi.fn();
 const transactionCreate = vi.fn();
+const claimCreate = vi.fn();
+const claimDelete = vi.fn();
 
 const prismaMock = {
   savingsJar: {
@@ -28,7 +30,11 @@ const prismaMock = {
   },
   transaction: {
     create: (...args: any[]) => transactionCreate(...args),
-  }
+  },
+  autoRunClaim: {
+    create: (...args: any[]) => claimCreate(...args),
+    delete: (...args: any[]) => claimDelete(...args),
+  },
 };
 
 vi.mock('@/lib/authz', () => ({
@@ -55,6 +61,10 @@ beforeEach(() => {
   portfolioDelete.mockReset();
   portfolioUpdate.mockReset();
   transactionCreate.mockReset();
+  claimCreate.mockReset();
+  claimDelete.mockReset();
+  claimCreate.mockResolvedValue({ key: 'money-user-user_1' });
+  claimDelete.mockResolvedValue({ key: 'money-user-user_1' });
 });
 
 describe('POST /api/trade', () => {

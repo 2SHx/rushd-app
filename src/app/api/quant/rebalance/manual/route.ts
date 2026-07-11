@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { isHalted } from '@/quant/automation/control';
 import { executePortfolioRebalance } from '@/quant/portfolio/rebalancer';
 
-function isUniqueViolation(error: unknown): boolean {
-  return !!error && typeof error === 'object' && 'code' in error && error.code === 'P2002';
+function acceptsJson(req: Request): boolean {
+  return req.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() === 'application/json';
 }
 
 export async function POST(req: Request) {
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    if (req.headers.get('content-type') !== 'application/json') {
+    if (!acceptsJson(req)) {
       return NextResponse.json({ error: 'unsupported_media_type' }, { status: 415 });
     }
 
@@ -34,26 +34,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, rebalanceDate, logs: {} });
     }
 
-    try {
-      await prisma.autoRunClaim.create({
-        data: { key: `manual-rebalance:${user.id}:${rebalanceDate}` },
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        return NextResponse.json({ error: 'already_run_today' }, { status: 409 });
-      }
-      throw error;
-    }
-
-    const logs: Record<string, Awaited<ReturnType<typeof executePortfolioRebalance>>> = {};
+    const logs: Record<string, Awaited<ReturnType<typeof executePortfolioRebalance>> | {
+      rebalanced: false;
+      error: string;
+    }> = {};
+    let failed = false;
     for (const strategy of strategies) {
       if (await isHalted()) {
         return NextResponse.json({ error: 'halted', logs }, { status: 503 });
       }
-      logs[strategy.id] = await executePortfolioRebalance(user.id, strategy.id, now);
+      try {
+        logs[strategy.id] = await executePortfolioRebalance(user.id, strategy.id, now);
+      } catch (error) {
+        console.error(`Manual rebalance failed for strategy ${strategy.id}:`, error);
+        failed = true;
+        logs[strategy.id] = {
+          rebalanced: false,
+          error: 'rebalance_failed',
+        };
+      }
     }
 
-    return NextResponse.json({ success: true, rebalanceDate, logs });
+    return NextResponse.json(
+      { success: !failed, rebalanceDate, logs },
+      { status: failed ? 500 : 200 },
+    );
   } catch (error) {
     if (error && typeof error === 'object' && 'response' in error) {
       return (error as { response: Response }).response;

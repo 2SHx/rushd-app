@@ -47,6 +47,12 @@ export default async function DashboardPage({ params }: { params: { locale: stri
   }));
 
   const t = await getTranslations('Quant');
+  const performanceWarning = {
+    no_snapshots: t('portfolioPerformanceNoSnapshots'),
+    multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
+    mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
+    available: null,
+  }[portfolio.performanceStatus];
 
   return (
     <>
@@ -55,14 +61,22 @@ export default async function DashboardPage({ params }: { params: { locale: stri
           {t('portfolioPricingIncomplete', { symbols: portfolio.unpricedSymbols.join(', ') })}
         </div>
       )}
+      {performanceWarning && (
+        <div className="mx-auto mt-3 max-w-6xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+          {performanceWarning}
+        </div>
+      )}
       <DashboardClient
         locale={locale}
         initialNAV={portfolio.initialNAV}
         initialCash={portfolio.initialCash}
+        cashCurrency={portfolio.cashCurrency}
         initialPositions={portfolio.initialPositions}
         initialSnapshots={portfolio.initialSnapshots}
         initialMetrics={portfolio.initialMetrics}
         initialTransactions={initialTransactions}
+        performanceStatus={portfolio.performanceStatus}
+        currencyTotals={portfolio.currencyTotals}
       />
     </>
   );

@@ -2,9 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { motion } from 'framer-motion';
 import {
-  Briefcase,
   TrendingUp,
   Percent,
   Activity,
@@ -14,25 +12,37 @@ import {
   Play,
   Loader2,
   ShieldCheck,
-  ClipboardList
 } from 'lucide-react';
 
 interface Position {
   symbol: string;
   name: string;
+  market: 'TASI' | 'NASDAQ';
+  currency: 'SAR' | 'USD';
   shares: number;
-  costBasis: number;
+  costBasis: number | null;
   price: number;
   value: number;
-  weight: number;
+  weight: number | null;
+  complianceStatus: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
 }
 
 interface Snapshot {
   asOf: string;
   nav: number;
   cashVirtual: number;
+  currency: 'SAR' | 'USD';
   spy: number;
   spus: number;
+}
+
+type PerformanceStatus = 'available' | 'no_snapshots' | 'multiple_strategies' | 'mixed_currencies';
+
+interface CurrencyTotal {
+  currency: 'SAR' | 'USD';
+  positionsValue: number;
+  cashValue: number | null;
+  totalValue: number | null;
 }
 
 interface PurificationEntry {
@@ -71,24 +81,29 @@ interface Metrics {
 
 interface PortfolioClientProps {
   locale: string;
-  initialNAV: number;
+  initialNAV: number | null;
   initialCash: number;
+  cashCurrency: 'SAR' | 'USD' | null;
   initialPositions: Position[];
   initialSnapshots: Snapshot[];
   initialPurification: PurificationEntry[];
   initialMetrics: Metrics;
   initialTrades?: Trade[];
+  performanceStatus: PerformanceStatus;
+  currencyTotals: CurrencyTotal[];
 }
 
 export default function PortfolioClient({
   locale,
   initialNAV,
   initialCash,
+  cashCurrency,
   initialPositions,
   initialSnapshots,
   initialPurification,
   initialMetrics,
-  initialTrades = []
+  performanceStatus,
+  currencyTotals,
 }: PortfolioClientProps) {
   const t = useTranslations('Quant');
 
@@ -98,7 +113,6 @@ export default function PortfolioClient({
   const [snapshots] = useState(initialSnapshots);
   const [purification] = useState(initialPurification);
   const [metrics] = useState(initialMetrics);
-  const [trades] = useState(initialTrades);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,16 +132,28 @@ export default function PortfolioClient({
   });
 
   // Formatter helpers
-  const fmtMoney = (val: number) => {
+  const fmtMoney = (val: number, currency: 'SAR' | 'USD') => {
     return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency,
     }).format(val);
   };
+
+  const performanceMessage = {
+    no_snapshots: t('portfolioPerformanceNoSnapshots'),
+    multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
+    mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
+    available: '',
+  }[performanceStatus];
+  const hasPerformanceMetrics = performanceStatus === 'available' && snapshots.length >= 2;
 
   const fmtPercent = (val: number) => {
     return `${(val * 100).toFixed(2)}%`;
   };
+
+  const fmtNumber = (val: number) => new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
+    maximumFractionDigits: 2,
+  }).format(val);
 
   // Rebalance execution handler
   async function triggerManualRebalance() {
@@ -140,12 +166,19 @@ export default function PortfolioClient({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Failed to rebalance');
+        const errorKey = {
+          forbidden: 'rebalanceErrorForbidden',
+          unsupported_media_type: 'rebalanceErrorUnsupported',
+          halted: 'rebalanceErrorHalted',
+          already_run_today: 'rebalanceErrorAlreadyRun',
+          internal_error: 'rebalanceErrorGeneric',
+        }[data.error as string] ?? 'rebalanceErrorGeneric';
+        setError(t(errorKey));
         return;
       }
       window.location.reload();
-    } catch (err: any) {
-      setError(err.message || 'Error executing rebalance');
+    } catch {
+      setError(t('rebalanceErrorGeneric'));
     } finally {
       setLoading(false);
     }
@@ -153,10 +186,10 @@ export default function PortfolioClient({
 
   // Pure SVG scaling chart logic
   function renderSvgChart() {
-    if (filteredSnapshots.length < 2) {
+    if (performanceStatus !== 'available' || filteredSnapshots.length < 2) {
       return (
         <div className="flex items-center justify-center h-64 text-gray-500">
-          Not enough historical snapshots to render performance curve for this timeframe.
+          {performanceMessage || t('portfolioPerformanceInsufficient')}
         </div>
       );
     }
@@ -242,68 +275,31 @@ export default function PortfolioClient({
     );
   }
 
-  // Drawdown gauge helper (circular progress)
-  function renderDrawdownGauge() {
-    const radius = 50;
-    const strokeWidth = 8;
-    const normalizedDrawdown = Math.min(1, Math.max(0, metrics.maxDrawdown));
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - normalizedDrawdown * circumference;
-    
-    let strokeColor = '#10B981'; // Compliant green
-    if (normalizedDrawdown > 0.15) strokeColor = '#F59E0B'; // Amber
-    if (normalizedDrawdown > 0.3) strokeColor = '#EF4444'; // Red
-
-    return (
-      <div className="flex flex-col items-center justify-center p-6 glass-panel text-center h-full">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">{t('drawdownGauge')}</h3>
-        <div className="relative w-36 h-36">
-          <svg className="w-full h-full transform -rotate-90">
-            <circle
-              cx="72"
-              cy="72"
-              r={radius}
-              stroke="currentColor" className="text-slate-200 dark:text-slate-900 dark:text-white/5"
-              strokeWidth={strokeWidth}
-              fill="transparent"
-            />
-            <circle
-              cx="72"
-              cy="72"
-              r={radius}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              fill="transparent"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              className="transition-all duration-1000 ease-out"
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-slate-900 dark:text-white">{fmtPercent(metrics.maxDrawdown)}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Calculate Running Purification Total
   const runningPurificationTotal = purification.reduce((sum, item) => sum + item.amount, 0);
-
-  // Capital needed approximation for $1,000/day
-  const expectedReturn = Math.max(0.08, metrics.cagr > 0 ? metrics.cagr : 0.12);
-  const capitalNeeded = expectedReturn > 0 ? 252000 / expectedReturn : 2520000;
 
 
   // Asset Allocation Donut Chart
   function renderAllocationDonut() {
+    if (nav === null) {
+      return (
+        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-sm text-amber-300">
+          <p>{t('portfolioCombinedUnavailable')}</p>
+          <div className="mt-3 flex flex-wrap gap-3 font-mono text-xs" dir="ltr">
+            {currencyTotals.map(total => (
+              <span key={total.currency}>{fmtMoney(total.positionsValue, total.currency)}</span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     const radius = 50;
     const strokeWidth = 12;
     const circumference = 2 * Math.PI * radius;
     
-    const usEquities = positions.filter(p => !p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
-    const saudiEquities = positions.filter(p => p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
+    const usEquities = positions.filter(p => p.market === 'NASDAQ').reduce((sum, p) => sum + p.value, 0);
+    const saudiEquities = positions.filter(p => p.market === 'TASI').reduce((sum, p) => sum + p.value, 0);
     const cashValue = cash;
     const totalValue = nav || 1;
     
@@ -367,7 +363,7 @@ export default function PortfolioClient({
                   <div className="w-full h-full bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white font-extrabold text-lg">U</div>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
-                  {fmtMoney(nav).replace('$', '$ ')}
+                  {nav !== null && cashCurrency ? fmtMoney(nav, cashCurrency) : t('valueUnavailable')}
                 </h1>
               </div>
             </div>
@@ -376,12 +372,18 @@ export default function PortfolioClient({
             <div className="flex glass-panel p-1 rounded-2xl border border-slate-200 dark:border-white/10 h-12 shadow-sm self-start">
               <button onClick={triggerManualRebalance} disabled={loading} className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-50 flex items-center gap-1.5">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
-                Rebalance
+                {loading ? t('rebalancing') : t('rebalanceButton')}
               </button>
               <button className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all text-gray-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white flex items-center">Wallet</button>
               <button className="px-5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all bg-emerald-500 text-black shadow-lg shadow-emerald-500/25 flex items-center font-black">Analytics</button>
             </div>
           </div>
+
+          {error && (
+            <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-semibold text-rose-400">
+              {error}
+            </div>
+          )}
 
           {/* Main Navigation Tabs */}
           <div className="flex overflow-x-auto no-scrollbar gap-8 border-b border-slate-200 dark:border-white/5 mt-4">
@@ -421,18 +423,18 @@ export default function PortfolioClient({
               <div>
                 <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">US Equities</div>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
+                  {fmtMoney(positions.filter(p => p.market === 'NASDAQ').reduce((s, p) => s + p.value, 0), 'USD')}
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1.5">
                   <span className="text-gray-400">Portfolio Share</span>
                   <span className="text-slate-950 dark:text-white font-mono font-bold">
-                    {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                    {nav === null ? t('valueUnavailable') : fmtPercent(positions.filter(p => p.market === 'NASDAQ').reduce((s, p) => s + (p.weight ?? 0), 0))}
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => p.market === 'NASDAQ').reduce((s, p) => s + (p.weight ?? 0), 0) * 100)}%` }}></div>
                 </div>
                 <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
                   <div className="flex -space-x-1.5">
@@ -448,18 +450,18 @@ export default function PortfolioClient({
               <div>
                 <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">Saudi Equities</div>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
+                  {fmtMoney(positions.filter(p => p.market === 'TASI').reduce((s, p) => s + p.value, 0), 'SAR')}
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1.5">
                   <span className="text-gray-400">Portfolio Share</span>
                   <span className="text-slate-950 dark:text-white font-mono font-bold">
-                    {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
+                    {nav === null ? t('valueUnavailable') : fmtPercent(positions.filter(p => p.market === 'TASI').reduce((s, p) => s + (p.weight ?? 0), 0))}
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100)}%` }}></div>
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, positions.filter(p => p.market === 'TASI').reduce((s, p) => s + (p.weight ?? 0), 0) * 100)}%` }}></div>
                 </div>
                 <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
                   <div className="flex -space-x-1.5">
@@ -475,18 +477,18 @@ export default function PortfolioClient({
               <div>
                 <div className="text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2">Cash & Purify</div>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {fmtMoney(cash)}
+                  {cashCurrency ? fmtMoney(cash, cashCurrency) : `${fmtNumber(cash)} — ${t('cashCurrencyUnavailable')}`}
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1.5">
                   <span className="text-gray-400">Portfolio Share</span>
                   <span className="text-slate-950 dark:text-white font-mono font-bold">
-                    {fmtPercent(nav > 0 ? cash / nav : 0)}
+                    {nav !== null && nav > 0 ? fmtPercent(cash / nav) : t('valueUnavailable')}
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden mb-3">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, nav > 0 ? (cash / nav) * 100 : 0)}%` }}></div>
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, nav !== null && nav > 0 ? (cash / nav) * 100 : 0)}%` }}></div>
                 </div>
                 <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-white/5">
                   <div className="flex -space-x-1.5">
@@ -500,10 +502,12 @@ export default function PortfolioClient({
 
           <div className="flex justify-end gap-4 mt-4 mb-8">
             <button className="px-8 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-white/5 transition-all">View All</button>
-            <button onClick={triggerManualRebalance} className="px-8 py-3 rounded-2xl bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2">
-              <Play className="w-4 h-4 text-black" /> Run Trade Strategy
+            <button onClick={triggerManualRebalance} disabled={loading} className="px-8 py-3 rounded-2xl bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2 disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-black" />}
+              {loading ? t('rebalancing') : t('rebalanceButton')}
             </button>
           </div>
+          <p className="mb-8 text-xs text-foreground/60">{t('paperDisclaimer')}</p>
 
           {/* Tables Section */}
           <div className="space-y-8">
@@ -518,37 +522,51 @@ export default function PortfolioClient({
                     <tr className="border-b border-slate-200 dark:border-white/10 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
                       <th className="py-3 text-start px-2">{t('symbol')}</th>
                       <th className="py-3 text-start px-2">{t('name')}</th>
+                      <th className="py-3 text-start px-2">{t('marketLabel')}</th>
+                      <th className="py-3 text-start px-2">{t('currencyLabel')}</th>
                       <th className="py-3 text-start px-2">{t('shariaStatus')}</th>
                       <th className="py-3 text-end px-2">{t('shares')}</th>
+                      <th className="py-3 text-end px-2">{t('costBasis')}</th>
                       <th className="py-3 text-end px-2">{t('value')}</th>
                       <th className="py-3 text-end px-2">{t('weight')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {positions.map(pos => (
-                      <tr key={pos.symbol} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-2 font-black font-mono text-emerald-400">{pos.symbol}</td>
+                    {positions.map(pos => {
+                      const compliance = pos.complianceStatus === 'VERIFIED_COMPLIANT'
+                        ? { label: t('compliant'), title: t('shariaVerifiedCompliantNote'), Icon: ShieldCheck, className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+                        : pos.complianceStatus === 'VERIFIED_NON_COMPLIANT'
+                          ? { label: t('nonCompliant'), title: t('shariaVerifiedNonCompliantNote'), Icon: AlertTriangle, className: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
+                          : { label: t('shariaUnverified'), title: t('shariaUnverifiedNote'), Icon: AlertTriangle, className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+                      const ComplianceIcon = compliance.Icon;
+                      return (
+                      <tr key={`${pos.market}:${pos.symbol}`} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
+                        <td className="py-3.5 px-2 font-black font-mono text-emerald-400" dir="ltr">{pos.symbol}</td>
                         <td className="py-3.5 px-2 text-slate-700 dark:text-gray-300 max-w-[200px] truncate">{pos.name || pos.symbol}</td>
+                        <td className="py-3.5 px-2 text-slate-700 dark:text-gray-300">{pos.market}</td>
+                        <td className="py-3.5 px-2 font-mono text-slate-700 dark:text-gray-300" dir="ltr">{pos.currency}</td>
                         <td className="py-3.5 px-2">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider shadow-sm">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            {t('compliant')}
+                          <span title={compliance.title} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold border uppercase tracking-wider shadow-sm ${compliance.className}`}>
+                            <ComplianceIcon className="w-3.5 h-3.5" />
+                            {compliance.label}
                           </span>
                         </td>
                         <td className="py-3.5 px-2 text-end font-mono text-slate-700 dark:text-gray-300">{pos.shares.toFixed(2)}</td>
-                        <td className="py-3.5 px-2 text-end font-mono text-slate-900 dark:text-white font-bold">{fmtMoney(pos.value)}</td>
+                        <td className="py-3.5 px-2 text-end font-mono text-slate-700 dark:text-gray-300">{pos.costBasis === null ? t('costBasisUnknown') : fmtMoney(pos.costBasis, pos.currency)}</td>
+                        <td className="py-3.5 px-2 text-end font-mono text-slate-900 dark:text-white font-bold">{fmtMoney(pos.value, pos.currency)}</td>
                         <td className="py-3.5 px-2 text-end">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1 bg-black/40 rounded-full overflow-hidden hidden sm:block">
-                              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+                              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${(pos.weight ?? 0) * 100}%` }} />
                             </div>
-                            <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtPercent(pos.weight)}</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">{pos.weight === null ? t('valueUnavailable') : fmtPercent(pos.weight)}</span>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {positions.length === 0 && (
-                      <tr><td colSpan={6} className="py-8 text-center text-gray-500">No active positions.</td></tr>
+                      <tr><td colSpan={9} className="py-8 text-center text-gray-500">{t('noActivePositions')}</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -563,7 +581,7 @@ export default function PortfolioClient({
                   <span>{t('purificationLedgerTitle')}</span>
                 </h2>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20 shadow-sm">
-                  Total Purified: {fmtMoney(runningPurificationTotal)}
+                  Total Purified: {fmtNumber(runningPurificationTotal)}
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -580,7 +598,7 @@ export default function PortfolioClient({
                       <tr key={entry.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
                         <td className="py-3.5 px-2 text-gray-400 font-mono text-xs">{new Date(entry.createdAt).toLocaleDateString(locale)}</td>
                         <td className="py-3.5 px-2 font-black text-emerald-400">{entry.symbol}</td>
-                        <td className="py-3.5 px-2 text-end text-amber-400 font-bold font-mono">{fmtMoney(entry.amount)}</td>
+                        <td className="py-3.5 px-2 text-end text-amber-400 font-bold font-mono">{fmtNumber(entry.amount)}</td>
                       </tr>
                     ))}
                     {purification.length === 0 && (
@@ -608,17 +626,17 @@ export default function PortfolioClient({
 
           {/* Key Metrics / Popular Strategies List */}
           <div className="glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-lg">
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200 mb-4">Key Metrics</h3>
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200 mb-4">{t('metricsHeading')}</h3>
             <div className="space-y-4">
               <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
                   <Activity className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Sharpe Ratio</div>
-                  <div className="text-[10px] text-gray-500 leading-tight">Risk-adjusted returns indicator</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">{t('metricSharpe')}</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">{t('metricSharpeDescription')}</div>
                 </div>
-                <div className="text-base font-black text-emerald-400 font-mono">{metrics.sharpe.toFixed(2)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{hasPerformanceMetrics ? metrics.sharpe.toFixed(2) : t('valueUnavailable')}</div>
               </div>
 
               <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
@@ -626,10 +644,10 @@ export default function PortfolioClient({
                   <TrendingUp className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">CAGR</div>
-                  <div className="text-[10px] text-gray-500 leading-tight">Compounded Annual Growth Rate</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">{t('metricCagr')}</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">{t('metricCagrDescription')}</div>
                 </div>
-                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.cagr)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{hasPerformanceMetrics ? fmtPercent(metrics.cagr) : t('valueUnavailable')}</div>
               </div>
 
               <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
@@ -637,10 +655,10 @@ export default function PortfolioClient({
                   <Percent className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Alpha vs SPUS</div>
-                  <div className="text-[10px] text-gray-500 leading-tight">Outperformance vs SPUS index</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">{t('metricAlphaSpus')}</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">{t('metricAlphaSpusDescription')}</div>
                 </div>
-                <div className="text-base font-black text-emerald-400 font-mono">{fmtPercent(metrics.alphaVsSpus)}</div>
+                <div className="text-base font-black text-emerald-400 font-mono">{hasPerformanceMetrics ? fmtPercent(metrics.alphaVsSpus) : t('valueUnavailable')}</div>
               </div>
               
               <div className="flex items-center gap-4 p-3.5 bg-black/20 hover:bg-black/35 rounded-2xl border border-slate-200/50 dark:border-white/5 transition-colors cursor-pointer group shadow-sm">
@@ -648,10 +666,10 @@ export default function PortfolioClient({
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Max Drawdown</div>
-                  <div className="text-[10px] text-gray-500 leading-tight">Peak-to-trough historical drop</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">{t('metricMaxDrawdown')}</div>
+                  <div className="text-[10px] text-gray-500 leading-tight">{t('metricMaxDrawdownDescription')}</div>
                 </div>
-                <div className="text-base font-black text-amber-400 font-mono">{fmtPercent(metrics.maxDrawdown)}</div>
+                <div className="text-base font-black text-amber-400 font-mono">{hasPerformanceMetrics ? fmtPercent(metrics.maxDrawdown) : t('valueUnavailable')}</div>
               </div>
             </div>
             

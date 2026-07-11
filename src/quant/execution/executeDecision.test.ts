@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
 const h = vi.hoisted(() => ({
+  lockCreate: vi.fn(),
+  lockDeleteMany: vi.fn(),
   tx: {
     order: { update: vi.fn() },
     transaction: { create: vi.fn() },
-    user: { update: vi.fn() },
-    portfolioItem: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    user: { update: vi.fn(), updateMany: vi.fn() },
+    portfolioItem: {
+      upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(),
+      delete: vi.fn(), deleteMany: vi.fn(),
+    },
     decision: { update: vi.fn() },
   },
   submitOrder: vi.fn(),
@@ -17,7 +22,9 @@ vi.mock('@/lib/prisma', () => ({
     decision: { findUnique: vi.fn() },
     marketBar: { findFirst: vi.fn() },
     user: { findUnique: vi.fn() },
+    portfolioItem: { findUnique: vi.fn() },
     order: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    autoRunClaim: { create: h.lockCreate, deleteMany: h.lockDeleteMany },
     $transaction: vi.fn(async (cb: any) => cb(h.tx)),
   },
 }));
@@ -41,10 +48,15 @@ function decision(overrides: Record<string, unknown> = {}) {
 describe('executeDecision', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.lockCreate.mockResolvedValue({ key: `money-user-${OWNER}` });
+    h.lockDeleteMany.mockResolvedValue({ count: 1 });
     (prisma.marketBar.findFirst as any).mockResolvedValue({ close: new D(100) });
     (prisma.user.findUnique as any).mockResolvedValue({ cashVirtual: new D(100000) });
     (prisma.order.create as any).mockResolvedValue({ id: 'order-1' });
     h.submitOrder.mockResolvedValue({ brokerRef: 'r', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D('100.15') });
+    h.tx.user.updateMany.mockResolvedValue({ count: 1 });
+    h.tx.portfolioItem.updateMany.mockResolvedValue({ count: 1 });
+    (prisma.portfolioItem.findUnique as any).mockResolvedValue({ id: 'pi-1', shares: new D(50) });
     h.tx.portfolioItem.findUnique.mockResolvedValue({ id: 'pi-1', shares: new D(50) });
   });
 
@@ -58,19 +70,21 @@ describe('executeDecision', () => {
     expect((prisma.order.create as any).mock.calls[0][0].data.status).toBe('NEW');
     // settle: TRADE audit + cash debit + portfolio + status
     expect(h.tx.transaction.create.mock.calls[0][0].data.type).toBe('TRADE');
-    expect(h.tx.user.update.mock.calls[0][0].data.cashVirtual).toEqual({ decrement: new D('1001.5') }); // 10*100.15
+    expect(h.tx.transaction.create.mock.calls[0][0].data.amount.toString()).toBe('-1001.5');
+    expect(h.tx.user.updateMany.mock.calls[0][0].data.cashVirtual).toEqual({ decrement: new D('1001.5') }); // 10*100.15
     expect(h.tx.portfolioItem.upsert).toHaveBeenCalledTimes(1);
     expect(h.tx.decision.update.mock.calls[0][0].data.status).toBe('EXECUTED');
   });
 
-  it('race: a unique-constraint hit on claim short-circuits WITHOUT calling the broker', async () => {
+  it('reconciles an existing order claim with the stable broker request', async () => {
     (prisma.decision.findUnique as any).mockResolvedValue(decision());
     (prisma.order.create as any).mockRejectedValue(new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: '5' }));
-    (prisma.order.findUnique as any).mockResolvedValue({ id: 'order-x', status: 'NEW' });
+    (prisma.order.findUnique as any).mockResolvedValue({
+      id: 'order-x', status: 'NEW', brokerRef: null, filledQty: new D(0), avgFillPrice: new D(0), qty: new D(10),
+    });
     const res = await executeDecision('dec-1', OWNER);
-    expect(res).toEqual({ orderId: 'order-x', status: 'ALREADY_EXECUTED' });
-    expect(h.submitOrder).not.toHaveBeenCalled();
-    expect(prisma.$transaction as any).not.toHaveBeenCalled();
+    expect(res).toEqual({ orderId: 'order-x', status: 'FILLED' });
+    expect(h.submitOrder.mock.calls[0][0].clientOrderId).toBe('rushd-order-x');
   });
 
   it('broker failure after claim marks the Order REJECTED and rethrows', async () => {
@@ -89,10 +103,12 @@ describe('executeDecision', () => {
   });
 
   it('is idempotent (existing order), rejects non-owner, and no-ops HOLD', async () => {
-    (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ order: { id: 'o-1', status: 'FILLED' } }));
+    (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ status: 'EXECUTED', order: { id: 'o-1', status: 'FILLED' } }));
+    (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ status: 'EXECUTED', order: { id: 'o-1', status: 'FILLED' } }));
     expect(await executeDecision('dec-1', OWNER)).toEqual({ orderId: 'o-1', status: 'ALREADY_EXECUTED' });
     (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ userId: 'other' }));
     await expect(executeDecision('dec-1', OWNER)).rejects.toMatchObject({ code: 'forbidden' });
+    (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ finalAction: 'HOLD', finalQty: new D(0) }));
     (prisma.decision.findUnique as any).mockResolvedValueOnce(decision({ finalAction: 'HOLD', finalQty: new D(0) }));
     expect(await executeDecision('dec-1', OWNER)).toEqual({ orderId: null, status: 'HOLD_NOOP' });
   });

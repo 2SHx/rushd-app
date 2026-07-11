@@ -10,11 +10,13 @@
 import { Prisma } from '@prisma/client';
 import type { Currency, OrderSide } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { validateOrderFill, type OrderResult } from './broker';
 import { selectBroker } from './registry';
+import { acquireUserExecutionLock, releaseUserExecutionLock } from './userLock';
 
 const D = Prisma.Decimal;
 
-export type ExecCode = 'not_found' | 'forbidden' | 'conflict' | 'no_market_data' | 'insufficient_funds';
+export type ExecCode = 'not_found' | 'forbidden' | 'conflict' | 'no_market_data' | 'insufficient_funds' | 'insufficient_shares';
 
 export class ExecutionError extends Error {
   constructor(
@@ -40,15 +42,17 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 /** Execute an APPROVED decision for its owner. Idempotent; HOLD is a no-op. */
-export async function executeDecision(decisionId: string, userId: string): Promise<ExecResult> {
+async function executeLockedDecision(decisionId: string, userId: string): Promise<ExecResult> {
   const decision = await prisma.decision.findUnique({
     where: { id: decisionId },
     include: { order: true },
   });
   if (!decision) throw new ExecutionError('not_found', 'Decision not found.');
   if (decision.userId !== userId) throw new ExecutionError('forbidden', 'Not your decision.');
-  if (decision.order) return { orderId: decision.order.id, status: 'ALREADY_EXECUTED' };
   if (decision.finalAction === 'HOLD') return { orderId: null, status: 'HOLD_NOOP' };
+  if (decision.order && decision.status === 'EXECUTED') {
+    return { orderId: decision.order.id, status: 'ALREADY_EXECUTED' };
+  }
   if (decision.status !== 'APPROVED') {
     throw new ExecutionError('conflict', `Decision must be APPROVED to execute (is ${decision.status}).`);
   }
@@ -63,50 +67,107 @@ export async function executeDecision(decisionId: string, userId: string): Promi
   });
   if (!bar) throw new ExecutionError('no_market_data', 'No market data to price the fill.');
   const refPrice = bar.close;
+  const limitPrice = side === 'BUY' ? refPrice.mul('1.01') : undefined;
 
   // Constructing the broker asserts the live-execution gate for any live URL (dark by default).
   const broker = selectBroker(decision.market);
 
-  // Affordability pre-check on estimated notional (BUY only).
+  // The shared user lock makes these reservations stable until atomic settlement.
   if (side === 'BUY') {
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.cashVirtual.lt(qty.mul(refPrice))) {
+    if (!user || !limitPrice || user.cashVirtual.lt(qty.mul(limitPrice))) {
       throw new ExecutionError('insufficient_funds', 'Insufficient virtual cash for this buy.');
+    }
+  } else {
+    const holding = await prisma.portfolioItem.findUnique({
+      where: { userId_symbol: { userId, symbol: decision.symbol } },
+    });
+    if (!holding || holding.shares.lt(qty)) {
+      throw new ExecutionError('insufficient_shares', 'Insufficient shares for this sell.');
     }
   }
 
   // CLAIM the decision via the Order unique constraint BEFORE any external submit.
-  let orderId: string;
-  try {
-    const claimed = await prisma.order.create({
+  let order = decision.order;
+  if (!order) {
+    try {
+      order = await prisma.order.create({
+        data: {
+          decisionId: decision.id,
+          symbol: decision.symbol,
+          market: decision.market,
+          side,
+          qty,
+          filledQty: new D(0),
+          avgFillPrice: new D(0),
+          status: 'NEW',
+          broker: broker.kind,
+        },
+      });
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      order = await prisma.order.findUnique({ where: { decisionId: decision.id } });
+      if (!order) throw new ExecutionError('conflict', 'Order claim could not be recovered.');
+    }
+  }
+  const orderId = order.id;
+
+  const request = {
+    symbol: decision.symbol,
+    market: decision.market,
+    side,
+    qty,
+    refPrice,
+    limitPrice,
+    clientOrderId: `rushd-${orderId}`,
+  };
+  let fill: OrderResult;
+  if (order.brokerRef && order.status !== 'NEW' && order.status !== 'PARTIAL') {
+    fill = {
+      brokerRef: order.brokerRef,
+      status: order.status,
+      filledQty: order.filledQty,
+      avgFillPrice: order.avgFillPrice,
+    };
+  } else {
+    try {
+      fill = order.brokerRef
+        ? await broker.getOrder(order.brokerRef)
+        : await broker.submitOrder(request);
+    } catch (e) {
+      if (broker.kind === 'INTERNAL_SIM') {
+        await prisma.order.update({ where: { id: orderId }, data: { status: 'REJECTED' } });
+      }
+      throw e;
+    }
+    validateOrderFill(fill, qty);
+    await prisma.order.update({
+      where: { id: orderId },
       data: {
-        decisionId: decision.id,
-        symbol: decision.symbol,
-        market: decision.market,
-        side,
-        qty,
-        filledQty: new D(0),
-        avgFillPrice: new D(0),
-        status: 'NEW',
-        broker: broker.kind,
+        brokerRef: fill.brokerRef,
+        filledQty: fill.filledQty,
+        avgFillPrice: fill.avgFillPrice,
+        status: fill.status,
       },
     });
-    orderId = claimed.id;
-  } catch (e) {
-    if (isUniqueViolation(e)) {
-      const existing = await prisma.order.findUnique({ where: { decisionId: decision.id } });
-      return { orderId: existing?.id ?? null, status: 'ALREADY_EXECUTED' };
-    }
-    throw e;
   }
+  validateOrderFill(fill, qty);
 
-  // External submit — now guarded by the claim above.
-  let fill;
-  try {
-    fill = await broker.submitOrder({ symbol: decision.symbol, market: decision.market, side, qty, refPrice });
-  } catch (e) {
-    await prisma.order.update({ where: { id: orderId }, data: { status: 'REJECTED' } });
-    throw e;
+  if (fill.status === 'NEW' || fill.status === 'PARTIAL') {
+    await broker.cancelOrder(fill.brokerRef);
+    fill = validateOrderFill(await broker.getOrder(fill.brokerRef), qty);
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        brokerRef: fill.brokerRef,
+        filledQty: fill.filledQty,
+        avgFillPrice: fill.avgFillPrice,
+        status: fill.status,
+      },
+    });
+  }
+  if (fill.status === 'NEW' || fill.status === 'PARTIAL' || fill.filledQty.lte(0)) {
+    throw new ExecutionError('conflict', 'Broker order has no terminal fill to settle.');
   }
 
   const notional = fill.filledQty.mul(fill.avgFillPrice);
@@ -126,7 +187,7 @@ export async function executeDecision(decisionId: string, userId: string): Promi
     await tx.transaction.create({
       data: {
         userId,
-        amount: notional,
+        amount: side === 'BUY' ? notional.negated() : notional,
         currency,
         type: 'TRADE',
         description: `${side} ${fill.filledQty.toString()} ${decision.symbol} @ ${fill.avgFillPrice.toString()}`,
@@ -134,29 +195,50 @@ export async function executeDecision(decisionId: string, userId: string): Promi
     });
 
     if (side === 'BUY') {
-      await tx.user.update({ where: { id: userId }, data: { cashVirtual: { decrement: notional } } });
+      const cashUpdate = await tx.user.updateMany({
+        where: { id: userId, cashVirtual: { gte: notional } },
+        data: { cashVirtual: { decrement: notional } },
+      });
+      if (cashUpdate.count !== 1) {
+        throw new ExecutionError('insufficient_funds', 'Insufficient virtual cash during settlement.');
+      }
       await tx.portfolioItem.upsert({
         where: { userId_symbol: { userId, symbol: decision.symbol } },
         create: { userId, symbol: decision.symbol, shares: fill.filledQty, market: decision.market, currency },
         update: { shares: { increment: fill.filledQty } },
       });
     } else {
-      await tx.user.update({ where: { id: userId }, data: { cashVirtual: { increment: notional } } });
-      const held = await tx.portfolioItem.findUnique({
-        where: { userId_symbol: { userId, symbol: decision.symbol } },
+      const holdingUpdate = await tx.portfolioItem.updateMany({
+        where: { userId, symbol: decision.symbol, shares: { gte: fill.filledQty } },
+        data: { shares: { decrement: fill.filledQty } },
       });
-      if (held) {
-        const remaining = held.shares.minus(fill.filledQty);
-        if (remaining.lte(0)) {
-          await tx.portfolioItem.delete({ where: { id: held.id } });
-        } else {
-          await tx.portfolioItem.update({ where: { id: held.id }, data: { shares: remaining } });
-        }
+      if (holdingUpdate.count !== 1) {
+        throw new ExecutionError('insufficient_shares', 'Insufficient shares during settlement.');
       }
+      await tx.portfolioItem.deleteMany({
+        where: { userId, symbol: decision.symbol, shares: { lte: 0 } },
+      });
+      await tx.user.update({ where: { id: userId }, data: { cashVirtual: { increment: notional } } });
     }
 
     await tx.decision.update({ where: { id: decision.id }, data: { status: 'EXECUTED' } });
   });
 
   return { orderId, status: fill.status };
+}
+
+export async function executeDecision(decisionId: string, userId: string): Promise<ExecResult> {
+  const decision = await prisma.decision.findUnique({
+    where: { id: decisionId },
+    select: { userId: true },
+  });
+  if (!decision) throw new ExecutionError('not_found', 'Decision not found.');
+  if (decision.userId !== userId) throw new ExecutionError('forbidden', 'Not your decision.');
+
+  await acquireUserExecutionLock(userId);
+  try {
+    return await executeLockedDecision(decisionId, userId);
+  } finally {
+    await releaseUserExecutionLock(userId);
+  }
 }

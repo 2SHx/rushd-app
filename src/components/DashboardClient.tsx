@@ -10,42 +10,73 @@ import {
 export interface Position {
   symbol: string;
   name: string;
+  market: 'TASI' | 'NASDAQ';
+  currency: 'SAR' | 'USD';
   shares: number;
-  costBasis: number;
+  costBasis: number | null;
   price: number;
   value: number;
-  weight: number;
+  weight: number | null;
+  complianceStatus: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
 }
 
 export interface Snapshot {
   asOf: string;
   nav: number;
   cashVirtual: number;
+  currency: 'SAR' | 'USD';
   spy: number;
   spus: number;
 }
 
+type PerformanceStatus = 'available' | 'no_snapshots' | 'multiple_strategies' | 'mixed_currencies';
+
+interface CurrencyTotal {
+  currency: 'SAR' | 'USD';
+  positionsValue: number;
+  cashValue: number | null;
+  totalValue: number | null;
+}
+
 interface DashboardClientProps {
   locale: string;
-  initialNAV: number;
+  initialNAV: number | null;
   initialCash: number;
+  cashCurrency: 'SAR' | 'USD' | null;
   initialPositions: Position[];
   initialSnapshots: Snapshot[];
   initialMetrics: any;
   initialTransactions: any[];
+  performanceStatus: PerformanceStatus;
+  currencyTotals: CurrencyTotal[];
 }
 
 export default function DashboardClient({ 
   locale,
   initialNAV,
   initialCash,
+  cashCurrency,
   initialPositions,
   initialSnapshots,
   initialMetrics,
-  initialTransactions
+  initialTransactions,
+  performanceStatus,
+  currencyTotals
 }: DashboardClientProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+
+  const formatMoney = (value: number, currency: 'SAR' | 'USD') => new Intl.NumberFormat(
+    isAr ? 'ar-SA' : 'en-US',
+    { style: 'currency', currency },
+  ).format(value);
+  const performanceMessage = {
+    no_snapshots: t('portfolioPerformanceNoSnapshots'),
+    multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
+    mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
+    available: '',
+  }[performanceStatus];
+  const hasPerformanceMetrics = performanceStatus === 'available' && initialSnapshots.length >= 2;
 
   const [jarBal, setJarBal] = useState(initialCash);
   const [txs, setTxs] = useState<any[]>(initialTransactions ?? []);
@@ -59,18 +90,18 @@ export default function DashboardClient({
 
   // Derived metrics
   const lastSnap = useMemo(
-    () => initialSnapshots && initialSnapshots.length > 0
-      ? initialSnapshots[initialSnapshots.length - 1]
-      : { nav: initialNAV, cashVirtual: initialCash, asOf: '', spy: 100, spus: 100 },
-    [initialSnapshots, initialNAV, initialCash]
+    () => initialSnapshots.length > 0 ? initialSnapshots[initialSnapshots.length - 1] : null,
+    [initialSnapshots]
   );
-  const prevSnap = initialSnapshots && initialSnapshots.length > 1 ? initialSnapshots[initialSnapshots.length - 2] : lastSnap;
-  const dailyReturn = lastSnap.nav - prevSnap.nav;
-  const dailyReturnPct = prevSnap.nav > 0 ? (dailyReturn / prevSnap.nav) * 100 : 0;
+  const prevSnap = initialSnapshots.length > 1 ? initialSnapshots[initialSnapshots.length - 2] : null;
+  const dailyReturn = lastSnap && prevSnap ? lastSnap.nav - prevSnap.nav : null;
+  const dailyReturnPct = dailyReturn !== null && prevSnap && prevSnap.nav > 0
+    ? (dailyReturn / prevSnap.nav) * 100
+    : null;
 
   // P&L for selected timeframe (computed from snapshots)
   const plData = useMemo(() => {
-    if (!initialSnapshots || initialSnapshots.length < 2) return { value: dailyReturn, pct: dailyReturnPct };
+    if (performanceStatus !== 'available' || initialSnapshots.length < 2 || !lastSnap) return null;
     const daysMap: Record<string, number> = { '24H': 1, '7D': 7, '30D': 30, '90D': 90 };
     const days = daysMap[plTimeframe];
     const cutoff = new Date(Date.now() - days * 86400000);
@@ -78,23 +109,30 @@ export default function DashboardClient({
     const pl = lastSnap.nav - baseSnap.nav;
     const plPct = baseSnap.nav > 0 ? (pl / baseSnap.nav) * 100 : 0;
     return { value: pl, pct: plPct };
-  }, [plTimeframe, initialSnapshots, lastSnap, dailyReturn, dailyReturnPct]);
+  }, [plTimeframe, initialSnapshots, lastSnap, performanceStatus]);
 
   // Win rate: profitable positions / total positions
   const winRate = useMemo(() => {
-    if (!initialPositions || initialPositions.length === 0) return 0;
-    const winners = initialPositions.filter(p => p.price > p.costBasis).length;
-    return (winners / initialPositions.length) * 100;
+    const knownBasis = initialPositions.filter(
+      (position): position is Position & { costBasis: number } => position.costBasis !== null,
+    );
+    if (knownBasis.length === 0) return null;
+    const winners = knownBasis.filter(position => position.price > position.costBasis).length;
+    return (winners / knownBasis.length) * 100;
   }, [initialPositions]);
 
   const activeTrades = initialPositions.length;
 
-  const compliantStocksVal = initialPositions.reduce((acc, item) => acc + item.value, 0);
-  const zakatableWealth = jarBal + compliantStocksVal;
-  const zakatDue = zakatableWealth * 0.025;
+  const compliantStocksVal = initialPositions
+    .filter(item => item.complianceStatus === 'VERIFIED_COMPLIANT' && item.currency === 'SAR')
+    .reduce((acc, item) => acc + item.value, 0);
+  const zakatableWealth = cashCurrency === 'SAR' ? jarBal + compliantStocksVal : null;
+  const zakatDue = zakatableWealth === null ? null : zakatableWealth * 0.025;
 
   const renderSvgChart = () => {
-    if (!initialSnapshots || initialSnapshots.length === 0) return null;
+    if (performanceStatus !== 'available' || initialSnapshots.length < 2) {
+      return <p className="flex h-full items-center justify-center text-center text-xs text-gray-500">{performanceMessage || t('portfolioPerformanceInsufficient')}</p>;
+    }
     
     const maxNav = Math.max(...initialSnapshots.map(s => s.nav));
     const minNav = Math.min(...initialSnapshots.map(s => s.nav));
@@ -131,6 +169,9 @@ export default function DashboardClient({
 
   const renderAllocationDonut = () => {
     if (initialPositions.length === 0) return null;
+    if (initialNAV === null) {
+      return <p className="py-8 text-center text-xs text-gray-500">{t('portfolioCombinedUnavailable')}</p>;
+    }
     let currentAngle = 0;
     const size = 200;
     const center = size / 2;
@@ -139,7 +180,7 @@ export default function DashboardClient({
     return (
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[200px] mx-auto overflow-visible">
         {initialPositions.map((pos, i) => {
-          const angle = pos.weight * 360;
+          const angle = (pos.weight ?? 0) * 360;
           if (angle === 0) return null;
           const largeArcFlag = angle > 180 ? 1 : 0;
           const startX = center + radius * Math.cos((currentAngle - 90) * Math.PI / 180);
@@ -164,7 +205,7 @@ export default function DashboardClient({
               strokeWidth={2}
               className="hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <title>{pos.symbol}: {(pos.weight * 100).toFixed(1)}%</title>
+              <title>{pos.symbol}: {((pos.weight ?? 0) * 100).toFixed(1)}%</title>
             </path>
           );
         })}
@@ -190,7 +231,7 @@ export default function DashboardClient({
           amount: -parseFloat(data.amountPaid),
           currency: 'SAR',
           type: 'WITHDRAWAL',
-          description: `Zakat Purification / دفع الزكاة (2.5% of ${zakatableWealth.toFixed(2)} SAR)`,
+          description: `Zakat payment / دفع الزكاة (2.5% of ${(zakatableWealth ?? 0).toFixed(2)} SAR)`,
           createdAt: new Date().toISOString()
         };
         setTxs(prev => [newTx, ...prev]);
@@ -204,7 +245,7 @@ export default function DashboardClient({
     }
   };
 
-  const plUp = plData.value >= 0;
+  const plUp = plData !== null && plData.value >= 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24">
@@ -224,15 +265,32 @@ export default function DashboardClient({
         </div>
       </div>
 
+      {initialNAV === null && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
+          <p>{t('portfolioCombinedUnavailable')}</p>
+          <div className="mt-2 flex flex-wrap gap-3 font-mono text-xs" dir="ltr">
+            {currencyTotals.map(total => (
+              <span key={total.currency}>{formatMoney(total.positionsValue, total.currency)}</span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-amber-200/80">{t('cashCurrencyUnavailable')}</p>
+        </div>
+      )}
+
       {/* ── KPI strip: one dominant number per card ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Portfolio Value */}
         <div className="glass-panel rounded-2xl p-4 space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'قيمة المحفظة' : 'Portfolio Value'}</p>
           <p className="text-2xl font-bold font-mono tabular-nums text-foreground">
-            {initialNAV.toLocaleString('en-US', { maximumFractionDigits: 0 })} <span className="text-xs text-foreground/50">SAR</span>
+            {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
           </p>
-          <p className="text-[11px] text-foreground/50">{isAr ? 'سيولة:' : 'Cash:'} <span className="text-foreground/70 font-mono tabular-nums">{jarBal.toFixed(0)} SAR</span></p>
+          <p className="text-[11px] text-foreground/50">
+            {isAr ? 'سيولة:' : 'Cash:'}{' '}
+            <span className="text-foreground/70 font-mono tabular-nums">
+              {cashCurrency ? formatMoney(jarBal, cashCurrency) : `${jarBal.toFixed(2)} — ${t('cashCurrencyUnavailable')}`}
+            </span>
+          </p>
         </div>
 
         {/* P&L with Timeframe Selector */}
@@ -251,24 +309,24 @@ export default function DashboardClient({
               ))}
             </div>
           </div>
-          <p className={`text-2xl font-bold font-mono tabular-nums flex items-center gap-1 ${plUp ? 'text-up' : 'text-down'}`}>
-            {plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
-            {plUp ? '+' : ''}{plData.value.toFixed(0)}
+          <p className={`text-2xl font-bold font-mono tabular-nums flex items-center gap-1 ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
+            {plData !== null && (plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />)}
+            {plData === null ? t('valueUnavailable') : `${plUp ? '+' : ''}${plData.value.toFixed(0)}`}
           </p>
-          <p className={`text-[11px] font-bold font-mono tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
-            {plUp ? '+' : ''}{plData.pct.toFixed(2)}% {isAr ? 'خلال' : 'over'} {plTimeframe}
+          <p className={`text-[11px] font-bold ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
+            {plData === null ? performanceMessage || t('portfolioPerformanceInsufficient') : `${plUp ? '+' : ''}${plData.pct.toFixed(2)}% ${isAr ? 'خلال' : 'over'} ${plTimeframe}`}
           </p>
         </div>
 
         {/* Win Rate */}
         <div className="glass-panel rounded-2xl p-4 space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'نسبة الربح' : 'Win Rate'}</p>
-          <p className="text-2xl font-bold font-mono tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
+          <p className="text-2xl font-bold font-mono tabular-nums text-foreground">{winRate === null ? t('valueUnavailable') : `${winRate.toFixed(1)}%`}</p>
           <div className="flex items-center gap-1.5">
             <div className="flex-1 h-1 bg-foreground/10 rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full" style={{ width: `${winRate}%` }} />
+              <div className="h-full bg-accent rounded-full" style={{ width: `${winRate ?? 0}%` }} />
             </div>
-            <span className="text-[10px] text-foreground/50">{isAr ? 'آخر 90 صفقة' : 'Last 90 trades'}</span>
+            <span className="text-[10px] text-foreground/50">{winRate === null ? t('winRateUnavailable') : (isAr ? 'المراكز ذات التكلفة المسجلة' : 'Positions with recorded basis')}</span>
           </div>
         </div>
 
@@ -291,10 +349,14 @@ export default function DashboardClient({
             <span className="text-gray-400 text-xs font-bold">{isAr ? 'صافي قيمة الأصول (NAV)' : 'Net Asset Value (NAV)'}</span>
             <Wallet className="w-4 h-4 text-cyan-400" />
           </div>
-          <h2 className="text-2xl font-mono font-bold text-white">{initialNAV.toFixed(2)} <span className="text-xs text-gray-400">SAR</span></h2>
+          <h2 className="text-2xl font-mono font-bold text-white">
+            {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
+          </h2>
           <div className="pt-2 flex justify-between items-center text-xs border-t border-white/5">
             <span className="text-gray-500">{isAr ? 'السيولة' : 'Cash'}</span>
-            <span className="font-mono text-gray-300 font-bold">{jarBal.toFixed(2)} SAR</span>
+            <span className="font-mono text-gray-300 font-bold">
+              {cashCurrency ? formatMoney(jarBal, cashCurrency) : t('cashCurrencyUnavailable')}
+            </span>
           </div>
         </div>
 
@@ -305,13 +367,13 @@ export default function DashboardClient({
             <span className="text-gray-400 text-xs font-bold">{isAr ? 'العائد اليومي' : 'Daily Return'}</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
-          <h2 className={`text-2xl font-mono font-bold ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {dailyReturn >= 0 ? '+' : ''}{dailyReturn.toFixed(2)} <span className="text-xs text-gray-400">SAR</span>
+          <h2 className={`text-2xl font-mono font-bold ${dailyReturn === null ? 'text-gray-400' : dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {dailyReturn === null || !cashCurrency ? t('valueUnavailable') : `${dailyReturn >= 0 ? '+' : ''}${formatMoney(dailyReturn, cashCurrency)}`}
           </h2>
           <div className="pt-2 flex justify-between items-center text-xs border-t border-white/5">
             <span className="text-gray-500">{isAr ? 'يومي' : 'Daily %'}</span>
-            <span className={`font-bold ${dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {dailyReturn >= 0 ? '+' : ''}{dailyReturnPct.toFixed(2)}%
+            <span className={`font-bold ${dailyReturnPct === null ? 'text-gray-500' : dailyReturnPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {dailyReturnPct === null ? performanceMessage || t('portfolioPerformanceInsufficient') : `${dailyReturnPct >= 0 ? '+' : ''}${dailyReturnPct.toFixed(2)}%`}
             </span>
           </div>
         </div>
@@ -324,18 +386,18 @@ export default function DashboardClient({
             <Coins className="w-4 h-4 text-yellow-400" />
           </div>
           <h2 className="text-2xl font-mono font-bold text-white">
-            {zakatDue.toFixed(2)} <span className="text-xs text-gray-400">SAR</span>
+            {zakatDue === null ? t('valueUnavailable') : formatMoney(zakatDue, 'SAR')}
           </h2>
           <div className="pt-1 flex items-center justify-between gap-2">
             <span className="text-[10px] text-gray-500 leading-tight">
-              {isAr ? 'سيولة + أسهم حلال' : 'Cash + halal stocks'}
+              {t('zakatVerifiedAssetsOnly')}
             </span>
             <button
               onClick={handlePayZakat}
-              disabled={isZakatSubmitting || zakatDue <= 0.01}
+              disabled={isZakatSubmitting || zakatDue === null || zakatDue <= 0.01}
               className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold rounded-xl transition-all disabled:opacity-50"
             >
-              {isZakatSubmitting ? '...' : (isAr ? 'تطهير' : 'Purify')}
+              {isZakatSubmitting ? '...' : t('payZakat')}
             </button>
           </div>
         </div>
@@ -356,7 +418,11 @@ export default function DashboardClient({
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-mono font-bold text-emerald-400">+{((initialSnapshots.length > 0 ? (lastSnap.nav / initialSnapshots[0].nav) - 1 : 0) * 100).toFixed(2)}%</p>
+                <p className="text-2xl font-mono font-bold text-emerald-400">
+                  {lastSnap && initialSnapshots.length > 1
+                    ? `${((lastSnap.nav / initialSnapshots[0].nav) - 1) >= 0 ? '+' : ''}${(((lastSnap.nav / initialSnapshots[0].nav) - 1) * 100).toFixed(2)}%`
+                    : t('valueUnavailable')}
+                </p>
                 <p className="text-xs text-emerald-500/60 font-bold tracking-wider">{isAr ? 'العائد التراكمي' : 'CUMULATIVE RETURN'}</p>
               </div>
             </div>
@@ -391,11 +457,30 @@ export default function DashboardClient({
                   <tbody className="text-xs font-mono">
                     {initialPositions.map((pos) => (
                       <tr key={pos.symbol} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-                        <td className="py-3 text-white font-bold">{pos.symbol.replace('.SR', '')}</td>
+                        <td className="py-3 text-white font-bold">
+                          <span dir="ltr">{pos.symbol}</span>
+                          <span className="ms-2 text-[9px] text-gray-500">{pos.market}</span>
+                          <span
+                            className={`ms-2 text-[9px] ${
+                              pos.complianceStatus === 'VERIFIED_COMPLIANT'
+                                ? 'text-emerald-400'
+                                : pos.complianceStatus === 'VERIFIED_NON_COMPLIANT'
+                                  ? 'text-rose-400'
+                                  : 'text-amber-400'
+                            }`}
+                            title={pos.complianceStatus === 'UNVERIFIED' ? t('shariaUnverifiedNote') : undefined}
+                          >
+                            {pos.complianceStatus === 'VERIFIED_COMPLIANT'
+                              ? t('compliant')
+                              : pos.complianceStatus === 'VERIFIED_NON_COMPLIANT'
+                                ? t('nonCompliant')
+                                : t('shariaUnverified')}
+                          </span>
+                        </td>
                         <td className="py-3 text-gray-400 text-right rtl:text-left">{pos.shares.toFixed(2)}</td>
-                        <td className="py-3 text-gray-400 text-right rtl:text-left">${pos.price.toFixed(2)}</td>
-                        <td className="py-3 text-emerald-400 text-right rtl:text-left">{(pos.weight * 100).toFixed(1)}%</td>
-                        <td className="py-3 text-white text-right rtl:text-left">${pos.value.toFixed(2)}</td>
+                        <td className="py-3 text-gray-400 text-right rtl:text-left">{formatMoney(pos.price, pos.currency)}</td>
+                        <td className="py-3 text-emerald-400 text-right rtl:text-left">{pos.weight === null ? t('valueUnavailable') : `${(pos.weight * 100).toFixed(1)}%`}</td>
+                        <td className="py-3 text-white text-right rtl:text-left">{formatMoney(pos.value, pos.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -424,19 +509,19 @@ export default function DashboardClient({
             <div className="space-y-4">
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                 <span className="text-gray-400">Sharpe Ratio</span>
-                <span className="font-mono text-white font-bold">{initialMetrics.sharpe?.toFixed(2) ?? '0.00'}</span>
+                <span className="font-mono text-white font-bold">{hasPerformanceMetrics ? initialMetrics.sharpe?.toFixed(2) ?? t('valueUnavailable') : t('valueUnavailable')}</span>
               </div>
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                 <span className="text-gray-400">CAGR</span>
-                <span className="font-mono text-emerald-400 font-bold">{((initialMetrics.cagr ?? 0) * 100).toFixed(1)}%</span>
+                <span className="font-mono text-emerald-400 font-bold">{hasPerformanceMetrics ? `${((initialMetrics.cagr ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
               </div>
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                 <span className="text-gray-400">Alpha vs SPUS</span>
-                <span className="font-mono text-emerald-400 font-bold">{((initialMetrics.alphaVsSpus ?? 0) * 100).toFixed(2)}%</span>
+                <span className="font-mono text-emerald-400 font-bold">{hasPerformanceMetrics ? `${((initialMetrics.alphaVsSpus ?? 0) * 100).toFixed(2)}%` : t('valueUnavailable')}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-400">Max Drawdown</span>
-                <span className="font-mono text-red-400 font-bold">{((initialMetrics.maxDrawdown ?? 0) * 100).toFixed(1)}%</span>
+                <span className="font-mono text-red-400 font-bold">{hasPerformanceMetrics ? `${((initialMetrics.maxDrawdown ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
               </div>
             </div>
           </div>
@@ -466,7 +551,7 @@ export default function DashboardClient({
                          <p className="text-gray-400 text-[10px] leading-tight pt-1 w-32 truncate">{tx.description || tx.type}</p>
                        </div>
                        <span className={`font-mono font-bold ${isNegative ? 'text-red-400' : 'text-emerald-400'}`}>
-                         {isNegative ? '' : '+'}{tx.amount.toFixed(2)} SAR
+                         {isNegative ? '' : '+'}{formatMoney(tx.amount, tx.currency === 'USD' ? 'USD' : 'SAR')}
                        </span>
                      </div>
                    );
@@ -490,11 +575,11 @@ export default function DashboardClient({
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto animate-bounce">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="font-bold text-lg">{isAr ? 'تم دفع الزكاة وتطهير المحفظة!' : 'Zakat Paid successfully!'}</h3>
+              <h3 className="font-bold text-lg">{isAr ? 'تم دفع الزكاة بنجاح!' : 'Zakat paid successfully!'}</h3>
               <p className="text-xs text-gray-400 leading-relaxed">
                 {isAr 
-                  ? `تم سحب مبلغ الزكاة البالغ ${parseFloat(zakatPaidAmount).toFixed(2)} ريال سعودي بنجاح وتوجيهه للمصارف الشرعية لتطهير المحفظة.`
-                  : `Simulated Zakat purification of ${parseFloat(zakatPaidAmount).toFixed(2)} SAR successfully paid from your cash balance.`
+                  ? `تم سحب مبلغ الزكاة الافتراضي البالغ ${parseFloat(zakatPaidAmount).toFixed(2)} ريال سعودي من الرصيد وتوجيهه إلى مصارف الزكاة المستحقة.`
+                  : `A simulated Zakat payment of ${parseFloat(zakatPaidAmount).toFixed(2)} SAR was paid from your cash balance to eligible Zakat recipients.`
                 }
               </p>
               <button

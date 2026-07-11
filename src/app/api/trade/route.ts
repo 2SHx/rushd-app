@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/authz';
 import { fetchMarketData } from '@/services/marketData';
 import { Prisma } from '@prisma/client';
+import { UserExecutionLockedError, userExecutionLockKey } from '@/quant/execution/userLock';
 
 const tradeSchema = z.object({
   symbol: z.string().min(1),
@@ -56,6 +57,14 @@ export async function POST(req: Request) {
 
     // 3. Perform atomic trade execution inside a transaction
     const result = await prisma.$transaction(async (tx) => {
+      try {
+        await tx.autoRunClaim.create({ data: { key: userExecutionLockKey(user.id) } });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new UserExecutionLockedError();
+        }
+        throw error;
+      }
       // Get user's savings jar
       const jar = await tx.savingsJar.findUnique({
         where: { userId: user.id }
@@ -107,6 +116,7 @@ export async function POST(req: Request) {
           }
         });
 
+        await tx.autoRunClaim.delete({ where: { key: userExecutionLockKey(user.id) } });
         return { jar: updatedJar, portfolio: updatedPortfolio, transaction: auditLog };
       } else {
         // action === 'SELL'
@@ -166,6 +176,7 @@ export async function POST(req: Request) {
           }
         });
 
+        await tx.autoRunClaim.delete({ where: { key: userExecutionLockKey(user.id) } });
         return { jar: updatedJar, portfolio: updatedPortfolio, transaction: auditLog };
       }
     });
@@ -178,6 +189,9 @@ export async function POST(req: Request) {
   } catch (error: any) {
     if (error && typeof error === 'object' && 'response' in error) {
       return (error as any).response;
+    }
+    if (error instanceof UserExecutionLockedError) {
+      return NextResponse.json({ error: 'trade_in_progress' }, { status: 409 });
     }
 
     if (error.message === 'savings_jar_not_found') {

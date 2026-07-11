@@ -9,7 +9,7 @@ vi.mock('@/auth', () => ({
   auth: (...args: unknown[]) => auth(...args),
 }));
 
-import { requireSession, requireParent, AuthzError } from './authz';
+import { requireSession, requireParent, requireUltraTier, AuthzError } from './authz';
 
 beforeEach(() => {
   auth.mockReset();
@@ -67,5 +67,33 @@ describe('requireParent', () => {
     const user = { id: 'p1', role: 'PARENT', tier: 'BASIC', parentId: null };
     auth.mockResolvedValue({ user });
     await expect(requireParent()).resolves.toEqual(user);
+  });
+});
+
+describe('requireUltraTier', () => {
+  it('throws 401 when there is no session', async () => {
+    auth.mockResolvedValue(null);
+    await expect(requireUltraTier()).rejects.toMatchObject({ response: expect.any(Response) });
+  });
+
+  it('throws 403 for BASIC and PREMIUM users', async () => {
+    auth.mockResolvedValue({ user: { id: 'u1', role: 'PARENT', tier: 'BASIC', parentId: null } });
+    await expect(requireUltraTier()).rejects.toMatchObject({ response: expect.any(Response) });
+
+    auth.mockResolvedValue({ user: { id: 'u2', role: 'PARENT', tier: 'PREMIUM', parentId: null } });
+    try {
+      await requireUltraTier();
+      throw new Error('expected requireUltraTier to throw');
+    } catch (err) {
+      const response = (err as AuthzError).response;
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'forbidden' });
+    }
+  });
+
+  it('passes through an ULTRA user', async () => {
+    const user = { id: 'u3', role: 'PARENT', tier: 'ULTRA', parentId: null };
+    auth.mockResolvedValue({ user });
+    await expect(requireUltraTier()).resolves.toEqual(user);
   });
 });

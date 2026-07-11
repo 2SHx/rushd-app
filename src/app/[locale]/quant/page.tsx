@@ -45,7 +45,63 @@ export default async function QuantPage({ params }: { params: { locale: string }
     createdAt: t.createdAt.toISOString()
   }));
 
+  const strategy = await prisma.strategy.findFirst({
+    where: { ownerUserId: userId },
+    select: { id: true, autonomyTier: true }
+  });
+  const initialAutonomyTier = strategy?.autonomyTier || 'HUMAN_APPROVE';
+
+  const decisions = await prisma.decision.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    include: { signals: true }
+  });
+
+  const initialDecisions = decisions.map(d => ({
+    id: d.id,
+    symbol: d.symbol,
+    market: d.market,
+    asOf: d.asOf.toISOString(),
+    proposedAction: d.proposedAction,
+    proposedQty: Number(d.proposedQty?.toString() || '0'),
+    finalAction: d.finalAction,
+    finalQty: Number(d.finalQty?.toString() || '0'),
+    shariaGate: d.shariaGate as any,
+    riskAdjustments: d.riskAdjustments as any,
+    debateTranscript: d.debateTranscript as any,
+    status: d.status,
+    costCents: d.costCents,
+    createdAt: d.createdAt.toISOString(),
+    signals: d.signals.map(s => ({
+      id: s.id,
+      agent: s.agent,
+      stance: s.stance,
+      conviction: Number(s.conviction.toString()),
+      rationaleEn: s.rationaleEn,
+      rationaleAr: s.rationaleAr,
+      evidence: s.evidence,
+      failureMode: s.failureMode,
+    })),
+  }));
+
   const t = await getTranslations('Quant');
+  const performanceWarning = {
+    no_snapshots: t('portfolioPerformanceNoSnapshots'),
+    multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
+    mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
+    available: null,
+  }[portfolio.performanceStatus];
+  const committeePositions = portfolio.initialPositions.every(
+    position => position.costBasis !== null && position.weight !== null,
+  )
+    ? portfolio.initialPositions.map(position => ({
+        ...position,
+        costBasis: position.costBasis as number,
+        weight: position.weight as number,
+      }))
+    : null;
+  const canRenderCommittee = portfolio.initialNAV !== null && committeePositions !== null;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-4 md:p-6">
@@ -70,16 +126,30 @@ export default async function QuantPage({ params }: { params: { locale: string }
         </div>
       )}
 
-      <CommitteeClient 
-        locale={locale} 
-        initialNAV={portfolio.initialNAV}
-        initialCash={portfolio.initialCash}
-        initialPositions={portfolio.initialPositions}
-        initialSnapshots={portfolio.initialSnapshots}
-        initialPurification={initialPurification}
-        initialMetrics={portfolio.initialMetrics}
-        initialTrades={initialTrades}
-      />
+      {performanceWarning && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+          {performanceWarning}
+        </div>
+      )}
+
+      {canRenderCommittee ? (
+        <CommitteeClient
+          locale={locale}
+          initialNAV={portfolio.initialNAV as number}
+          initialCash={portfolio.initialCash}
+          initialPositions={committeePositions}
+          initialSnapshots={portfolio.initialSnapshots}
+          initialPurification={initialPurification}
+          initialMetrics={portfolio.initialMetrics}
+          initialTrades={initialTrades}
+          initialDecisions={initialDecisions}
+          initialAutonomyTier={initialAutonomyTier}
+        />
+      ) : (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+          {t('portfolioInteractiveUnavailable')}
+        </div>
+      )}
     </div>
   );
 }
