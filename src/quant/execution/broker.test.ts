@@ -141,7 +141,8 @@ describe('AlpacaPaperBroker client-order idempotency', () => {
 
 describe('broker registry', () => {
   it('selects Alpaca paper for NASDAQ with a key, else InternalSim', () => {
-    expect(pickBrokerKind('NASDAQ' as any, { ALPACA_API_KEY: 'sk-real' } as any)).toBe('ALPACA_PAPER');
+    expect(pickBrokerKind('NASDAQ' as any, { MARKET_DATA_MODE: 'live', ALPACA_API_KEY: 'sk-real' } as any)).toBe('ALPACA_PAPER');
+    expect(pickBrokerKind('NASDAQ' as any, { MARKET_DATA_MODE: 'bundled', ALPACA_API_KEY: 'sk-real' } as any)).toBe('INTERNAL_SIM');
     expect(pickBrokerKind('NASDAQ' as any, {} as any)).toBe('INTERNAL_SIM');
     expect(pickBrokerKind('TASI' as any, { ALPACA_API_KEY: 'sk-real' } as any)).toBe('INTERNAL_SIM');
     expect(selectBroker('TASI' as any, {} as any).kind).toBe('INTERNAL_SIM');

@@ -1,4 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const generateObject = vi.hoisted(() => vi.fn());
+const agentModel = vi.hoisted(() => vi.fn());
+vi.mock('ai', () => ({ generateObject }));
+vi.mock('../llm/client', () => ({ agentModel }));
 import { runDebate } from './debate';
 import type { CommitteeResult } from './collect';
 import type { AnalystSignal, AgentKind } from '../types';
@@ -33,8 +38,26 @@ function fakeResult(signals: AnalystSignal[], tradeable = true): CommitteeResult
 
 describe('runDebate (mock mode)', () => {
   beforeEach(() => {
+    generateObject.mockReset();
+    agentModel.mockReset().mockReturnValue({ config: {}, mock: true });
     delete process.env.OPENAI_API_KEY;
     delete process.env.QUANT_LLM_API_KEY;
+  });
+
+  it('live mode makes one structured call that returns both sides', async () => {
+    agentModel.mockReturnValue({ config: {}, model: { id: 'live' }, mock: false });
+    generateObject.mockResolvedValue({
+      object: {
+        bull: { argumentEn: 'Bull case', argumentAr: 'حجة متفائلة' },
+        bear: { argumentEn: 'Bear case', argumentAr: 'حجة متشائمة' },
+      },
+    });
+    const turns = await runDebate(fakeResult([fakeSignal('QUANT_CORE')]));
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(turns).toEqual([
+      { side: 'BULL', round: 1, argumentEn: 'Bull case', argumentAr: 'حجة متفائلة' },
+      { side: 'BEAR', round: 1, argumentEn: 'Bear case', argumentAr: 'حجة متشائمة' },
+    ]);
   });
 
   it('synthesizes one BULL + one BEAR turn from the signal stance distribution — no throw', async () => {

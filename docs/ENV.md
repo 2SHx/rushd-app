@@ -1,8 +1,7 @@
 # Environment Reference
 
-`.env` (gitignored, human-edited only) configures Rushd. Everything runs in **mock mode**
-with keys unset — each key upgrades one integration from mock → real. Copy the blocks you
-need into `.env` and fill in the values.
+`.env` (gitignored, human-edited only) configures Rushd. Everything defaults to the
+zero-outbound **bundled mode**. Keys do nothing unless their integration is explicitly enabled.
 
 ## Required
 ```bash
@@ -15,6 +14,7 @@ CRON_SECRET=""          # openssl rand -hex 24      (schedulers' Bearer token)
 Free. Gives the quant committee **real Alpaca market data** and **real paper fills** on
 virtual money. See the 4 steps below to get the keys.
 ```bash
+MARKET_DATA_MODE="live"  # bundled (default/no network) | keyless (Yahoo delayed) | live
 ALPACA_API_KEY=""       # the Key ID from your PAPER account
 ALPACA_API_SECRET=""    # the Secret shown once at key-generation time
 # ALPACA_BASE_URL=      # LEAVE UNSET for paper. The app defaults to the paper
@@ -31,18 +31,29 @@ ALPACA_API_SECRET=""    # the Secret shown once at key-generation time
 Then verify: `node scripts/verify-alpaca.mjs` (checks the paper account + a live bar; never prints the secret).
 
 ## LLM — committee analysts, debate, Portfolio Manager
-OpenAI-compatible. OpenRouter unlocks the free per-agent models + Opus fallback (docs/MODELS.md).
-Unset → the committee runs on its deterministic mock.
+OpenAI-compatible and free-model-first. Unset → the committee uses deterministic analysts,
+one local bilateral debate, and the versioned deterministic PM policy with zero outbound calls.
 ```bash
-OPENAI_API_KEY=""
-OPENAI_BASE_URL="https://openrouter.ai/api/v1"
-# QUANT_LLM_API_KEY=    # optional quant-only override; else uses OPENAI_API_KEY
+QUANT_LLM_API_KEY=""    # explicit opt-in; generic OPENAI_API_KEY is deliberately ignored
+QUANT_LLM_BASE_URL="https://openrouter.ai/api/v1"
+# QUANT_LLM_RETRY="true" # optional second free-model attempt; off by default
+```
+
+## LLM — quiz and educational signal prose
+The bilingual local quiz bank and a symbol-bound educational HOLD are the defaults.
+```bash
+# APP_LLM_MODE="live"
+# APP_LLM_API_KEY=""
+# APP_LLM_BASE_URL="https://openrouter.ai/api/v1"
+# APP_LLM_MODEL="openai/gpt-oss-20b:free"
 ```
 
 ## Optional vendors (mock without)
 ```bash
 SAHMK_API_KEY=""        # TASI market data (else Yahoo .SR / mock)
 ZOYA_API_KEY=""         # AAOIFI Sharia screening (else mock screener)
+AUTO_RUN_MAX_STRATEGIES="1"  # default 1, hard ceiling 50
+AUTO_RUN_MAX_SYMBOLS="5"     # default 5, hard ceiling 20
 ```
 
 ## Real-money LIVE execution — DARK BY DEFAULT (do not set casually)

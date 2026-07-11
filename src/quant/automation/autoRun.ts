@@ -17,8 +17,13 @@ import { executeDecision } from '../execution/executeDecision';
 import { isHalted } from './control';
 
 /** Cost/DoS caps (DR: unbounded strategies × symbols work). */
-export const MAX_STRATEGIES = 50;
-export const MAX_SYMBOLS_PER_STRATEGY = 20;
+function configuredCap(name: string, fallback: number, ceiling: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, ceiling) : fallback;
+}
+
+export const MAX_STRATEGIES = configuredCap('AUTO_RUN_MAX_STRATEGIES', 1, 50);
+export const MAX_SYMBOLS_PER_STRATEGY = configuredCap('AUTO_RUN_MAX_SYMBOLS', 5, 20);
 
 const configSchema = z.object({
   symbols: z

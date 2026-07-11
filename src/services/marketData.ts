@@ -24,7 +24,7 @@ export interface MarketData {
   price: number;
   history: Candle[];
   isShariaCompliant: boolean;
-  shariaSource: 'mock' | 'zoya';
+  shariaSource: 'mock' | 'zoya' | 'none';
   marketDataSource: 'live' | 'delayed' | 'mock';
   purificationRatioBps?: number;
   analystRatings?: { buy: number; sell: number; hold: number };
@@ -72,7 +72,7 @@ export interface ShariaVerdict {
     interestSecuritiesToMcap: number;
     nonCompliantIncomeToIncome: number;
   };
-  source: 'mock' | 'zoya';
+  source: 'mock' | 'zoya' | 'none';
   asOf: Date;
 }
 
@@ -386,23 +386,19 @@ export class ZoyaAdapter implements ShariaScreener {
         throw new Error(`Zoya screener request failed with status ${res.status}`);
       }
       const data = await res.json();
+      if (typeof data.is_compliant !== 'boolean') {
+        throw new Error('Zoya response omitted is_compliant');
+      }
       return {
         symbol,
-        compliant: data.is_compliant ?? (symbol !== 'TSLA' && symbol !== 'META'),
+        compliant: data.is_compliant,
         standard: 'AAOIFI',
         source: 'zoya',
         asOf: new Date(),
       };
     } catch (err) {
       console.error(`Error querying Zoya API for ${symbol}:`, err);
-      const compliant = symbol !== 'TSLA' && symbol !== 'META';
-      return {
-        symbol,
-        compliant,
-        standard: 'AAOIFI',
-        source: 'zoya',
-        asOf: new Date(),
-      };
+      throw err;
     }
   }
 }
@@ -412,20 +408,24 @@ export class ZoyaAdapter implements ShariaScreener {
 // -------------------------------------------------------------
 export class ProviderRegistry {
   getProvider(market: 'TASI' | 'NASDAQ'): MarketDataProvider {
-    if (market === 'TASI' && process.env.SAHMK_API_KEY) {
+    const mode = process.env.MARKET_DATA_MODE ?? 'bundled';
+    if (mode === 'bundled') {
+      return new MockProvider();
+    }
+    if (mode === 'keyless') {
+      return new YahooFinanceProvider();
+    }
+    if (mode === 'live' && market === 'TASI' && process.env.SAHMK_API_KEY) {
       return new SahmkAdapter();
     }
-    if (market === 'NASDAQ' && process.env.ALPACA_API_KEY) {
+    if (mode === 'live' && market === 'NASDAQ' && process.env.ALPACA_API_KEY) {
       return new AlpacaAdapter();
-    }
-    if (process.env.NODE_ENV !== 'test') {
-      return new YahooFinanceProvider();
     }
     return new MockProvider();
   }
 
   getScreener(): ShariaScreener {
-    if (process.env.ZOYA_API_KEY) {
+    if (process.env.MARKET_DATA_MODE === 'live' && process.env.ZOYA_API_KEY) {
       return new ZoyaAdapter();
     }
     return new MockScreener();
@@ -541,7 +541,7 @@ const UNIVERSE_TTL_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Full searchable universe for a market. NASDAQ uses the live Alpaca asset
- * list when ALPACA_API_KEY is set (cached ~12h); otherwise (or on any
+ * list in live mode when ALPACA_API_KEY is set (cached ~12h); otherwise (or on any
  * fetch/rate-limit failure) falls back to the bundled list so the feature
  * keeps working with no API keys set. TASI has no free listing API, so it is
  * always the bundled, verified roster.
@@ -558,7 +558,7 @@ export async function getStockUniverse(market: 'TASI' | 'NASDAQ'): Promise<Stock
     return cached.entries;
   }
 
-  if (!process.env.ALPACA_API_KEY) {
+  if (process.env.MARKET_DATA_MODE !== 'live' || !process.env.ALPACA_API_KEY) {
     return NASDAQ_UNIVERSE_FALLBACK;
   }
 
@@ -584,7 +584,8 @@ export async function getStockUniverse(market: 'TASI' | 'NASDAQ'): Promise<Stock
 }
 
 export async function getCachedShariaVerdict(screener: ShariaScreener, symbol: string, market: 'TASI' | 'NASDAQ'): Promise<ShariaVerdict> {
-  const key = `${market}:${symbol}`;
+  const live = process.env.MARKET_DATA_MODE === 'live';
+  const key = `${screener.constructor.name}:${market}:${symbol}`;
   const now = Date.now();
   const cached = shariaCache.get(key);
 
@@ -593,8 +594,9 @@ export async function getCachedShariaVerdict(screener: ShariaScreener, symbol: s
   }
 
   if (!shariaLimiter.tryAcquire()) {
-    console.warn(`Rate limit hit for Sharia screening ${key}. Serving cached/mock.`);
-    if (cached) return cached.verdict;
+    console.warn(`Rate limit hit for Sharia screening ${key}. Serving cached/fail-closed.`);
+    if (cached && !live) return cached.verdict;
+    if (live) return { symbol, compliant: false, standard: 'AAOIFI', source: 'none', asOf: new Date() };
     return new MockScreener().screen(symbol, market);
   }
 
@@ -604,7 +606,8 @@ export async function getCachedShariaVerdict(screener: ShariaScreener, symbol: s
     return verdict;
   } catch (err) {
     console.error(`Error screening Sharia compliance for ${key}:`, err);
-    if (cached) return cached.verdict;
+    if (cached && !live) return cached.verdict;
+    if (live) return { symbol, compliant: false, standard: 'AAOIFI', source: 'none', asOf: new Date() };
     return new MockScreener().screen(symbol, market);
   }
 }

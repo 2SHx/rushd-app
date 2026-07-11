@@ -1,6 +1,6 @@
 // Rushd Quant — BrokerAdapter interface + registry (QUANT_DESIGN.md §5).
 // Execution is market-agnostic: the committee/UI talk to one interface. The registry
-// picks AlpacaPaperBroker for NASDAQ when an Alpaca key is present, otherwise the
+// picks AlpacaPaperBroker for NASDAQ only in explicit live mode with an Alpaca key, otherwise the
 // InternalSimBroker (TASI + all keyless/mock mode) — so the whole path runs with no keys.
 import { Prisma } from '@prisma/client';
 import type { Market, BrokerKind, OrderStatus, OrderSide } from '@prisma/client';
@@ -59,7 +59,7 @@ export function pickBrokerKind(market: Market, env: NodeJS.ProcessEnv = process.
   if (process.env.NODE_ENV === 'test' && env === process.env) {
     return 'INTERNAL_SIM';
   }
-  if (market === 'NASDAQ' && env.ALPACA_API_KEY && env.ALPACA_API_KEY !== 'mock-key') {
+  if (market === 'NASDAQ' && env.MARKET_DATA_MODE === 'live' && env.ALPACA_API_KEY && env.ALPACA_API_KEY !== 'mock-key') {
     return 'ALPACA_PAPER';
   }
   return 'INTERNAL_SIM';

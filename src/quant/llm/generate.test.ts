@@ -11,8 +11,11 @@ const primary = { id: 'primary' } as any;
 const fallback = { id: 'opus' } as any;
 const args = { schema, system: 's', prompt: 'p', temperature: 0 };
 
-describe('generateObjectWithFallback (Opus safety net)', () => {
-  beforeEach(() => genMock.mockReset());
+describe('generateObjectWithFallback', () => {
+  beforeEach(() => {
+    genMock.mockReset();
+    delete process.env.QUANT_LLM_RETRY;
+  });
 
   it('uses the primary model when it succeeds', async () => {
     genMock.mockResolvedValueOnce({ object: { ok: true } });
@@ -22,12 +25,19 @@ describe('generateObjectWithFallback (Opus safety net)', () => {
     expect(genMock.mock.calls[0][0].model).toBe(primary);
   });
 
-  it('retries once on the fallback when the primary errors', async () => {
+  it('does not retry by default when the primary errors', async () => {
+    genMock.mockRejectedValueOnce(new Error('free tier down'));
+    await expect(generateObjectWithFallback({ model: primary, fallback, ...args })).rejects.toThrow('free tier down');
+    expect(genMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries once on the fallback when explicitly enabled', async () => {
+    process.env.QUANT_LLM_RETRY = 'true';
     genMock.mockRejectedValueOnce(new Error('free tier down')).mockResolvedValueOnce({ object: { ok: false } });
     const r = await generateObjectWithFallback({ model: primary, fallback, ...args });
     expect(r).toEqual({ object: { ok: false }, usedFallback: true });
     expect(genMock).toHaveBeenCalledTimes(2);
-    expect(genMock.mock.calls[1][0].model).toBe(fallback); // Opus
+    expect(genMock.mock.calls[1][0].model).toBe(fallback);
   });
 
   it('rethrows when the primary errors and there is no fallback', async () => {

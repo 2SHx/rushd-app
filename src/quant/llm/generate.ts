@@ -1,6 +1,6 @@
 // Rushd Quant — generateObject with a free-model fallback (QUANT_DESIGN.md §2.6).
 // Runs the agent's assigned free model; if that call errors or is rate-limited (429),
-// retries ONCE on a different free model before the caller drops to its deterministic
+// optionally retries once on a different free model before the caller drops to its deterministic
 // mock. Output is capped (maxTokens) so calls stay cheap and avoid the balance/limit
 // 402s that a default 64k-token request triggers on a low free-tier balance.
 import { generateObject } from 'ai';
@@ -30,7 +30,7 @@ export async function generateObjectWithFallback<S extends z.ZodTypeAny>(
     const r = await generateObject({ model, schema, system, prompt, temperature, maxTokens });
     return { object: r.object, usedFallback: false };
   } catch (err) {
-    if (!fallback) throw err;
+    if (!fallback || process.env.QUANT_LLM_RETRY !== 'true') throw err;
     const r = await generateObject({ model: fallback, schema, system, prompt, temperature, maxTokens });
     return { object: r.object, usedFallback: true };
   }

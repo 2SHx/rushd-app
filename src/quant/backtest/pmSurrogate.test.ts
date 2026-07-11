@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { PM_SURROGATE_ID, surrogateDecision } from './pmSurrogate';
+import { PM_SURROGATE_ID, surrogateDecision, surrogateProposal } from './pmSurrogate';
 import type { CommitteeResult } from '../committee/collect';
 import type { PortfolioState, MarketState, RiskLimits } from '../risk/envelope';
 import type { AnalystSignal, AgentKind } from '../types';
@@ -84,6 +84,12 @@ describe('surrogateDecision (PM policy-surrogate)', () => {
     expect(outcome.finalQty.gt(0)).toBe(true);
     // envelope clamp by max name weight (0.5 * 100000 / 100 = 500) must not be exceeded
     expect(outcome.finalQty.lte(500)).toBe(true);
+  });
+
+  it('exposes the deterministic proposal for reuse by free live PM mode', () => {
+    const proposal = surrogateProposal(fakeResult(bullishSignals, true, compliantGate), basePortfolio(), baseMarket());
+    expect(proposal.action).toBe('BUY');
+    expect(proposal.qty.gt(0)).toBe(true);
   });
 
   it('mostly-bearish, tradeable, with an owned position → SELL', () => {

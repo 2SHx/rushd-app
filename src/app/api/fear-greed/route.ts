@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 
 export const revalidate = 300; // 5-minute ISR cache
 
+const OFFLINE_FALLBACK = {
+  fear_and_greed: { score: 50, rating: 'Bundled neutral fallback', previous_close: 50 },
+  source: 'bundled',
+};
+
 export async function GET() {
+  if (!['keyless', 'live'].includes(process.env.MARKET_DATA_MODE ?? 'bundled')) {
+    return NextResponse.json(OFFLINE_FALLBACK);
+  }
+
   try {
     const res = await fetch(
       'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',

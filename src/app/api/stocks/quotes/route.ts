@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     const key = process.env.ALPACA_API_KEY;
     const secret = process.env.ALPACA_API_SECRET ?? '';
 
-    if (market === 'NASDAQ' && key && key !== 'fail') {
+    if (process.env.MARKET_DATA_MODE === 'live' && market === 'NASDAQ' && key && key !== 'fail') {
       try {
         const symbolsString = symbolList.join(',');
         const res = await fetch(`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbolsString}`, {

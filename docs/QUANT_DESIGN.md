@@ -139,7 +139,7 @@ The PM (an LLM at temp 0) chooses **action + size**; two deterministic gates bou
 
 ### 2.6 Model tiering and LLM-call budget
 
-Routine analyst passes (News, Fundamental, non-final debate) use a **cheap fast model** (`OPENAI_MODEL_FAST`, e.g. `qwen2.5-72b-instruct`); the PM and the final debate round use a **strong model** (`OPENAI_MODEL_STRONG`). A per-pass counter caps total LLM calls at `MAX_LLM_CALLS_PER_PASS` (default 8: News + Fundamental + Research = 3, debate 2 rounds × 2 = 4, PM = 1 — Quant Core, Technical, Pattern, Sharia are deterministic and free). When the budget is exhausted, remaining LLM agents `abstain`; deterministic agents always run. Every LLM call's `costCents` is summed onto the `Decision`.
+Runtime LLMs are explicit opt-in: only `QUANT_LLM_API_KEY` activates them; generic app/OpenAI keys never do. News uses a cheap free-tier model; Fundamental, Research, the bilateral debate, and PM use a stronger free-tier model. One structured debate call returns both Bull and Bear cases, so a full live pass is capped structurally at five primary calls (News + Fundamental + Research + bilateral debate + PM). A second free-model attempt is disabled by default and requires `QUANT_LLM_RETRY=true`. With no Quant key, all five stages use deterministic/local fallbacks; the PM reuses the versioned backtest surrogate proposal before the unchanged risk envelope and Sharia veto.
 
 ### 2.7 Execution model — no worker, no queue (QDR-5)
 

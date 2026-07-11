@@ -78,11 +78,13 @@ describe('runPortfolioManager (mock mode)', () => {
     delete process.env.QUANT_LLM_API_KEY;
   });
 
-  it('mock PM with a compliant, bullish committee returns a valid PmOutcome (HOLD acceptable in mock)', async () => {
+  it('free PM deterministically proposes through the same risk envelope', async () => {
     const outcome = await runPortfolioManager(baseInputs());
     expect(['BUY', 'SELL', 'HOLD']).toContain(outcome.proposedAction);
     expect(['BUY', 'SELL', 'HOLD']).toContain(outcome.finalAction);
-    expect(outcome.finalAction).toBe('HOLD'); // mock proposer is deterministic HOLD
+    expect(outcome.proposedAction).toBe('BUY');
+    expect(outcome.finalAction).toBe('BUY');
+    expect(outcome.finalQty.gt(0)).toBe(true);
     expect(outcome.proposedQty).toBeInstanceOf(Prisma.Decimal);
     expect(outcome.finalQty).toBeInstanceOf(Prisma.Decimal);
     expect(outcome.debate.length).toBeGreaterThan(0);

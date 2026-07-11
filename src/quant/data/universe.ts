@@ -1,4 +1,4 @@
-import { registry } from '@/services/marketData';
+import { getCachedShariaVerdict, registry } from '@/services/marketData';
 import { TICKERS } from '@/lib/tickers';
 
 export interface HalalUniverseEntry {
@@ -74,8 +74,9 @@ export async function getHalalUniverse(market: 'TASI' | 'NASDAQ'): Promise<Halal
 
   for (const c of candidates) {
     try {
-      const verdict = await screener.screen(c.symbol, market);
-      if (verdict && verdict.compliant) {
+      const verdict = await getCachedShariaVerdict(screener, c.symbol, market);
+      const verifiedForMode = process.env.MARKET_DATA_MODE !== 'live' || verdict.source === 'zoya';
+      if (verdict && verdict.compliant && verifiedForMode) {
         // Find ratio from screener ratios or default fallback
         const purificationRatio = verdict.ratios?.nonCompliantIncomeToIncome ?? 
                                   getMockPurificationRatio(c.symbol);

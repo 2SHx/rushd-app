@@ -1,5 +1,5 @@
 // src/quant/data/ingest.ts — Q0 ingestion: provider registry -> MarketBar (idempotent upsert).
-// Mock-first: with no API keys, YahooFinanceProvider (keyless) or MockProvider (test env)
+// Offline-first: bundled mode uses MockProvider; network modes are explicit.
 // answers via `registry.getProvider`; ingestion never hits the network directly.
 import { Prisma } from '@prisma/client';
 import type { Market, DataSource } from '@prisma/client';
@@ -12,6 +12,9 @@ import {
   AlpacaAdapter,
   YahooFinanceProvider,
 } from '@/services/marketData';
+
+const INITIAL_BACKFILL_DAYS = 90;
+const OVERLAP_DAYS = 3;
 
 /** Which adapter answered -> DataSource enum, for provenance on every bar. */
 function sourceFor(provider: MarketDataProvider): DataSource {
@@ -29,11 +32,25 @@ export async function ingestBars(
 ): Promise<{ upserted: number; source: string }> {
   let provider = registry.getProvider(market);
   // Bypasses Alpaca free tier caps for deep historical NASDAQ runs
-  if (market === 'NASDAQ' && opts?.days && opts.days > 365) {
+  if (process.env.MARKET_DATA_MODE === 'keyless' && market === 'NASDAQ' && opts?.days && opts.days > 365) {
     provider = new YahooFinanceProvider();
   }
   const source = sourceFor(provider);
-  const candles = await provider.getCandles(symbol, market, opts?.days ?? 90);
+  const latest = await prisma.marketBar.findFirst({
+    where: { symbol, market, interval: 'DAY' },
+    orderBy: { ts: 'desc' },
+    select: { ts: true },
+  });
+  // Bundled candles are synthetic. Once seeded, avoid regenerating and rewriting
+  // them on every scheduled run.
+  if (latest && provider instanceof MockProvider) {
+    return { upserted: 0, source };
+  }
+  const elapsedDays = latest
+    ? Math.max(0, Math.floor(Date.now() / 86_400_000) - Math.floor(latest.ts.getTime() / 86_400_000))
+    : 0;
+  const days = latest ? elapsedDays + OVERLAP_DAYS : (opts?.days ?? INITIAL_BACKFILL_DAYS);
+  const candles = await provider.getCandles(symbol, market, days);
 
   await prisma.$transaction(
     candles.map((c) => {

@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    marketBar: { upsert: vi.fn() },
+    marketBar: { findFirst: vi.fn(), upsert: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
   },
 }));
@@ -17,7 +17,7 @@ vi.mock('@/services/marketData', async () => {
 });
 
 import { prisma } from '@/lib/prisma';
-import { registry, YahooFinanceProvider } from '@/services/marketData';
+import { MockProvider, registry, YahooFinanceProvider } from '@/services/marketData';
 import { ingestBars } from './ingest';
 
 const D = Prisma.Decimal;
@@ -29,6 +29,7 @@ const candles = [
 describe('ingestBars', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.marketBar.findFirst as any).mockResolvedValue(null);
     const yahoo = new YahooFinanceProvider();
     yahoo.getCandles = vi.fn().mockResolvedValue(candles);
     (registry.getProvider as any).mockReturnValue(yahoo);
@@ -39,6 +40,7 @@ describe('ingestBars', () => {
 
     expect(res.upserted).toBe(2);
     expect(res.source).toBe('YAHOO');
+    expect((registry.getProvider as any).mock.results[0].value.getCandles).toHaveBeenCalledWith('MSFT', 'NASDAQ', 90);
     expect(prisma.marketBar.upsert).toHaveBeenCalledTimes(2);
 
     const call0 = (prisma.marketBar.upsert as any).mock.calls[0][0];
@@ -80,6 +82,32 @@ describe('ingestBars', () => {
     const call0 = (prisma.marketBar.upsert as any).mock.calls[0][0];
     expect(call0.create.volume).toEqual(new D(0));
   });
+
+  it('requests only a three-day overlap when the latest bar is current', async () => {
+    vi.setSystemTime(new Date('2024-01-10T12:00:00Z'));
+    (prisma.marketBar.findFirst as any).mockResolvedValue({ ts: new Date('2024-01-10T00:00:00Z') });
+    const provider = (registry.getProvider as any).mock.results[0]?.value ?? new YahooFinanceProvider();
+    provider.getCandles = vi.fn().mockResolvedValue(candles);
+    (registry.getProvider as any).mockReturnValue(provider);
+
+    await ingestBars('MSFT', 'NASDAQ');
+
+    expect(provider.getCandles).toHaveBeenCalledWith('MSFT', 'NASDAQ', 3);
+    vi.useRealTimers();
+  });
+
+  it('does not regenerate bundled mock bars after the initial seed', async () => {
+    const provider = new MockProvider();
+    provider.getCandles = vi.fn();
+    (registry.getProvider as any).mockReturnValue(provider);
+    (prisma.marketBar.findFirst as any).mockResolvedValue({ ts: new Date() });
+
+    const result = await ingestBars('MSFT', 'NASDAQ');
+
+    expect(result).toEqual({ upserted: 0, source: 'MOCK' });
+    expect(provider.getCandles).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/cron/quant-ingest', () => {
@@ -87,6 +115,7 @@ describe('POST /api/cron/quant-ingest', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.marketBar.findFirst as any).mockResolvedValue(null);
     const yahoo = new YahooFinanceProvider();
     yahoo.getCandles = vi.fn().mockResolvedValue(candles);
     (registry.getProvider as any).mockReturnValue(yahoo);

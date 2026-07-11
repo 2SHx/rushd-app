@@ -7,10 +7,12 @@ import { prisma } from '@/lib/prisma';
 import { addXP } from '@/services/engines';
 import { TokenBucket } from '@/services/marketData';
 
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'mock-key',
-  baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-});
+const DEFAULT_APP_LLM_BASE_URL = 'https://openrouter.ai/api/v1';
+const DEFAULT_APP_LLM_MODEL = 'openai/gpt-oss-20b:free';
+
+function appLlmEnabled() {
+  return process.env.APP_LLM_MODE === 'live' && !!process.env.APP_LLM_API_KEY;
+}
 
 const TOPIC_ALLOWLIST = [
   'Stock Market Basics',
@@ -233,13 +235,6 @@ const LOCAL_QUESTION_BANK: Record<string, Array<{
 const quizLimiter = new TokenBucket(5, 0.1);
 
 export async function GET(req: Request) {
-  if (!quizLimiter.tryAcquire()) {
-    return NextResponse.json(
-      { error: 'rate_limit_exceeded', message: 'Too many requests. Please try again later.' },
-      { status: 429 }
-    );
-  }
-
   try {
     const { searchParams } = new URL(req.url);
     const rawTopic = searchParams.get('topic') || 'Stock Market Basics';
@@ -247,8 +242,8 @@ export async function GET(req: Request) {
     // Sanitize input using the allowlist
     const topic = TOPIC_ALLOWLIST.includes(rawTopic) ? rawTopic : 'Stock Market Basics';
 
-    // Local randomized fallback if API key is not present
-    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'mock-key') {
+    // Local randomized default. Live generation is explicit opt-in.
+    if (!appLlmEnabled()) {
       const pool = LOCAL_QUESTION_BANK[topic] || LOCAL_QUESTION_BANK['Stock Market Basics'];
       const randomQuestion = pool[Math.floor(Math.random() * pool.length)];
       return NextResponse.json({
@@ -257,7 +252,18 @@ export async function GET(req: Request) {
       });
     }
 
-    const model = openai('qwen2.5-72b-instruct');
+    if (!quizLimiter.tryAcquire()) {
+      return NextResponse.json(
+        { error: 'rate_limit_exceeded', message: 'Too many requests. Please try again later.' },
+        { status: 429 },
+      );
+    }
+
+    const provider = createOpenAI({
+      apiKey: process.env.APP_LLM_API_KEY,
+      baseURL: process.env.APP_LLM_BASE_URL || DEFAULT_APP_LLM_BASE_URL,
+    });
+    const model = provider(process.env.APP_LLM_MODEL || DEFAULT_APP_LLM_MODEL);
 
     const result = await generateObject({
       model,

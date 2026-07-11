@@ -25,6 +25,7 @@ describe('Market Data Registry & Adapter Routing', () => {
   });
 
   it('selects MockProvider and MockScreener when no env keys are present', () => {
+    delete process.env.MARKET_DATA_MODE;
     delete process.env.SAHMK_API_KEY;
     delete process.env.ALPACA_API_KEY;
     delete process.env.ZOYA_API_KEY;
@@ -39,18 +40,21 @@ describe('Market Data Registry & Adapter Routing', () => {
   });
 
   it('swaps to SahmkAdapter for TASI when SAHMK_API_KEY is set', () => {
+    process.env.MARKET_DATA_MODE = 'live';
     process.env.SAHMK_API_KEY = 'test_sahmk_key';
     const providerTasi = registry.getProvider('TASI');
     expect(providerTasi).toBeInstanceOf(SahmkAdapter);
   });
 
   it('swaps to AlpacaAdapter for NASDAQ when ALPACA_API_KEY is set', () => {
+    process.env.MARKET_DATA_MODE = 'live';
     process.env.ALPACA_API_KEY = 'test_alpaca_key';
     const providerNasdaq = registry.getProvider('NASDAQ');
     expect(providerNasdaq).toBeInstanceOf(AlpacaAdapter);
   });
 
   it('swaps to ZoyaAdapter for Sharia screening when ZOYA_API_KEY is set', () => {
+    process.env.MARKET_DATA_MODE = 'live';
     process.env.ZOYA_API_KEY = 'test_zoya_key';
     const screener = registry.getScreener();
     expect(screener).toBeInstanceOf(ZoyaAdapter);
@@ -69,6 +73,7 @@ describe('Fallback Behavior & Error/Rate-Limit Safety', () => {
   });
 
   it('falls back to MockProvider quotes and candles when the active adapter throws', async () => {
+    process.env.MARKET_DATA_MODE = 'live';
     process.env.SAHMK_API_KEY = 'fail'; // Triggers simulated failure in SahmkAdapter
     const res = await fetchMarketData('1120.SR', 'TASI');
     
@@ -78,6 +83,7 @@ describe('Fallback Behavior & Error/Rate-Limit Safety', () => {
   });
 
   it('falls back to MockScreener when the ZoyaAdapter throws', async () => {
+    process.env.MARKET_DATA_MODE = 'live';
     process.env.ZOYA_API_KEY = 'fail'; // Triggers simulated failure in ZoyaAdapter
     const res = await fetchMarketData('TSLA', 'NASDAQ');
     

@@ -43,20 +43,22 @@ describe('per-agent model matrix', () => {
 });
 
 describe('endpoint + mock detection', () => {
-  it('defaults to OpenRouter, falls back to OPENAI_* wiring', () => {
+  it('defaults to OpenRouter and requires explicit Quant wiring', () => {
     expect(llmEndpoint({} as any).baseURL).toBe(DEFAULT_LLM_BASE_URL);
     expect(llmEndpoint({ OPENAI_BASE_URL: 'http://x/v1', OPENAI_API_KEY: 'k' } as any)).toEqual({
-      baseURL: 'http://x/v1',
-      apiKey: 'k',
+      baseURL: DEFAULT_LLM_BASE_URL,
+      apiKey: undefined,
     });
-    expect(llmEndpoint({ QUANT_LLM_BASE_URL: 'http://or/v1', QUANT_LLM_API_KEY: 'z' } as any).baseURL).toBe(
-      'http://or/v1',
-    );
+    expect(llmEndpoint({ QUANT_LLM_BASE_URL: 'http://or/v1', QUANT_LLM_API_KEY: 'z' } as any)).toEqual({
+      baseURL: 'http://or/v1',
+      apiKey: 'z',
+    });
   });
 
   it('is mock mode without a key or with the mock-key sentinel', () => {
     expect(isMockMode({} as any)).toBe(true);
-    expect(isMockMode({ OPENAI_API_KEY: 'mock-key' } as any)).toBe(true);
+    expect(isMockMode({ OPENAI_API_KEY: 'sk-generic' } as any)).toBe(true);
+    expect(isMockMode({ QUANT_LLM_API_KEY: 'mock-key' } as any)).toBe(true);
     expect(isMockMode({ QUANT_LLM_API_KEY: 'sk-real' } as any)).toBe(false);
   });
 });

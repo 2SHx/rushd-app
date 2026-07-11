@@ -32,6 +32,11 @@ export interface SurrogateOutcome {
   adjustments: string[];
 }
 
+export interface SurrogateProposal {
+  action: 'BUY' | 'SELL' | 'HOLD';
+  qty: Prisma.Decimal;
+}
+
 function stanceSign(stance: 'BULLISH' | 'BEARISH' | 'NEUTRAL'): number {
   if (stance === 'BULLISH') return 1;
   if (stance === 'BEARISH') return -1;
@@ -46,6 +51,25 @@ function netScore(result: CommitteeResult): number {
   return sum / active.length;
 }
 
+/** Shared zero-call PM proposal used by both live mock mode and backtests. */
+export function surrogateProposal(
+  result: CommitteeResult,
+  pf: PortfolioState,
+  mkt: MarketState,
+): SurrogateProposal {
+  const score = netScore(result);
+
+  let action: SurrogateProposal['action'] = 'HOLD';
+  if (score > DEADBAND) action = 'BUY';
+  else if (score < -DEADBAND) action = 'SELL';
+
+  const qty =
+    action === 'HOLD' || mkt.price.lte(0)
+      ? new D(0)
+      : pf.equity.mul(PROPOSED_FRACTION_OF_EQUITY).div(mkt.price);
+  return { action, qty };
+}
+
 /**
  * Deterministic stand-in for `runPortfolioManager` (src/quant/committee/pm.ts), used only
  * in backtests. Same signature-shape/envelope/veto semantics, zero LLM involvement.
@@ -57,16 +81,7 @@ export function surrogateDecision(
   limits: RiskLimits,
   killSwitch = false,
 ): SurrogateOutcome {
-  const score = netScore(result);
-
-  let proposedAction: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
-  if (score > DEADBAND) proposedAction = 'BUY';
-  else if (score < -DEADBAND) proposedAction = 'SELL';
-
-  const proposedQty =
-    proposedAction === 'HOLD' || mkt.price.lte(0)
-      ? new D(0)
-      : pf.equity.mul(PROPOSED_FRACTION_OF_EQUITY).div(mkt.price);
+  const { action: proposedAction, qty: proposedQty } = surrogateProposal(result, pf, mkt);
 
   // Sharia veto: a proposed BUY on a non-tradeable symbol is forced to HOLD before the
   // envelope ever sees it (belt-and-suspenders with `result.tradeable` upstream).

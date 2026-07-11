@@ -4,8 +4,7 @@
 // then clamps that proposal to the risk limits, and the Sharia gate is enforced a second
 // time here (belt-and-suspenders with the veto already baked into the tradeable universe
 // upstream) so a BUY on a non-compliant symbol can never slip through regardless of what
-// the LLM proposed. Mock mode / any LLM error ⇒ deterministic fallback proposal = HOLD/0
-// (do nothing) — the mock-first invariant holds even if the model never runs.
+// the LLM proposed. Mock mode / any LLM error uses the deterministic backtest surrogate.
 import { generateObjectWithFallback } from '../llm/generate';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -14,6 +13,7 @@ import { applyEnvelope, type PortfolioState, type MarketState, type RiskLimits, 
 import { gateAllowsAction } from '../gates/sharia';
 import { agentModel } from '../llm/client';
 import { runDebate, type DebateTurn } from './debate';
+import { surrogateProposal } from '../backtest/pmSurrogate';
 
 const D = Prisma.Decimal;
 
@@ -70,13 +70,14 @@ const PmDecisionSchema = z.object({
     .describe('نفس التبرير بالعربية الفصحى المبسطة، من جملتين إلى أربع جمل، تعليمي فقط وليس نصيحة استثمارية.'),
 });
 
-/** Fixed, schema-valid mock proposal used whenever no model is available or a call errors. */
-function mockProposal(): PmProposal {
+/** Deterministic zero-call proposal shared with the backtest PM surrogate. */
+function mockProposal(inp: PmInputs): PmProposal {
+  const proposal = surrogateProposal(inp.result, inp.portfolio, inp.market);
   return {
-    action: 'HOLD',
-    qty: 0,
-    rationaleEn: 'Mock mode: no live model available; the Portfolio Manager conservatively proposes HOLD.',
-    rationaleAr: 'وضع تجريبي: لا يتوفر نموذج حي حاليًا؛ يقترح مدير المحفظة الاحتفاظ (HOLD) بحذر.',
+    action: proposal.action,
+    qty: proposal.qty.toNumber(),
+    rationaleEn: `Local deterministic policy proposes ${proposal.action} from the committee's net conviction; the risk and Sharia gates still decide the final action.`,
+    rationaleAr: `تقترح السياسة المحلية الحتمية ${proposal.action} بناءً على صافي قناعة اللجنة؛ ويبقى القرار النهائي خاضعًا لضوابط المخاطر والبوابة الشرعية.`,
   };
 }
 
@@ -93,7 +94,7 @@ function pmContext(result: CommitteeResult, debate: DebateTurn[]) {
 
 async function proposeDefault(inp: PmInputs, debate: DebateTurn[]): Promise<PmProposal> {
   const { config, model, fallback, mock } = agentModel('PORTFOLIO_MANAGER');
-  if (mock || !model) return mockProposal();
+  if (mock || !model) return mockProposal(inp);
 
   try {
     const generated = await generateObjectWithFallback({
@@ -121,7 +122,7 @@ async function proposeDefault(inp: PmInputs, debate: DebateTurn[]): Promise<PmPr
       modelId: config.model,
     };
   } catch {
-    return mockProposal();
+    return mockProposal(inp);
   }
 }
 

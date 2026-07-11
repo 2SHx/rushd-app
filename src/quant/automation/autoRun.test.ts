@@ -42,6 +42,11 @@ describe('runAutomatedStrategies', () => {
     h.autoRunClaimCreate.mockResolvedValue({});
   });
 
+  it('uses conservative free-tier defaults', () => {
+    expect(MAX_STRATEGIES).toBe(1);
+    expect(MAX_SYMBOLS_PER_STRATEGY).toBe(5);
+  });
+
   it('halted: returns immediately, never queries strategies or calls the runner', async () => {
     h.isHalted.mockResolvedValue(true);
     const res = await runAutomatedStrategies();

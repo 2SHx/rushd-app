@@ -146,8 +146,8 @@ No new auth tables (JWT sessions, no adapter). `onDelete: Cascade` already prese
 
 Today `fetchMarketData` (`marketData.ts:46`) branches inline on env keys and returns mock data; the MCP server already wraps it. That inline branching is replaced by an interface + registry so live keys swap providers with zero call-site change.
 
-### DR-4: One `MarketDataProvider` + `ShariaScreener` interface with an env-keyed registry; adapters are swappable, mock is the default
-Decision: define `MarketDataProvider` (`getQuote`, `getCandles`) and `ShariaScreener` (`screen`) interfaces; a registry selects an adapter per market by env-key presence, defaulting to `MockProvider`/`MockScreener`; `fetchMarketData` becomes a thin façade over the registry.
+### DR-4: One `MarketDataProvider` + `ShariaScreener` interface with an explicit-mode registry; adapters are swappable, bundled is the default
+Decision: define `MarketDataProvider` (`getQuote`, `getCandles`) and `ShariaScreener` (`screen`) interfaces; a registry selects adapters through `MARKET_DATA_MODE=bundled|keyless|live`, defaulting to `MockProvider`/`MockScreener`; `fetchMarketData` becomes a thin façade over the registry. `bundled` performs no outbound data calls, `keyless` explicitly enables delayed Yahoo data, and `live` alone may select keyed Alpaca/Sahmk/Zoya adapters.
 Options: keep per-call `if (env.KEY)` branching (untestable, duplicated across quote/candle/screen paths) / a separate data microservice (new infra for read-only reference data) / interface + registry inside the monolith (testable, one swap point, no new infra).
 Rationale: three providers (SAHMK/Alpaca/Zoya) with independent keys and failure modes need one selection point and one fallback policy; the MCP server and UI must never diverge, which an interface guarantees.
 Consequences: adding a provider = one adapter file + one registry line; every adapter must implement the mock-fallback contract so no-key mode keeps working. Screening and quotes stay one code path across HTTP + MCP.
@@ -157,7 +157,7 @@ Revisit when: a provider needs push/streaming (WebSocket) rather than request/re
 ```
 interface Quote  { symbol; market; price; currency; asOf }
 interface MarketDataProvider { getQuote(symbol, market): Quote; getCandles(symbol, market, days): Candle[] }
-interface ShariaVerdict  { symbol; compliant; standard: 'AAOIFI'; ratios?; source: 'mock'|'zoya'; asOf }
+interface ShariaVerdict  { symbol; compliant; standard: 'AAOIFI'; ratios?; source: 'mock'|'zoya'|'none'; asOf }
 interface ShariaScreener { screen(symbol, market): ShariaVerdict }
 ```
 
@@ -165,14 +165,14 @@ interface ShariaScreener { screen(symbol, market): ShariaVerdict }
 | Provider | Role | Env key | Selected for | No-key behavior |
 |---|---|---|---|---|
 | `MockProvider` | quotes + candles | — | default | always available; seeded random walk |
-| `SahmkAdapter` | TASI quotes/candles | `SAHMK_API_KEY` | market=TASI when key set | falls back to `MockProvider` |
-| `AlpacaAdapter` | NASDAQ quotes/candles | `ALPACA_API_KEY` | market=NASDAQ when key set | falls back to `MockProvider` |
+| `SahmkAdapter` | TASI quotes/candles | `SAHMK_API_KEY` | `live` mode + market=TASI + key | falls back to `MockProvider` |
+| `AlpacaAdapter` | NASDAQ quotes/candles | `ALPACA_API_KEY` | `live` mode + market=NASDAQ + key | falls back to `MockProvider` |
 | `MockScreener` | AAOIFI screen | — | default | `TSLA`/`META` non-compliant, else compliant (label "demo data") |
-| `ZoyaAdapter` | AAOIFI screen | `ZOYA_API_KEY` | when key set | falls back to `MockScreener` |
+| `ZoyaAdapter` | AAOIFI screen | `ZOYA_API_KEY` | `live` mode + key | live screening failures return unverified/non-compliant `source=none` |
 
-**Caching + rate limits (in-process, no Redis).** A module-level TTL `Map`: quotes 60 s, candles until end of the symbol's trading day (TASI calendar Sun–Thu), Sharia verdicts 24 h. A per-provider token bucket caps outbound calls; on 429/timeout/error the layer serves the last cached value, else mock — it **never throws to the UI**. Single-instance cache is acceptable at this scale; revisit with Redis only when the app runs multiple instances.
+**Caching + rate limits (in-process, no Redis).** A module-level TTL `Map`: quotes 60 s, candles until end of the symbol's trading day (TASI calendar Sun–Thu), Sharia verdicts 24 h. A per-provider token bucket caps outbound calls. Quote/candle failures serve cache or labeled mock data; live Sharia failures serve only a fresh verified cache and otherwise fail closed with `source=none`. Single-instance cache is acceptable at this scale; revisit with Redis only when the app runs multiple instances.
 
-**Env-key swap path.** Selection happens at call time by env presence, so setting `SAHMK_API_KEY` flips TASI mock→live with no code change; unset reverts to mock. This is the load-bearing property tested in M4.
+**Explicit-mode swap path.** Selection happens at call time. The default/unset mode is `bundled`; `keyless` opts into delayed Yahoo data; `live` plus the relevant key selects Alpaca/Sahmk/Zoya and safely falls back. A generic key never silently creates outbound traffic.
 
 **MCP relationship.** `mcp/rushd-market` stays a transport-only wrapper (`get_quote`/`get_candles`/`check_sharia_compliance`) over the same registry — one screening/quote implementation, two transports. Its "demo data / Zoya pending" notes are driven by `ShariaVerdict.source`, not a second rule.
 
@@ -180,10 +180,10 @@ interface ShariaScreener { screen(symbol, market): ShariaVerdict }
 
 ## 6. AI features
 
-Two endpoints exist: `quiz` (`generateObject`+zod, mock fallback) and `signals` (same, bilingual reasoning). Both call Qwen via the OpenAI-compatible `OPENAI_BASE_URL`.
+Two endpoints exist: `quiz` (`generateObject`+zod, local bank fallback) and `signals` (same, bilingual reasoning). Both are local by default. Live generation requires the explicit `APP_LLM_MODE=live` plus `APP_LLM_API_KEY` opt-in.
 
 ### DR-7: Keep Qwen via OpenAI-compatible base URL with mock-first fallback; harden with schema-enforced compliance tags and injection-safe inputs
-Decision: retain `@ai-sdk/openai` + `generateObject` pointed at Qwen through `OPENAI_BASE_URL`, keep the mock object as a first-class fallback, and extend both zod schemas with a required `complianceTag` plus system prompts that enforce not-advice, minor-appropriate, Arabic-primary output.
+Decision: retain `@ai-sdk/openai` + `generateObject` behind the explicit `APP_LLM_*` opt-in, keep local deterministic content as the default/fallback, and require schema-enforced `complianceTag` plus not-advice, minor-appropriate, Arabic-primary output. The default hosted model slug is free-tier and env-overridable.
 Options: swap SDKs / call the model unstructured and parse text (loses schema guarantees, reopens injection) / harden the existing structured path (minimal change, keeps mock-mode, adds the guardrails we actually need).
 Rationale: the structured `generateObject` path already gives schema validation and a mock fallback — the gap is compliance labeling and input hygiene, not the transport. Provider stays swappable via base URL (Qwen today, ALLaM/Jais under evaluation, OQ-6).
 Consequences: schema rejects model output missing a tag; mock fallbacks must also carry a tag; a golden-set eval (M5) guards Arabic quality and schema validity in CI without live keys.

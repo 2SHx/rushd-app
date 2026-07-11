@@ -109,17 +109,17 @@ export function resolveModelConfig(role: LlmRole, env: NodeJS.ProcessEnv = proce
   return { ...base, model, fallbackModel };
 }
 
-/** The base URL + key the committee's LLM calls use (falls back to the app's OPENAI_* wiring). */
+/** The base URL + explicit Quant key used by committee LLM calls. */
 export function llmEndpoint(env: NodeJS.ProcessEnv = process.env): { baseURL: string; apiKey?: string } {
   return {
-    baseURL: env.QUANT_LLM_BASE_URL || env.OPENAI_BASE_URL || DEFAULT_LLM_BASE_URL,
-    apiKey: env.QUANT_LLM_API_KEY || env.OPENAI_API_KEY,
+    baseURL: env.QUANT_LLM_BASE_URL || DEFAULT_LLM_BASE_URL,
+    apiKey: env.QUANT_LLM_API_KEY,
   };
 }
 
 /** True when no usable key is configured — the committee must run its mock fallbacks. */
 export function isMockMode(env: NodeJS.ProcessEnv = process.env): boolean {
-  const key = env.QUANT_LLM_API_KEY || env.OPENAI_API_KEY;
+  const key = env.QUANT_LLM_API_KEY;
   return !key || key === 'mock-key';
 }
 
