@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-11 — Quant Strategy Lab G0: contract, ledger, research RAG, continuation brief ✅
+Shipped: QDR-6 + §9b roadmap in QUANT_DESIGN.md (deterministic intraday gapper lane, MC promotion gate, honest-expectations policy); docs/STRATEGY_LAB.md ledger (11 setups tiered + research anchors); 8 research docs seeded into ResearchDoc RAG; docs/QUANT_LAB_PLAN.md — the cross-AI continuation brief with the full G-1→G6 status DAG.
+Decisions: USER DIRECTIVE — no mock/synthetic data in the strategy lane; fixtures = captured REAL bars; tiers = real fixtures → Alpaca free backfill → Yahoo keyless. Strategy lane is LLM-free ($0 recurring). Long-only cash, NASDAQ-first, AUTO_PAPER only. Alpaca paper keys verified live.
+Open: G1 data spine in flight (data-engineer); G2/G3 next; STOP after G3 for the validation report card. Alpaca paper account has negative cash from old margin paper trades — G4 envelope must limit by cash, not buying power. Cold-start from docs/QUANT_LAB_PLAN.md.
+
 ## 2026-07-11 — Free-first runtime and quota controls ✅
 Shipped: Zero-outbound bundled defaults, explicit app/Quant LLM opt-ins, five-call live Quant ceiling, one-call bilateral debate, deterministic PM fallback, incremental bar ingestion, cached Sharia universe, conservative automation caps, offline Fear/Greed, and CI cancellation.
 Decisions: Generic OpenAI keys never activate Quant; market data requires `MARKET_DATA_MODE`; local quiz/HOLD content is the honest default; no Redis, queue, vector DB, worker, PSP, or live broker is required.

@@ -225,6 +225,7 @@ Two implementations, selected by a registry on `market` + key presence, defaulti
 - **Risk management (deterministic, in the envelope §2.5).** Position cap (% NAV/symbol), sector + market exposure caps, gross-exposure cap, per-trade stop (max loss %), a **portfolio drawdown breaker** (halt new BUYs beyond −X% peak-to-trough), and a **kill-switch** (§7).
 - **Reproducibility.** Every `Decision` persists `pmModelId`, `temperature (0)`, `seed`, `gitSha`, `asOf`, and the full input signal set → replay reproduces the deterministic envelope exactly. Backtests use a deterministic **policy-surrogate** for the PM (QDR-4) and spot-check that the live LLM agrees; `BacktestRun` records `seed` + `gitSha`.
 - **Mock-first invariant.** The committee, broker, and spine run end-to-end with zero keys (mock model, mock bars, `InternalSimBroker`). Inherited from the parent contract; holds through Q7.
+- **Monte Carlo gate (deterministic lane).** The intraday strategy lane adds Monte Carlo validation as a promotion gate co-equal with Deflated Sharpe and extends the implausible flag to any claimed daily return ≥3σ of validated history — see QDR-6.
 
 ---
 
@@ -277,6 +278,18 @@ Options: in-process scheduler (`setInterval` dies with the stateless request lif
 Rationale: a daily batch over a bounded universe plus on-demand single-symbol runs needs neither a queue nor a second runtime; the parent already runs Render cron against a signed route, so we extend it. Order submission must be **idempotent and atomic** — the batch wraps each symbol's decide-and-submit in a `prisma.$transaction` and relies on `Order.@@unique([decisionId])`, explicitly avoiding the non-atomic per-row race present in the Mudarabah cron.
 Consequences: no retry infrastructure — a missed batch is caught by the next day's idempotent pass; long universes must fit inside the route's execution budget (chunk if needed, still no queue); per-instance in-memory limiters are advisory, DB idempotency is authoritative.
 Revisit when: the universe grows past what one request can process within the platform timeout, or intraday cadence is required — then introduce one worker + a lightweight queue (couples with parent DR-8's trigger).
+
+### QDR-6: Deterministic intraday strategy lane (gapper momentum) with Monte Carlo validation as a first-class gate
+Decision: add an **LLM-free strategy lane** to `src/quant/` — versioned, deterministic `StrategySetup` rules (screen/entry/exit, PIT-only) that emit `AnalystSignal`-compatible output into the **unchanged** downstream envelope + Sharia gate — starting with a small-cap **gapper momentum** setup, **NASDAQ-only first**, **long-only cash** (no short, no margin — Sharia). It runs on a new 1-minute intraday spine: `IntradayBar` (1-min bars incl. premarket) + `SymbolSnapshot` (mcap, float?, premarket %, cumulative volume), PIT-safe through the `pointInTime.ts` patterns (§2.2). Screener parameters are a **versioned config, never hardcoded**; v1 defaults: `mcapMin=10e6`, `mcapMax=400e6`, `premarketMovePct>=5`, `dayMovePct>=5`, `minCumVolume=10e6` shares. Data comes in three tiers: **bundled fixtures of captured real market data** (real downloaded bars snapshotted into the repo for keyless/CI determinism — **synthetic/generated bars are prohibited** in this lane's data and validation numbers) → **Alpaca free-key historical backfill** (resumable, 90-day initial then incremental) → **Yahoo keyless short-history** (always labeled as short-history). The intraday snapshot path **bypasses the 12h universe cache**; the 24h Sharia verdict cache stays. **Monte Carlo validation is a promotion gate co-equal with Deflated Sharpe** (§6).
+Options: extend the LLM committee to intraday cadence (impossible under the 5-call FREE_MODE budget §2.6, non-reproducible per-minute, and QDR-5 forbids the worker it would need) / a standalone gapper script outside `src/quant/` (no PIT guarantee, bypasses the envelope and Sharia gate, unauditable) / a deterministic `StrategySetup` lane inside the module, reusing `AnalystSignal` + envelope, with Monte Carlo promotion gates (reproducible, Sharia-gated, zero LLM calls, extensible to a setup catalog).
+Rationale: intraday cadence rules out LLM calls entirely, and deterministic rules are the only replayable, budget-free path; emitting `AnalystSignal`-compatible output means the Sharia veto and risk clamps are byte-identical live vs backtest with no new gate code (QDR-1, QDR-4). Gapper-style strategies produce few, fat-tailed trades where a single realized equity curve overfits notoriously — bootstrap and permutation tests measure the *distribution* of outcomes, which is the only honest basis for promotion or user-facing claims.
+Consequences:
+- **MC gate** (`monteCarlo.ts`): trade-outcome bootstrap (equity-curve distribution, maxDD percentiles, risk-of-ruin), an entry-jitter permutation test, and fractional-Kelly sizing **clamped by the envelope**.
+- **Promotion checklist (all required):** walk-forward + ≥20–30% OOS holdout + ≥100–200 trades + Deflated Sharpe + profit plateau (§6) **and** MC maxDD p95 within the envelope's drawdown breaker.
+- **Honest-expectations policy:** the deliverable is the **measured daily-return distribution**, incl. `P(day ≥ +5%)` and `P(day ≤ −5%)`; no promised returns anywhere in copy; the §6 implausible flag **extends to any claimed daily return ≥3σ of validated history**.
+- **Automation:** AUTO_PAPER only (ULTRA, §7), via **premarket + intraday signed-cron passes** — QDR-5's cron pattern over a bounded screener universe, still no worker and no queue. On pass error, a surrogate-trade fallback is acceptable for AUTO_PAPER but **MUST revert to fail-safe HOLD as a precondition of any future AUTO_REAL enablement** (QDR-2 gate).
+- §1's intraday non-goal is **narrowed, not removed**: no intraday LLM committee and no HFT; deterministic minute-bar setups are in scope via this lane only. New additive models `IntradayBar`/`SymbolSnapshot` follow §4's rules and are tagged to G1 (§9b).
+Revisit when: TASI intraday data becomes viable (extend the lane, same rules), a proposed setup requires shorting (out absent a Sharia-board ruling), or the MC and Deflated-Sharpe gates persistently disagree on promotions — then re-weight the gate composition.
 
 ---
 
@@ -363,6 +376,20 @@ Goal: the bilingual committee-reasoning surface ships and the eval gate guards i
 | Arabic committee copy + disclaimers, key-identical JSON | i18n-fintech-expert | `messages/en.json` / `messages/ar.json` keys match (script); MSA copy, no banned transliterated jargon |
 | Committee eval golden set (schema-valid signals, veto honored, budget capped) | test-engineer | `npx vitest run quant-eval` green asserting all three properties |
 | Backtest reproducibility eval (seed + gitSha replay = identical metrics) | test-engineer | test: replaying a `BacktestRun` yields an identical `deflatedSharpe` |
+
+---
+
+## 9b. Strategy-lab roadmap G1–G5
+
+Binding roadmap for the QDR-6 lane. Same rules as §9: exactly one owner per item, checkable exits, and **zero-key mode green at every milestone** — the keyless path is the bundled-fixtures tier, which is **captured real market data** (real downloaded bars snapshotted into the repo), never synthetic/generated bars; the app-wide mock-first invariant (§6) is unchanged outside this lane. The setup ledger is `docs/STRATEGY_LAB.md` (lifecycle rows: IDEA → CODIFIED → VALIDATED → PROMOTED). New additive models land in the G1 migration per §4's rules: `IntradayBar` (`symbol`, `market`, `ts`, OHLCV `Decimal`, `session`, `@@unique([symbol, market, ts])`) and `SymbolSnapshot` (`symbol`, `market`, `asOf`, `mcap`, `float?`, `premarketMovePct`, `cumVolume`, `@@unique([symbol, market, asOf])`).
+
+| Milestone | Work item | Owner | Exit criterion |
+|---|---|---|---|
+| G1 | Intraday data spine: `IntradayBar` + `SymbolSnapshot` models/migration + three-tier ingest (bundled captured-real-data fixtures → resumable Alpaca backfill, 90-day-then-incremental → labeled Yahoo short-history), snapshot path bypassing the 12h universe cache | backend-expert | keyless captured-real-data fixtures load into both models; a look-ahead injection test on minute bars **fails the run** (`npx vitest run quant-intraday`) |
+| G2 | `StrategySetup` framework (versioned screen/entry/exit config, PIT-only, `AnalystSignal`-compatible output) + setup catalog seeded with gapper-ORB | quant-strategist | gapper-ORB setup unit-tested green; `docs/STRATEGY_LAB.md` has a CODIFIED row for it |
+| G3 | Intraday backtest loop + `monteCarlo.ts` (bootstrap, entry-jitter permutation, Kelly clamp) + strategy report card + `npm run backtest` CLI | quant-strategist | seeded MC determinism test: same seed ⇒ identical distribution output |
+| G4 | AUTO_PAPER wiring (premarket + intraday signed-cron passes, QDR-5 pattern) + `POST /api/quant/strategies/gapper` | backend-expert | test: a −3% daily drawdown breaker flips `QuantControl.halted` |
+| G5 | `/quant` strategy tab: report card + measured daily-return distribution (incl. `P(day≥+5%)` / `P(day≤−5%)`), bilingual/RTL | frontend-expert | tab renders all four states (loading/empty/error/populated); every figure carries a simulated/paper label |
 
 ---
 
