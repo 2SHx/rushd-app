@@ -42,7 +42,7 @@ interface RawMinuteBar {
 }
 
 /** US/Eastern session tag for a UTC timestamp, DST-safe via Intl (no manual offset math). */
-export function sessionForTs(ts: Date): IntradaySession {
+export function nasdaqMinuteOfDay(ts: Date): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
     hour12: false,
@@ -52,7 +52,12 @@ export function sessionForTs(ts: Date): IntradaySession {
   let hh = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
   const mm = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   if (hh === 24) hh = 0;
-  const minutesOfDay = hh * 60 + mm;
+  return hh * 60 + mm;
+}
+
+/** US/Eastern session tag for a UTC timestamp, DST-safe via Intl (no manual offset math). */
+export function sessionForTs(ts: Date): IntradaySession {
+  const minutesOfDay = nasdaqMinuteOfDay(ts);
   if (minutesOfDay < 9 * 60 + 30) return 'PRE';
   if (minutesOfDay < 16 * 60) return 'REGULAR';
   return 'POST';
@@ -147,7 +152,7 @@ async function ingestFixtureBars(symbol: string, market: Market): Promise<Intrad
     const rows = fx.bars.map((b) => ({
       symbol,
       market,
-      ts: new Date(b.ts),
+      ts: new Date(new Date(b.ts).getTime() + 60_000), // provider timestamps are minute starts
       open: new D(b.open),
       high: new D(b.high),
       low: new D(b.low),
@@ -219,7 +224,8 @@ export async function ingestIntradayBars(
   }
 
   const rows = rawBars.map((b) => {
-    const ts = new Date(b.ts);
+    const barStart = new Date(b.ts);
+    const ts = new Date(barStart.getTime() + 60_000); // provider timestamps are minute starts; PIT key is bar close
     return {
       symbol,
       market,
@@ -229,7 +235,7 @@ export async function ingestIntradayBars(
       low: new D(b.low),
       close: new D(b.close),
       volume: new D(b.volume ?? 0),
-      session: sessionForTs(ts),
+      session: sessionForTs(barStart),
       source,
     };
   });

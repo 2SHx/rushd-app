@@ -198,7 +198,7 @@ async function main() {
     }
 
     const bars = rawBars.map((b) => ({
-      ts: new Date(b.t).toISOString(),
+      ts: new Date(b.t).toISOString(), // raw provider minute-start; ingestion normalizes to bar-close PIT time
       open: b.o,
       high: b.h,
       low: b.l,

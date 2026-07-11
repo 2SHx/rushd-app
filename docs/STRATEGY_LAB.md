@@ -14,7 +14,7 @@ All setups long-only cash (Sharia: no short, no margin). Every claim labeled sim
 
 | id | tier | hypothesis (one line) | params ver | status | trades | expectancy/trade (net) | dSharpe | maxDD p95 | P(day≥5%) | next action |
 |---|---|---|---|---|---|---|---|---|---|---|
-| gapper-orb | T1 | Micro-cap gappers (mcap 10–400M, PM>5%, day>5%, vol>10M) continue after a 5-min opening-range breakout | v1 | CANDIDATE | – | – | – | – | – | codify after G1 spine |
+| gapper-orb | T1 | Micro-cap gappers (mcap 10–400M, PM>5%, day>5%, vol>10M) continue after a 5-min opening-range breakout | v1 | CODIFIED | – | – | – | – | – | run G3 backtest + MC; no validation claim yet |
 | htf-trend-filter | T1 | Long entries only above the 1H 100-EMA improve every other setup's expectancy (composable filter, not standalone) | v1 | CANDIDATE | – | – | – | – | – | codify; A/B via harness |
 | vwap-reclaim | T1 | Long wick + volume + no-follow-through at VWAP marks absorption; reclaim continues up (incl. premarket-VWAP variant) | v1 | CANDIDATE | – | – | – | – | – | codify after G1 |
 | rsi-exhaustion-long | T1 | RSI(2–14)≤10 + first reversal candle mean-reverts up (long side only) | v1 | CANDIDATE | – | – | – | – | – | codify after G1 |

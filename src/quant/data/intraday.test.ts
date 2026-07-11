@@ -54,7 +54,7 @@ describe('intraday data tiers', () => {
     const result = await ingestIntradayBars('MSFT', 'NASDAQ');
 
     expect(result).toMatchObject({ requested: 2, created: 2, source: 'YAHOO', tier: 'fixtures' });
-    expect(result.latestTs).toEqual(new Date('2026-07-06T13:31:00.000Z'));
+    expect(result.latestTs).toEqual(new Date('2026-07-06T13:32:00.000Z'));
     expect(result.fixtureSnapshots[0]).toMatchObject({
       barsSource: 'YAHOO', priorClose: 100, mcap: 1_000_000, mcapSource: 'FUNDAMENTALS',
     });
@@ -92,5 +92,20 @@ describe('intraday data tiers', () => {
     await ingestIntradayBars('MSFT', 'NASDAQ', { now });
     url = new URL(fetchMock.mock.calls[0][0] as URL);
     expect(url.searchParams.get('start')).toBe('2026-07-11T09:30:00.000Z');
+  });
+
+  it('normalizes provider minute-start timestamps to completed-bar PIT timestamps', async () => {
+    process.env.MARKET_DATA_MODE = 'live';
+    process.env.ALPACA_API_KEY = 'key';
+    h.createMany.mockResolvedValue({ count: 1 });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      bars: { MSFT: [{ t: '2026-07-06T13:30:00.000Z', o: 1, h: 2, l: 1, c: 2, v: 10 }] },
+    }), { status: 200 })));
+
+    await ingestIntradayBars('MSFT', 'NASDAQ', { now: new Date('2026-07-06T14:00:00Z') });
+
+    const row = h.createMany.mock.calls[0][0].data[0];
+    expect(row.ts).toEqual(new Date('2026-07-06T13:31:00.000Z'));
+    expect(row.session).toBe('REGULAR');
   });
 });
