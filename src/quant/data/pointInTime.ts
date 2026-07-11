@@ -11,7 +11,7 @@
 // `asOf` is ever visible, enforced in the query AND asserted at runtime. Because every
 // filter lives here, analyst code is byte-identical between live and backtest.
 import { prisma } from '@/lib/prisma';
-import type { Market, BarInterval, MarketBar, Fundamentals, NewsItem } from '@prisma/client';
+import type { Market, BarInterval, MarketBar, Fundamentals, NewsItem, IntradayBar, SymbolSnapshot } from '@prisma/client';
 
 /** Thrown when a record dated after `asOf` reaches a caller — a look-ahead bug. */
 export class LookaheadError extends Error {
@@ -75,6 +75,38 @@ export class PointInTimeStore {
       orderBy: { publishedAt: 'desc' },
     });
     return assertNoLookahead(rows, asOf, 'publishedAt') as NewsItem[];
+  }
+}
+
+/**
+ * QDR-6 (G1): no-look-ahead accessor for the 1-minute intraday spine (`IntradayBar`) and its
+ * derived rollup (`SymbolSnapshot`). Same contract as `PointInTimeStore`: nothing dated after
+ * `asOf` is ever returned, enforced in the query AND asserted at runtime. This path bypasses
+ * the 12h NASDAQ universe cache in `services/marketData.ts` on purpose — intraday screening
+ * needs fresh-to-the-minute data, not a slow-changing symbol list.
+ */
+export class IntradayPointInTimeStore {
+  async bars(symbol: string, market: Market, asOf: Date, lookbackMinutes?: number): Promise<IntradayBar[]> {
+    const from = lookbackMinutes ? new Date(asOf.getTime() - lookbackMinutes * 60_000) : undefined;
+    const rows = await prisma.intradayBar.findMany({
+      where: {
+        symbol,
+        market,
+        ts: { lte: asOf, ...(from ? { gt: from } : {}) },
+      },
+      orderBy: { ts: 'asc' },
+    });
+    return assertNoLookahead(rows, asOf, 'ts') as IntradayBar[];
+  }
+
+  /** Latest snapshot at-or-before `asOf` (mcap/float/premarket move/cumulative volume). */
+  async snapshot(symbol: string, market: Market, asOf: Date): Promise<SymbolSnapshot | null> {
+    const s = await prisma.symbolSnapshot.findFirst({
+      where: { symbol, market, asOf: { lte: asOf } },
+      orderBy: { asOf: 'desc' },
+    });
+    if (s) assertNoLookahead([s], asOf, 'asOf');
+    return s;
   }
 }
 

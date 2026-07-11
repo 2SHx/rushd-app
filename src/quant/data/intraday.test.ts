@@ -1,0 +1,96 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const h = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+  createMany: vi.fn(),
+  loadFixturesForSymbol: vi.fn(),
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: { intradayBar: { findFirst: h.findFirst, createMany: h.createMany } },
+}));
+vi.mock('./fixtureLoader', () => ({ loadFixturesForSymbol: h.loadFixturesForSymbol }));
+
+import { ingestIntradayBars, selectIntradayTier, sessionForTs } from './intraday';
+
+describe('intraday data tiers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    delete process.env.MARKET_DATA_MODE;
+    delete process.env.ALPACA_API_KEY;
+    h.findFirst.mockResolvedValue(null);
+    h.createMany.mockResolvedValue({ count: 0 });
+    h.loadFixturesForSymbol.mockReturnValue([]);
+  });
+
+  it('requires explicit live mode for Alpaca', () => {
+    process.env.ALPACA_API_KEY = 'configured';
+    expect(selectIntradayTier()).toBe('fixtures');
+    process.env.MARKET_DATA_MODE = 'keyless';
+    expect(selectIntradayTier()).toBe('yahoo');
+    process.env.MARKET_DATA_MODE = 'live';
+    expect(selectIntradayTier()).toBe('alpaca');
+  });
+
+  it('classifies Eastern sessions across daylight-saving time', () => {
+    expect(sessionForTs(new Date('2026-07-06T13:29:00Z'))).toBe('PRE');
+    expect(sessionForTs(new Date('2026-07-06T13:30:00Z'))).toBe('REGULAR');
+    expect(sessionForTs(new Date('2026-07-06T20:00:00Z'))).toBe('POST');
+  });
+
+  it('preserves real fixture provenance and reports the latest observed timestamp', async () => {
+    h.loadFixturesForSymbol.mockReturnValue([{
+      source: 'YAHOO',
+      verification: { priorClose: 100 },
+      fundamentals: { marketCap: 1_000_000 },
+      bars: [
+        { ts: '2026-07-06T13:30:00.000Z', open: 1, high: 2, low: 1, close: 2, volume: 10, session: 'REGULAR' },
+        { ts: '2026-07-06T13:31:00.000Z', open: 2, high: 3, low: 2, close: 3, volume: 20, session: 'REGULAR' },
+      ],
+    }]);
+    h.createMany.mockResolvedValue({ count: 2 });
+
+    const result = await ingestIntradayBars('MSFT', 'NASDAQ');
+
+    expect(result).toMatchObject({ requested: 2, created: 2, source: 'YAHOO', tier: 'fixtures' });
+    expect(result.latestTs).toEqual(new Date('2026-07-06T13:31:00.000Z'));
+    expect(result.fixtureSnapshots[0]).toMatchObject({
+      barsSource: 'YAHOO', priorClose: 100, mcap: 1_000_000, mcapSource: 'FUNDAMENTALS',
+    });
+    expect(h.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+  });
+
+  it('returns no snapshot timestamp when bundled fixtures are absent', async () => {
+    await expect(ingestIntradayBars('MSFT', 'NASDAQ')).resolves.toMatchObject({
+      requested: 0, created: 0, tier: 'fixtures', latestTs: null, fixtureSnapshots: [],
+    });
+    expect(h.createMany).not.toHaveBeenCalled();
+  });
+
+  it('performs no I/O for unsupported TASI ingestion', async () => {
+    const result = await ingestIntradayBars('2222', 'TASI');
+    expect(result.tier).toBe('unsupported-market');
+    expect(result.latestTs).toBeNull();
+    expect(h.loadFixturesForSymbol).not.toHaveBeenCalled();
+  });
+
+  it('uses a 90-day initial Alpaca window and a 60-minute resumable overlap', async () => {
+    process.env.MARKET_DATA_MODE = 'live';
+    process.env.ALPACA_API_KEY = 'key';
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify({ bars: { MSFT: [] } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const now = new Date('2026-07-11T12:00:00.000Z');
+
+    await ingestIntradayBars('MSFT', 'NASDAQ', { now });
+    let url = new URL(fetchMock.mock.calls[0][0] as URL);
+    expect(url.searchParams.get('start')).toBe('2026-04-12T12:00:00.000Z');
+
+    h.findFirst.mockResolvedValue({ ts: new Date('2026-07-11T10:30:00.000Z') });
+    fetchMock.mockClear();
+    await ingestIntradayBars('MSFT', 'NASDAQ', { now });
+    url = new URL(fetchMock.mock.calls[0][0] as URL);
+    expect(url.searchParams.get('start')).toBe('2026-07-11T09:30:00.000Z');
+  });
+});

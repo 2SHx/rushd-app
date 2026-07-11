@@ -5,6 +5,8 @@ vi.mock('@/lib/prisma', () => ({
     marketBar: { findMany: vi.fn() },
     fundamentals: { findFirst: vi.fn() },
     newsItem: { findMany: vi.fn() },
+    intradayBar: { findMany: vi.fn() },
+    symbolSnapshot: { findFirst: vi.fn() },
   },
 }));
 
@@ -14,6 +16,7 @@ import {
   loadPointInTimeContext,
   assertNoLookahead,
   LookaheadError,
+  IntradayPointInTimeStore,
 } from './pointInTime';
 
 const asOf = new Date('2026-06-30T00:00:00.000Z');
@@ -21,6 +24,33 @@ const daysAgo = (n: number) => new Date(asOf.getTime() - n * 86_400_000);
 const bar = (ts: Date) => ({
   id: ts.toISOString(), symbol: 'AAPL', market: 'NASDAQ', interval: 'DAY',
   ts, open: 1, high: 1, low: 1, close: 1, volume: 1, source: 'ALPACA', createdAt: new Date(),
+});
+
+describe('IntradayPointInTimeStore', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('queries minute bars only at-or-before asOf', async () => {
+    (prisma.intradayBar.findMany as any).mockResolvedValue([{ ts: asOf }]);
+    await new IntradayPointInTimeStore().bars('AAPL', 'NASDAQ' as any, asOf, 60);
+    const query = (prisma.intradayBar.findMany as any).mock.calls[0][0];
+    expect(query.where.ts.lte).toBe(asOf);
+    expect(query.where.ts.gt).toEqual(new Date(asOf.getTime() - 60 * 60_000));
+    expect(query.orderBy).toEqual({ ts: 'asc' });
+  });
+
+  it('LOOK-AHEAD INJECTION → rejects a leaked future minute bar', async () => {
+    (prisma.intradayBar.findMany as any).mockResolvedValue([{ ts: new Date(asOf.getTime() + 60_000) }]);
+    await expect(new IntradayPointInTimeStore().bars('AAPL', 'NASDAQ' as any, asOf)).rejects.toBeInstanceOf(LookaheadError);
+  });
+
+  it('queries the latest snapshot at-or-before asOf', async () => {
+    (prisma.symbolSnapshot.findFirst as any).mockResolvedValue({ asOf });
+    await new IntradayPointInTimeStore().snapshot('AAPL', 'NASDAQ' as any, asOf);
+    expect((prisma.symbolSnapshot.findFirst as any).mock.calls[0][0]).toMatchObject({
+      where: { symbol: 'AAPL', market: 'NASDAQ', asOf: { lte: asOf } },
+      orderBy: { asOf: 'desc' },
+    });
+  });
 });
 const newsRow = (ts: Date) => ({
   id: ts.toISOString(), symbol: 'AAPL', market: 'NASDAQ', publishedAt: ts,

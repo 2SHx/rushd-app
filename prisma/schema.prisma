@@ -173,6 +173,53 @@ model MarketBar {
   @@index([symbol, market, interval, ts])
 }
 
+// ── Rushd Quant: intraday data spine (QDR-6 / G1). Additive; NASDAQ-only first.
+// IntradayBar mirrors MarketBar's PIT contract at 1-minute granularity (incl. premarket/
+// postmarket, tagged via `session`). SymbolSnapshot is a derived, point-in-time-stamped
+// rollup (mcap/float/premarket move/cumulative volume) consumed by the gapper-momentum
+// strategy lane (G2) — never written by hand, always computed from IntradayBar + Fundamentals.
+// Same no-look-ahead discipline as MarketBar: reads go through pointInTime.ts exclusively.
+enum IntradaySession {
+  PRE
+  REGULAR
+  POST
+}
+
+model IntradayBar {
+  id        String          @id @default(uuid())
+  symbol    String
+  market    Market
+  ts        DateTime // bar close time (UTC, 1-min granularity) — the point-in-time key
+  open      Decimal         @db.Decimal(18, 6)
+  high      Decimal         @db.Decimal(18, 6)
+  low       Decimal         @db.Decimal(18, 6)
+  close     Decimal         @db.Decimal(18, 6)
+  volume    Decimal         @db.Decimal(24, 4)
+  session   IntradaySession
+  source    DataSource
+  createdAt DateTime        @default(now())
+
+  @@unique([symbol, market, ts])
+  @@index([symbol, market, ts])
+}
+
+model SymbolSnapshot {
+  id               String     @id @default(uuid())
+  symbol           String
+  market           Market
+  asOf             DateTime // the point-in-time key
+  mcap             Decimal?   @db.Decimal(24, 4)
+  float            Decimal?   @db.Decimal(24, 4)
+  premarketMovePct Decimal?   @db.Decimal(9, 4)
+  cumVolume        Decimal    @db.Decimal(24, 4)
+  source           DataSource // provenance of premarketMovePct/cumVolume bars
+  mcapSource       DataSource? // separate provenance for mcap; null when mcap is unavailable
+  createdAt        DateTime   @default(now())
+
+  @@unique([symbol, market, asOf])
+  @@index([symbol, market, asOf])
+}
+
 model Fundamentals {
   id         String     @id @default(uuid())
   symbol     String

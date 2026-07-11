@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-11 — Quant Strategy Lab G1: intraday real-data spine ✅
+Shipped: Additive IntradayBar/SymbolSnapshot migrations; explicit fixtures→Yahoo→Alpaca-IEX tiers; resumable 90-day/60-minute-overlap backfill; signed bounded cron; Eastern-session PIT snapshots; 10 captured-real symbol-days (3,598 bars, 667 KB; gapper+controls) with integrity tests.
+Decisions: Strategy-lane fixtures remain real provider downloads only; captured prior closes + SEC-XBRL shares produce PIT market caps; bar/mcap provenance stays separate; keyless mode cannot activate Alpaca from ambient keys; empty passes never write snapshots.
+Open: G2 StrategySetup + gapper-ORB is next, then G3 backtest/Monte Carlo and the mandatory user report-card pause; IEX coverage remains partial and must be reflected in validation claims.
+
 ## 2026-07-11 — Quant Strategy Lab G0: contract, ledger, research RAG, continuation brief ✅
 Shipped: QDR-6 + §9b roadmap in QUANT_DESIGN.md (deterministic intraday gapper lane, MC promotion gate, honest-expectations policy); docs/STRATEGY_LAB.md ledger (11 setups tiered + research anchors); 8 research docs seeded into ResearchDoc RAG; docs/QUANT_LAB_PLAN.md — the cross-AI continuation brief with the full G-1→G6 status DAG.
 Decisions: USER DIRECTIVE — no mock/synthetic data in the strategy lane; fixtures = captured REAL bars; tiers = real fixtures → Alpaca free backfill → Yahoo keyless. Strategy lane is LLM-free ($0 recurring). Long-only cash, NASDAQ-first, AUTO_PAPER only. Alpaca paper keys verified live.
