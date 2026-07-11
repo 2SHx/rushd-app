@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-12 — Quant Strategy Lab G3: intraday harness + Monte Carlo + backtest CLI ✅
+Shipped: intradayEngine.ts (minute-bar, envelope-clamped, halt-gap no-fill, participation partial fills, look-ahead guard), seeded monteCarlo.ts (bootstrap/jitter-permutation/Kelly-through-envelope), daily-return distribution incl. P(day≥+5%), report card with dataFeed labels + RED implausible, `npm run backtest` CLI; 353 tests green; 379k real IEX minute bars backfilled (20 symbols × 90d).
+Decisions: zero LLM in the whole path; fixture run honestly returns INSUFFICIENT_TRADES (IEX cumVolume ~1.5M fails the 10M screen — feed undercount is real and labeled); results/ gitignored (runs reproducible via seed+gitSha); multi-symbol = pooled independent sims.
+Open: G3b historical snapshot backfill in flight (SEC-XBRL PIT mcaps + checkpoints); then the 90-day real-data validation run → ledger + QA gate → report-card PAUSE. IEX volume undercount may need a documented screener param decision (consolidated-volume source or labeled v1-iex threshold) — quant-strategist + architect, never silent.
+
 ## 2026-07-11 — Quant Strategy Lab G2: StrategySetup + gapper-ORB codified ✅
 Shipped: Minimal PIT-only StrategySetup contract/catalog and deterministic gapper-ORB v1 screen/entry/exit signal using captured real fixtures; provider minute-start timestamps normalize to bar-close before PIT persistence.
 Decisions: Setup emits PATTERN_ANALOG-compatible signals but never sizes/executes; unchanged Sharia veto + risk envelope remain downstream; v1 stays long-only, zero-LLM, low-conviction and explicitly CODIFIED—not validated.
