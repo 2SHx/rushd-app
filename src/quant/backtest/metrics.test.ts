@@ -88,6 +88,42 @@ describe('computeMetrics', () => {
     });
   });
 
+  it('calendar annualization of a sparse trade sequence == daily equity curve (√252 defect fixed)', () => {
+    // Regression pin for the measurement fix: a POOLED TRADE-SEQUENCED curve (one point per trade
+    // exit) is NOT a per-trading-day series. Annualizing it with a fixed √252 treats sparse trades
+    // as consecutive daily returns and fabricates Sharpe — this false-tripped the Sharpe>3
+    // implausible guard on bollinger-mr-long-v2 (3.06). The statistically defensible treatment is
+    // to annualize by the curve's OWN observation frequency (trades/year); that must reproduce the
+    // Sharpe of the equivalent daily mark-to-market curve.
+    const totalDays = 1000; // ~2.74 calendar years at 1 point/day
+    const tradeEvery = 20; // ⇒ 50 trades over the span (sparse)
+    // Deterministic small mixed-sign per-trade returns (zero-ish mean → μ² negligible → tight match).
+    const seededReturn = (k: number): number => 0.012 * Math.sin(k * 1.7) + 0.002;
+
+    // Daily mark-to-market curve: equity only moves on trade days, flat otherwise.
+    const daily: EquityPoint[] = [{ ts: day(0), equity: 100 }];
+    // Trade-sequenced curve: one point per trade exit, SAME start/end timestamps as `daily`.
+    const trade: EquityPoint[] = [{ ts: day(0), equity: 100 }];
+    let equity = 100;
+    let k = 0;
+    for (let i = 1; i <= totalDays; i++) {
+      if (i % tradeEvery === 0) {
+        equity *= 1 + seededReturn(k++);
+        trade.push({ ts: day(i), equity });
+      }
+      daily.push({ ts: day(i), equity });
+    }
+
+    const dailyM = computeMetrics(daily, { trades: k, turnover: 1, annualization: 'calendar' });
+    const tradeM = computeMetrics(trade, { trades: k, turnover: 1, annualization: 'calendar' });
+    // Time-based annualization makes the two representations agree (μ² approximation → ~2 dp).
+    expect(tradeM.sharpe).toBeCloseTo(dailyM.sharpe, 1);
+    // And the OLD defective treatment (fixed √252 on the sparse trade sequence) inflates it far
+    // above the correct value — the exact failure mode we removed.
+    const tradeDefective = computeMetrics(trade, { trades: k, turnover: 1 }); // fixed √252
+    expect(tradeDefective.sharpe).toBeGreaterThan(tradeM.sharpe * 3);
+  });
+
   it('determinism: same input ⇒ identical output', () => {
     const equities = [100, 105, 102, 110, 108, 115];
     const opts = { trades: 6, turnover: 2, trials: 5 };

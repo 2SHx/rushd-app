@@ -124,11 +124,36 @@ function deflatedSharpe(periodReturns: number[], srPeriod: number, trials: numbe
 
 export function computeMetrics(
   curve: EquityPoint[],
-  opts: { trades: number; turnover: number; periodsPerYear?: number; trials?: number }
+  opts: {
+    trades: number;
+    turnover: number;
+    periodsPerYear?: number;
+    trials?: number;
+    /**
+     * How to annualize the per-period Sharpe.
+     *  - 'fixed' (default): multiply by √periodsPerYear (default 252). CORRECT ONLY when `curve`
+     *    is a genuine per-trading-day mark-to-market series (≈252 points/year) — e.g. the intraday
+     *    and daily ENGINE equity curves. Backward-compatible default.
+     *  - 'calendar': derive the true observation frequency from the curve's OWN calendar span,
+     *    periodsPerYear = observations / elapsedYears, then annualize by its √. Use this for a
+     *    POOLED TRADE-SEQUENCED curve (one point per trade exit): such a curve has ~trades/year
+     *    points, NOT 252, so a fixed √252 fabricates Sharpe. This defect annualized a sparse
+     *    ~28-trades/year sequence as if consecutive daily returns and false-tripped the Sharpe>3
+     *    implausible guard on bollinger-mr-long-v2 at 3.06 (measurement artifact, not real edge).
+     *
+     *    Statistical justification: for a near-zero-mean return series the trade-sequence Sharpe
+     *    annualized by √(N/T) equals the √252-annualized Sharpe of the equivalent daily
+     *    mark-to-market curve. Sketch: with N trades of returns rᵢ over D trading days (T=D/252
+     *    years) and zero on non-trade days, daily SR·√252 = (Σrᵢ)·√252/√(D·Σrᵢ²); trade SR·√(N/T)
+     *    = (Σrᵢ)/√(N·Σrᵢ²)·√(N·252/D) = (Σrᵢ)·√252/√(D·Σrᵢ²) — identical. The zero-return days
+     *    that dilute the daily mean cancel exactly against the D they add to the daily variance.
+     *    Pinned in metrics.test.ts ("calendar annualization of a sparse trade sequence …").
+     */
+    annualization?: 'fixed' | 'calendar';
+  }
 ): BacktestMetrics {
   if (curve.length < 2) return { ...ZERO, trades: opts.trades ?? 0, turnover: opts.turnover ?? 0 };
 
-  const periodsPerYear = opts.periodsPerYear ?? 252;
   const trials = opts.trials ?? 1;
 
   const returns: number[] = [];
@@ -138,16 +163,24 @@ export function computeMetrics(
     returns.push(prev !== 0 ? (cur - prev) / prev : 0);
   }
 
+  const first = curve[0].equity;
+  const last = curve[curve.length - 1].equity;
+  const elapsedYears = (curve[curve.length - 1].ts.getTime() - curve[0].ts.getTime()) / MS_PER_YEAR;
+  const cagr = first > 0 && elapsedYears > 0 ? Math.pow(last / first, 1 / elapsedYears) - 1 : 0;
+
+  // Time-based annualization when requested; else the fixed frequency (backward-compatible).
+  const periodsPerYear =
+    opts.annualization === 'calendar'
+      ? elapsedYears > 0
+        ? returns.length / elapsedYears
+        : 0
+      : opts.periodsPerYear ?? 252;
+
   const m = mean(returns);
   const variance = moment(returns, m, 2);
   const stdDev = Math.sqrt(variance);
   const srPeriod = stdDev !== 0 ? m / stdDev : 0;
   const sharpe = srPeriod * Math.sqrt(periodsPerYear);
-
-  const first = curve[0].equity;
-  const last = curve[curve.length - 1].equity;
-  const elapsedYears = (curve[curve.length - 1].ts.getTime() - curve[0].ts.getTime()) / MS_PER_YEAR;
-  const cagr = first > 0 && elapsedYears > 0 ? Math.pow(last / first, 1 / elapsedYears) - 1 : 0;
 
   let peak = curve[0].equity;
   let maxDrawdown = 0;

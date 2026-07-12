@@ -459,6 +459,11 @@ async function main() {
   let lastPrice = 0;
   let symbols: string[] = [];
   let excludedMock = 0;
+  // Data/PIT integrity signal: every bar the engine consumed passed the real-source filter (MOCK
+  // excluded + asserted, loaders throw on any leak) AND the engine re-ran assertNoLookahead on it
+  // (simulateSetupDaily / simulateIntraday abort the whole run via LookaheadError on violation).
+  // Counting bars actually simulated is the observable proof both guards executed and passed.
+  let pitBarsProcessed = 0;
 
   try {
     if (cadence === 'daily') {
@@ -487,6 +492,7 @@ async function main() {
         excludedMock += dropped;
         if (bars.length) lastPrice = Number(bars.at(-1)!.close);
         const sim = simulateSetupDaily({ setup, params, symbol, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+        pitBarsProcessed += sim.barsProcessed;
         pooledTradeReturns.push(...sim.tradeReturns);
         pooledTradeRecords.push(...sim.tradeRecords);
         pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
@@ -542,6 +548,7 @@ async function main() {
             setup, params, symbol, market: 'NASDAQ', bars: chunk, dayContext, startingCash,
             limits: DEFAULT_INTRADAY_LIMITS,
           });
+          pitBarsProcessed += sim.barsProcessed;
           pooledTradeReturns.push(...sim.tradeReturns);
           pooledTradeRecords.push(...sim.tradeRecords);
           pooledDailyReturns.push(...(
@@ -572,10 +579,14 @@ async function main() {
     curve.push({ ts: tr.exitTs, equity: running });
   }
   const turnover = pooledTradeRecords.length; // count proxy; per-symbol notional pooled below is noisy
-  const full = computeMetrics(curve, { trades: sortedTrades.length, turnover });
+  // `curve` is a POOLED TRADE-SEQUENCED curve (one point per trade exit), NOT a per-trading-day
+  // series — so it must be annualized by its OWN calendar span (trades/year), never a fixed √252.
+  // Fixed √252 here treated ~28 sparse trades/year as consecutive daily returns and false-tripped
+  // the Sharpe>3 implausible guard (v2 at 3.06). See computeMetrics `annualization` doc.
+  const full = computeMetrics(curve, { trades: sortedTrades.length, turnover, annualization: 'calendar' });
   const oosStart = Math.floor(curve.length * (1 - oosFraction));
   const oosTrades = transitionCountInsideSlice(curve.length, oosStart);
-  const oos = computeMetrics(curve.slice(oosStart), { trades: oosTrades, turnover: oosTrades });
+  const oos = computeMetrics(curve.slice(oosStart), { trades: oosTrades, turnover: oosTrades, annualization: 'calendar' });
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
   const bootstrap = bootstrapTradeOutcomes(pooledTradeReturns, {
@@ -597,14 +608,26 @@ async function main() {
     resultsDir,
     backtestResultFilename(setupId, from, to, candidateEvidence?.sha256Digest),
   );
+
+  const runGitSha = gitSha();
+  // dataQualityPitOk — VERIFIED, not asserted-true-by-fiat: the run reached here only after the
+  // real-source filter kept MOCK bars out (loaders throw on any MOCK/non-Alpaca leak) and the
+  // engine re-ran the point-in-time look-ahead guard on every one of `pitBarsProcessed` bars
+  // (a violation raises LookaheadError → nonzero exit, never this line). Zero bars = nothing
+  // verified ⇒ false.
+  const dataQualityPitOk = pitBarsProcessed > 0;
+  // reproducible — this path is deterministic (PM surrogate, no LLM, seeded Monte Carlo) and the
+  // run records a concrete seed + gitSha, which is exactly what a byte-identical rerun needs.
+  const reproducible = Number.isSafeInteger(seed) && seed >= 0 && runGitSha !== 'unknown';
+
   const card = {
     ...assembleReportCard({
-      setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: gitSha(),
+      setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: runGitSha,
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
       shariaState: shariaStateForSetup(setupId, candidateArtifact?.shariaStatus),
-      ...(candidateArtifact ? { dataQualityPitOk: true, reproducible: true } : {}),
+      dataQualityPitOk, reproducible,
     }),
     ...(candidateEvidence ? {
       candidateArtifact: {
