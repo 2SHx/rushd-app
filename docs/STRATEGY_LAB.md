@@ -30,6 +30,8 @@ All setups long-only cash (Sharia: no short, no margin). Every claim labeled sim
 
 These result cards are binding finalizations under QDR-7. `n/a — not persisted` identifies an
 artifact gap; it never authorizes an inferred or fabricated value.
+Field mapping (QA 2026-07-12): "expectancy/trade (net)" in rows and cards = `permutation.observedMean`
+in the results/*.json artifact — verified present and matching in all four round-1 artifacts.
 
 ### gapper-orb v1-iex — REJECTED
 
