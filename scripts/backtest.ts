@@ -41,6 +41,7 @@ import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics'
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
 import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ShariaValidationState } from '../src/quant/backtest/reportCard';
+import { buildHistoricalComparisonEvidence } from '../src/quant/backtest/historicalComparison';
 
 const D = Prisma.Decimal;
 
@@ -606,6 +607,33 @@ async function main() {
   const oosTrades = transitionCountInsideSlice(curve.length, oosStart);
   const oos = computeMetrics(curve.slice(oosStart), { trades: oosTrades, turnover: oosTrades, annualization: 'calendar' });
 
+  // Persist a truthful, compact learning comparison when both real ETF benchmark histories exist.
+  // Legacy/missing data remains null; the UI must never synthesize a replacement curve.
+  let comparison = null;
+  try {
+    const { prisma } = await import('../src/lib/prisma');
+    const benchmarkRows = await prisma.marketBar.findMany({
+      where: {
+        symbol: { in: ['SPY', 'SPUS'] }, market: 'NASDAQ', interval: 'DAY',
+        source: { in: ['YAHOO', 'ALPACA'] },
+        ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+      },
+      select: { symbol: true, ts: true, close: true, source: true },
+      orderBy: { ts: 'asc' },
+    });
+    comparison = buildHistoricalComparisonEvidence({
+      strategyCurve: curve,
+      oosStart: curve[oosStart]?.ts ?? curve.at(-1)!.ts,
+      benchmarkBars: benchmarkRows.flatMap((row) => (
+        (row.symbol === 'SPY' || row.symbol === 'SPUS') && (row.source === 'YAHOO' || row.source === 'ALPACA')
+          ? [{ symbol: row.symbol, ts: row.ts, close: Number(row.close), source: row.source }]
+          : []
+      )),
+    });
+  } catch (err) {
+    console.warn(`\x1b[33mHistorical benchmark comparison unavailable: ${(err as Error).message}\x1b[0m`);
+  }
+
   const distribution = summarizeDailyReturns(pooledDailyReturns);
   const bootstrap = bootstrapTradeOutcomes(pooledTradeReturns, {
     resamples: 1000, seed, startEquity: Number(startingCash),
@@ -646,6 +674,7 @@ async function main() {
       shariaState: shariaStateForSetup(setupId, candidateArtifact?.shariaStatus),
       dataQualityPitOk, reproducible,
     }),
+    comparison,
     ...(candidateEvidence ? {
       candidateArtifact: {
         ...candidateEvidence,

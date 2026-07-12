@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
+import HistoricalComparisonChart from './HistoricalComparisonChart';
 
 interface StrategyLeagueClientProps {
   teams: StrategyLeagueTeam[];
@@ -216,6 +217,8 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
           </div>
         </div>
       </div>
+
+      <HistoricalComparisonChart comparison={selected.comparison} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <article className="min-w-0 rounded-2xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">

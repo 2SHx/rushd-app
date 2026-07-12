@@ -37,6 +37,40 @@ const rejectionReasonSchema = z.enum([
   'REPRODUCIBILITY_FAILURE',
 ]);
 
+const comparisonPointSchema = z.object({
+  ts: z.string().datetime(),
+  value: nonNegative,
+});
+const comparisonSchema = z.object({
+  basis: z.literal('NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS'),
+  strategyKind: z.literal('POOLED_TRADE_SEQUENCED_SIMULATED_EQUITY'),
+  benchmarkKind: z.literal('ETF_CLOSE_PRICE_PROXY'),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  oosStart: z.string().datetime(),
+  sources: z.object({
+    spy: z.array(z.enum(['YAHOO', 'ALPACA'])).min(1),
+    spus: z.array(z.enum(['YAHOO', 'ALPACA'])).min(1),
+  }),
+  series: z.object({
+    model: z.array(comparisonPointSchema).min(2),
+    spy: z.array(comparisonPointSchema).min(2),
+    spus: z.array(comparisonPointSchema).min(2),
+  }),
+}).superRefine((comparison, context) => {
+  const start = Date.parse(comparison.start);
+  const end = Date.parse(comparison.end);
+  const ordered = start < end && Object.values(comparison.series).every((series) => (
+    series[0].ts === comparison.start
+    && series.at(-1)?.ts === comparison.end
+    && Math.abs(series[0].value - 100) < 1e-9
+    && series.every((point, index) => index === 0 || Date.parse(point.ts) > Date.parse(series[index - 1].ts))
+  ));
+  if (!ordered) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'comparison series must share ordered normalized endpoints' });
+  }
+});
+
 const reportCardSchema = z.object({
   setup: z.string().min(1),
   symbols: z.array(z.string().min(1)).min(1),
@@ -89,6 +123,7 @@ const reportCardSchema = z.object({
   status: z.enum(['ACCEPTED', 'REJECTED']),
   rejectionReasonCodes: z.array(rejectionReasonSchema),
   acceptanceMeaning: z.literal('AUTO_PAPER_ADMISSION_ONLY'),
+  comparison: comparisonSchema.nullish().transform((value) => value ?? null),
 }).superRefine((card, context) => {
   const numericChecklistConsistent = card.checklist.enoughTrades === (card.full.trades >= 100)
     && card.checklist.deflatedSharpeOk === (card.oos.deflatedSharpe > 0.95)

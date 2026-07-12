@@ -106,6 +106,7 @@ describe('loadStrategyLeagueViewModel', () => {
 
     const { teams: [result] } = await loadStrategyLeagueViewModel();
 
+    expect(result.comparison).toBeNull();
     expect(result.distribution).toEqual({
       count: null, mean: null, std: null, min: null, max: null,
       probDayGe5pct: null, probDayLe5pct: null,
