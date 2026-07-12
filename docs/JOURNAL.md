@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-12 — Strategy tournament round 1 complete: 4 teams validated, 4 honest rejections ✅
+Shipped: Team A genuine run on the G3d PIT micro-cap universe (153 symbols, 394 real gap days): 76 trades, −4.19%/trade, ruin 99.9% → REJECTED NEGATIVE_EXPECTANCY with terminal card; Mode D coint-statarb REJECTED INSUFFICIENT_SAMPLE (9 trades; Sharpe 5.05 auto-flagged IMPLAUSIBLE); Modes B/C previously REJECTED. Ledger + plan table fully closed for round 1.
+Decisions: Expert finding recorded — long gap-continuation on micro-cap gappers is the losing side (gap-ups fade; documented edge is short-side, Sharia-excluded); v2 hypotheses must change (Stocks-in-Play relative-volume/trend, per-name sizing, deep-history universe), never retune viewed data. Backwards daily deep-backfill identified as the unlock for all daily v2 candidates.
+Open: QA gate over the milestone, then the PAUSE report card to the user. Zero validated-promotable strategies is the honest round-1 outcome — the gates prevented four losing automations at $0 LLM cost.
+
 ## 2026-07-12 — QDR-7 competing-team final-status contract ✅
 Shipped: Bound every strategy team to `CANDIDATE → CODIFIED → VALIDATING → ACCEPTED | REJECTED`, with mandatory terminal evidence cards and deterministic cumulative rejection codes.
 Decisions: Only ACCEPTED versions enter isolated AUTO_PAPER books; Sharia-unscreened research cannot be accepted; rejection binds the tested version/run and never erases its measured results.
