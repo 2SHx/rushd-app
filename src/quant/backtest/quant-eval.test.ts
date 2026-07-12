@@ -1,9 +1,20 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { runPortfolioBacktest } from './portfolioEngine';
 import { assertNoLookahead } from '../data/pointInTime';
 import { computePortfolioMetrics } from './metrics';
+
+vi.mock('../data/universe', () => ({
+  getHalalUniverse: async (market: 'TASI' | 'NASDAQ', symbolAllowlist?: readonly string[]) =>
+    (symbolAllowlist ?? []).map(symbol => ({
+      symbol,
+      name: symbol,
+      arName: symbol,
+      market,
+      purificationRatio: 0,
+    })),
+}));
 
 describe('quant-eval', () => {
   // Sealed synthetic fixture window: deliberately predates every real R2 market-data range.
@@ -134,7 +145,7 @@ describe('quant-eval', () => {
 
     // Assert strategy beats the index out-of-sample
     expect(oosMetrics.irVsSpus).toBeGreaterThan(0); // IR > 0 vs Sharia Index
-    expect(oosMetrics.cagr).toBeGreaterThan(oosMetrics.cagr * 0.5); // Competitive performance
+    expect(oosMetrics.cagr).toBeGreaterThan(0); // Positive after simulated costs
   }, 30_000);
 
   it('fails the run when a look-ahead violation is injected (look-ahead guard)', () => {
