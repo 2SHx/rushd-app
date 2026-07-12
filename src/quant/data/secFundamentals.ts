@@ -3,17 +3,52 @@
 // scripts/capture-intraday-fixtures.ts (fetchHistoricalFundamentals), generalized to resolve the
 // CIK dynamically from SEC's own ticker map instead of a hand-maintained list. Used by
 // scripts/backfill-snapshots.ts to compute mcap = shares outstanding (latest filing with
-// `filed` <= the trading day, PIT-correct) x prior real close. Never fabricates: returns null —
+// `filed` strictly before the trading day, PIT-correct for intraday use) x prior real close.
+// Never fabricates: returns null —
 // which the caller must leave as a null `SymbolSnapshot.mcap` — when SEC has no CIK for the
 // symbol or no eligible filing, rather than inventing a number.
 const SEC_HEADERS = { 'User-Agent': 'RUSHD-Quant/0.1 research@rushd.app' };
 
 let tickerToCikPromise: Promise<Map<string, string>> | null = null;
 
-interface SecFactPoint {
+export interface SecFactPoint {
   val: number;
   filed: string; // YYYY-MM-DD, when the filing became public — the PIT gate
   end: string; // YYYY-MM-DD, the fiscal period end the value describes
+}
+
+export interface SecSharesOutstanding {
+  shares: number;
+  filedDate: string;
+  endDate: string;
+}
+
+function isValidSecDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+/** Latest shares fact known before an intraday decision date; same-day filing time is unknown. */
+export function selectSecSharesOutstanding(
+  lists: readonly (readonly SecFactPoint[])[],
+  dateKey: string,
+): SecSharesOutstanding | null {
+  let best: SecFactPoint | null = null;
+  for (const list of lists) {
+    for (const fact of list) {
+      if (
+        !Number.isFinite(fact.val) ||
+        fact.val <= 0 ||
+        !isValidSecDateKey(fact.end) ||
+        !isValidSecDateKey(fact.filed) ||
+        fact.end > fact.filed ||
+        fact.filed >= dateKey
+      ) continue;
+      if (!best || fact.filed > best.filed || (fact.filed === best.filed && fact.end > best.end)) best = fact;
+    }
+  }
+  return best ? { shares: best.val, filedDate: best.filed, endDate: best.end } : null;
 }
 
 /** SEC's official ticker->CIK map (company_tickers.json), fetched once and cached. Keyless. */
@@ -76,7 +111,9 @@ async function loadCompanyFacts(cik: string): Promise<any> {
 
 /**
  * Point-in-time shares outstanding for `symbol` as of `dateKey` (YYYY-MM-DD, Eastern trading
- * date): the latest filing with `filed` <= `dateKey`, most-recent fiscal `end` breaking ties.
+ * date): the latest filing with `filed` < `dateKey`, most-recent fiscal `end` breaking ties.
+ * Same-day facts are excluded because Company Facts does not provide a reliable intraday
+ * availability timestamp for this path.
  * Checks both `dei.EntityCommonStockSharesOutstanding` and `us-gaap.CommonStockSharesOutstanding`
  * (coverage varies by filer). Returns null — never fabricated — when SEC has no CIK or no
  * eligible filing.
@@ -84,7 +121,7 @@ async function loadCompanyFacts(cik: string): Promise<any> {
 export async function lookupSecSharesOutstanding(
   symbol: string,
   dateKey: string,
-): Promise<{ shares: number; filedDate: string } | null> {
+): Promise<SecSharesOutstanding | null> {
   try {
     const tickerMap = await loadTickerToCik();
     const cik = tickerMap.get(symbol.toUpperCase());
@@ -95,16 +132,7 @@ export async function lookupSecSharesOutstanding(
       facts.facts?.['us-gaap']?.CommonStockSharesOutstanding?.units?.shares,
     ].filter(Boolean);
 
-    let best: SecFactPoint | null = null;
-    for (const list of lists) {
-      for (const fact of list) {
-        if (fact.val <= 0 || fact.filed > dateKey) continue;
-        if (!best || fact.filed > best.filed || (fact.filed === best.filed && fact.end > best.end)) {
-          best = fact;
-        }
-      }
-    }
-    return best ? { shares: best.val, filedDate: best.filed } : null;
+    return selectSecSharesOutstanding(lists, dateKey);
   } catch (err) {
     console.warn(`SEC shares-outstanding lookup failed for ${symbol}: ${err instanceof Error ? err.message : err}`);
     return null;
@@ -115,9 +143,10 @@ export interface SecMarketCap {
   mcap: number;
   sharesOutstanding: number;
   filedDate: string;
+  endDate: string;
 }
 
-/** mcap = shares outstanding (PIT filing <= dateKey) x priorClose. Null propagates honestly. */
+/** mcap = shares outstanding (PIT filing < dateKey) x priorClose. Null propagates honestly. */
 export async function lookupSecMcap(
   symbol: string,
   dateKey: string,
@@ -126,5 +155,10 @@ export async function lookupSecMcap(
   if (priorClose == null) return null;
   const shares = await lookupSecSharesOutstanding(symbol, dateKey);
   if (!shares) return null;
-  return { mcap: shares.shares * priorClose, sharesOutstanding: shares.shares, filedDate: shares.filedDate };
+  return {
+    mcap: shares.shares * priorClose,
+    sharesOutstanding: shares.shares,
+    filedDate: shares.filedDate,
+    endDate: shares.endDate,
+  };
 }

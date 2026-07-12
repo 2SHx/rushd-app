@@ -4,17 +4,31 @@
 // days already covered by the real `IntradayBar` spine, for the gapper screener's candidate
 // universe. Real data only, at every layer:
 //   - bars: existing IntradayBar rows (real Alpaca IEX minute bars)
-//   - priorClose: MarketBar DAY rows, backfilled here via the existing ingestBars ingester
-//   - mcap: SEC-XBRL shares outstanding (latest filing with `filed` <= the trading day) x
+//   - priorClose: normal mode uses MarketBar DAY rows; candidate mode requires the artifact's
+//     authoritative Alpaca-IEX raw prior close and never re-ingests an adjustment-incompatible row
+//   - mcap: SEC-XBRL shares outstanding (latest filing with `filed` < the trading day) x
 //     priorClose — never fabricated; left null (and reported) when SEC has no eligible filing.
 // Idempotent: computeAndUpsertSnapshot upserts on (symbol, market, asOf); reruns are safe and
 // report 0 new rows. Resumable per symbol (each symbol is independent end-to-end).
 //
 //   npx tsx scripts/backfill-snapshots.ts --symbols=GME,AMC --days=90
+//
+// Candidate-list mode (QDR-6 gapper-universe discovery):
+//   npx tsx scripts/backfill-snapshots.ts --candidates=results/gapper-candidates.json
+// reads the discovery artifact's candidates (including raw-price PIT mcap provenance) and builds
+// snapshots ONLY at those checkpoints — not every trading day with stored IntradayBar rows.
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { ingestBars } from '../src/quant/data/ingest';
 import { computeAndUpsertSnapshot, nasdaqDateKey } from '../src/quant/data/snapshot';
 import { tradingDayCheckpoints } from '../src/quant/data/checkpoints';
 import { lookupSecMcap } from '../src/quant/data/secFundamentals';
+import {
+  compareCandidateDays,
+  parsePositiveIntegerCap,
+  parseSnapshotArtifactCandidate,
+  type SnapshotArtifactCandidate,
+} from '../src/quant/data/gapperCandidates';
 import { prisma } from '../src/lib/prisma';
 
 process.loadEnvFile?.('.env');
@@ -28,6 +42,7 @@ const DEFAULT_DAYS = 90;
 const DAILY_BACKFILL_MARGIN_DAYS = 30; // extra calendar days so the earliest checkpoint has a prior close
 const GAPPER_PREMARKET_MOVE_MIN = 5;
 const GAPPER_CUM_VOLUME_MIN = 10_000_000;
+const DEFAULT_MAX_CANDIDATE_BACKFILL = 1000;
 
 function arg(name: string): string | undefined {
   return process.argv.find((v) => v.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
@@ -64,10 +79,60 @@ interface SymbolReport {
   gapperDays: string[];
 }
 
+interface CandidateFile {
+  candidates: unknown[];
+}
+
+export async function runCandidatesMode(candidatesPath: string, maxCandidateBackfill: number) {
+  const raw = JSON.parse(fs.readFileSync(candidatesPath, 'utf8')) as CandidateFile;
+  const allCandidates = (raw.candidates ?? []).map(parseSnapshotArtifactCandidate);
+  const candidates = [...allCandidates].sort(compareCandidateDays).slice(0, maxCandidateBackfill);
+  const bySymbol = new Map<string, SnapshotArtifactCandidate[]>();
+  for (const candidate of candidates) {
+    const entries = bySymbol.get(candidate.symbol) ?? [];
+    entries.push(candidate);
+    bySymbol.set(candidate.symbol, entries);
+  }
+  console.log(`Candidate-list snapshot build: ${candidates.length}/${allCandidates.length} capped symbol-day(s) across ${bySymbol.size} symbol(s) from ${candidatesPath}\n`);
+
+  let written = 0, newRows = 0;
+  for (const [symbol, entries] of Array.from(bySymbol.entries())) {
+    for (const candidate of entries.sort(compareCandidateDays)) {
+      for (const asOf of tradingDayCheckpoints(candidate.date)) {
+        const existing = await prisma.symbolSnapshot.findUnique({
+          where: { symbol_market_asOf: { symbol, market: MARKET, asOf } },
+        });
+        const result = await computeAndUpsertSnapshot(symbol, MARKET, asOf, 'ALPACA', {
+          priorClose: candidate.mcapPrice,
+          mcap: candidate.mcap,
+          mcapSource: 'FUNDAMENTALS',
+        });
+        if (!result) continue;
+        written += 1;
+        if (!existing) newRows += 1;
+      }
+    }
+  }
+  console.log(`Snapshots written (upserted): ${written} (${newRows} new)`);
+  console.log(`Mcap coverage: ${candidates.length}/${candidates.length} candidate symbol-days (artifact-authoritative)`);
+}
+
 async function main() {
+  const candidatesPath = arg('candidates');
+  if (candidatesPath) {
+    const maxCandidateBackfill = parsePositiveIntegerCap(
+      arg('max-candidate-backfill'),
+      DEFAULT_MAX_CANDIDATE_BACKFILL,
+      'max-candidate-backfill',
+    );
+    await runCandidatesMode(candidatesPath, maxCandidateBackfill);
+    return;
+  }
+
   if (!process.env.ALPACA_API_KEY || !process.env.ALPACA_API_SECRET) {
     throw new Error('ALPACA_API_KEY/ALPACA_API_SECRET are required (daily-close backfill needs real Alpaca data)');
   }
+
   const symbols = (arg('symbols') ?? DEFAULT_SYMBOLS.join(','))
     .split(',')
     .map((s) => s.trim().toUpperCase())
@@ -149,7 +214,9 @@ async function main() {
   else for (const c of candidates) console.log(`  ${c}`);
 }
 
-main().catch((err) => {
-  console.error(`backfill-snapshots failed: ${err instanceof Error ? err.message : err}`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`backfill-snapshots failed: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  });
+}

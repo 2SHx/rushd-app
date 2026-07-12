@@ -1,6 +1,6 @@
 // scripts/backtest.ts — QDR-6 user-runnable validation CLI.
 //   npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols GME,SNDL]
-//                       [--seed 42] [--feed fixtures-real|alpaca-iex]
+//                       [--candidates=path.json] [--seed 42] [--feed fixtures-real|alpaca-iex]
 //
 // Runs a cataloged StrategySetup against stored historical minute bars with ZERO LLM calls,
 // prints the QDR-6 report card, writes results/<setup>-<from>-<to>.json, and persists a
@@ -8,7 +8,9 @@
 // no synthetic bars anywhere. Exits nonzero on any look-ahead detection.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../src/quant/strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../src/quant/strategies/gapperOrb';
@@ -16,6 +18,11 @@ import { NASDAQ_HALAL_UNIVERSE } from '../src/quant/strategies/bollingerMrLong';
 import type { StrategySetup } from '../src/quant/strategies/types';
 import { loadAllFixtures } from '../src/quant/data/fixtureLoader';
 import { nasdaqDateKey } from '../src/quant/data/snapshot';
+import {
+  parseCandidateArtifact,
+  type ParsedCandidateArtifact,
+  type SnapshotArtifactCandidate,
+} from '../src/quant/data/gapperCandidates';
 import { LookaheadError } from '../src/quant/data/pointInTime';
 import {
   simulateIntraday, DEFAULT_INTRADAY_LIMITS,
@@ -36,6 +43,11 @@ function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith('--')) {
+      const equalsAt = argv[i].indexOf('=');
+      if (equalsAt > 2) {
+        out[argv[i].slice(2, equalsAt)] = argv[i].slice(equalsAt + 1);
+        continue;
+      }
       const key = argv[i].slice(2);
       const val = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
       out[key] = val;
@@ -57,6 +69,51 @@ interface SymbolSeries {
   symbol: string;
   bars: IntradayBarInput[];
   dayContext: Map<string, DayContext>;
+}
+
+interface CandidateArtifactEvidence {
+  inputPath: string;
+  absolutePath: string;
+  relativePath: string;
+  sha256Digest: string;
+  candidateCount: number;
+  symbolCount: number;
+  generatedAt: string | null;
+  corporateActionScreen: Record<string, unknown> | null;
+}
+
+export function backtestResultFilename(
+  setup: string,
+  from: string,
+  to: string,
+  candidateDigest?: string,
+): string {
+  const suffix = candidateDigest ? `-${candidateDigest.slice(0, 16)}` : '';
+  return `${setup}-${from}-${to}${suffix}.json`;
+}
+
+function loadCandidateArtifactFile(inputPath: string): {
+  artifact: ParsedCandidateArtifact;
+  evidence: CandidateArtifactEvidence;
+} {
+  const absolutePath = path.resolve(inputPath);
+  const bytes = fs.readFileSync(absolutePath);
+  const artifact = parseCandidateArtifact(JSON.parse(bytes.toString('utf8')), {
+    requireCompletedCorporateActionScreen: true,
+  });
+  return {
+    artifact,
+    evidence: {
+      inputPath,
+      absolutePath,
+      relativePath: path.relative(process.cwd(), absolutePath) || '.',
+      sha256Digest: crypto.createHash('sha256').update(bytes).digest('hex'),
+      candidateCount: artifact.candidates.length,
+      symbolCount: new Set(artifact.candidates.map((candidate) => candidate.symbol)).size,
+      generatedAt: artifact.generatedAt,
+      corporateActionScreen: artifact.corporateActionScreen,
+    },
+  };
 }
 
 /** Split chronological bars into per-NASDAQ-trading-day chunks (preserving order). */
@@ -121,6 +178,66 @@ async function loadDbSymbol(symbol: string, from: string, to: string): Promise<S
   for (const key of Array.from(new Set(bars.map((b) => nasdaqDateKey(b.ts))))) {
     const mc = mcapByDay.get(key);
     dayContext.set(key, { priorClose: priorByDay.get(key) ?? null, mcap: mc?.mcap ?? null, mcapSource: mc?.src ?? null });
+  }
+  return { symbol, bars, dayContext };
+}
+
+/** Candidate mode: artifact pairs and PIT facts are authoritative; unrelated DB days are dropped. */
+export async function loadDbCandidateSymbol(
+  symbol: string,
+  candidates: readonly SnapshotArtifactCandidate[],
+): Promise<SymbolSeries> {
+  if (!candidates.length || candidates.some((candidate) => candidate.symbol !== symbol)) {
+    throw new Error(`Candidate artifact has no consistent entries for ${symbol}`);
+  }
+  const { prisma } = await import('../src/lib/prisma');
+  const dates = new Set(candidates.map((candidate) => candidate.date));
+  const orderedDates = Array.from(dates).sort();
+  // NASDAQ POST bars can land after 00:00 UTC on the following calendar day. Query a safe
+  // timezone margin, then make nasdaqDateKey + the artifact set the authoritative filter.
+  const queryStart = new Date(`${orderedDates[0]}T00:00:00.000Z`);
+  queryStart.setUTCHours(queryStart.getUTCHours() - 12);
+  const queryEnd = new Date(`${orderedDates.at(-1)!}T00:00:00.000Z`);
+  queryEnd.setUTCHours(queryEnd.getUTCHours() + 36);
+  const rows = await prisma.intradayBar.findMany({
+    where: {
+      symbol,
+      market: 'NASDAQ',
+      source: 'ALPACA',
+      ts: {
+        gte: queryStart,
+        lte: queryEnd,
+      },
+    },
+    orderBy: { ts: 'asc' },
+  });
+  const selected = rows.filter((bar) => dates.has(nasdaqDateKey(bar.ts)));
+  if (selected.some((bar) => bar.market !== 'NASDAQ' || bar.source !== 'ALPACA')) {
+    throw new Error(`Non-NASDAQ/Alpaca bar leaked into candidate series for ${symbol}`);
+  }
+  const foundDates = new Set(selected.map((bar) => nasdaqDateKey(bar.ts)));
+  const missing = orderedDates.filter((date) => !foundDates.has(date));
+  if (missing.length) {
+    throw new Error(`Candidate pair(s) have no minute bars: ${missing.map((date) => `${symbol} ${date}`).join(', ')}`);
+  }
+
+  const bars: IntradayBarInput[] = selected.map((bar) => ({
+    ts: bar.ts,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+    session: bar.session,
+    source: bar.source,
+  }));
+  const dayContext = new Map<string, DayContext>();
+  for (const candidate of candidates) {
+    dayContext.set(candidate.date, {
+      priorClose: candidate.mcapPrice,
+      mcap: candidate.mcap,
+      mcapSource: 'FUNDAMENTALS',
+    });
   }
   return { symbol, bars, dayContext };
 }
@@ -206,7 +323,7 @@ async function main() {
   const oosFraction = Number(args.oos ?? '0.3');
 
   if (!setupId || !from || !to) {
-    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--seed N]');
+    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N]');
     process.exit(2);
   }
   const setup = (STRATEGY_SETUP_CATALOG as Record<string, StrategySetup<unknown>>)[setupId] as
@@ -222,11 +339,28 @@ async function main() {
   const source = (args.source ?? 'fixtures') as 'fixtures' | 'db';
 
   const cadence = setup.cadence;
-  const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : 'fixtures-real')) as DataFeed;
+  const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : args.candidates ? 'alpaca-iex' : 'fixtures-real')) as DataFeed;
 
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
+
+  let candidateArtifact: ParsedCandidateArtifact | null = null;
+  let candidateEvidence: CandidateArtifactEvidence | null = null;
+  if (args.candidates) {
+    if (source !== 'db' || cadence !== 'intraday') {
+      throw new Error('--candidates is valid only for intraday --source db backtests');
+    }
+    if (feed !== 'alpaca-iex') throw new Error('--candidates requires --feed alpaca-iex');
+    if (wantSymbols) throw new Error('--symbols cannot be combined with --candidates; the artifact is the exact universe');
+    const loaded = loadCandidateArtifactFile(args.candidates);
+    candidateArtifact = loaded.artifact;
+    candidateEvidence = loaded.evidence;
+    const outsideRange = candidateArtifact.candidates.find((candidate) => candidate.date < from || candidate.date > to);
+    if (outsideRange) {
+      throw new Error(`Candidate ${outsideRange.symbol} ${outsideRange.date} is outside --from/--to; the artifact cannot be partially simulated`);
+    }
+  }
 
   const pooledTradeReturns: number[] = [];
   const pooledTradeRecords: TradeRecord[] = [];
@@ -258,12 +392,24 @@ async function main() {
       // ── INTRADAY path (unchanged). DB is STREAMED one symbol at a time (bounded memory); fixtures
       // are tiny, built up-front and served from a lookup. Per-day batching applies to DB source.
       const fixtureSeries = source === 'db' ? null : buildFixtureSeries(wantSymbols, from, to);
-      symbols = source === 'db'
-        ? await listDbSymbols(wantSymbols, from, to)
+      const candidatesBySymbol = new Map<string, SnapshotArtifactCandidate[]>();
+      for (const candidate of candidateArtifact?.candidates ?? []) {
+        const entries = candidatesBySymbol.get(candidate.symbol) ?? [];
+        entries.push(candidate);
+        candidatesBySymbol.set(candidate.symbol, entries);
+      }
+      symbols = candidateArtifact
+        ? Array.from(candidatesBySymbol.keys()).sort()
+        : source === 'db'
+          ? await listDbSymbols(wantSymbols, from, to)
         : fixtureSeries!.map((s) => s.symbol);
       const fixtureByName = new Map((fixtureSeries ?? []).map((s) => [s.symbol, s] as const));
       const loadSeries = (symbol: string): Promise<SymbolSeries> =>
-        source === 'db' ? loadDbSymbol(symbol, from, to) : Promise.resolve(fixtureByName.get(symbol)!);
+        candidateArtifact
+          ? loadDbCandidateSymbol(symbol, candidatesBySymbol.get(symbol)!)
+          : source === 'db'
+            ? loadDbSymbol(symbol, from, to)
+            : Promise.resolve(fixtureByName.get(symbol)!);
       const batchPerDay = source === 'db';
       console.log(`\nprocessing ${symbols.length} symbol(s) [source=${source}${batchPerDay ? ', per-day batched' : ''}] …`);
       for (let i = 0; i < symbols.length; i++) {
@@ -324,19 +470,31 @@ async function main() {
     DEFAULT_INTRADAY_LIMITS,
   );
 
-  const card = assembleReportCard({
-    setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: gitSha(),
-    full, oos, distribution, bootstrap, permutation,
-    kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
-    oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
-  });
+  const resultsDir = path.join(process.cwd(), 'results');
+  const outFile = path.join(
+    resultsDir,
+    backtestResultFilename(setupId, from, to, candidateEvidence?.sha256Digest),
+  );
+  const card = {
+    ...assembleReportCard({
+      setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: gitSha(),
+      full, oos, distribution, bootstrap, permutation,
+      kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
+      oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
+    }),
+    ...(candidateEvidence ? {
+      candidateArtifact: {
+        ...candidateEvidence,
+        resultPath: outFile,
+        resultRelativePath: path.relative(process.cwd(), outFile),
+      },
+    } : {}),
+  };
 
   console.log('\n' + renderReportCard(card));
 
   // ── Persist results JSON.
-  const resultsDir = path.join(process.cwd(), 'results');
   fs.mkdirSync(resultsDir, { recursive: true });
-  const outFile = path.join(resultsDir, `${setupId}-${from}-${to}.json`);
   fs.writeFileSync(outFile, JSON.stringify(card, null, 2));
   console.log(`\nwrote ${outFile}`);
 
@@ -367,7 +525,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

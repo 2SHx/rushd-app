@@ -11,7 +11,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 vi.mock('./fixtureLoader', () => ({ loadFixturesForSymbol: h.loadFixturesForSymbol }));
 
-import { ingestIntradayBars, selectIntradayTier, sessionForTs } from './intraday';
+import { ingestIntradayBars, ingestIntradayBarsForDay, selectIntradayTier, sessionForTs } from './intraday';
 
 describe('intraday data tiers', () => {
   beforeEach(() => {
@@ -107,5 +107,50 @@ describe('intraday data tiers', () => {
     const row = h.createMany.mock.calls[0][0].data[0];
     expect(row.ts).toEqual(new Date('2026-07-06T13:31:00.000Z'));
     expect(row.session).toBe('REGULAR');
+  });
+
+  describe('ingestIntradayBarsForDay (candidate-list single-day backfill)', () => {
+    it('performs no I/O for unsupported TASI ingestion', async () => {
+      const result = await ingestIntradayBarsForDay('2222', 'TASI', '2026-07-06');
+      expect(result.tier).toBe('unsupported-market');
+      expect(h.createMany).not.toHaveBeenCalled();
+    });
+
+    it('requires explicit live Alpaca mode', async () => {
+      await expect(ingestIntradayBarsForDay('MSFT', 'NASDAQ', '2026-07-06')).rejects.toThrow(/live Alpaca mode/);
+    });
+
+    it.each([
+      ['2026-07-06', '2026-07-06T08:00:00.000Z', '2026-07-07T00:00:00.000Z'],
+      ['2026-01-06', '2026-01-06T09:00:00.000Z', '2026-01-07T01:00:00.000Z'],
+    ])('requests exactly 04:00-20:00 ET on %s across DST', async (dateKey, expectedStart, expectedEnd) => {
+      process.env.MARKET_DATA_MODE = 'live';
+      process.env.ALPACA_API_KEY = 'key';
+      h.createMany.mockResolvedValue({ count: 1 });
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        bars: { MSFT: [{ t: '2026-07-06T13:30:00.000Z', o: 1, h: 2, l: 1, c: 2, v: 10 }] },
+      }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await ingestIntradayBarsForDay('MSFT', 'NASDAQ', dateKey);
+
+      const url = new URL(fetchMock.mock.calls[0][0] as URL);
+      expect(url.searchParams.get('start')).toBe(expectedStart);
+      expect(url.searchParams.get('end')).toBe(expectedEnd);
+      expect(result).toMatchObject({ requested: 1, created: 1, source: 'ALPACA', tier: 'alpaca' });
+      expect(h.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    });
+
+    it('is idempotent: a rerun over stored bars reports 0 new rows via skipDuplicates', async () => {
+      process.env.MARKET_DATA_MODE = 'live';
+      process.env.ALPACA_API_KEY = 'key';
+      h.createMany.mockResolvedValue({ count: 0 }); // simulates every row already existing
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        bars: { MSFT: [{ t: '2026-07-06T13:30:00.000Z', o: 1, h: 2, l: 1, c: 2, v: 10 }] },
+      }), { status: 200 })));
+
+      const result = await ingestIntradayBarsForDay('MSFT', 'NASDAQ', '2026-07-06');
+      expect(result).toMatchObject({ requested: 1, created: 0 });
+    });
   });
 });
