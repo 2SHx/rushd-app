@@ -48,7 +48,7 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | **PAUSE — report card to user** | — | ⏳ | present measured distribution incl. P(day≥5%), MC drawdown percentiles. STOP HERE. |
 | G4 automation wiring (paper) | backend-expert + security-auditor | 🔒 POST-PAUSE | premarket+intraday signed-cron passes, −3% daily circuit breaker, envelope caps; NOTE: Alpaca paper acct shows negative cash (−$82.8k, margin used by old paper trades) — envelope must limit by CASH not buying power |
 | G4b TradingView webhooks + deep links | backend-expert + security-auditor | 🔒 POST-PAUSE | HMAC-signed `/api/quant/webhooks/tradingview` → same Sharia gate/envelope pipeline; dark until secret set |
-| G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | 🔒 POST-PAUSE | screener table, paper P&L, MC fan, report card — all labeled simulated/paper, en+ar |
+| G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | 🔄 LEAGUE SLICE SHIPPED | DB-backed `/quant/league`: accepted + rejected terminal teams, OOS CAGR vs MC p95 DD graph, full/OOS evidence, gates, reasons, provenance and Sharia block; en+ar/RTL/mobile verified. Next: persist real equity/drawdown series before adding MC fan or paper P&L; never synthesize a curve. |
 | G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔒 POST-PAUSE | identical gates; Python sidecar only via QDR-3 architect decision |
 
 ## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
@@ -97,7 +97,24 @@ The binding reason-code definitions and ordering live in QDR-7.
 | R2-2 stocks-in-play gapper v2 | quant-strategist | ✅ REJECTED | 468 trades; CAGR −45.70%, OOS −44.84%, MC p95 DD 81.41%, ruin 96.10%; terminal evidence in STRATEGY_LAB |
 | R2-3 B v2 + C v2 (per-name sizing, regime gates) | quant-strategist | ✅ REJECTED | both structural fixes improved OOS/risk materially but neither cleared every gate; exact cards in STRATEGY_LAB; no post-hoc retuning |
 | R2-4 Tier-1 setups ×4 | quant-strategist | 🔄 1/4 | vwap-reclaim v1 REJECTED (347 trades, CAGR −40.62%, ruin 100%); next: stop-hunt-reversal-long, then bagholder-bounce and time-of-day |
-| R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | ⏳ | build after validations; automation activates only for ACCEPTED teams (may be zero — league renders honestly empty) |
+| R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | 🔄 G5 FIRST SLICE | Visual league reads persisted terminal cards and honestly renders zero accepted/four rejected teams. G4/allocator/webhooks remain dark because zero teams are ACCEPTED. |
+
+## Current delivery sequence — app completion, then model enhancement
+
+1. **Evidence persistence:** extend generated Prisma storage for real equity/drawdown series, strategy
+   version and effective parameters; backfill only by reproducible reruns. This unlocks NAV, drawdown and
+   Monte Carlo fan charts without invented data.
+2. **Frontend completion:** finish G5 report-card views and M9 responsive/accessibility consistency,
+   then add isolated paper-book P&L only after an ACCEPTED team exists. Every terminal state remains
+   visible; rejection is never filtered out.
+3. **Finish the frozen hypotheses:** validate R2-4 stop-hunt-reversal-long, bagholder-bounce and
+   time-of-day in that pre-registered order. No tuning against already-viewed OOS results.
+4. **Best next model class:** implement G6b monthly long-only cross-sectional linear factors before RL.
+   It has greater diversification value than another intraday variant, is deterministic/explainable,
+   and can use the same walk-forward, DSR, Monte Carlo, Sharia and risk gates.
+5. **Committee enhancement:** calibrate strategy-team allocation weights only from isolated paper
+   evidence after at least one ACCEPTED team exists. RL/G6a remains experimental and cannot weaken a
+   deterministic Sharia veto, risk envelope, or AUTO_REAL gate.
 
 ## Continuation protocol (for ANY AI picking this up)
 

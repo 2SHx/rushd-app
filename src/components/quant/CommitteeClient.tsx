@@ -153,129 +153,6 @@ const DEFAULT_SYMBOL: Record<MarketKind, string> = {
   NASDAQ: 'AAPL',
 };
 
-function generateMockSnapshots(baseNAV: number, length = 30): Snapshot[] {
-  const navVal = baseNAV || 100000;
-  const list: Snapshot[] = [];
-  const now = new Date();
-  for (let i = length - 1; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dayFactor = length - 1 - i;
-    // simulated compound growth: strategy Nav outperforms benchmarks
-    const sNav = navVal * (1 + 0.0012 * dayFactor + Math.sin(dayFactor / 2) * 0.005 + Math.cos(dayFactor * 1.7) * 0.004);
-    const spy = navVal * (1 + 0.0006 * dayFactor + Math.sin(dayFactor / 3) * 0.006 + Math.cos(dayFactor * 1.3) * 0.005);
-    const spus = navVal * (1 + 0.0008 * dayFactor + Math.sin(dayFactor / 2.5) * 0.0055 + Math.cos(dayFactor * 1.5) * 0.0045);
-    list.push({
-      asOf: d.toISOString(),
-      nav: sNav,
-      cashVirtual: navVal * 0.1,
-      spy,
-      spus,
-    });
-  }
-  return list;
-}
-
-function generateMockDecisions(isAr: boolean): DecisionRecord[] {
-  return [
-    {
-      id: 'mock-dec-1',
-      symbol: '1120.SR',
-      market: 'TASI',
-      asOf: new Date(Date.now() - 3600000 * 2).toISOString(),
-      proposedAction: 'BUY',
-      proposedQty: 500,
-      finalAction: 'BUY',
-      finalQty: 500,
-      status: 'EXECUTED',
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      shariaGate: { compliant: true },
-      riskAdjustments: { capped: false },
-      debateTranscript: [
-        {
-          side: 'BULL',
-          round: 1,
-          argumentEn: 'Al Rajhi shows exceptional ROE, solid dividend support, and is trading near key technical moving averages.',
-          argumentAr: 'مصرف الراجحي يظهر عائداً ممتازاً على حقوق الملكية، ودعماً قوياً للأرباح، ويتداول بالقرب من المتوسطات المتحركة الرئيسية.',
-        },
-        {
-          side: 'BEAR',
-          round: 1,
-          argumentEn: 'Banking sector interest margins are experiencing slight contraction due to competitive liquidity positioning.',
-          argumentAr: 'هوامش صافي الفائدة للقطاع المصرفي تشهد انكماشاً طفيفاً نتيجة للمنافسة على السيولة.',
-        },
-      ],
-      signals: [
-        {
-          agent: 'QUANT_CORE',
-          stance: 'BULLISH',
-          conviction: 0.85,
-          rationaleEn: 'Momentum scoring remains positive on high relative volume.',
-          rationaleAr: 'مؤشرات الزخم إيجابية مع حجم تداول نسبي مرتفع.',
-          evidence: { 'Momentum 12-1': '+14.5%', 'MA Trend': 'Above MA(50)' },
-          failureMode: 'ok',
-        },
-        {
-          agent: 'TECHNICAL',
-          stance: 'BULLISH',
-          conviction: 0.75,
-          rationaleEn: 'Indicators signaling accumulation phase bottom out.',
-          rationaleAr: 'المؤشرات الفنية تشير إلى انتهاء مرحلة التجميع ودعم ارتدادي.',
-          evidence: { RSI: '45.2', MACD: 'Bullish Cross' },
-          failureMode: 'ok',
-        },
-        {
-          agent: 'SHARIA',
-          stance: 'NEUTRAL',
-          conviction: 1.0,
-          rationaleEn: 'Financial activities and ratio screens are fully compliant with AAOIFI limits.',
-          rationaleAr: 'أنشطة البنك ونسبه المالية متوافقة تماماً مع معايير هيئة المحاسبة والمراجعة للمؤسسات المالية الإسلامية.',
-          evidence: { 'Compliant Income': '100%', 'Debt/Mcap': '12.4%' },
-          failureMode: 'ok',
-        },
-      ],
-    },
-    {
-      id: 'mock-dec-2',
-      symbol: '2222.SR',
-      market: 'TASI',
-      asOf: new Date(Date.now() - 3600000 * 24).toISOString(),
-      proposedAction: 'BUY',
-      proposedQty: 1000,
-      finalAction: 'HOLD',
-      finalQty: 0,
-      status: 'VETOED',
-      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      shariaGate: { compliant: false, reason: 'Non-compliant interest-bearing leverage crossing the 30% threshold limit.' },
-      riskAdjustments: { capped: true },
-      debateTranscript: [
-        {
-          side: 'BULL',
-          round: 1,
-          argumentEn: 'Aramco exhibits cash generation that is highly robust, presenting an attractive dividend play.',
-          argumentAr: 'تظهر أرامكو قدرة قوية على توليد التدفقات النقدية، مما يمثل خياراً جاذباً للأرباح الموزعة.',
-        },
-        {
-          side: 'BEAR',
-          round: 1,
-          argumentEn: 'Temporary spikes in interest-bearing debt relative to market cap have triggered a Sharia filter warning.',
-          argumentAr: 'الارتفاع المؤقت في الديون ذات الفائدة مقارنة بالقيمة السوقية أدى إلى إطلاق تنبيه من الفلتر الشرعي.',
-        },
-      ],
-      signals: [
-        {
-          agent: 'SHARIA',
-          stance: 'BEARISH',
-          conviction: 1.0,
-          rationaleEn: 'AAOIFI Debt limit crossed (32.4% > 30.0% standard cap).',
-          rationaleAr: 'تجاوز حد الدين الإسلامي (32.4٪ > 30.0٪ الحد الأقصى للمعيار).',
-          evidence: { 'Interest-Debt / Mcap': '32.4%' },
-          failureMode: 'ok',
-        },
-      ],
-    },
-  ];
-}
-
 const AGENT_KEYS = [
   'QUANT_CORE',
   'NEWS_CATALYST',
@@ -333,12 +210,7 @@ export default function CommitteeClient({
 
   const [activeTab, setActiveTab] = useState<'board' | 'portfolio'>('board');
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
-  const [decisions, setDecisions] = useState<DecisionRecord[]>(() => {
-    if (!initialDecisions || initialDecisions.length === 0) {
-      return generateMockDecisions(isAr);
-    }
-    return initialDecisions;
-  });
+  const [decisions, setDecisions] = useState<DecisionRecord[]>(initialDecisions ?? []);
 
   const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(null);
 
@@ -364,12 +236,7 @@ export default function CommitteeClient({
   // Timeframe selector for charts
   const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
 
-  const [snapshots] = useState<Snapshot[]>(() => {
-    if (!initialSnapshots || initialSnapshots.length < 2) {
-      return generateMockSnapshots(initialNAV);
-    }
-    return initialSnapshots;
-  });
+  const [snapshots] = useState<Snapshot[]>(initialSnapshots ?? []);
 
   const [simStep, setSimStep] = useState<SimStep>('idle');
   const [simPlay, setSimPlay] = useState(false);

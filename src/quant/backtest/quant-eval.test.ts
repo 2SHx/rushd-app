@@ -21,7 +21,13 @@ describe('quant-eval', () => {
     }
   });
 
+  let originalMode: string | undefined;
+
   beforeAll(async () => {
+    originalMode = process.env.MARKET_DATA_MODE;
+    // Bypasses live screening filters to allow mock data matching in zero-key environment
+    delete process.env.MARKET_DATA_MODE;
+
     await cleanupFixture();
 
     // Seed 1,000 trading days of historical data (~4 years)
@@ -80,6 +86,11 @@ describe('quant-eval', () => {
   }, 15000);
 
   afterAll(async () => {
+    if (originalMode === undefined) {
+      delete process.env.MARKET_DATA_MODE;
+    } else {
+      process.env.MARKET_DATA_MODE = originalMode;
+    }
     await cleanupFixture();
   }, 15000);
 

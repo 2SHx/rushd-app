@@ -33,4 +33,11 @@ describe('CommitteeClient safety boundary', () => {
     expect(source.slice(0, handlerStart)).not.toContain('runPass(');
     expect(source.slice(handlerStart)).toContain('onClick={() => runPass()}');
   });
+
+  it('never fabricates decisions or an outperforming NAV curve for empty DB state', () => {
+    expect(source).not.toContain('generateMockSnapshots');
+    expect(source).not.toContain('generateMockDecisions');
+    expect(source).not.toContain('mock-dec-');
+    expect(source).not.toContain('simulated compound growth');
+  });
 });

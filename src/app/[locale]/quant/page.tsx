@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
-import { GraduationCap } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart3, GraduationCap } from 'lucide-react';
 import CommitteeClient from '@/components/quant/CommitteeClient';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
@@ -86,6 +87,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
   }));
 
   const t = await getTranslations('Quant');
+  const resultsT = await getTranslations('QuantResults');
   const performanceWarning = {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
@@ -104,19 +106,26 @@ export default async function QuantPage({ params }: { params: { locale: string }
   const canRenderCommittee = portfolio.initialNAV !== null && committeePositions !== null;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto p-4 md:p-6">
-      <div>
-        <h1 className="text-3xl font-extrabold bg-gradient-to-r from-emerald-400 to-neonBlue bg-clip-text text-transparent">
-          {t('title')}
-        </h1>
-        <p className="text-gray-400 mt-1 text-sm">{t('subtitle')}</p>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-foreground ltr:tracking-tight">{t('title')}</h1>
+          <p className="text-sm leading-6 text-foreground/65">{t('subtitle')}</p>
+        </div>
+        <Link
+          href={`/${locale}/quant/league`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        >
+          <BarChart3 className="h-4 w-4" aria-hidden="true" />
+          {resultsT('navLabel')}
+        </Link>
       </div>
 
-      <div className="glass-panel p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 flex items-start gap-3 text-start">
-        <GraduationCap className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 rounded-2xl bg-up/5 p-4 text-start shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+        <GraduationCap className="mt-0.5 h-5 w-5 shrink-0 text-up" />
         <div className="space-y-1">
-          <p className="text-emerald-300 font-bold text-sm">{t('disclaimer')}</p>
-          <p className="text-gray-400 text-xs leading-relaxed">{t('ultraNote')}</p>
+          <p className="text-sm font-semibold text-foreground">{t('disclaimer')}</p>
+          <p className="text-xs leading-relaxed text-foreground/60">{t('ultraNote')}</p>
         </div>
       </div>
 
