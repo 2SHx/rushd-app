@@ -60,6 +60,16 @@ Evidence order: B/C/D now ($0, hundreds of trades), A after G3d ingestion, E/F p
 Capital allocation across validated modes = deterministic fractional-Kelly per card, envelope-clamped
 (strategy-level committee). Modes B–D dispatches are SEQUENCED (shared STRATEGY_LAB.md ledger).
 
+USER DIRECTIVE 2026-07-12 ("modes act like different teams that compete, Sharia-compliant"):
+**Competing-books tournament (QDR-7, being bound by architect):** each VALIDATED mode = an isolated
+virtual book (own NAV/positions/P&L) in AUTO_PAPER; deterministic seeded allocator re-scores monthly
+on rolling ~63d live-paper results blended with validation-card priors (shrinkage), deflated-Sharpe-style
+score with drawdown penalty; caps (≤40%/mode, bench=0% allowed); IMMEDIATE bench on drawdown breach;
+live-vs-backtest tracking-error breach ⇒ auto-bench + re-validate; implausible ⇒ disqualified; league
+entry only via QDR-6 gates. Sharia = league constitution (per-signal veto + per-mode instrument charter;
+UNSCREENED universes paper-only per DR-5; purification per book). No worker/queue (QDR-5); paper-only
+until the QDR-2 CMA gate ever opens; league-table UI = post-pause G5. Mode B may re-enter as v2 through gates.
+
 ## Continuation protocol (for ANY AI picking this up)
 
 1. Read this file, `docs/JOURNAL.md` (top entries), `docs/QUANT_DESIGN.md` QDR-6 + §9b,
