@@ -151,6 +151,10 @@ export async function repairBarsRange(
         create: { symbol, market, interval: 'DAY', ts, ...fields }, update: fields,
       });
     }
+    // Synthetic fixtures can include exchange holidays that have no matching
+    // provider candle. Remove those bounded leftovers after authoritative dates
+    // have been upserted; the transaction keeps replacement + cleanup atomic.
+    await tx.marketBar.deleteMany({ where: { ...where, source: { not: 'YAHOO' } } });
     const [after, persistedRows] = await Promise.all([
       tx.marketBar.groupBy({ by: ['source'], where, _count: { _all: true } }),
       tx.marketBar.findMany({ where, select: { ts: true, source: true } }),

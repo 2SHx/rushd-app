@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    marketBar: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), createMany: vi.fn(), groupBy: vi.fn() },
+    marketBar: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn(), groupBy: vi.fn() },
     $transaction: vi.fn(async (work: unknown) => typeof work === 'function'
       ? (work as (tx: unknown) => Promise<unknown>)(prisma)
       : Promise.all(work as Promise<unknown>[])),
@@ -44,7 +44,6 @@ describe('ingestBars', () => {
     expect(res.source).toBe('YAHOO');
     expect((registry.getProvider as any).mock.results[0].value.getCandles).toHaveBeenCalledWith('MSFT', 'NASDAQ', 90);
     expect(prisma.marketBar.upsert).toHaveBeenCalledTimes(2);
-
     const call0 = (prisma.marketBar.upsert as any).mock.calls[0][0];
     expect(call0.where).toEqual({
       symbol_market_interval_ts: {
@@ -207,6 +206,11 @@ describe('repairBarsRange', () => {
       gte: new Date('2024-01-01T00:00:00.000Z'), lte: new Date('2024-01-02T00:00:00.000Z'),
     });
     expect(prisma.marketBar.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.marketBar.deleteMany).toHaveBeenCalledWith({ where: {
+      symbol: 'GOOGL', market: 'NASDAQ', interval: 'DAY',
+      ts: { gte: new Date('2024-01-01T00:00:00.000Z'), lte: new Date('2024-01-02T00:00:00.000Z') },
+      source: { not: 'YAHOO' },
+    } });
     for (const [{ create, update }] of (prisma.marketBar.upsert as any).mock.calls) {
       expect(create.source).toBe('YAHOO');
       expect(update.source).toBe('YAHOO');
@@ -239,7 +243,7 @@ describe('repairBarsRange', () => {
     expect(prisma.marketBar.upsert).not.toHaveBeenCalled();
   });
 
-  it('throws inside the transaction when a residual MOCK row remains', async () => {
+  it('throws inside the transaction if bounded cleanup leaves a residual MOCK row', async () => {
     vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(candles);
     (prisma.marketBar.findMany as any).mockResolvedValue([
       { ts: new Date('2024-01-01T00:00:00.000Z'), source: 'YAHOO' },
