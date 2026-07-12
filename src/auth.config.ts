@@ -27,6 +27,15 @@ function resolveAuthSecret(): string {
     console.warn('[auth] AUTH_SECRET is not set — using an insecure dev-only fallback secret.');
     return DEV_ONLY_FALLBACK_SECRET;
   }
+  // `next build`'s "Collecting page data" step imports every route module
+  // (including this one, transitively) purely to read static exports — no
+  // request is ever served from that pass. Next sets NEXT_PHASE to this
+  // exact value for that step only (never for `next start`), so gating on
+  // it lets a keyless build succeed without weakening the real runtime
+  // guard below.
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return DEV_ONLY_FALLBACK_SECRET;
+  }
   throw new Error(
     'AUTH_SECRET must be set (the insecure dev-only fallback only applies when NODE_ENV="development"). Set the AUTH_SECRET environment variable.'
   );
