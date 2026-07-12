@@ -196,13 +196,22 @@ describe('gapperCandidates (pure daily-bar candidate generator)', () => {
       candidateCount: 1,
       totalDiscoveredCandidateCount: 1,
       corporateActionScreen: screen,
+      shariaStatus: 'UNSCREENED_EXECUTION_BLOCKED',
       candidates: [validArtifact],
     };
   }
 
   it('accepts the completed, internally consistent Alpaca split screen in strict mode', () => {
-    expect(parseCandidateArtifact(strictArtifact(), { requireCompletedCorporateActionScreen: true }).candidates)
-      .toEqual([validArtifact]);
+    const parsed = parseCandidateArtifact(strictArtifact(), { requireCompletedCorporateActionScreen: true });
+    expect(parsed.candidates).toEqual([validArtifact]);
+    expect(parsed.shariaStatus).toBe('UNSCREENED_EXECUTION_BLOCKED');
+  });
+
+  it('strict mode requires explicit execution-blocked Sharia metadata', () => {
+    expect(() => parseCandidateArtifact(
+      { ...strictArtifact(), shariaStatus: 'UNVERIFIED' },
+      { requireCompletedCorporateActionScreen: true },
+    )).toThrow(/shariaStatus=UNSCREENED_EXECUTION_BLOCKED/);
   });
 
   it('accepts a capped emission enclosed by the full split-screen population range', () => {

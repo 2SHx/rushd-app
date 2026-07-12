@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { summarizeDailyReturns, toDailyReturns, isImplausibleDailyClaim } from './distribution';
+import {
+  summarizeDailyReturns,
+  toDailyReturns,
+  toIndependentPeriodReturns,
+  isImplausibleDailyClaim,
+} from './distribution';
 import { computeMetrics, type EquityPoint } from './metrics';
 
 describe('summarizeDailyReturns', () => {
@@ -29,6 +34,21 @@ describe('toDailyReturns', () => {
     const r = toDailyReturns(curve, dateKey);
     expect(r).toHaveLength(1);
     expect(r[0]).toBeCloseTo((99 - 110) / 110, 10);
+  });
+});
+
+describe('toIndependentPeriodReturns', () => {
+  it('emits one observation per independent day, including no-trade days', () => {
+    const day = (endingEquity?: number): EquityPoint[] => endingEquity === undefined ? [] : [
+      { ts: new Date('2026-01-06T14:30:00Z'), equity: 100 },
+      { ts: new Date('2026-01-06T21:00:00Z'), equity: endingEquity },
+    ];
+    const returns = toIndependentPeriodReturns([day(105), day(100), day(), day(90)], 100);
+    expect(returns).toHaveLength(4);
+    expect(returns[0]).toBeCloseTo(0.05, 12);
+    expect(returns[1]).toBe(0);
+    expect(returns[2]).toBe(0);
+    expect(returns[3]).toBeCloseTo(-0.1, 12);
   });
 });
 

@@ -87,3 +87,21 @@ describe('ProviderRegistry market-data modes', () => {
     expect(registry.getProvider('TASI')).toBeInstanceOf(SahmkAdapter);
   });
 });
+
+describe('YahooFinanceProvider candle failure policy', () => {
+  it('strict maintenance candles throw on an empty Yahoo response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      chart: { result: [{ timestamp: [], indicators: { quote: [{}] } }] },
+    }), { status: 200 })));
+
+    await expect(new YahooFinanceProvider().getCandlesStrict('AAPL', 'NASDAQ', 30)).rejects.toThrow(/Empty Yahoo/);
+  });
+
+  it('normal candles preserve the synthetic fallback when strict Yahoo fetching fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 503 })));
+
+    const candles = await new YahooFinanceProvider().getCandles('AAPL', 'NASDAQ', 5);
+
+    expect(candles).toHaveLength(5);
+  });
+});

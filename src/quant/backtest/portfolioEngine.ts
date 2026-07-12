@@ -1,7 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { constructHalalPortfolio } from '../portfolio/construction';
-import { getNormalizedBenchmarks } from '../data/benchmarks';
+import {
+  getNormalizedBenchmarks,
+  type NormalizedBenchmarkPoint
+} from '../data/benchmarks';
 import { assertNoLookahead } from '../data/pointInTime';
 import {
   computePortfolioMetrics,
@@ -19,6 +22,29 @@ const D = Prisma.Decimal;
 const COMMISSION_BPS = 0.0010; // 0.10%
 const SLIPPAGE_BPS = 0.0005; // 0.05%
 
+export function normalizeSymbolAllowlist(
+  symbolAllowlist?: readonly string[]
+): string[] | undefined {
+  if (!symbolAllowlist) return undefined;
+  return Array.from(new Set(
+    symbolAllowlist.map(symbol => symbol.trim().toUpperCase()).filter(Boolean)
+  ));
+}
+
+export function getBenchmarkAtOrBefore(
+  benchmarks: readonly NormalizedBenchmarkPoint[],
+  date: Date,
+  startingCash: number
+): Pick<NormalizedBenchmarkPoint, 'spy' | 'spus'> {
+  const activeTime = date.getTime();
+  for (let i = benchmarks.length - 1; i >= 0; i--) {
+    if (benchmarks[i].ts.getTime() <= activeTime) {
+      return { spy: benchmarks[i].spy, spus: benchmarks[i].spus };
+    }
+  }
+  return { spy: startingCash, spus: startingCash };
+}
+
 /**
  * Runs a cross-sectional halal portfolio backtest over a date range.
  * Simulates monthly rebalances.
@@ -26,14 +52,21 @@ const SLIPPAGE_BPS = 0.0005; // 0.05%
 export async function runPortfolioBacktest(
   fromDate: Date,
   toDate: Date,
-  startingCash = 100000
+  startingCash = 100000,
+  symbolAllowlist?: readonly string[]
 ): Promise<{ equityCurve: PortfolioEquityPoint[]; metrics: PortfolioBacktestMetrics }> {
+  const normalizedAllowlist = normalizeSymbolAllowlist(symbolAllowlist);
+  if (normalizedAllowlist?.length === 0) {
+    return { equityCurve: [], metrics: computePortfolioMetrics([]) };
+  }
+
   // Query all daily bars in range for aligning dates
   const datesRow = await prisma.marketBar.findMany({
     where: {
       market: 'NASDAQ',
       interval: 'DAY',
-      ts: { gte: fromDate, lte: toDate }
+      ts: { gte: fromDate, lte: toDate },
+      ...(normalizedAllowlist ? { symbol: { in: normalizedAllowlist } } : {})
     },
     select: { ts: true },
     orderBy: { ts: 'asc' }
@@ -62,9 +95,7 @@ export async function runPortfolioBacktest(
     const activeTime = date.getTime();
     
     // Find aligned benchmark point
-    const benchPoint = benchmarks.find(b => b.ts.getTime() === activeTime) || 
-                      benchmarks[benchmarks.length - 1] || 
-                      { spy: startingCash, spus: startingCash };
+    const benchPoint = getBenchmarkAtOrBefore(benchmarks, date, startingCash);
 
     // Load active prices for current holdings to calculate NAV at the close
     let portfolioValue = 0;
@@ -86,7 +117,12 @@ export async function runPortfolioBacktest(
       lastRebalanceTime = activeTime;
 
       // Construct target weights based on data strictly up to the close
-      const proposal = await constructHalalPortfolio('NASDAQ', date);
+      const proposal = await constructHalalPortfolio(
+        'NASDAQ',
+        date,
+        undefined,
+        normalizedAllowlist
+      );
       
       // Execute simulated trades on the close (simplifying fill on same day close)
       // Diff current holdings vs target allocations

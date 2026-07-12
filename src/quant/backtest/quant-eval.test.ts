@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { runPortfolioBacktest } from './portfolioEngine';
@@ -6,17 +6,23 @@ import { assertNoLookahead } from '../data/pointInTime';
 import { computePortfolioMetrics } from './metrics';
 
 describe('quant-eval', () => {
-  const fromDate = new Date('2022-01-01');
-  const toDate = new Date('2025-12-31');
+  // Sealed synthetic fixture window: deliberately predates every real R2 market-data range.
+  // Never move this forward into project history; the scoped cleanup must remain symmetric.
+  const fromDate = new Date('1990-01-01');
+  const toDate = new Date('1993-12-31');
+  const fixtureSymbols = ['SPY', 'SPUS', 'MSFT', 'NVDA', 'GOOGL'];
+
+  const cleanupFixture = () => prisma.marketBar.deleteMany({
+    where: {
+      market: 'NASDAQ',
+      interval: 'DAY',
+      ts: { gte: fromDate, lte: toDate },
+      symbol: { in: fixtureSymbols }
+    }
+  });
 
   beforeAll(async () => {
-    // Clear existing bars in the range for clean testing
-    await prisma.marketBar.deleteMany({
-      where: {
-        ts: { gte: fromDate, lte: toDate },
-        symbol: { in: ['SPY', 'SPUS', 'MSFT', 'NVDA', 'GOOGL'] }
-      }
-    });
+    await cleanupFixture();
 
     // Seed 1,000 trading days of historical data (~4 years)
     const seedBars = [];
@@ -69,27 +75,21 @@ describe('quant-eval', () => {
     // Insert seeded bars
     for (let chunkStart = 0; chunkStart < seedBars.length; chunkStart += 500) {
       const chunk = seedBars.slice(chunkStart, chunkStart + 500);
-      await prisma.$transaction(
-        chunk.map(b => prisma.marketBar.create({
-          data: {
-            symbol: b.symbol,
-            market: b.market,
-            interval: b.interval,
-            ts: b.ts,
-            open: b.open as any,
-            high: b.high as any,
-            low: b.low as any,
-            close: b.close as any,
-            volume: b.volume as any,
-            source: b.source
-          }
-        }))
-      );
+      await prisma.marketBar.createMany({ data: chunk });
     }
-  });
+  }, 15000);
+
+  afterAll(async () => {
+    await cleanupFixture();
+  }, 15000);
 
   it('runs out-of-sample backtest & prints relative metrics net of costs', async () => {
-    const result = await runPortfolioBacktest(fromDate, toDate);
+    const result = await runPortfolioBacktest(
+      fromDate,
+      toDate,
+      100000,
+      ['MSFT', 'NVDA', 'GOOGL']
+    );
     
     expect(result.equityCurve.length).toBeGreaterThan(100);
     const metrics = result.metrics;
@@ -124,7 +124,7 @@ describe('quant-eval', () => {
     // Assert strategy beats the index out-of-sample
     expect(oosMetrics.irVsSpus).toBeGreaterThan(0); // IR > 0 vs Sharia Index
     expect(oosMetrics.cagr).toBeGreaterThan(oosMetrics.cagr * 0.5); // Competitive performance
-  }, 30000);
+  }, 30_000);
 
   it('fails the run when a look-ahead violation is injected (look-ahead guard)', () => {
     // Construct a bar dated in the future

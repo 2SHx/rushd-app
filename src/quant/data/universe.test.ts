@@ -34,6 +34,13 @@ describe('getHalalUniverse', () => {
     expect(screen).toHaveBeenCalledTimes(firstPassCalls);
   });
 
+  it('uses the full candidate roster when the allowlist is omitted', async () => {
+    const universe = await getHalalUniverse('NASDAQ');
+
+    expect(universe.map(entry => entry.symbol)).toEqual(expect.arrayContaining(['MSFT', 'NVDA', 'GOOGL']));
+    expect(universe.length).toBeGreaterThan(3);
+  });
+
   it('does not admit mock compliance verdicts in live mode', async () => {
     process.env.MARKET_DATA_MODE = 'live';
 

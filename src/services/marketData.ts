@@ -315,7 +315,8 @@ export class YahooFinanceProvider implements MarketDataProvider {
     };
   }
 
-  async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
+  /** Maintenance path: real Yahoo data only; never substitutes synthetic candles. */
+  async getCandlesStrict(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
     const ticker = market === 'TASI' && !symbol.endsWith('.SR') ? `${symbol}.SR` : symbol;
     // Tiers extend past 5y for deep-history backfill (QDR-6): Yahoo's keyless chart endpoint
     // accepts up to 'max', so a 6y+ request (e.g. the daily halal-universe backfill) gets '10y'
@@ -333,7 +334,7 @@ export class YahooFinanceProvider implements MarketDataProvider {
     const timestamps = result.timestamp || [];
     const quote = result.indicators?.quote?.[0];
     if (!quote || !timestamps.length) {
-      return generateMockHistory(market === 'TASI' ? 120.5 : 350.25).slice(-days);
+      throw new Error(`Empty Yahoo Finance candles response for ${ticker}`);
     }
 
     const candles: Candle[] = [];
@@ -356,7 +357,17 @@ export class YahooFinanceProvider implements MarketDataProvider {
         });
       }
     }
-    return candles.slice(-days);
+    const sliced = candles.slice(-days);
+    if (!sliced.length) throw new Error(`Empty Yahoo Finance candles response for ${ticker}`);
+    return sliced;
+  }
+
+  async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
+    try {
+      return await this.getCandlesStrict(symbol, market, days);
+    } catch {
+      return generateMockHistory(market === 'TASI' ? 120.5 : 350.25).slice(-days);
+    }
   }
 }
 

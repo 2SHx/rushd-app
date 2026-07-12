@@ -33,6 +33,19 @@ export interface StrategyCheck {
 export interface UniversePrepareInput {
   readonly symbols: string[];
   readonly closesBySymbol: Map<string, { ts: Date; close: number }[]>;
+  /** Optional compact PIT aggregates for setups whose screen depends on same-day cross-section. */
+  readonly stocksInPlayBook?: ReadonlyMap<string, readonly {
+    date: string;
+    openingOpen: number;
+    openingHigh: number;
+    openingLow: number;
+    openingClose: number;
+    openingVolume: number;
+    dailyHigh: number | null;
+    dailyLow: number | null;
+    dailyClose: number | null;
+    dailyVolume: number | null;
+  }[]>;
 }
 
 /** Pure, versioned G2 setup contract. Loading, sizing, Sharia veto, and execution stay outside it. */

@@ -47,7 +47,10 @@ function getMockPurificationRatio(symbol: string): number {
  * registry.getScreener() and returns the filtered set of compliant assets with purification ratios.
  * Fail-closed: if the screener throws or errors, candidates are excluded.
  */
-export async function getHalalUniverse(market: 'TASI' | 'NASDAQ'): Promise<HalalUniverseEntry[]> {
+export async function getHalalUniverse(
+  market: 'TASI' | 'NASDAQ',
+  symbolAllowlist?: readonly string[]
+): Promise<HalalUniverseEntry[]> {
   const screener = registry.getScreener();
   const results: HalalUniverseEntry[] = [];
 
@@ -70,6 +73,11 @@ export async function getHalalUniverse(market: 'TASI' | 'NASDAQ'): Promise<Halal
         arName: match ? match.arName : sym
       };
     });
+  }
+
+  if (symbolAllowlist) {
+    const allowed = new Set(symbolAllowlist.map(symbol => symbol.toUpperCase()));
+    candidates = candidates.filter(candidate => allowed.has(candidate.symbol.toUpperCase()));
   }
 
   for (const c of candidates) {

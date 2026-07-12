@@ -81,6 +81,12 @@ describe('Halal Quant Portfolio Tests', () => {
     expect(msft?.purificationRatio).toBeLessThan(0.05); // Less than 5%
   });
 
+  it('does not let an allowlist bypass Sharia screening or invent unknown symbols', async () => {
+    const universe = await getHalalUniverse('NASDAQ', ['TSLA', 'UNKNOWN']);
+
+    expect(universe).toEqual([]);
+  });
+
   it('constructs momentum weights deterministically conforming to risk rules', async () => {
     // Seed at least some historical bars for candidates to compute scores
     const now = new Date();

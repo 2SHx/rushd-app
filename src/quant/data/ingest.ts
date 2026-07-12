@@ -84,6 +84,91 @@ export interface BackfillResult {
   earliestAfter: Date | null;
 }
 
+export interface RangeRepairResult {
+  upserted: number;
+  returned: number;
+  persisted: number;
+  remainingMock: number;
+  source: 'YAHOO';
+  beforeBySource: Partial<Record<DataSource, number>>;
+  afterBySource: Partial<Record<DataSource, number>>;
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 86_400_000;
+
+function parseRepairDay(value: string, name: string): Date {
+  if (!ISO_DAY.test(value)) throw new Error(`${name} must be YYYY-MM-DD`);
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${name} must be a valid YYYY-MM-DD date`);
+  }
+  return parsed;
+}
+
+function sourceCounts(rows: Array<{ source: DataSource; _count: { _all: number } }>): Partial<Record<DataSource, number>> {
+  return Object.fromEntries(rows.map((row) => [row.source, row._count._all]));
+}
+
+/** Bounded Yahoo repair: fills holes and replaces any synthetic rows inside [from, to]. */
+export async function repairBarsRange(
+  symbol: string,
+  market: Market,
+  range: { from: string; to: string; now?: Date },
+): Promise<RangeRepairResult> {
+  if (market !== 'NASDAQ') throw new Error(`repairBarsRange only supports NASDAQ; got market=${market}`);
+  const from = parseRepairDay(range.from, 'from');
+  const to = parseRepairDay(range.to, 'to');
+  const now = range.now ?? new Date();
+  if (from > to) throw new Error('from must be on or before to');
+  if (to.getTime() > now.getTime()) throw new Error('to must not be in the future');
+  const maxTo = new Date(from);
+  maxTo.setUTCFullYear(maxTo.getUTCFullYear() + 10);
+  if (to > maxTo) {
+    throw new Error('repair range must not exceed 10 years');
+  }
+
+  const where = { symbol, market, interval: 'DAY' as const, ts: { gte: from, lte: to } };
+  const provider = new YahooFinanceProvider();
+  const requestDays = Math.ceil((now.getTime() - from.getTime()) / DAY_MS) + 1;
+  const providerCandles = await provider.getCandlesStrict(symbol, market, requestDays);
+  const candles = providerCandles.filter((c) => {
+    const ts = new Date(`${c.time}T00:00:00.000Z`);
+    return ts >= from && ts <= to;
+  });
+  if (candles.length === 0) throw new Error(`Yahoo returned zero candles in range ${range.from}..${range.to} for ${symbol}`);
+
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.marketBar.groupBy({ by: ['source'], where, _count: { _all: true } });
+    for (const c of candles) {
+      const ts = new Date(`${c.time}T00:00:00.000Z`);
+      const fields = {
+        open: new Prisma.Decimal(c.open), high: new Prisma.Decimal(c.high), low: new Prisma.Decimal(c.low),
+        close: new Prisma.Decimal(c.close), volume: new Prisma.Decimal(c.value ?? 0), source: 'YAHOO' as const,
+      };
+      await tx.marketBar.upsert({
+        where: { symbol_market_interval_ts: { symbol, market, interval: 'DAY', ts } },
+        create: { symbol, market, interval: 'DAY', ts, ...fields }, update: fields,
+      });
+    }
+    const [after, persistedRows] = await Promise.all([
+      tx.marketBar.groupBy({ by: ['source'], where, _count: { _all: true } }),
+      tx.marketBar.findMany({ where, select: { ts: true, source: true } }),
+    ]);
+    const unsupported = persistedRows.filter((row) => row.source !== 'YAHOO');
+    if (unsupported.length) throw new Error(`repair verification failed: ${unsupported.length} non-YAHOO row(s) remain`);
+    const persistedDates = new Set(persistedRows.map((row) => row.ts.toISOString().slice(0, 10)));
+    const missing = candles.filter((c) => !persistedDates.has(c.time));
+    if (missing.length) throw new Error(`repair verification failed: ${missing.length} Yahoo candle date(s) were not persisted`);
+    const afterBySource = sourceCounts(after);
+    return {
+      upserted: candles.length, returned: candles.length, persisted: persistedRows.length,
+      remainingMock: afterBySource.MOCK ?? 0, source: 'YAHOO' as const,
+      beforeBySource: sourceCounts(before), afterBySource,
+    };
+  });
+}
+
 /**
  * Deep-history BACKWARDS backfill (QDR-6): the forward-only `ingestBars` cursor above never
  * looks earlier than the oldest stored bar, so once a symbol has *any* recent history it can

@@ -14,6 +14,11 @@ import { pathToFileURL } from 'node:url';
 import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../src/quant/strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../src/quant/strategies/gapperOrb';
+import {
+  buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
+  stocksInPlayPrehistoryStart,
+  type SourcedDailyRow, type SourcedMinuteRow, type StocksInPlayAggregate,
+} from '../src/quant/strategies/stocksInPlayOrb';
 import { NASDAQ_HALAL_UNIVERSE } from '../src/quant/strategies/bollingerMrLong';
 import type { StrategySetup } from '../src/quant/strategies/types';
 import { loadAllFixtures } from '../src/quant/data/fixtureLoader';
@@ -33,9 +38,9 @@ import {
   type BacktestBar, type DailyBarInput,
 } from '../src/quant/backtest/engine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
-import { summarizeDailyReturns, toDailyReturns } from '../src/quant/backtest/distribution';
+import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
 import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
-import { assembleReportCard, renderReportCard, type DataFeed } from '../src/quant/backtest/reportCard';
+import { assembleReportCard, renderReportCard, type DataFeed, type ShariaValidationState } from '../src/quant/backtest/reportCard';
 
 const D = Prisma.Decimal;
 
@@ -65,10 +70,52 @@ function gitSha(): string {
   }
 }
 
+/** Strict candidate runs are reproducible only from a clean tracked/untracked, non-ignored tree. */
+export function assertCandidateWorktreeClean(porcelainStatus: string): void {
+  if (porcelainStatus.trim()) {
+    throw new Error('Candidate-scoped backtest requires a clean Git worktree; commit or remove all non-ignored changes first');
+  }
+}
+
+/** Candidate evidence is reproducible only with a valid deterministic seed and real OOS split. */
+export function assertCandidateValidationConfig(seed: number, oosFraction: number): void {
+  if (!Number.isSafeInteger(seed) || seed < 0) {
+    throw new Error('--seed must be a finite non-negative safe integer for candidate-scoped backtests');
+  }
+  if (!Number.isFinite(oosFraction) || oosFraction <= 0 || oosFraction >= 1) {
+    throw new Error('--oos must be finite and strictly between 0 and 1 for candidate-scoped backtests');
+  }
+}
+
+function assertCurrentCandidateWorktreeClean(): void {
+  const status = execSync('git status --porcelain=v1 --untracked-files=all', { encoding: 'utf-8' });
+  assertCandidateWorktreeClean(status);
+}
+
+/** A trade-sequenced curve has one initial point; only transitions fully inside the slice count. */
+export function transitionCountInsideSlice(pointCount: number, sliceStart: number): number {
+  return Math.max(0, pointCount - Math.max(0, sliceStart) - 1);
+}
+
 interface SymbolSeries {
   symbol: string;
   bars: IntradayBarInput[];
   dayContext: Map<string, DayContext>;
+}
+
+/** Fail closed even when a mocked or faulty DB ignores the execution query predicates. */
+export function assertAlpacaNasdaqExecutionRows(rows: readonly { market: string; source: string }[]): void {
+  if (rows.some((row) => row.market !== 'NASDAQ' || row.source !== 'ALPACA')) {
+    throw new Error('Intraday DB execution rows must be NASDAQ/ALPACA only');
+  }
+}
+
+/** Exact report-card state routing; noncandidate legacy setups retain their prior default. */
+export function shariaStateForSetup(
+  setupId: string,
+  candidateState?: ShariaValidationState,
+): ShariaValidationState {
+  return candidateState ?? (setupId === 'stocks-in-play-orb' ? 'UNSCREENED_EXECUTION_BLOCKED' : 'UNVERIFIED');
 }
 
 interface CandidateArtifactEvidence {
@@ -80,6 +127,7 @@ interface CandidateArtifactEvidence {
   symbolCount: number;
   generatedAt: string | null;
   corporateActionScreen: Record<string, unknown> | null;
+  shariaStatus: ParsedCandidateArtifact['shariaStatus'];
 }
 
 export function backtestResultFilename(
@@ -112,6 +160,7 @@ function loadCandidateArtifactFile(inputPath: string): {
       symbolCount: new Set(artifact.candidates.map((candidate) => candidate.symbol)).size,
       generatedAt: artifact.generatedAt,
       corporateActionScreen: artifact.corporateActionScreen,
+      shariaStatus: artifact.shariaStatus,
     },
   };
 }
@@ -149,13 +198,14 @@ async function listDbSymbols(want: string[] | null, from: string, to: string): P
  * stored at 00:00 UTC labeled with their trading date, so their UTC calendar date equals the
  * Eastern trading date used by intraday nasdaqDateKey — that alignment lands priorClose correctly.
  */
-async function loadDbSymbol(symbol: string, from: string, to: string): Promise<SymbolSeries> {
+export async function loadDbSymbol(symbol: string, from: string, to: string): Promise<SymbolSeries> {
   const { prisma } = await import('../src/lib/prisma');
   const fromDate = new Date(`${from}T00:00:00.000Z`);
   const toDate = new Date(`${to}T23:59:59.999Z`);
   const ibars = await prisma.intradayBar.findMany({
-    where: { symbol, ts: { gte: fromDate, lte: toDate } }, orderBy: { ts: 'asc' },
+    where: { symbol, market: 'NASDAQ', source: 'ALPACA', ts: { gte: fromDate, lte: toDate } }, orderBy: { ts: 'asc' },
   });
+  assertAlpacaNasdaqExecutionRows(ibars);
   const bars: IntradayBarInput[] = ibars.map((b) => ({
     ts: b.ts, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume,
     session: b.session, source: b.source,
@@ -314,6 +364,43 @@ async function listDailySymbols(want: string[] | null, from: string, to: string)
   return distinct.map((d) => d.symbol);
 }
 
+/** Read only the bounded OR prehistory plus daily liquidity facts; return compact aggregates. */
+export async function loadStocksInPlayReferenceBook(from: string, to: string) {
+  const { prisma } = await import('../src/lib/prisma');
+  const fromDate = stocksInPlayPrehistoryStart(from);
+  const toDate = new Date(`${to}T23:59:59.999Z`);
+  const symbols = [...STOCKS_IN_PLAY_UNIVERSE_V1];
+  const book = new Map<string, StocksInPlayAggregate[]>();
+  let excludedNonAlpacaMinute = 0;
+  let excludedUnsupportedDaily = 0;
+  // Bound peak memory to one symbol's raw bars; only compact aggregates survive each iteration.
+  for (const symbol of symbols) {
+    const [minuteRows, dailyRows] = await Promise.all([
+      prisma.intradayBar.findMany({
+        where: { symbol, market: 'NASDAQ', source: 'ALPACA', ts: { gte: fromDate, lte: toDate } }, orderBy: { ts: 'asc' },
+        select: { symbol: true, market: true, ts: true, open: true, high: true, low: true, close: true, volume: true, session: true, source: true },
+      }),
+      prisma.marketBar.findMany({
+        where: { symbol, market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] }, ts: { gte: fromDate, lte: toDate } }, orderBy: { ts: 'asc' },
+        select: { symbol: true, ts: true, high: true, low: true, close: true, volume: true, source: true },
+      }),
+    ]);
+    assertAlpacaNasdaqExecutionRows(minuteRows);
+    const built = buildStocksInPlayBook(
+      minuteRows.map((r): SourcedMinuteRow => ({ symbol: r.symbol, ts: r.ts, open: Number(r.open), high: Number(r.high), low: Number(r.low), close: Number(r.close), volume: Number(r.volume), session: r.session, source: r.source })),
+      dailyRows.map((r): SourcedDailyRow => ({ symbol: r.symbol, ts: r.ts, high: Number(r.high), low: Number(r.low), close: Number(r.close), volume: Number(r.volume), source: r.source })),
+    );
+    if (dailyRows.some((row) => row.source !== 'YAHOO' && row.source !== 'ALPACA')) {
+      throw new Error(`Stocks-in-play daily liquidity rows must be YAHOO/ALPACA only (${symbol})`);
+    }
+    const aggregate = built.book.get(symbol);
+    if (aggregate) book.set(symbol, aggregate);
+    excludedNonAlpacaMinute += built.excludedNonAlpacaMinute;
+    excludedUnsupportedDaily += built.excludedUnsupportedDaily;
+  }
+  return { book, excludedNonAlpacaMinute, excludedUnsupportedDaily };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const setupId = args.setup;
@@ -336,10 +423,12 @@ async function main() {
 
   const wantSymbols = args.symbols ? args.symbols.split(',').map((s) => s.trim()) : null;
   const startingCash = new D(100_000);
-  const source = (args.source ?? 'fixtures') as 'fixtures' | 'db';
+  // stocks-in-play-orb validates on the REAL Alpaca-IEX minute spine (DB), not the small committed
+  // fixture set — so it defaults to --source db unless overridden.
+  const source = (args.source ?? (setupId === 'stocks-in-play-orb' ? 'db' : 'fixtures')) as 'fixtures' | 'db';
 
   const cadence = setup.cadence;
-  const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : args.candidates ? 'alpaca-iex' : 'fixtures-real')) as DataFeed;
+  const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : (args.candidates || source === 'db') ? 'alpaca-iex' : 'fixtures-real')) as DataFeed;
 
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
@@ -353,6 +442,8 @@ async function main() {
     }
     if (feed !== 'alpaca-iex') throw new Error('--candidates requires --feed alpaca-iex');
     if (wantSymbols) throw new Error('--symbols cannot be combined with --candidates; the artifact is the exact universe');
+    assertCandidateValidationConfig(seed, oosFraction);
+    assertCurrentCandidateWorktreeClean();
     const loaded = loadCandidateArtifactFile(args.candidates);
     candidateArtifact = loaded.artifact;
     candidateEvidence = loaded.evidence;
@@ -413,9 +504,22 @@ async function main() {
       }
       symbols = candidateArtifact
         ? Array.from(candidatesBySymbol.keys()).sort()
+        : setupId === 'stocks-in-play-orb'
+          ? [...STOCKS_IN_PLAY_UNIVERSE_V1]
         : source === 'db'
           ? await listDbSymbols(wantSymbols, from, to)
         : fixtureSeries!.map((s) => s.symbol);
+      if (setupId === 'stocks-in-play-orb') {
+        const requested = wantSymbols?.slice().sort().join(',');
+        const v1 = [...STOCKS_IN_PLAY_UNIVERSE_V1].sort().join(',');
+        if (requested && requested !== v1) throw new Error('stocks-in-play-orb@v1 requires its exact 11-symbol deep-minute universe');
+        symbols = [...STOCKS_IN_PLAY_UNIVERSE_V1];
+        if (source !== 'db' || feed !== 'alpaca-iex') throw new Error('stocks-in-play-orb@v1 requires --source db --feed alpaca-iex');
+        const prepared = await loadStocksInPlayReferenceBook(from, to);
+        excludedMock += prepared.excludedUnsupportedDaily + prepared.excludedNonAlpacaMinute;
+        setup.prepareUniverse?.({ symbols, closesBySymbol: new Map(), stocksInPlayBook: prepared.book });
+        console.log(`prepared stocks-in-play PIT book for ${prepared.book.size}/11 symbols [OR=ALPACA-IEX; daily liquidity=YAHOO/ALPACA consolidated; ${prepared.excludedNonAlpacaMinute} non-ALPACA minute + ${prepared.excludedUnsupportedDaily} unsupported daily rows excluded; ${from}..${to}; 35d prehistory]`);
+      }
       const fixtureByName = new Map((fixtureSeries ?? []).map((s) => [s.symbol, s] as const));
       const loadSeries = (symbol: string): Promise<SymbolSeries> =>
         candidateArtifact
@@ -440,7 +544,11 @@ async function main() {
           });
           pooledTradeReturns.push(...sim.tradeReturns);
           pooledTradeRecords.push(...sim.tradeRecords);
-          pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
+          pooledDailyReturns.push(...(
+            batchPerDay
+              ? toIndependentPeriodReturns([sim.equityCurve], Number(startingCash))
+              : toDailyReturns(sim.equityCurve, nasdaqDateKey)
+          ));
           symTrades += sim.trades;
         }
         console.log(`${bars.length} bars, ${chunks.length} days → ${symTrades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
@@ -466,7 +574,8 @@ async function main() {
   const turnover = pooledTradeRecords.length; // count proxy; per-symbol notional pooled below is noisy
   const full = computeMetrics(curve, { trades: sortedTrades.length, turnover });
   const oosStart = Math.floor(curve.length * (1 - oosFraction));
-  const oos = computeMetrics(curve.slice(oosStart), { trades: sortedTrades.length, turnover });
+  const oosTrades = transitionCountInsideSlice(curve.length, oosStart);
+  const oos = computeMetrics(curve.slice(oosStart), { trades: oosTrades, turnover: oosTrades });
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
   const bootstrap = bootstrapTradeOutcomes(pooledTradeReturns, {
@@ -494,6 +603,8 @@ async function main() {
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
+      shariaState: shariaStateForSetup(setupId, candidateArtifact?.shariaStatus),
+      ...(candidateArtifact ? { dataQualityPitOk: true, reproducible: true } : {}),
     }),
     ...(candidateEvidence ? {
       candidateArtifact: {

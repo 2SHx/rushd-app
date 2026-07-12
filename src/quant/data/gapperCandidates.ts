@@ -187,6 +187,7 @@ export interface ParsedCandidateArtifact {
   totalDiscoveredCandidateCount: number | null;
   generatedAt: string | null;
   corporateActionScreen: Record<string, unknown> | null;
+  shariaStatus: 'UNSCREENED_EXECUTION_BLOCKED' | 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
 }
 
 export interface CandidateArtifactParseOptions {
@@ -273,6 +274,15 @@ export function parseCandidateArtifact(
   ) {
     throw new Error('Candidate artifact candidateCount must be a nonnegative integer');
   }
+  const shariaStates = new Set([
+    'UNSCREENED_EXECUTION_BLOCKED',
+    'VERIFIED_COMPLIANT',
+    'VERIFIED_NON_COMPLIANT',
+    'UNVERIFIED',
+  ]);
+  if (artifact.shariaStatus !== undefined && !shariaStates.has(String(artifact.shariaStatus))) {
+    throw new Error('Candidate artifact shariaStatus is invalid');
+  }
 
   const byKey = new Map<string, SnapshotArtifactCandidate>();
   artifact.candidates.forEach((raw, index) => {
@@ -303,12 +313,16 @@ export function parseCandidateArtifact(
       typeof artifact.totalDiscoveredCandidateCount === 'number' ? artifact.totalDiscoveredCandidateCount : null,
     generatedAt: typeof artifact.generatedAt === 'string' ? artifact.generatedAt : null,
     corporateActionScreen: (artifact.corporateActionScreen as Record<string, unknown> | undefined) ?? null,
+    shariaStatus: (artifact.shariaStatus as ParsedCandidateArtifact['shariaStatus'] | undefined) ?? 'UNVERIFIED',
   };
   if (parsed.candidateCount != null && parsed.candidateCount !== parsed.candidates.length) {
     throw new Error('Candidate artifact candidateCount must equal canonical candidates.length');
   }
-  if (options.requireCompletedCorporateActionScreen && parsed.candidates.length) {
-    assertCompletedCorporateActionScreen(parsed);
+  if (options.requireCompletedCorporateActionScreen) {
+    if (parsed.shariaStatus !== 'UNSCREENED_EXECUTION_BLOCKED') {
+      throw new Error('Strict candidate artifact requires shariaStatus=UNSCREENED_EXECUTION_BLOCKED');
+    }
+    if (parsed.candidates.length) assertCompletedCorporateActionScreen(parsed);
   }
   return parsed;
 }

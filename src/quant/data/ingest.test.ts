@@ -3,8 +3,10 @@ import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    marketBar: { findFirst: vi.fn(), upsert: vi.fn(), createMany: vi.fn() },
-    $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
+    marketBar: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), createMany: vi.fn(), groupBy: vi.fn() },
+    $transaction: vi.fn(async (work: unknown) => typeof work === 'function'
+      ? (work as (tx: unknown) => Promise<unknown>)(prisma)
+      : Promise.all(work as Promise<unknown>[])),
   },
 }));
 
@@ -18,7 +20,7 @@ vi.mock('@/services/marketData', async () => {
 
 import { prisma } from '@/lib/prisma';
 import { MockProvider, registry, YahooFinanceProvider } from '@/services/marketData';
-import { ingestBars, ingestBarsBackfill } from './ingest';
+import { ingestBars, ingestBarsBackfill, repairBarsRange } from './ingest';
 
 const D = Prisma.Decimal;
 const candles = [
@@ -172,6 +174,102 @@ describe('ingestBarsBackfill (BACKWARDS deep-history)', () => {
 
     expect(result.inserted).toBe(0);
     expect(prisma.marketBar.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('repairBarsRange', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.marketBar.groupBy as any)
+      .mockResolvedValueOnce([{ source: 'MOCK', _count: { _all: 1 } }])
+      .mockResolvedValueOnce([{ source: 'YAHOO', _count: { _all: 2 } }]);
+    (prisma.marketBar.findMany as any).mockResolvedValue([
+      { ts: new Date('2024-01-01T00:00:00.000Z'), source: 'YAHOO' },
+      { ts: new Date('2024-01-02T00:00:00.000Z'), source: 'YAHOO' },
+    ]);
+  });
+
+  it('fills holes, replaces MOCK rows, and restricts reads and writes to the inclusive range', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue([
+      { time: '2023-12-29', open: 1, high: 2, low: 1, close: 2, value: 10 },
+      ...candles,
+      { time: '2024-01-03', open: 3, high: 4, low: 2, close: 3, value: 20 },
+    ]);
+
+    const result = await repairBarsRange('GOOGL', 'NASDAQ', {
+      from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10T00:00:00.000Z'),
+    });
+
+    expect(result).toEqual({ upserted: 2, returned: 2, persisted: 2, remainingMock: 0, source: 'YAHOO', beforeBySource: { MOCK: 1 }, afterBySource: { YAHOO: 2 } });
+    expect(YahooFinanceProvider.prototype.getCandlesStrict).toHaveBeenCalledWith('GOOGL', 'NASDAQ', 10);
+    expect(prisma.marketBar.groupBy).toHaveBeenCalledTimes(2);
+    expect((prisma.marketBar.groupBy as any).mock.calls[0][0].where.ts).toEqual({
+      gte: new Date('2024-01-01T00:00:00.000Z'), lte: new Date('2024-01-02T00:00:00.000Z'),
+    });
+    expect(prisma.marketBar.upsert).toHaveBeenCalledTimes(2);
+    for (const [{ create, update }] of (prisma.marketBar.upsert as any).mock.calls) {
+      expect(create.source).toBe('YAHOO');
+      expect(update.source).toBe('YAHOO');
+      expect(create.ts >= new Date('2024-01-01T00:00:00.000Z') && create.ts <= new Date('2024-01-02T00:00:00.000Z')).toBe(true);
+    }
+  });
+
+  it('rejects invalid, reversed, future, and overlong ranges before querying', async () => {
+    const now = new Date('2025-01-01T00:00:00.000Z');
+    await expect(repairBarsRange('AAPL', 'NASDAQ', { from: '2024-02-30', to: '2024-03-01', now })).rejects.toThrow(/valid/);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', { from: '2024-02-02', to: '2024-02-01', now })).rejects.toThrow(/on or before/);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', { from: '2025-01-01', to: '2025-01-02', now })).rejects.toThrow(/future/);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', { from: '2010-01-01', to: '2020-01-02', now })).rejects.toThrow(/10 years/);
+    expect(prisma.marketBar.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('fails without writing when Yahoo returns no in-range candles', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue([]);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', {
+      from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10T00:00:00.000Z'),
+    })).rejects.toThrow(/zero candles/);
+    expect(prisma.marketBar.upsert).not.toHaveBeenCalled();
+  });
+
+  it('propagates strict Yahoo failure without writing, even for a one-weekday range', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockRejectedValue(new Error('Yahoo unavailable'));
+    await expect(repairBarsRange('AAPL', 'NASDAQ', {
+      from: '2024-01-02', to: '2024-01-02', now: new Date('2024-01-10T00:00:00.000Z'),
+    })).rejects.toThrow(/Yahoo unavailable/);
+    expect(prisma.marketBar.upsert).not.toHaveBeenCalled();
+  });
+
+  it('throws inside the transaction when a residual MOCK row remains', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(candles);
+    (prisma.marketBar.findMany as any).mockResolvedValue([
+      { ts: new Date('2024-01-01T00:00:00.000Z'), source: 'YAHOO' },
+      { ts: new Date('2024-01-02T00:00:00.000Z'), source: 'MOCK' },
+    ]);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', {
+      from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10'),
+    })).rejects.toThrow(/non-YAHOO/);
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it('throws inside the transaction when a returned Yahoo date is missing after persistence', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(candles);
+    (prisma.marketBar.findMany as any).mockResolvedValue([
+      { ts: new Date('2024-01-01T00:00:00.000Z'), source: 'YAHOO' },
+    ]);
+    await expect(repairBarsRange('AAPL', 'NASDAQ', {
+      from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10'),
+    })).rejects.toThrow(/not persisted/);
+  });
+
+  it('is idempotent by issuing identical unique-key upserts on rerun', async () => {
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(candles);
+    await repairBarsRange('AAPL', 'NASDAQ', { from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10') });
+    (prisma.marketBar.groupBy as any)
+      .mockResolvedValueOnce([{ source: 'YAHOO', _count: { _all: 2 } }])
+      .mockResolvedValueOnce([{ source: 'YAHOO', _count: { _all: 2 } }]);
+    await repairBarsRange('AAPL', 'NASDAQ', { from: '2024-01-01', to: '2024-01-02', now: new Date('2024-01-10') });
+    expect((prisma.marketBar.upsert as any).mock.calls[2][0].where).toEqual((prisma.marketBar.upsert as any).mock.calls[0][0].where);
+    expect((prisma.marketBar.upsert as any).mock.calls[3][0].where).toEqual((prisma.marketBar.upsert as any).mock.calls[1][0].where);
   });
 });
 

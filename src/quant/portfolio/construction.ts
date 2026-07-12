@@ -56,9 +56,10 @@ async function computeMomentumScore(
 export async function constructHalalPortfolio(
   market: 'TASI' | 'NASDAQ',
   asOf: Date,
-  limits = { maxNameWeight: 0.20, maxPositions: 5 }
+  limits = { maxNameWeight: 0.20, maxPositions: 5 },
+  symbolAllowlist?: readonly string[]
 ): Promise<PortfolioProposal> {
-  const universe = await getHalalUniverse(market);
+  const universe = await getHalalUniverse(market, symbolAllowlist);
   const scoredCandidates: { entry: HalalUniverseEntry; score: number }[] = [];
 
   for (const entry of universe) {

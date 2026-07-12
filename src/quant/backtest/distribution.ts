@@ -64,6 +64,17 @@ export function toDailyReturns(curve: EquityPoint[], dateKey: (d: Date) => strin
 }
 
 /**
+ * Return of each independently-capitalized simulation period. Unlike close-to-close aggregation,
+ * every supplied period contributes exactly one observation, including no-trade/zero-return days.
+ */
+export function toIndependentPeriodReturns(curves: readonly EquityPoint[][], startingEquity: number): number[] {
+  return curves.map((curve) => {
+    const endingEquity = curve.at(-1)?.equity ?? startingEquity;
+    return startingEquity !== 0 ? endingEquity / startingEquity - 1 : 0;
+  });
+}
+
+/**
  * §6 implausible extension: a claimed daily return is implausible when it lies ≥ `sigma`
  * standard deviations above the mean of validated history (i.e. beyond what the measured
  * distribution supports). With <2 observations there is no validated history, so any nonzero

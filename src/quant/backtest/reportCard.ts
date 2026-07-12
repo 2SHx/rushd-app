@@ -10,6 +10,26 @@ import type { BootstrapResult, PermutationResult } from './monteCarlo';
 export type DataFeed = 'alpaca-iex' | 'fixtures-real' | 'yahoo-short-history' | 'yahoo-daily';
 
 export const MIN_TRADES_FOR_VALIDATION = 100;
+/** Versioned QDR-7 default: at most 5% of bootstrap paths may reach the ruin threshold. */
+export const DEFAULT_MAX_RISK_OF_RUIN = 0.05;
+
+export type TerminalValidationStatus = 'ACCEPTED' | 'REJECTED';
+export type ShariaValidationState =
+  | 'VERIFIED_COMPLIANT'
+  | 'VERIFIED_NON_COMPLIANT'
+  | 'UNSCREENED_EXECUTION_BLOCKED'
+  | 'UNVERIFIED';
+export type RejectionReasonCode =
+  | 'INSUFFICIENT_SAMPLE'
+  | 'OOS_FAILURE'
+  | 'DSR_FAILURE'
+  | 'DRAWDOWN_RISK_FAILURE'
+  | 'IMPLAUSIBLE_RESULT'
+  | 'NO_PROFIT_PLATEAU_OVERFIT'
+  | 'SHARIA_NON_COMPLIANT'
+  | 'SHARIA_UNVERIFIABLE'
+  | 'DATA_QUALITY_PIT_FAILURE'
+  | 'REPRODUCIBILITY_FAILURE';
 
 export interface PromotionChecklist {
   walkForward: boolean;
@@ -19,6 +39,9 @@ export interface PromotionChecklist {
   deflatedSharpeOk: boolean; // DSR > 0.95
   profitPlateau: boolean; // parameter robustness (evaluated upstream; false until proven)
   mcMaxDDWithinBreaker: boolean; // MC maxDD p95 ≤ drawdown breaker
+  mcRiskOfRuinWithinLimit: boolean;
+  dataQualityPitOk: boolean;
+  reproducible: boolean;
 }
 
 export interface ReportCard {
@@ -38,7 +61,11 @@ export interface ReportCard {
   kellyClampedQty: number;
   checklist: PromotionChecklist;
   implausible: boolean;
-  verdict: 'INSUFFICIENT_TRADES' | 'FAILED_PROMOTION' | 'PROMOTABLE';
+  shariaState: ShariaValidationState;
+  status: TerminalValidationStatus;
+  rejectionReasonCodes: RejectionReasonCode[];
+  acceptanceMeaning: 'AUTO_PAPER_ADMISSION_ONLY';
+  riskOfRuinLimit: number;
 }
 
 export interface AssembleArgs {
@@ -58,33 +85,57 @@ export interface AssembleArgs {
   kellyClampedQty: number;
   oosFraction: number;
   drawdownBreakerPct: number;
+  maxRiskOfRuin?: number;
+  walkForward?: boolean;
   profitPlateau?: boolean;
+  shariaState?: ShariaValidationState;
+  dataQualityPitOk?: boolean;
+  reproducible?: boolean;
 }
 
 export function assembleReportCard(a: AssembleArgs): ReportCard {
   const enoughTrades = a.full.trades >= MIN_TRADES_FOR_VALIDATION;
   const mcMaxDDWithinBreaker = a.bootstrap.maxDrawdown.p95 <= a.drawdownBreakerPct;
+  const riskOfRuinLimit = a.maxRiskOfRuin ?? DEFAULT_MAX_RISK_OF_RUIN;
+  if (!Number.isFinite(riskOfRuinLimit) || riskOfRuinLimit < 0 || riskOfRuinLimit > 1) {
+    throw new Error('maxRiskOfRuin must be a finite ratio between 0 and 1');
+  }
+  const mcRiskOfRuinWithinLimit = a.bootstrap.riskOfRuin <= riskOfRuinLimit;
   const checklist: PromotionChecklist = {
-    walkForward: enoughTrades, // walk-forward only meaningful with a real trade population
+    walkForward: a.walkForward ?? false,
     oosHoldoutPct: a.oosFraction,
     oosHoldoutOk: a.oosFraction >= 0.2,
     enoughTrades,
     deflatedSharpeOk: a.oos.deflatedSharpe > 0.95,
     profitPlateau: a.profitPlateau ?? false,
     mcMaxDDWithinBreaker,
+    mcRiskOfRuinWithinLimit,
+    dataQualityPitOk: a.dataQualityPitOk ?? false,
+    reproducible: a.reproducible ?? false,
   };
   const implausible = a.full.implausible || a.oos.implausible;
-  const promotable = Object.values(checklist).every((v) => (typeof v === 'boolean' ? v : true)) &&
-    checklist.oosHoldoutOk && !implausible;
-  const verdict: ReportCard['verdict'] = !enoughTrades
-    ? 'INSUFFICIENT_TRADES'
-    : promotable ? 'PROMOTABLE' : 'FAILED_PROMOTION';
+  const shariaState = a.shariaState ?? 'UNVERIFIED';
+  const rejectionReasonCodes: RejectionReasonCode[] = [];
+  if (!enoughTrades) rejectionReasonCodes.push('INSUFFICIENT_SAMPLE');
+  if (!checklist.walkForward || !checklist.oosHoldoutOk || a.oos.cagr <= 0) rejectionReasonCodes.push('OOS_FAILURE');
+  if (!checklist.deflatedSharpeOk) rejectionReasonCodes.push('DSR_FAILURE');
+  if (!mcMaxDDWithinBreaker || !mcRiskOfRuinWithinLimit) rejectionReasonCodes.push('DRAWDOWN_RISK_FAILURE');
+  if (implausible) rejectionReasonCodes.push('IMPLAUSIBLE_RESULT');
+  if (!checklist.profitPlateau) rejectionReasonCodes.push('NO_PROFIT_PLATEAU_OVERFIT');
+  if (shariaState === 'VERIFIED_NON_COMPLIANT') rejectionReasonCodes.push('SHARIA_NON_COMPLIANT');
+  if (shariaState === 'UNSCREENED_EXECUTION_BLOCKED' || shariaState === 'UNVERIFIED') {
+    rejectionReasonCodes.push('SHARIA_UNVERIFIABLE');
+  }
+  if (!checklist.dataQualityPitOk) rejectionReasonCodes.push('DATA_QUALITY_PIT_FAILURE');
+  if (!checklist.reproducible) rejectionReasonCodes.push('REPRODUCIBILITY_FAILURE');
+  const status: TerminalValidationStatus = rejectionReasonCodes.length === 0 ? 'ACCEPTED' : 'REJECTED';
 
   return {
     setup: a.setup, symbols: a.symbols, from: a.from, to: a.to, dataFeed: a.dataFeed,
     seed: a.seed, gitSha: a.gitSha, full: a.full, oos: a.oos, distribution: a.distribution,
     bootstrap: a.bootstrap, permutation: a.permutation, kellyFraction: a.kellyFraction,
-    kellyClampedQty: a.kellyClampedQty, checklist, implausible, verdict,
+    kellyClampedQty: a.kellyClampedQty, checklist, implausible, shariaState, status,
+    rejectionReasonCodes, acceptanceMeaning: 'AUTO_PAPER_ADMISSION_ONLY', riskOfRuinLimit,
   };
 }
 
@@ -105,7 +156,7 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  ${c.symbols.join(', ')}  |  ${c.from} → ${c.to}`);
   L.push(paint(`  dataFeed=${c.dataFeed}  seed=${c.seed}  gitSha=${c.gitSha}`, DIM));
   L.push('────────────────────────────────────────────────────────────────');
-  L.push(`  Trades (full):        ${c.full.trades}   Turnover: ${c.full.turnover.toFixed(2)}x`);
+  L.push(`  Trades (full/OOS):    ${c.full.trades} / ${c.oos.trades}   Turnover: ${c.full.turnover.toFixed(2)}x`);
   L.push(`  CAGR:                 ${pct(c.full.cagr)}   (OOS ${pct(c.oos.cagr)})`);
   L.push(`  Sharpe:               ${c.full.sharpe.toFixed(2)}   (OOS ${c.oos.sharpe.toFixed(2)})`);
   L.push(`  Deflated Sharpe:      ${c.full.deflatedSharpe.toFixed(3)}   (OOS ${c.oos.deflatedSharpe.toFixed(3)})`);
@@ -117,21 +168,22 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push('──── Monte Carlo gate (seeded) ────');
   L.push(`  Bootstrap resamples:  ${c.bootstrap.resamples}  (${c.bootstrap.tradesPerPath} trades/path)`);
   L.push(`  Max DD p5/p50/p95:    ${pct(c.bootstrap.maxDrawdown.p5)} / ${pct(c.bootstrap.maxDrawdown.p50)} / ${pct(c.bootstrap.maxDrawdown.p95)}`);
-  L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)}`);
+  L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
   L.push(`  Entry-jitter p-value: ${c.permutation.pValue.toFixed(3)}  (mean/trade ${pct(c.permutation.observedMean)})`);
   L.push(`  Kelly fraction:       ${c.kellyFraction.toFixed(4)}  → clamped qty ${c.kellyClampedQty.toFixed(4)}`);
   L.push('──── promotion checklist (all required) ────');
   L.push(`  walk-forward:${yn(c.checklist.walkForward)}  OOS≥20% (${pct(c.checklist.oosHoldoutPct)}):${yn(c.checklist.oosHoldoutOk)}  trades≥100:${yn(c.checklist.enoughTrades)}`);
   L.push(`  deflated-Sharpe:${yn(c.checklist.deflatedSharpeOk)}  profit-plateau:${yn(c.checklist.profitPlateau)}  MC-maxDD≤breaker:${yn(c.checklist.mcMaxDDWithinBreaker)}`);
+  L.push(`  MC-risk-of-ruin≤limit:${yn(c.checklist.mcRiskOfRuinWithinLimit)}`);
+  L.push(`  data/PIT integrity:${yn(c.checklist.dataQualityPitOk)}  reproducible clean run:${yn(c.checklist.reproducible)}`);
   L.push('────────────────────────────────────────────────────────────────');
   if (c.implausible) {
     L.push(paint('  ⚠ IMPLAUSIBLE: Sharpe > 3 or daily claim ≥ 3σ — treat as overfit/bug', RED));
   }
-  const vColor = c.verdict === 'PROMOTABLE' ? GREEN : c.verdict === 'INSUFFICIENT_TRADES' ? YELLOW : RED;
-  L.push(paint(`  VERDICT: ${c.verdict}`, vColor));
-  if (c.verdict === 'INSUFFICIENT_TRADES') {
-    L.push(paint(`  (need ≥ ${MIN_TRADES_FOR_VALIDATION} trades; the fixture spine is too small to validate — backfill required)`, YELLOW));
-  }
+  L.push(`  Sharia state:         ${c.shariaState}`);
+  L.push(paint(`  STATUS: ${c.status}`, c.status === 'ACCEPTED' ? GREEN : RED));
+  L.push(`  Rejection reasons:    ${c.rejectionReasonCodes.length ? c.rejectionReasonCodes.join(', ') : 'none'}`);
+  L.push('  ACCEPTED = admission to AUTO_PAPER only; no profit promise or AUTO_REAL permission.');
   L.push('════════════════════════════════════════════════════════════════');
   return L.join('\n');
 }

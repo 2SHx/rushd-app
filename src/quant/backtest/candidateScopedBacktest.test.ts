@@ -1,12 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({ findMany: vi.fn() }));
+const h = vi.hoisted(() => ({ findMany: vi.fn(), marketFindMany: vi.fn(), snapshotFindMany: vi.fn() }));
 
 vi.mock('../../lib/prisma', () => ({
-  prisma: { intradayBar: { findMany: h.findMany } },
+  prisma: {
+    intradayBar: { findMany: h.findMany },
+    marketBar: { findMany: h.marketFindMany },
+    symbolSnapshot: { findMany: h.snapshotFindMany },
+  },
 }));
 
-import { backtestResultFilename, loadDbCandidateSymbol } from '../../../scripts/backtest';
+import {
+  assertCandidateValidationConfig,
+  assertCandidateWorktreeClean,
+  assertAlpacaNasdaqExecutionRows,
+  backtestResultFilename,
+  loadDbCandidateSymbol,
+  loadDbSymbol,
+  shariaStateForSetup,
+  transitionCountInsideSlice,
+} from '../../../scripts/backtest';
 import type { SnapshotArtifactCandidate } from '../data/gapperCandidates';
 
 const candidate: SnapshotArtifactCandidate = {
@@ -87,5 +100,56 @@ describe('candidate-scoped intraday DB loading', () => {
     expect(backtestResultFilename('gapper-orb', '2026-01-01', '2026-02-01', digestA)).not.toBe(
       backtestResultFilename('gapper-orb', '2026-01-01', '2026-02-01', digestB),
     );
+  });
+
+  it('rejects every tracked or untracked non-ignored candidate worktree change', () => {
+    expect(() => assertCandidateWorktreeClean('')).not.toThrow();
+    expect(() => assertCandidateWorktreeClean('\n')).not.toThrow();
+    expect(() => assertCandidateWorktreeClean(' M scripts/backtest.ts\n')).toThrow(/clean Git worktree/);
+    expect(() => assertCandidateWorktreeClean('?? scratch.json\n')).toThrow(/clean Git worktree/);
+  });
+
+  it('accepts seed 0 and a strict interior OOS fraction', () => {
+    expect(() => assertCandidateValidationConfig(0, 0.3)).not.toThrow();
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1])(
+    'rejects invalid candidate seed %s',
+    (seed) => expect(() => assertCandidateValidationConfig(seed, 0.3)).toThrow(/--seed/),
+  );
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, 1, -0.1, 1.1])(
+    'rejects invalid candidate OOS fraction %s',
+    (oos) => expect(() => assertCandidateValidationConfig(42, oos)).toThrow(/--oos/),
+  );
+
+  it('counts only trade transitions fully inside the OOS curve slice', () => {
+    // 10 trades => 11 curve points; slice starts at point 7 => transitions 7→8, 8→9, 9→10.
+    expect(transitionCountInsideSlice(11, 7)).toBe(3);
+    expect(transitionCountInsideSlice(1, 0)).toBe(0);
+  });
+});
+
+describe('shared intraday provenance and setup metadata', () => {
+  it('constrains ordinary DB execution loads to NASDAQ/ALPACA and rechecks returned rows', async () => {
+    h.findMany.mockResolvedValueOnce([bar('2026-01-06', 10)]);
+    h.marketFindMany.mockResolvedValueOnce([]);
+    h.snapshotFindMany.mockResolvedValueOnce([]);
+    await loadDbSymbol('AAPL', '2026-01-06', '2026-01-06');
+    expect(h.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ symbol: 'AAPL', market: 'NASDAQ', source: 'ALPACA' }),
+    }));
+  });
+
+  it('accepts only NASDAQ/ALPACA execution rows and fails closed on either mismatch', () => {
+    expect(() => assertAlpacaNasdaqExecutionRows([{ market: 'NASDAQ', source: 'ALPACA' }])).not.toThrow();
+    expect(() => assertAlpacaNasdaqExecutionRows([{ market: 'TASI', source: 'ALPACA' }])).toThrow(/NASDAQ\/ALPACA/);
+    expect(() => assertAlpacaNasdaqExecutionRows([{ market: 'NASDAQ', source: 'MOCK' }])).toThrow(/NASDAQ\/ALPACA/);
+  });
+
+  it('routes stocks-in-play to the exact execution-blocked Sharia state without changing defaults', () => {
+    expect(shariaStateForSetup('stocks-in-play-orb')).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    expect(shariaStateForSetup('bollinger-mr-long')).toBe('UNVERIFIED');
+    expect(shariaStateForSetup('gapper-orb', 'VERIFIED_COMPLIANT')).toBe('VERIFIED_COMPLIANT');
   });
 });
