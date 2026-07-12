@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-13 — G5 model vs SPY/SPUS historical learning chart ✅
+Shipped: Persisted normalized-100 weekly model/SPY/SPUS comparison evidence in terminal `BacktestRun` cards and rendered a bilingual accessible chart with OOS boundary, sources, signed ending changes, mobile containment, and an honest legacy-rerun state.
+Decisions: Lazy-dev rung 2 reused the JSON evidence envelope (no schema/dependency); benchmarks are real Yahoo close-price ETF proxies, dividends excluded, common period starts at SPUS availability, and the model is explicitly pooled simulated trade-sequenced equity—not a daily investable portfolio.
+Open: All four teams were reproducibly rerun at `0daef96` and remain REJECTED; next build a true shared-cash daily portfolio/drawdown curve before MC fan or paper P&L, while automation stays inactive with zero ACCEPTED teams.
+
 ## 2026-07-12 — G5 strategy league evidence UI, first slice ✅
 Shipped: Authenticated `/quant/league` reads strict persisted terminal cards and graphs OOS CAGR versus MC p95 drawdown; accepted and rejected teams remain selectable with full/OOS metrics, gates, exact reasons, provenance, and Sharia execution state in English/Arabic.
 Decisions: Removed fabricated committee decisions and synthetic compound-growth fallbacks; missing equity history is shown as missing rather than invented. Mobile scroll is contained inside the graph/table cards, with RTL, interaction, and console checks executed in-browser.
