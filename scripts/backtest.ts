@@ -374,6 +374,19 @@ async function main() {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
       symbols = await listDailySymbols(wantSymbols, from, to);
+      // Cross-name preload (pairs/cross-sectional setups): hand the setup every symbol's REAL daily
+      // closes once, before the per-symbol loop, so a setup whose ctx is single-symbol (the engine
+      // is single-symbol) can still reason across names. MOCK is already excluded by loadDailySymbol;
+      // the setup PIT-filters ≤ asOf on read. Single-name setups omit prepareUniverse (no-op here).
+      if (setup.prepareUniverse) {
+        const closesBySymbol = new Map<string, { ts: Date; close: number }[]>();
+        for (const s of symbols) {
+          const { bars: sb } = await loadDailySymbol(s, from, to);
+          closesBySymbol.set(s, sb.map((b) => ({ ts: b.ts, close: Number(b.close) })));
+        }
+        setup.prepareUniverse({ symbols, closesBySymbol });
+        console.log(`prepared cross-name book for ${closesBySymbol.size} symbol(s) [pairs/cross-sectional]`);
+      }
       console.log(`\nprocessing ${symbols.length} symbol(s) [source=daily MarketBar, YAHOO/ALPACA only] …`);
       for (let i = 0; i < symbols.length; i++) {
         const symbol = symbols[i];
