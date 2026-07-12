@@ -12,6 +12,8 @@ import { execSync } from 'node:child_process';
 import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../src/quant/strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../src/quant/strategies/gapperOrb';
+import { NASDAQ_HALAL_UNIVERSE } from '../src/quant/strategies/bollingerMrLong';
+import type { StrategySetup } from '../src/quant/strategies/types';
 import { loadAllFixtures } from '../src/quant/data/fixtureLoader';
 import { nasdaqDateKey } from '../src/quant/data/snapshot';
 import { LookaheadError } from '../src/quant/data/pointInTime';
@@ -19,6 +21,10 @@ import {
   simulateIntraday, DEFAULT_INTRADAY_LIMITS,
   type DayContext, type IntradayBarInput, type TradeRecord,
 } from '../src/quant/backtest/intradayEngine';
+import {
+  simulateSetupDaily, filterRealDailyBars, DEFAULT_BT_LIMITS,
+  type BacktestBar, type DailyBarInput,
+} from '../src/quant/backtest/engine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
 import { summarizeDailyReturns, toDailyReturns } from '../src/quant/backtest/distribution';
 import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
@@ -150,21 +156,61 @@ function buildFixtureSeries(want: string[] | null, from: string, to: string): Sy
   });
 }
 
+/**
+ * DAILY source: real MarketBar spine (interval=DAY, market=NASDAQ) for one symbol. Loads ALL
+ * rows (incl. MOCK) then hands them through `filterRealDailyBars`, so the excluded-MOCK count is
+ * observed and asserted in-path (user no-mock directive). Returns {} when the symbol has no real
+ * daily bars.
+ */
+async function loadDailySymbol(
+  symbol: string, from: string, to: string,
+): Promise<{ bars: BacktestBar[]; excludedMock: number }> {
+  const { prisma } = await import('../src/lib/prisma');
+  const rows = await prisma.marketBar.findMany({
+    where: {
+      symbol, market: 'NASDAQ', interval: 'DAY',
+      ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+    },
+    orderBy: { ts: 'asc' },
+  });
+  const withSource: DailyBarInput[] = rows.map((r) => ({
+    ts: r.ts, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume, source: r.source,
+  }));
+  const { real, excludedMock } = filterRealDailyBars(withSource);
+  // Assertion (no-mock guard): no MOCK bar may reach the simulator.
+  if (real.some((b) => b.source === 'MOCK')) throw new Error(`MOCK bar leaked into ${symbol} daily series`);
+  const bars: BacktestBar[] = real.map((b) => ({ ts: b.ts, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }));
+  return { bars, excludedMock };
+}
+
+/** Distinct NASDAQ-halal symbols with REAL daily bars in [from,to] (MOCK excluded at source). */
+async function listDailySymbols(want: string[] | null, from: string, to: string): Promise<string[]> {
+  const { prisma } = await import('../src/lib/prisma');
+  const universe = want ?? [...NASDAQ_HALAL_UNIVERSE];
+  const distinct = await prisma.marketBar.findMany({
+    where: {
+      symbol: { in: universe }, market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] },
+      ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+    },
+    distinct: ['symbol'], select: { symbol: true }, orderBy: { symbol: 'asc' },
+  });
+  return distinct.map((d) => d.symbol);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const setupId = args.setup;
   const from = args.from;
   const to = args.to;
   const seed = Number(args.seed ?? '42');
-  const feed = (args.feed ?? 'fixtures-real') as DataFeed;
   const oosFraction = Number(args.oos ?? '0.3');
 
   if (!setupId || !from || !to) {
     console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--seed N]');
     process.exit(2);
   }
-  const setup = (STRATEGY_SETUP_CATALOG as Record<string, unknown>)[setupId] as
-    | (typeof STRATEGY_SETUP_CATALOG)[keyof typeof STRATEGY_SETUP_CATALOG]
+  const setup = (STRATEGY_SETUP_CATALOG as Record<string, StrategySetup<unknown>>)[setupId] as
+    | StrategySetup<unknown>
     | undefined;
   if (!setup) {
     console.error(`unknown setup "${setupId}". known: ${Object.keys(STRATEGY_SETUP_CATALOG).join(', ')}`);
@@ -175,54 +221,71 @@ async function main() {
   const startingCash = new D(100_000);
   const source = (args.source ?? 'fixtures') as 'fixtures' | 'db';
 
+  const cadence = setup.cadence;
+  const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : 'fixtures-real')) as DataFeed;
+
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
-
-  // ── REAL series (no synthetic bars). DB is STREAMED one symbol at a time (bounded memory: the
-  // prior whole-range load held all 20 symbols' minute bars at once and was OOM-killed). Fixtures
-  // are tiny, so they are built up-front and served from a lookup.
-  const fixtureSeries = source === 'db' ? null : buildFixtureSeries(wantSymbols, from, to);
-  const symbols = source === 'db'
-    ? await listDbSymbols(wantSymbols, from, to)
-    : fixtureSeries!.map((s) => s.symbol);
-  const fixtureByName = new Map((fixtureSeries ?? []).map((s) => [s.symbol, s] as const));
-  const loadSeries = (symbol: string): Promise<SymbolSeries> =>
-    source === 'db' ? loadDbSymbol(symbol, from, to) : Promise.resolve(fixtureByName.get(symbol)!);
 
   const pooledTradeReturns: number[] = [];
   const pooledTradeRecords: TradeRecord[] = [];
   const pooledDailyReturns: number[] = [];
   let lastPrice = 0;
+  let symbols: string[] = [];
+  let excludedMock = 0;
 
-  // Per-day batching (DB source): feed the engine one NASDAQ trading day at a time. gapper-orb is
-  // strictly intraday — positions are force-liquidated at each day's last bar and screen/entry/exit
-  // read ONLY same-day bars — so per-day input is EXACT for trade selection while turning the
-  // engine's per-bar day-scan from O(n²) (a 90-day symbol) into O(day²). This is a CLI feed choice,
-  // not an engine-semantics change; the only cross-day quantities it resets are the drawdown-breaker
-  // peak and the ATR/ADV sizing warmup (both sizing-side, immaterial to which setups fire).
-  const batchPerDay = source === 'db';
-  console.log(`\nprocessing ${symbols.length} symbol(s) [source=${source}${batchPerDay ? ', per-day batched' : ''}] …`);
   try {
-    for (let i = 0; i < symbols.length; i++) {
-      const symbol = symbols[i];
-      const t0 = Date.now();
-      process.stdout.write(`  [${i + 1}/${symbols.length}] ${symbol} … `);
-      const { bars, dayContext } = await loadSeries(symbol); // one symbol resident; released next loop
-      if (bars.length) lastPrice = Number(bars.at(-1)!.close);
-      const chunks: IntradayBarInput[][] = batchPerDay ? groupBarsByDay(bars) : [bars];
-      let symTrades = 0;
-      for (const chunk of chunks) {
-        const sim = simulateIntraday({
-          setup, params, symbol, market: 'NASDAQ', bars: chunk, dayContext, startingCash,
-          limits: DEFAULT_INTRADAY_LIMITS,
-        });
+    if (cadence === 'daily') {
+      // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
+      // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
+      symbols = await listDailySymbols(wantSymbols, from, to);
+      console.log(`\nprocessing ${symbols.length} symbol(s) [source=daily MarketBar, YAHOO/ALPACA only] …`);
+      for (let i = 0; i < symbols.length; i++) {
+        const symbol = symbols[i];
+        const t0 = Date.now();
+        process.stdout.write(`  [${i + 1}/${symbols.length}] ${symbol} … `);
+        const { bars, excludedMock: dropped } = await loadDailySymbol(symbol, from, to);
+        excludedMock += dropped;
+        if (bars.length) lastPrice = Number(bars.at(-1)!.close);
+        const sim = simulateSetupDaily({ setup, params, symbol, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
         pooledTradeReturns.push(...sim.tradeReturns);
         pooledTradeRecords.push(...sim.tradeRecords);
         pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
-        symTrades += sim.trades;
+        console.log(`${bars.length} real bars (${dropped} MOCK excl.) → ${sim.trades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
       }
-      console.log(`${bars.length} bars, ${chunks.length} days → ${symTrades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
+    } else {
+      // ── INTRADAY path (unchanged). DB is STREAMED one symbol at a time (bounded memory); fixtures
+      // are tiny, built up-front and served from a lookup. Per-day batching applies to DB source.
+      const fixtureSeries = source === 'db' ? null : buildFixtureSeries(wantSymbols, from, to);
+      symbols = source === 'db'
+        ? await listDbSymbols(wantSymbols, from, to)
+        : fixtureSeries!.map((s) => s.symbol);
+      const fixtureByName = new Map((fixtureSeries ?? []).map((s) => [s.symbol, s] as const));
+      const loadSeries = (symbol: string): Promise<SymbolSeries> =>
+        source === 'db' ? loadDbSymbol(symbol, from, to) : Promise.resolve(fixtureByName.get(symbol)!);
+      const batchPerDay = source === 'db';
+      console.log(`\nprocessing ${symbols.length} symbol(s) [source=${source}${batchPerDay ? ', per-day batched' : ''}] …`);
+      for (let i = 0; i < symbols.length; i++) {
+        const symbol = symbols[i];
+        const t0 = Date.now();
+        process.stdout.write(`  [${i + 1}/${symbols.length}] ${symbol} … `);
+        const { bars, dayContext } = await loadSeries(symbol); // one symbol resident; released next loop
+        if (bars.length) lastPrice = Number(bars.at(-1)!.close);
+        const chunks: IntradayBarInput[][] = batchPerDay ? groupBarsByDay(bars) : [bars];
+        let symTrades = 0;
+        for (const chunk of chunks) {
+          const sim = simulateIntraday({
+            setup, params, symbol, market: 'NASDAQ', bars: chunk, dayContext, startingCash,
+            limits: DEFAULT_INTRADAY_LIMITS,
+          });
+          pooledTradeReturns.push(...sim.tradeReturns);
+          pooledTradeRecords.push(...sim.tradeRecords);
+          pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
+          symTrades += sim.trades;
+        }
+        console.log(`${bars.length} bars, ${chunks.length} days → ${symTrades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
+      }
     }
   } catch (err) {
     if (err instanceof LookaheadError) {
@@ -231,6 +294,7 @@ async function main() {
     }
     throw err;
   }
+  if (cadence === 'daily') console.log(`\nexcluded ${excludedMock} MOCK bar(s) across the universe (no-mock directive)`);
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
   const sortedTrades = [...pooledTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());

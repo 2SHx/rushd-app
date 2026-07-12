@@ -9,6 +9,13 @@ export interface StrategyPointInTimeContext {
   readonly bars: readonly IntradayBar[];
   readonly snapshot: SymbolSnapshot | null;
   readonly positionQty: Prisma.Decimal;
+  /**
+   * Open-position provenance, populated by the engine when a position is held (else null).
+   * Lets a stateless `exit()` express entry-relative rules (ATR hard stop, max-holding-days)
+   * without owning position state. Intraday setups that never need them may ignore both.
+   */
+  readonly entryPrice?: Prisma.Decimal | null;
+  readonly entryTs?: Date | null;
 }
 
 export interface StrategyCheck {
@@ -21,6 +28,8 @@ export interface StrategyCheck {
 export interface StrategySetup<Params> {
   readonly id: string;
   readonly version: string;
+  /** Bar granularity the setup reasons over — routes the CLI to the intraday vs daily engine path. */
+  readonly cadence: 'daily' | 'intraday';
   readonly defaultParams: Params;
   screen(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
   entry(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;

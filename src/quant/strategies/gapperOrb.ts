@@ -93,6 +93,7 @@ function check(matched: boolean, reasons: string[], evidenceItems: Evidence[]): 
 export const gapperOrbSetup: StrategySetup<GapperOrbParams> = {
   id: 'gapper-orb',
   version: 'v1',
+  cadence: 'intraday',
   defaultParams: GAPPER_ORB_V1,
 
   screen(ctx, params) {

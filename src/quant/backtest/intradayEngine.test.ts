@@ -18,7 +18,7 @@ function bar(i: number, o: number, h: number, l: number, c: number, v: number, s
 function alwaysEnter(exitAt = 3): StrategySetup<unknown> {
   const chk = (matched: boolean) => ({ matched, reasons: matched ? [] : ['no'], evidence: [] });
   return {
-    id: 'always-enter', version: 'test', defaultParams: {},
+    id: 'always-enter', version: 'test', cadence: 'intraday', defaultParams: {},
     screen: () => chk(true),
     entry: (ctx) => {
       // enter on the first bar only
@@ -38,7 +38,7 @@ describe('simulateIntraday — look-ahead guard', () => {
   it('a setup that peeks at a bar dated after asOf FAILS the run (LookaheadError)', () => {
     const bars = [bar(0, 100, 101, 99, 100, 1e6), bar(1, 100, 102, 99, 101, 1e6), bar(2, 101, 103, 100, 102, 1e6)];
     const peeking: StrategySetup<unknown> = {
-      id: 'peek', version: 'test', defaultParams: {},
+      id: 'peek', version: 'test', cadence: 'intraday', defaultParams: {},
       screen: () => ({ matched: true, reasons: [], evidence: [] }),
       entry: (ctx) => {
         // Inject a future-dated bar into the slice, then assert — must throw.

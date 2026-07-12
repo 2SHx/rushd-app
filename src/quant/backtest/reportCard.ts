@@ -7,7 +7,7 @@ import type { BacktestMetrics } from './metrics';
 import type { DailyReturnDistribution } from './distribution';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
 
-export type DataFeed = 'alpaca-iex' | 'fixtures-real' | 'yahoo-short-history';
+export type DataFeed = 'alpaca-iex' | 'fixtures-real' | 'yahoo-short-history' | 'yahoo-daily';
 
 export const MIN_TRADES_FOR_VALIDATION = 100;
 

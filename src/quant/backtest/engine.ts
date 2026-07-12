@@ -6,13 +6,15 @@
 // `simulate` is pure (no DB); `runBacktest` loads bars, computes metrics (full + OOS),
 // and persists a BacktestRun.
 import { Prisma } from '@prisma/client';
-import type { Market, MarketBar } from '@prisma/client';
+import type { IntradayBar, Market, MarketBar } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { assertNoLookahead, type PointInTimeContext } from '../data/pointInTime';
 import { collectSignals } from '../committee/collect';
 import { surrogateDecision, PM_SURROGATE_ID } from './pmSurrogate';
 import { computeMetrics, type EquityPoint, type BacktestMetrics } from './metrics';
-import type { PortfolioState, MarketState, RiskLimits } from '../risk/envelope';
+import { applyEnvelope, type PortfolioState, type MarketState, type RiskLimits } from '../risk/envelope';
+import type { StrategySetup } from '../strategies/types';
+import type { TradeRecord } from './intradayEngine';
 import type { Analyst } from '../types';
 
 const D = Prisma.Decimal;
@@ -169,6 +171,165 @@ export async function simulate(inp: SimInput): Promise<SimResult> {
 
   const avgEquity = meanN(equityCurve.map((p) => p.equity)) || 1;
   return { equityCurve, trades, turnover: num(turnoverNotional) / avgEquity };
+}
+
+// ── Daily StrategySetup driver ──────────────────────────────────────────────────────────────
+// Mirrors `simulate` semantics EXACTLY (decide on bar t close, fill at bar t+1 open, same
+// COMMISSION_BPS + SLIPPAGE_BPS + ADV cap + affordability), but drives a pure G2 `StrategySetup`
+// (screen/entry/exit) instead of the committee — so a daily setup validates through the identical
+// no-look-ahead / cost model as intraday, while HOLDING ACROSS DAYS (no end-of-day flat). The
+// engine owns position state and feeds entryPrice/entryTs back into the setup's stateless exit().
+
+/** A daily bar carrying its provenance, so the MOCK-exclusion assertion is enforceable in-path. */
+export interface DailyBarInput extends BacktestBar {
+  source: MarketBar['source'];
+}
+
+/**
+ * No-mock guard (user directive): keep ONLY real feed rows (YAHOO/ALPACA) and report how many
+ * MOCK bars were dropped. Every daily backtest must call this before simulating.
+ */
+export function filterRealDailyBars(bars: DailyBarInput[]): { real: DailyBarInput[]; excludedMock: number } {
+  const real = bars.filter((b) => b.source === 'YAHOO' || b.source === 'ALPACA');
+  return { real, excludedMock: bars.length - real.length };
+}
+
+export interface DailySetupSimInput<P> {
+  setup: StrategySetup<P>;
+  params?: P;
+  symbol: string;
+  market: Market;
+  bars: BacktestBar[]; // chronological, real (MOCK already excluded)
+  startingCash: Prisma.Decimal;
+  limits?: RiskLimits;
+}
+
+export interface DailySetupSimResult {
+  equityCurve: EquityPoint[];
+  trades: number;
+  turnover: number;
+  tradeReturns: number[];
+  tradeRecords: TradeRecord[];
+  barsProcessed: number;
+}
+
+function toDailyIntradayBar(symbol: string, market: Market, b: BacktestBar): IntradayBar {
+  return {
+    id: `${symbol}-${b.ts.getTime()}`, symbol, market, ts: b.ts,
+    open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume,
+    session: 'REGULAR', source: 'YAHOO', createdAt: b.ts,
+  } as IntradayBar;
+}
+
+/**
+ * Pure single-symbol DAILY simulation over a `StrategySetup`. Positions persist across bars until
+ * the setup's exit fires (mid-band / ATR stop / time stop). Every fill is net of commission +
+ * slippage and capped by ADV. Returns the mark-to-market equity curve plus per-trade outcomes for
+ * the Monte Carlo gate — same result shape as the intraday engine so the report card is uniform.
+ */
+export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSimResult {
+  const limits = inp.limits ?? DEFAULT_BT_LIMITS;
+  const { symbol, market, bars } = inp;
+  const ibars = bars.map((b) => toDailyIntradayBar(symbol, market, b));
+
+  let cash = inp.startingCash;
+  let qty = new D(0);
+  let peakEquity = inp.startingCash;
+  let entryPrice = new D(0);
+  let entryTs: Date | null = null;
+  let entryReason = '';
+  let trades = 0;
+  let turnoverNotional = new D(0);
+  const equityCurve: EquityPoint[] = [];
+  const tradeReturns: number[] = [];
+  const tradeRecords: TradeRecord[] = [];
+
+  for (let t = 0; t < bars.length - 1; t++) {
+    const asOf = bars[t].ts;
+    const slice = ibars.slice(0, t + 1);
+    assertNoLookahead(slice, asOf, 'ts');
+    const ctx = {
+      symbol, market, asOf, bars: slice, snapshot: null, positionQty: qty,
+      entryPrice: qty.gt(0) ? entryPrice : null, entryTs: qty.gt(0) ? entryTs : null,
+    };
+
+    const nextOpen = bars[t + 1].open;
+    const slip = nextOpen.mul(SLIPPAGE_BPS).div(BPS);
+    const comm = nextOpen.mul(COMMISSION_BPS).div(BPS);
+    const advCap = bars[t + 1].volume.mul(new D(limits.liquidityAdvFraction));
+
+    if (qty.gt(0)) {
+      const ex = inp.setup.exit(ctx, inp.params);
+      if (ex.matched) {
+        const fillPrice = nextOpen.minus(slip).minus(comm);
+        const sellQty = dmin(qty, advCap);
+        if (sellQty.gt(0)) {
+          const proceeds = sellQty.mul(fillPrice);
+          cash = cash.plus(proceeds);
+          turnoverNotional = turnoverNotional.plus(proceeds.abs());
+          const ret = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+          tradeReturns.push(ret);
+          tradeRecords.push({
+            entryTs: entryTs ?? bars[t + 1].ts, exitTs: bars[t + 1].ts, qty: num(sellQty),
+            entryPrice: num(entryPrice), exitPrice: num(fillPrice), ret,
+            reason: ex.reasons[0] ?? 'exit', partial: sellQty.lt(qty),
+          });
+          trades++;
+          qty = qty.minus(sellQty);
+          if (qty.lte(0)) { qty = new D(0); entryTs = null; }
+        }
+      }
+    } else {
+      const en = inp.setup.entry(ctx, inp.params);
+      if (en.matched) {
+        const price = bars[t].close;
+        const a = atr(slice as unknown as BacktestBar[]);
+        const mkt: MarketState = { symbol, price, atr: a, adv: avgVol(slice as unknown as BacktestBar[]), stopPrice: price.minus(a.mul(2)) };
+        const pf: PortfolioState = { equity: cash, cash, positions: [], peakEquity };
+        const proposalQty = price.gt(0) ? cash.div(price) : new D(0);
+        const env = applyEnvelope({ action: 'BUY', qty: proposalQty }, pf, mkt, limits, false);
+        if (env.action === 'BUY' && env.qty.gt(0)) {
+          const fillPrice = nextOpen.plus(slip).plus(comm);
+          let fillQty = dmin(env.qty, advCap);
+          fillQty = dmin(fillQty, cash.div(fillPrice));
+          if (fillQty.gt(0)) {
+            cash = cash.minus(fillQty.mul(fillPrice));
+            qty = fillQty;
+            entryPrice = fillPrice;
+            entryTs = bars[t + 1].ts;
+            entryReason = en.reasons[0] ?? 'entry';
+            turnoverNotional = turnoverNotional.plus(fillQty.mul(fillPrice));
+          }
+        }
+      }
+    }
+
+    const equityNext = cash.plus(qty.mul(bars[t + 1].close));
+    if (equityNext.gt(peakEquity)) peakEquity = equityNext;
+    equityCurve.push({ ts: bars[t + 1].ts, equity: num(equityNext) });
+  }
+
+  // Liquidate any open position at the last bar's close so trade outcomes are complete.
+  if (qty.gt(0) && bars.length) {
+    const last = bars[bars.length - 1];
+    const fillPrice = last.close.minus(last.close.mul(SLIPPAGE_BPS).div(BPS)).minus(last.close.mul(COMMISSION_BPS).div(BPS));
+    const ret = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+    cash = cash.plus(qty.mul(fillPrice));
+    tradeReturns.push(ret);
+    tradeRecords.push({
+      entryTs: entryTs ?? last.ts, exitTs: last.ts, qty: num(qty),
+      entryPrice: num(entryPrice), exitPrice: num(fillPrice), ret, reason: 'end_of_window_flat', partial: false,
+    });
+    trades++;
+    qty = new D(0);
+  }
+  void entryReason;
+
+  const avgEquity = meanN(equityCurve.map((p) => p.equity)) || 1;
+  return {
+    equityCurve, trades, turnover: num(turnoverNotional) / avgEquity,
+    tradeReturns, tradeRecords, barsProcessed: bars.length,
+  };
 }
 
 export interface RunBacktestInput {
