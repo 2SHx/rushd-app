@@ -39,13 +39,26 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | G1 intraday data spine | data-engineer | ✅ DONE | additive `IntradayBar`+`SymbolSnapshot` (Decimal OHLCV, @@unique per QDR-6), resumable Alpaca-IEX backfill, 10 captured-real symbol-days (3,598 bars; 667 KB; screening-complete gapper+controls with SEC-XBRL mcap), labeled Yahoo tier, signed cron, Eastern-session snapshots, direct PIT access + future-bar rejection test |
 | G2 StrategySetup framework + Tier-1 catalog | quant-strategist | ✅ DONE | PIT-only `StrategySetup` contract + catalog; versioned gapper-ORB v1 screen/entry/exit emits deterministic `AnalystSignal`; captured-real SNDL default screen and AAPL breakout/stop tests; ledger CODIFIED, not validated |
 | G3 intraday backtest + MC + CLI | quant-strategist | ✅ DONE | `intradayEngine.ts` (decide-on-close/fill-next-open, vol-scaled slippage, participation-cap partial fills, halt-gap no-fill, EOD flat, envelope-clamped), seeded `monteCarlo.ts` (bootstrap+jitter permutation+Kelly via applyEnvelope), `distribution.ts` P(day≥+5%)/P(day≤−5%)+3σ flag, `reportCard.ts`, `npm run backtest` CLI (BacktestRun + results/*.json, gitignored). 353 tests green. Fixture run verdict: INSUFFICIENT_TRADES (honest — IEX volume undercount fails 10M screen). Multi-symbol = pooled independent sims (shared-cash portfolio engine out of scope) |
-| G3b historical snapshots | data-engineer | 🔄 IN FLIGHT | `scripts/backfill-snapshots.ts` — MarketBar DAY backfill + SEC-XBRL PIT mcap + checkpoint snapshots (09:30→16:00 ET) over the 20-symbol/90-day real-bar store; emits the real historical gapper-candidate list |
+| G3b historical snapshots | data-engineer | ✅ DONE | commit `b1cc65c`: 12,974 PIT checkpoint snapshots (20 symbols × 90d), 100% SEC-XBRL mcap coverage, idempotent. FINDING: zero symbol-days pass 10M cumVolume — IEX feed = few % of consolidated tape (real moves exist, e.g. HUT +25.46%); threshold needs measured feed-aware params |
+| G3c IEX calibration + validation run | quant-strategist | 🔄 IN FLIGHT | measure IEX/consolidated ratio vs Yahoo keyless daily volume → additive labeled `v1-iex` params (v1 untouched as consolidated reference) → full 90-day gapper-orb run, funnel counts, report card, ledger row update (honest verdict; INSUFFICIENT_TRADES if <100 trades) |
 | QA gates over G1–G3 | qa-reviewer | ⏳ PENDING | same acceptance blocks as implementers; different model than implementer |
 | **PAUSE — report card to user** | — | ⏳ | present measured distribution incl. P(day≥5%), MC drawdown percentiles. STOP HERE. |
 | G4 automation wiring (paper) | backend-expert + security-auditor | 🔒 POST-PAUSE | premarket+intraday signed-cron passes, −3% daily circuit breaker, envelope caps; NOTE: Alpaca paper acct shows negative cash (−$82.8k, margin used by old paper trades) — envelope must limit by CASH not buying power |
 | G4b TradingView webhooks + deep links | backend-expert + security-auditor | 🔒 POST-PAUSE | HMAC-signed `/api/quant/webhooks/tradingview` → same Sharia gate/envelope pipeline; dark until secret set |
 | G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | 🔒 POST-PAUSE | screener table, paper P&L, MC fan, report card — all labeled simulated/paper, en+ar |
 | G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔒 POST-PAUSE | identical gates; Python sidecar only via QDR-3 architect decision |
+
+## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
+
+The goal is pursued by a BOOK of uncorrelated modes, each independently validated through the same
+gates, never one filter: A intraday gapper momentum (needs G3d micro-cap universe — funnel proof:
+16/20 backfilled symbols never enter the 10–400M mcap band; 0 joint screen passes in 90d) ·
+B daily mean reversion (bollinger-mr-long, rsi-exhaustion-long — 6yr daily bars ALREADY in DB, validate first) ·
+C trend following (ts-momentum-halal-basket + htf-trend-filter — data in DB) ·
+D stat-arb long-leg (coint pairs — data in DB) · E cross-sectional factor (G6b) · F RL (G6a).
+Evidence order: B/C/D now ($0, hundreds of trades), A after G3d ingestion, E/F post-pause.
+Capital allocation across validated modes = deterministic fractional-Kelly per card, envelope-clamped
+(strategy-level committee). Modes B–D dispatches are SEQUENCED (shared STRATEGY_LAB.md ledger).
 
 ## Continuation protocol (for ANY AI picking this up)
 

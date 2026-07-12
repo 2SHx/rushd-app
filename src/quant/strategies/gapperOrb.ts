@@ -9,7 +9,8 @@ import type { StrategyCheck, StrategyPointInTimeContext, StrategySetup } from '.
 const D = Prisma.Decimal;
 
 export const GapperOrbParamsSchema = z.object({
-  version: z.literal('v1'),
+  // Versioned config (QDR-6): each params version is a distinct, labeled tape calibration.
+  version: z.enum(['v1', 'v1-iex']),
   mcapMin: z.number().positive(),
   mcapMax: z.number().positive(),
   premarketMovePctMin: z.number(),
@@ -21,6 +22,7 @@ export const GapperOrbParamsSchema = z.object({
 });
 export type GapperOrbParams = z.infer<typeof GapperOrbParamsSchema>;
 
+/** v1 — calibrated for the CONSOLIDATED tape (Yahoo/SIP daily volume). Reference, do not edit. */
 export const GAPPER_ORB_V1: GapperOrbParams = Object.freeze({
   version: 'v1',
   mcapMin: 10_000_000,
@@ -31,6 +33,21 @@ export const GAPPER_ORB_V1: GapperOrbParams = Object.freeze({
   regularOpenMinute: 9 * 60 + 30,
   openingRangeMinutes: 5,
   forceExitMinute: 15 * 60 + 55,
+});
+
+// v1-iex — MEASURED calibration for the Alpaca IEX feed (scripts/calibrate-iex-ratio.ts).
+// IEX prints only a fraction of the consolidated tape, so a 10e6 consolidated cumVolume screen
+// clears ZERO IEX symbol-days (G3b). We measured the per-symbol-day ratio
+//   ratio = (Σ IntradayBar.volume, all sessions) / (Yahoo consolidated daily volume)
+// across all 20 backfilled symbols × 62 trading days (1,240 symbol-days): MEDIAN = 3.28%
+// (range 0.59%–14.97%). Derived threshold = 10e6 × 0.0328 = 327,725 → rounded to 350,000 shares.
+// Only the volume leg is re-scaled; the mcap band and gap thresholds are DECIDED-unchanged, so
+// mid/large-cap backfill names still (correctly) fail the mcap screen. Rerun the script to
+// re-derive; never hand-tune this number.
+export const GAPPER_ORB_V1_IEX: GapperOrbParams = Object.freeze({
+  ...GAPPER_ORB_V1,
+  version: 'v1-iex',
+  minCumVolume: 350_000, // = round50k(10e6 × 0.0328 median IEX/consolidated volume ratio)
 });
 
 function paramsOrDefault(params?: GapperOrbParams): GapperOrbParams {

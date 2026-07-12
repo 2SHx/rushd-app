@@ -11,6 +11,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../src/quant/strategies/catalog';
+import { GAPPER_ORB_V1_IEX } from '../src/quant/strategies/gapperOrb';
 import { loadAllFixtures } from '../src/quant/data/fixtureLoader';
 import { nasdaqDateKey } from '../src/quant/data/snapshot';
 import { LookaheadError } from '../src/quant/data/pointInTime';
@@ -46,6 +47,109 @@ function gitSha(): string {
   }
 }
 
+interface SymbolSeries {
+  symbol: string;
+  bars: IntradayBarInput[];
+  dayContext: Map<string, DayContext>;
+}
+
+/** Split chronological bars into per-NASDAQ-trading-day chunks (preserving order). */
+function groupBarsByDay(bars: IntradayBarInput[]): IntradayBarInput[][] {
+  const byDay = new Map<string, IntradayBarInput[]>();
+  for (const b of bars) {
+    const key = nasdaqDateKey(b.ts);
+    const arr = byDay.get(key) ?? [];
+    arr.push(b);
+    byDay.set(key, arr);
+  }
+  return Array.from(byDay.values());
+}
+
+/** Distinct symbols with IntradayBar rows in [from,to] (optionally filtered by --symbols). */
+async function listDbSymbols(want: string[] | null, from: string, to: string): Promise<string[]> {
+  const { prisma } = await import('../src/lib/prisma');
+  const distinct = await prisma.intradayBar.findMany({
+    where: {
+      symbol: want ? { in: want } : undefined,
+      ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+    },
+    distinct: ['symbol'], select: { symbol: true }, orderBy: { symbol: 'asc' },
+  });
+  return distinct.map((d) => d.symbol);
+}
+
+/**
+ * DB source (`--source db`): loads ONE symbol's REAL IntradayBar spine (Alpaca IEX) with per-day
+ * priorClose from the DAY MarketBar spine and mcap from the SEC-XBRL-backed SymbolSnapshot.
+ * Called per symbol so only one symbol's minute bars are ever resident (memory-bounded; the
+ * previous whole-range load OOM-killed the run). Reads only; never fabricates a bar. DAY bars are
+ * stored at 00:00 UTC labeled with their trading date, so their UTC calendar date equals the
+ * Eastern trading date used by intraday nasdaqDateKey — that alignment lands priorClose correctly.
+ */
+async function loadDbSymbol(symbol: string, from: string, to: string): Promise<SymbolSeries> {
+  const { prisma } = await import('../src/lib/prisma');
+  const fromDate = new Date(`${from}T00:00:00.000Z`);
+  const toDate = new Date(`${to}T23:59:59.999Z`);
+  const ibars = await prisma.intradayBar.findMany({
+    where: { symbol, ts: { gte: fromDate, lte: toDate } }, orderBy: { ts: 'asc' },
+  });
+  const bars: IntradayBarInput[] = ibars.map((b) => ({
+    ts: b.ts, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume,
+    session: b.session, source: b.source,
+  }));
+  const dayRows = await prisma.marketBar.findMany({
+    where: { symbol, market: 'NASDAQ', interval: 'DAY' }, orderBy: { ts: 'asc' },
+    select: { ts: true, close: true },
+  });
+  const priorByDay = new Map<string, number>();
+  for (let i = 1; i < dayRows.length; i++) {
+    priorByDay.set(dayRows[i].ts.toISOString().slice(0, 10), Number(dayRows[i - 1].close));
+  }
+  const snaps = await prisma.symbolSnapshot.findMany({
+    where: { symbol, mcap: { not: null } }, select: { asOf: true, mcap: true, mcapSource: true },
+    orderBy: { asOf: 'asc' },
+  });
+  const mcapByDay = new Map<string, { mcap: number; src: DayContext['mcapSource'] }>();
+  for (const s of snaps) mcapByDay.set(nasdaqDateKey(s.asOf), { mcap: Number(s.mcap), src: s.mcapSource });
+  const dayContext = new Map<string, DayContext>();
+  for (const key of Array.from(new Set(bars.map((b) => nasdaqDateKey(b.ts))))) {
+    const mc = mcapByDay.get(key);
+    dayContext.set(key, { priorClose: priorByDay.get(key) ?? null, mcap: mc?.mcap ?? null, mcapSource: mc?.src ?? null });
+  }
+  return { symbol, bars, dayContext };
+}
+
+/** Fixtures source: builds all (small) per-symbol series up-front from committed real fixtures. */
+function buildFixtureSeries(want: string[] | null, from: string, to: string): SymbolSeries[] {
+  const fixtures = loadAllFixtures().filter((f) => {
+    if (want && !want.includes(f.symbol)) return false;
+    return f.date >= from && f.date <= to;
+  });
+  const fxSymbols = Array.from(new Set(fixtures.map((f) => f.symbol))).sort();
+  return fxSymbols.map((symbol) => {
+    const symFixtures = fixtures.filter((f) => f.symbol === symbol).sort((a, b) => a.date.localeCompare(b.date));
+    const bars: IntradayBarInput[] = [];
+    const dayContext = new Map<string, DayContext>();
+    for (const fx of symFixtures) {
+      for (const b of fx.bars) {
+        bars.push({
+          ts: new Date(new Date(b.ts).getTime() + 60_000), // minute-start → bar-close (DB convention)
+          open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume, session: b.session,
+          source: fx.source,
+        });
+      }
+      const key = nasdaqDateKey(new Date(new Date(fx.bars.at(-1)!.ts).getTime() + 60_000));
+      dayContext.set(key, {
+        priorClose: fx.verification.priorClose,
+        mcap: fx.fundamentals?.marketCap ?? null,
+        mcapSource: fx.fundamentals ? 'FUNDAMENTALS' : null,
+      });
+    }
+    bars.sort((a, b) => a.ts.getTime() - b.ts.getTime());
+    return { symbol, bars, dayContext };
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const setupId = args.setup;
@@ -69,51 +173,56 @@ async function main() {
 
   const wantSymbols = args.symbols ? args.symbols.split(',').map((s) => s.trim()) : null;
   const startingCash = new D(100_000);
+  const source = (args.source ?? 'fixtures') as 'fixtures' | 'db';
 
-  // ── Load REAL fixtures only, filtered by [from,to] and optional --symbols. No synthetic bars.
-  const fixtures = loadAllFixtures().filter((f) => {
-    if (wantSymbols && !wantSymbols.includes(f.symbol)) return false;
-    return f.date >= from && f.date <= to;
-  });
+  // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
+  // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
+  const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
 
-  const symbols = Array.from(new Set(fixtures.map((f) => f.symbol))).sort();
+  // ── REAL series (no synthetic bars). DB is STREAMED one symbol at a time (bounded memory: the
+  // prior whole-range load held all 20 symbols' minute bars at once and was OOM-killed). Fixtures
+  // are tiny, so they are built up-front and served from a lookup.
+  const fixtureSeries = source === 'db' ? null : buildFixtureSeries(wantSymbols, from, to);
+  const symbols = source === 'db'
+    ? await listDbSymbols(wantSymbols, from, to)
+    : fixtureSeries!.map((s) => s.symbol);
+  const fixtureByName = new Map((fixtureSeries ?? []).map((s) => [s.symbol, s] as const));
+  const loadSeries = (symbol: string): Promise<SymbolSeries> =>
+    source === 'db' ? loadDbSymbol(symbol, from, to) : Promise.resolve(fixtureByName.get(symbol)!);
 
   const pooledTradeReturns: number[] = [];
   const pooledTradeRecords: TradeRecord[] = [];
   const pooledDailyReturns: number[] = [];
   let lastPrice = 0;
 
+  // Per-day batching (DB source): feed the engine one NASDAQ trading day at a time. gapper-orb is
+  // strictly intraday — positions are force-liquidated at each day's last bar and screen/entry/exit
+  // read ONLY same-day bars — so per-day input is EXACT for trade selection while turning the
+  // engine's per-bar day-scan from O(n²) (a 90-day symbol) into O(day²). This is a CLI feed choice,
+  // not an engine-semantics change; the only cross-day quantities it resets are the drawdown-breaker
+  // peak and the ATR/ADV sizing warmup (both sizing-side, immaterial to which setups fire).
+  const batchPerDay = source === 'db';
+  console.log(`\nprocessing ${symbols.length} symbol(s) [source=${source}${batchPerDay ? ', per-day batched' : ''}] …`);
   try {
-    for (const symbol of symbols) {
-      const symFixtures = fixtures.filter((f) => f.symbol === symbol)
-        .sort((a, b) => a.date.localeCompare(b.date));
-      const bars: IntradayBarInput[] = [];
-      const dayContext = new Map<string, DayContext>();
-      for (const fx of symFixtures) {
-        for (const b of fx.bars) {
-          bars.push({
-            ts: new Date(new Date(b.ts).getTime() + 60_000), // minute-start → bar-close (DB convention)
-            open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume, session: b.session,
-            source: fx.source,
-          });
-        }
-        const key = nasdaqDateKey(new Date(new Date(fx.bars.at(-1)!.ts).getTime() + 60_000));
-        dayContext.set(key, {
-          priorClose: fx.verification.priorClose,
-          mcap: fx.fundamentals?.marketCap ?? null,
-          mcapSource: fx.fundamentals ? 'FUNDAMENTALS' : null,
-        });
-      }
-      bars.sort((a, b) => a.ts.getTime() - b.ts.getTime());
+    for (let i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
+      const t0 = Date.now();
+      process.stdout.write(`  [${i + 1}/${symbols.length}] ${symbol} … `);
+      const { bars, dayContext } = await loadSeries(symbol); // one symbol resident; released next loop
       if (bars.length) lastPrice = Number(bars.at(-1)!.close);
-
-      const sim = simulateIntraday({
-        setup, symbol, market: 'NASDAQ', bars, dayContext, startingCash,
-        limits: DEFAULT_INTRADAY_LIMITS,
-      });
-      pooledTradeReturns.push(...sim.tradeReturns);
-      pooledTradeRecords.push(...sim.tradeRecords);
-      pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
+      const chunks: IntradayBarInput[][] = batchPerDay ? groupBarsByDay(bars) : [bars];
+      let symTrades = 0;
+      for (const chunk of chunks) {
+        const sim = simulateIntraday({
+          setup, params, symbol, market: 'NASDAQ', bars: chunk, dayContext, startingCash,
+          limits: DEFAULT_INTRADAY_LIMITS,
+        });
+        pooledTradeReturns.push(...sim.tradeReturns);
+        pooledTradeRecords.push(...sim.tradeRecords);
+        pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
+        symTrades += sim.trades;
+      }
+      console.log(`${bars.length} bars, ${chunks.length} days → ${symTrades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
     }
   } catch (err) {
     if (err instanceof LookaheadError) {
