@@ -78,6 +78,42 @@ describe('simulateIntraday — participation cap partial fill', () => {
   });
 });
 
+describe('simulateIntraday — shrink-only setup sizing and entry provenance', () => {
+  it('applies sizeFraction before the envelope and preserves signal provenance through jitter', () => {
+    let seenSignalTs: Date | null | undefined;
+    let seenEntryTs: Date | null | undefined;
+    let seenEntryPrice: Prisma.Decimal | null | undefined;
+    const setup: StrategySetup<unknown> = {
+      id: 'sized-entry', version: 'test', cadence: 'intraday', defaultParams: {},
+      screen: () => ({ matched: true, reasons: [], evidence: [] }),
+      entry: (ctx) => ({
+        matched: ctx.bars.length === 1, reasons: ['sized_entry'], evidence: [], sizeFraction: 0.1,
+      }),
+      exit: (ctx) => {
+        seenSignalTs = ctx.entrySignalTs;
+        seenEntryTs = ctx.entryTs;
+        seenEntryPrice = ctx.entryPrice;
+        return { matched: ctx.bars.length >= 3, reasons: ['test_exit'], evidence: [] };
+      },
+      signal: () => { throw new Error('unused'); },
+    };
+    const bars = [
+      bar(0, 1, 1.01, 0.99, 1, 1e9), bar(1, 1, 1.01, 0.99, 1, 1e9),
+      bar(2, 1, 1.01, 0.99, 1, 1e9), bar(3, 1, 1.01, 0.99, 1, 1e9),
+    ];
+    const res = simulateIntraday({
+      setup, symbol: 'GME', market: 'NASDAQ', bars, dayContext: dayCtx, startingCash: new D(1_000_000),
+      participationCap: 1, entryJitterBars: 1,
+      limits: { maxNameWeight: 1, maxGrossExposure: 1, maxOpenPositions: 1, maxRiskPct: 1, volTargetPct: 10, liquidityAdvFraction: 1, drawdownHaltPct: 1 },
+    });
+    expect(res.tradeRecords[0].qty).toBeGreaterThan(90_000);
+    expect(res.tradeRecords[0].qty).toBeLessThan(110_000);
+    expect(seenSignalTs).toEqual(min(0));
+    expect(seenEntryTs).toEqual(min(2));
+    expect(seenEntryPrice?.gt(0)).toBe(true);
+  });
+});
+
 describe('simulateIntraday — no overnight leakage', () => {
   it('force-liquidates an open position at the last bar of the trading day', () => {
     const bars = [bar(0, 1, 1.02, 0.99, 1, 1e9), bar(1, 1, 1.01, 0.99, 1, 1e9)];

@@ -178,6 +178,7 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
   let peakEquity = inp.startingCash;
   let entryPrice = new D(0);
   let entryTs: Date | null = null;
+  let entrySignalTs: Date | null = null;
   let entryReason = '';
   let entryPartial = false;
   let trades = 0;
@@ -188,7 +189,7 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
 
   const dateKey = (d: Date) => nasdaqDateKey(d);
   // pending entry fills queued by jitter: index at which the delayed fill should execute
-  const pendingEntryAt = new Map<number, { proposalQty: Prisma.Decimal }>();
+  const pendingEntryAt = new Map<number, { proposalQty: Prisma.Decimal; signalTs: Date; reason: string }>();
 
   const commissionFor = (price: Prisma.Decimal) => price.mul(COMMISSION_BPS).div(BPS);
   const slipFor = (fill: IntradayBar) => {
@@ -214,6 +215,7 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
     trades++;
     qty = new D(0);
     entryTs = null;
+    entrySignalTs = null;
     entryPartial = false;
   };
 
@@ -243,6 +245,8 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
         qty = fillQty;
         entryPrice = fillPrice;
         entryTs = cur.ts;
+        entrySignalTs = pending.signalTs;
+        entryReason = pending.reason;
       }
     }
     pendingEntryAt.delete(t);
@@ -252,7 +256,10 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
     const dayBars = slice.filter((b) => dateKey(b.ts) === key);
     assertNoLookahead(slice, asOf, 'ts');
     const snapshot = buildSnapshot(symbol, market, dayBars, asOf, inp.dayContext.get(key));
-    const ctx = { symbol, market, asOf, bars: slice, snapshot, positionQty: qty };
+    const ctx = {
+      symbol, market, asOf, bars: slice, snapshot, positionQty: qty,
+      entryPrice: qty.gt(0) ? entryPrice : null, entryTs, entrySignalTs,
+    };
 
     // Force-liquidate at the last bar of a trading day — no overnight holds.
     if (qty.gt(0) && (!next || !sameDayNext)) {
@@ -274,12 +281,17 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
             symbol, price, atr: a, adv: avgVol(slice), stopPrice: price.minus(a.mul(2)),
           };
           const pf: PortfolioState = { equity: cash.plus(qty.mul(price)), cash, positions: [], peakEquity };
-          // Propose "all-in"; the envelope clamps it — sizing is never the setup's job.
-          const proposalQty = price.gt(0) ? cash.div(price) : new D(0);
+          // Optional setup weight can only SHRINK the proposal; the envelope remains authoritative.
+          const sizeFraction = en.sizeFraction === undefined ? new D(1) : new D(en.sizeFraction);
+          const proposalQty = price.gt(0) && sizeFraction.gt(0) && sizeFraction.lte(1)
+            ? cash.mul(sizeFraction).div(price)
+            : new D(0);
           const env = applyEnvelope({ action: 'BUY', qty: proposalQty }, pf, mkt, limits, false);
           if (env.action === 'BUY' && env.qty.gt(0)) {
             if (jitter > 0) {
-              pendingEntryAt.set(t + 1 + jitter, { proposalQty: env.qty });
+              pendingEntryAt.set(t + 1 + jitter, {
+                proposalQty: env.qty, signalTs: cur.ts, reason: en.reasons[0] ?? 'entry',
+              });
             } else {
               const slip = slipFor(next);
               const comm = commissionFor(next.open);
@@ -293,6 +305,7 @@ export function simulateIntraday<P>(inp: IntradaySimInput<P>): IntradaySimResult
                 qty = fillQty;
                 entryPrice = fillPrice;
                 entryTs = next.ts;
+                entrySignalTs = cur.ts;
                 entryReason = en.reasons[0] ?? 'entry';
                 turnoverNotional = turnoverNotional.plus(fillQty.mul(fillPrice));
               }

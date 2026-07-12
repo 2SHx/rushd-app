@@ -158,6 +158,7 @@ describe('shared intraday provenance and setup metadata', () => {
 
   it('routes stocks-in-play to the exact execution-blocked Sharia state without changing defaults', () => {
     expect(shariaStateForSetup('stocks-in-play-orb')).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    expect(shariaStateForSetup('vwap-reclaim')).toBe('UNSCREENED_EXECUTION_BLOCKED');
     expect(shariaStateForSetup('bollinger-mr-long')).toBe('UNVERIFIED');
     expect(shariaStateForSetup('gapper-orb', 'VERIFIED_COMPLIANT')).toBe('VERIFIED_COMPLIANT');
   });

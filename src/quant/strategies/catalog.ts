@@ -5,10 +5,12 @@ import { bollingerMrLongV2Setup } from './bollingerMrLongV2';
 import { tsMomentumHalalBasketSetup } from './tsMomentumHalalBasket';
 import { tsMomentumHalalBasketV2Setup } from './tsMomentumHalalBasketV2';
 import { cointStatArbLongLegSetup } from './cointStatArbLongLeg';
+import { vwapReclaimSetup } from './vwapReclaim';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
   [stocksInPlayOrbSetup.id]: stocksInPlayOrbSetup,
+  [vwapReclaimSetup.id]: vwapReclaimSetup,
   [bollingerMrLongSetup.id]: bollingerMrLongSetup,
   [bollingerMrLongV2Setup.id]: bollingerMrLongV2Setup,
   [tsMomentumHalalBasketSetup.id]: tsMomentumHalalBasketSetup,

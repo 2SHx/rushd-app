@@ -128,7 +128,11 @@ export function shariaStateForSetup(
   setupId: string,
   candidateState?: ShariaValidationState,
 ): ShariaValidationState {
-  return candidateState ?? (setupId === 'stocks-in-play-orb' ? 'UNSCREENED_EXECUTION_BLOCKED' : 'UNVERIFIED');
+  return candidateState ?? (
+    setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim'
+      ? 'UNSCREENED_EXECUTION_BLOCKED'
+      : 'UNVERIFIED'
+  );
 }
 
 interface CandidateArtifactEvidence {

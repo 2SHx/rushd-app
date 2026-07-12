@@ -16,6 +16,8 @@ export interface StrategyPointInTimeContext {
    */
   readonly entryPrice?: Prisma.Decimal | null;
   readonly entryTs?: Date | null;
+  /** Decision bar that created the held position; stable across delayed/jittered fills. */
+  readonly entrySignalTs?: Date | null;
 }
 
 export interface StrategyCheck {
