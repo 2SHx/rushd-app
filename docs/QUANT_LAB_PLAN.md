@@ -38,9 +38,10 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | G1b research RAG | — | ✅ DONE | `scripts/seed-research-library.ts` ran: 8 docs in ResearchDoc (idempotent, re-runnable) |
 | G1 intraday data spine | data-engineer | ✅ DONE | additive `IntradayBar`+`SymbolSnapshot` (Decimal OHLCV, @@unique per QDR-6), resumable Alpaca-IEX backfill, 10 captured-real symbol-days (3,598 bars; 667 KB; screening-complete gapper+controls with SEC-XBRL mcap), labeled Yahoo tier, signed cron, Eastern-session snapshots, direct PIT access + future-bar rejection test |
 | G2 StrategySetup framework + Tier-1 catalog | quant-strategist | ✅ DONE | PIT-only `StrategySetup` contract + catalog; versioned gapper-ORB v1 screen/entry/exit emits deterministic `AnalystSignal`; captured-real SNDL default screen and AAPL breakout/stop tests; ledger CODIFIED, not validated |
-| G3 intraday backtest + MC + CLI | quant-strategist | ✅ DONE | `intradayEngine.ts` (decide-on-close/fill-next-open, vol-scaled slippage, participation-cap partial fills, halt-gap no-fill, EOD flat, envelope-clamped), seeded `monteCarlo.ts` (bootstrap+jitter permutation+Kelly via applyEnvelope), `distribution.ts` P(day≥+5%)/P(day≤−5%)+3σ flag, `reportCard.ts`, `npm run backtest` CLI (BacktestRun + results/*.json, gitignored). 353 tests green. Fixture run verdict: INSUFFICIENT_TRADES (honest — IEX volume undercount fails 10M screen). Multi-symbol = pooled independent sims (shared-cash portfolio engine out of scope) |
+| G3 intraday backtest + MC + CLI | quant-strategist | ✅ DONE | `intradayEngine.ts` (decide-on-close/fill-next-open, vol-scaled slippage, participation-cap partial fills, halt-gap no-fill, EOD flat, envelope-clamped), seeded `monteCarlo.ts` (bootstrap+jitter permutation+Kelly via applyEnvelope), `distribution.ts` P(day≥+5%)/P(day≤−5%)+3σ flag, `reportCard.ts`, `npm run backtest` CLI (BacktestRun + results/*.json, gitignored). 353 tests green. Fixture run terminal result: REJECTED (`INSUFFICIENT_SAMPLE`; IEX volume undercount fails 10M screen). Multi-symbol = pooled independent sims (shared-cash portfolio engine out of scope) |
 | G3b historical snapshots | data-engineer | ✅ DONE | commit `b1cc65c`: 12,974 PIT checkpoint snapshots (20 symbols × 90d), 100% SEC-XBRL mcap coverage, idempotent. FINDING: zero symbol-days pass 10M cumVolume — IEX feed = few % of consolidated tape (real moves exist, e.g. HUT +25.46%); threshold needs measured feed-aware params |
-| G3c IEX calibration + validation run | quant-strategist | 🔄 IN FLIGHT | measure IEX/consolidated ratio vs Yahoo keyless daily volume → additive labeled `v1-iex` params (v1 untouched as consolidated reference) → full 90-day gapper-orb run, funnel counts, report card, ledger row update (honest verdict; INSUFFICIENT_TRADES if <100 trades) |
+| G3c IEX calibration + validation run | quant-strategist | ✅ DONE | commit `55a1021`: measured median IEX/consolidated volume ratio 3.28% → additive `v1-iex`; full 90-day/20-symbol run produced 0 trades; terminal result REJECTED (`INSUFFICIENT_SAMPLE`), with a new version/run allowed after G3d |
+| G3d PIT micro-cap gapper universe | data-engineer | 🔄 IN FLIGHT | discover historical NASDAQ candidate-days, evaluate market cap at each historical candidate date, ingest exact-day minute bars + PIT snapshots, then re-run gapper-orb as a new validation; current implementation is uncommitted and must not use today's market cap as a historical-universe filter |
 | QA gates over G1–G3 | qa-reviewer | ⏳ PENDING | same acceptance blocks as implementers; different model than implementer |
 | **PAUSE — report card to user** | — | ⏳ | present measured distribution incl. P(day≥5%), MC drawdown percentiles. STOP HERE. |
 | G4 automation wiring (paper) | backend-expert + security-auditor | 🔒 POST-PAUSE | premarket+intraday signed-cron passes, −3% daily circuit breaker, envelope caps; NOTE: Alpaca paper acct shows negative cash (−$82.8k, margin used by old paper trades) — envelope must limit by CASH not buying power |
@@ -57,18 +58,34 @@ B daily mean reversion (bollinger-mr-long, rsi-exhaustion-long — 6yr daily bar
 C trend following (ts-momentum-halal-basket + htf-trend-filter — data in DB) ·
 D stat-arb long-leg (coint pairs — data in DB) · E cross-sectional factor (G6b) · F RL (G6a).
 Evidence order: B/C/D now ($0, hundreds of trades), A after G3d ingestion, E/F post-pause.
-Capital allocation across validated modes = deterministic fractional-Kelly per card, envelope-clamped
+Capital allocation across ACCEPTED modes = deterministic fractional-Kelly per terminal evidence card, envelope-clamped
 (strategy-level committee). Modes B–D dispatches are SEQUENCED (shared STRATEGY_LAB.md ledger).
 
 USER DIRECTIVE 2026-07-12 ("modes act like different teams that compete, Sharia-compliant"):
-**Competing-books tournament (QDR-7, being bound by architect):** each VALIDATED mode = an isolated
+**Competing-books tournament (QDR-7, binding):** each ACCEPTED mode = an isolated
 virtual book (own NAV/positions/P&L) in AUTO_PAPER; deterministic seeded allocator re-scores monthly
 on rolling ~63d live-paper results blended with validation-card priors (shrinkage), deflated-Sharpe-style
 score with drawdown penalty; caps (≤40%/mode, bench=0% allowed); IMMEDIATE bench on drawdown breach;
 live-vs-backtest tracking-error breach ⇒ auto-bench + re-validate; implausible ⇒ disqualified; league
-entry only via QDR-6 gates. Sharia = league constitution (per-signal veto + per-mode instrument charter;
-UNSCREENED universes paper-only per DR-5; purification per book). No worker/queue (QDR-5); paper-only
+entry only via QDR-6 gates and a complete terminal evidence card. Sharia = league constitution
+(per-signal veto + per-mode instrument charter; UNSCREENED research is execution-blocked and cannot be
+ACCEPTED; purification per book). No worker/queue (QDR-5); paper-only
 until the QDR-2 CMA gate ever opens; league-table UI = post-pause G5. Mode B may re-enter as v2 through gates.
+
+## Team lifecycle and final-status contract
+
+Every team follows `CANDIDATE → CODIFIED → VALIDATING → ACCEPTED | REJECTED`. Only ACCEPTED joins
+the AUTO_PAPER league; ACCEPTED never means guaranteed profit or AUTO_REAL permission. Every completed
+validation gets a terminal evidence card under QDR-7. Legacy `INSUFFICIENT_TRADES`, `PARKED`, and
+`FAILED_PROMOTION` labels must resolve to the applicable QDR-7 reason code(s), never remain final statuses. A REJECTED decision binds
+only that strategy version + run; a materially changed version starts again as CANDIDATE.
+
+The card must show the measured IS and OOS results separately, trade counts, test period/universe/feed,
+return or CAGR, DSR, maxDD + MC p95 maxDD, hit rate, average win/loss or expectancy,
+turnover/exposure where available, both ±5% daily probabilities, risk of ruin, permutation p-value,
+Sharia state, exact ordered rejection reason codes, and strategy/params version + seed + git SHA +
+`BacktestRun`/result path. Missing values are labeled `n/a — not persisted`; they are never inferred.
+The binding reason-code definitions and ordering live in QDR-7.
 
 ## Continuation protocol (for ANY AI picking this up)
 
@@ -78,7 +95,7 @@ until the QDR-2 CMA gate ever opens; league-table UI = post-pause G5. Mode B may
    WIP, run its acceptance block (below) before building on it.
 3. Dispatch per `docs/AGENTS.md` template — never freehand. One goal per dispatch. Strategy Lab loop:
    pick next CANDIDATE row in the ledger → codify (G2 framework) → run G3 harness → write report
-   card → update ledger row (VALIDATED/PARKED/REJECTED with evidence) → next row.
+   card → update ledger row (ACCEPTED/REJECTED with evidence) → next row.
 4. Context discipline: raw bars/equity curves/MC distributions NEVER in chat — they live in DB +
    `results/*.json`; ledger carries headline metrics only; reports ≤25 lines; seeded determinism
    (seed + gitSha recorded per BacktestRun).

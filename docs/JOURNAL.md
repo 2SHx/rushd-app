@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-12 — QDR-7 competing-team final-status contract ✅
+Shipped: Bound every strategy team to `CANDIDATE → CODIFIED → VALIDATING → ACCEPTED | REJECTED`, with mandatory terminal evidence cards and deterministic cumulative rejection codes.
+Decisions: Only ACCEPTED versions enter isolated AUTO_PAPER books; Sharia-unscreened research cannot be accepted; rejection binds the tested version/run and never erases its measured results.
+Open: G3d must repair its current-market-cap survivorship bias, revalidate gapper-orb on a PIT micro-cap universe, then complete the pending independent QA gate and user report-card pause.
+
 ## 2026-07-12 — Quant Strategy Lab G3: intraday harness + Monte Carlo + backtest CLI ✅
 Shipped: intradayEngine.ts (minute-bar, envelope-clamped, halt-gap no-fill, participation partial fills, look-ahead guard), seeded monteCarlo.ts (bootstrap/jitter-permutation/Kelly-through-envelope), daily-return distribution incl. P(day≥+5%), report card with dataFeed labels + RED implausible, `npm run backtest` CLI; 353 tests green; 379k real IEX minute bars backfilled (20 symbols × 90d).
 Decisions: zero LLM in the whole path; fixture run honestly returns INSUFFICIENT_TRADES (IEX cumVolume ~1.5M fails the 10M screen — feed undercount is real and labeled); results/ gitignored (runs reproducible via seed+gitSha); multi-symbol = pooled independent sims.
