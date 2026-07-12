@@ -22,6 +22,14 @@ export interface StrategyCheck {
   matched: boolean;
   reasons: string[];
   evidence: Evidence[];
+  /**
+   * Optional per-name book-weight hint in (0, 1], emitted ONLY by an `entry()` that matches, e.g.
+   * a volatility-scaled sizer (position ∝ 1/σ). The daily engine deploys `sizeFraction·cash` and
+   * lets the risk envelope CLAMP it further (name/gross/vol-target/ADV/cash) — the hint can only
+   * ever SHRINK exposure, never bypass the envelope. Absent (undefined) ⇒ legacy full-cash intent
+   * (weight 1), so every pre-existing setup is byte-identical. See engine.simulateSetupDaily.
+   */
+  sizeFraction?: number;
 }
 
 /**

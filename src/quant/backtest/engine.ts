@@ -238,6 +238,11 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
   let entryPrice = new D(0);
   let entryTs: Date | null = null;
   let entryReason = '';
+  // Fraction of the book actually deployed into the OPEN position (post-envelope). Legacy setups
+  // emit no sizeFraction hint ⇒ this stays 1 (full-cash intent) so their results are unchanged; a
+  // vol-scaled setup ⇒ this is the real deployed weight, and the pooled trade return is scaled by
+  // it (that is the structural fix for pooled full-cash-per-name drawdown amplification).
+  let entryWeight = 1;
   let trades = 0;
   let turnoverNotional = new D(0);
   const equityCurve: EquityPoint[] = [];
@@ -267,7 +272,8 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
           const proceeds = sellQty.mul(fillPrice);
           cash = cash.plus(proceeds);
           turnoverNotional = turnoverNotional.plus(proceeds.abs());
-          const ret = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+          const rawRet = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+          const ret = rawRet * entryWeight; // scale the pooled book impact by the deployed weight
           tradeReturns.push(ret);
           tradeRecords.push({
             entryTs: entryTs ?? bars[t + 1].ts, exitTs: bars[t + 1].ts, qty: num(sellQty),
@@ -286,19 +292,28 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
         const a = atr(slice as unknown as BacktestBar[]);
         const mkt: MarketState = { symbol, price, atr: a, adv: avgVol(slice as unknown as BacktestBar[]), stopPrice: price.minus(a.mul(2)) };
         const pf: PortfolioState = { equity: cash, cash, positions: [], peakEquity };
-        const proposalQty = price.gt(0) ? cash.div(price) : new D(0);
+        // Per-name sizing hint (vol-scaled setups): deploy sizeFraction·cash, then the envelope
+        // clamps it further (never bypassed). Absent hint ⇒ full-cash intent (legacy, unchanged).
+        const hasHint = typeof en.sizeFraction === 'number' && Number.isFinite(en.sizeFraction) && en.sizeFraction > 0;
+        const sizeFraction = hasHint ? Math.min(1, en.sizeFraction!) : 1;
+        const equityAtEntry = cash; // book is flat here (single-symbol sim), so equity == cash
+        const proposalQty = price.gt(0) ? cash.mul(new D(sizeFraction)).div(price) : new D(0);
         const env = applyEnvelope({ action: 'BUY', qty: proposalQty }, pf, mkt, limits, false);
         if (env.action === 'BUY' && env.qty.gt(0)) {
           const fillPrice = nextOpen.plus(slip).plus(comm);
           let fillQty = dmin(env.qty, advCap);
           fillQty = dmin(fillQty, cash.div(fillPrice));
           if (fillQty.gt(0)) {
-            cash = cash.minus(fillQty.mul(fillPrice));
+            const notional = fillQty.mul(fillPrice);
+            cash = cash.minus(notional);
             qty = fillQty;
             entryPrice = fillPrice;
             entryTs = bars[t + 1].ts;
             entryReason = en.reasons[0] ?? 'entry';
-            turnoverNotional = turnoverNotional.plus(fillQty.mul(fillPrice));
+            // Deployed book weight AFTER the envelope clamp — the honest fraction risked. Legacy
+            // (no hint) keeps weight 1 so pre-existing setups' pooled returns are byte-identical.
+            entryWeight = hasHint && equityAtEntry.gt(0) ? Math.min(1, num(notional.div(equityAtEntry))) : 1;
+            turnoverNotional = turnoverNotional.plus(notional);
           }
         }
       }
@@ -313,7 +328,8 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
   if (qty.gt(0) && bars.length) {
     const last = bars[bars.length - 1];
     const fillPrice = last.close.minus(last.close.mul(SLIPPAGE_BPS).div(BPS)).minus(last.close.mul(COMMISSION_BPS).div(BPS));
-    const ret = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+    const rawRet = entryPrice.gt(0) ? num(fillPrice.minus(entryPrice).div(entryPrice)) : 0;
+    const ret = rawRet * entryWeight; // scale by the deployed book weight (see entry above)
     cash = cash.plus(qty.mul(fillPrice));
     tradeReturns.push(ret);
     tradeRecords.push({
