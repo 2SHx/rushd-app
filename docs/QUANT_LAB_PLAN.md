@@ -93,10 +93,10 @@ The binding reason-code definitions and ordering live in QDR-7.
 
 | R2 unit | Owner | Status | Deliverable |
 |---|---|---|---|
-| R2-1 deep-history backfill | data-engineer | 🔄 | BACKWARDS daily backfill (Yahoo keyless, 6y+) for halal universe + liquid names; extended minute-bar history (Alpaca IEX, 2y) for liquid halal NASDAQ; ingest currently only extends forward — needs a backwards mode |
-| R2-2 stocks-in-play gapper v2 | quant-strategist | 🔄 | NEW hypothesis (Zarattini SiP): relative-volume ranking (vs 14d avg, cross-sectional from wide MarketBar) + trend alignment on LIQUID names + ORB; validate on available 90d minute data, re-run after R2-1 |
-| R2-3 B v2 + C v2 (per-name sizing, regime gates) | quant-strategist | ⏳ | new candidates, never retunes; validate after R2-1 depth |
-| R2-4 Tier-1 setups ×4 | quant-strategist | ⏳ | vwap-reclaim, stop-hunt-reversal-long, bagholder-bounce, time-of-day — one dispatch each, sequenced on ledger |
+| R2-1 deep-history backfill | data-engineer | ✅ | 6y real daily spine for 25-name research universe + 2y Alpaca-IEX minute spine for 11 liquid names; bounded Yahoo repair removed residual MOCK contamination |
+| R2-2 stocks-in-play gapper v2 | quant-strategist | ✅ REJECTED | 468 trades; CAGR −45.70%, OOS −44.84%, MC p95 DD 81.41%, ruin 96.10%; terminal evidence in STRATEGY_LAB |
+| R2-3 B v2 + C v2 (per-name sizing, regime gates) | quant-strategist | ✅ REJECTED | both structural fixes improved OOS/risk materially but neither cleared every gate; exact cards in STRATEGY_LAB; no post-hoc retuning |
+| R2-4 Tier-1 setups ×4 | quant-strategist | 🔄 1/4 | vwap-reclaim v1 REJECTED (347 trades, CAGR −40.62%, ruin 100%); next: stop-hunt-reversal-long, then bagholder-bounce and time-of-day |
 | R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | ⏳ | build after validations; automation activates only for ACCEPTED teams (may be zero — league renders honestly empty) |
 
 ## Continuation protocol (for ANY AI picking this up)

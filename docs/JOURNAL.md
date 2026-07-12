@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-12 — R2-4a VWAP-reclaim team terminally rejected ✅
+Shipped: Frozen regular-session VWAP-reclaim v1, exact signal/fill provenance, shrink-only volatility sizing under the envelope, Decimal stop/2R math, Sharia execution block, safe prefix memoization, and a clean-SHA two-year validation.
+Decisions: REJECTED on 347 trades: CAGR −40.62%, OOS −44.90%, hit 17%, MC p95 DD 67.43%, ruin 100%, jitter p=1.000; supported reasons OOS/DSR/drawdown/plateau/Sharia. Premarket v1.1 remains untested because v1 failed the a-priori non-negative-expectancy prerequisite.
+Open: Continue R2-4 with stop-hunt-reversal-long, then bagholder-bounce and time-of-day; future JSON cards must serialize setupVersion/effective params (current v1 remains reproducible via SHA + ledger); zero teams are ACCEPTED, so automation remains inactive.
+
 ## 2026-07-12 — Strategy tournament round 1 complete: 4 teams validated, 4 honest rejections ✅
 Shipped: Team A genuine run on the G3d PIT micro-cap universe (153 symbols, 394 real gap days): 76 trades, −4.19%/trade, ruin 99.9% → REJECTED NEGATIVE_EXPECTANCY with terminal card; Mode D coint-statarb REJECTED INSUFFICIENT_SAMPLE (9 trades; Sharpe 5.05 auto-flagged IMPLAUSIBLE); Modes B/C previously REJECTED. Ledger + plan table fully closed for round 1.
 Decisions: Expert finding recorded — long gap-continuation on micro-cap gappers is the losing side (gap-ups fade; documented edge is short-side, Sharia-excluded); v2 hypotheses must change (Stocks-in-Play relative-volume/trend, per-name sizing, deep-history universe), never retune viewed data. Backwards daily deep-backfill identified as the unlock for all daily v2 candidates.
