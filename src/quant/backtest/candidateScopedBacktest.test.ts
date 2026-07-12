@@ -17,6 +17,7 @@ import {
   backtestResultFilename,
   loadDbCandidateSymbol,
   loadDbSymbol,
+  isReproducibleRun,
   shariaStateForSetup,
   transitionCountInsideSlice,
 } from '../../../scripts/backtest';
@@ -107,6 +108,14 @@ describe('candidate-scoped intraday DB loading', () => {
     expect(() => assertCandidateWorktreeClean('\n')).not.toThrow();
     expect(() => assertCandidateWorktreeClean(' M scripts/backtest.ts\n')).toThrow(/clean Git worktree/);
     expect(() => assertCandidateWorktreeClean('?? scratch.json\n')).toThrow(/clean Git worktree/);
+  });
+
+  it('requires a clean worktree, deterministic seed, and known SHA for reproducibility', () => {
+    expect(isReproducibleRun(42, 'abc1234', '')).toBe(true);
+    expect(isReproducibleRun(42, 'abc1234', ' M strategy.ts\n')).toBe(false);
+    expect(isReproducibleRun(42, 'unknown', '')).toBe(false);
+    expect(isReproducibleRun(-1, 'abc1234', '')).toBe(false);
+    expect(isReproducibleRun(42, 'abc1234', null)).toBe(false);
   });
 
   it('accepts seed 0 and a strict interior OOS fraction', () => {

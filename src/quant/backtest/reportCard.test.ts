@@ -57,6 +57,12 @@ function args(override: Partial<AssembleArgs> = {}): AssembleArgs {
 }
 
 describe('terminal validation report card', () => {
+  it('does not mislabel the trade-count proxy as monetary turnover', () => {
+    const rendered = renderReportCard(assembleReportCard(args()), false);
+    expect(rendered).toContain('Trades (full/OOS):');
+    expect(rendered).not.toContain('Turnover:');
+  });
+
   it('emits ACCEPTED only when every actual gate passes and explains its limited meaning', () => {
     const card = assembleReportCard(args());
     expect(card.status).toBe('ACCEPTED');

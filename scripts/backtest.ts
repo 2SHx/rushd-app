@@ -70,6 +70,19 @@ function gitSha(): string {
   }
 }
 
+function gitWorktreeStatus(): string | null {
+  try {
+    return execSync('git status --porcelain=v1 --untracked-files=all', { encoding: 'utf-8' });
+  } catch {
+    return null;
+  }
+}
+
+/** A deterministic run is reproducible only when its recorded SHA exactly describes the input code. */
+export function isReproducibleRun(seed: number, sha: string, porcelainStatus: string | null): boolean {
+  return Number.isSafeInteger(seed) && seed >= 0 && sha !== 'unknown' && porcelainStatus !== null && !porcelainStatus.trim();
+}
+
 /** Strict candidate runs are reproducible only from a clean tracked/untracked, non-ignored tree. */
 export function assertCandidateWorktreeClean(porcelainStatus: string): void {
   if (porcelainStatus.trim()) {
@@ -408,6 +421,7 @@ async function main() {
   const to = args.to;
   const seed = Number(args.seed ?? '42');
   const oosFraction = Number(args.oos ?? '0.3');
+  const initialWorktreeStatus = gitWorktreeStatus();
 
   if (!setupId || !from || !to) {
     console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N]');
@@ -616,9 +630,8 @@ async function main() {
   // (a violation raises LookaheadError → nonzero exit, never this line). Zero bars = nothing
   // verified ⇒ false.
   const dataQualityPitOk = pitBarsProcessed > 0;
-  // reproducible — this path is deterministic (PM surrogate, no LLM, seeded Monte Carlo) and the
-  // run records a concrete seed + gitSha, which is exactly what a byte-identical rerun needs.
-  const reproducible = Number.isSafeInteger(seed) && seed >= 0 && runGitSha !== 'unknown';
+  // Capture cleanliness before simulation: a SHA cannot reproduce uncommitted input code.
+  const reproducible = isReproducibleRun(seed, runGitSha, initialWorktreeStatus);
 
   const card = {
     ...assembleReportCard({

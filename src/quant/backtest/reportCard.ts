@@ -156,7 +156,7 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  ${c.symbols.join(', ')}  |  ${c.from} → ${c.to}`);
   L.push(paint(`  dataFeed=${c.dataFeed}  seed=${c.seed}  gitSha=${c.gitSha}`, DIM));
   L.push('────────────────────────────────────────────────────────────────');
-  L.push(`  Trades (full/OOS):    ${c.full.trades} / ${c.oos.trades}   Turnover: ${c.full.turnover.toFixed(2)}x`);
+  L.push(`  Trades (full/OOS):    ${c.full.trades} / ${c.oos.trades}`);
   L.push(`  CAGR:                 ${pct(c.full.cagr)}   (OOS ${pct(c.oos.cagr)})`);
   L.push(`  Sharpe:               ${c.full.sharpe.toFixed(2)}   (OOS ${c.oos.sharpe.toFixed(2)})`);
   L.push(`  Deflated Sharpe:      ${c.full.deflatedSharpe.toFixed(3)}   (OOS ${c.oos.deflatedSharpe.toFixed(3)})`);
