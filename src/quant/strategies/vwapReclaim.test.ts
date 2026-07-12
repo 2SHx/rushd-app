@@ -66,6 +66,18 @@ describe('vwap-reclaim registration + VWAP math', () => {
     const ev = vwapReclaimSetup.screen(withPre, P).evidence.find((e) => e.ref === 'session_vwap');
     expect(Number(ev!.value)).toBeCloseTo(Number(vwOnlyRegular), 6);
   });
+
+  it('memoization recomputes when an interior bar changes inside a shared-object prefix', () => {
+    const first = PRIOR[0];
+    const last = PRIOR[2];
+    const original = [first, PRIOR[1], last];
+    const replacement = bar('13:32', 20, 20, 20, 20, 100);
+    vwapReclaimSetup.screen(ctx(original), P);
+    const changed = [first, replacement, last];
+    const expected = cumulativeSessionVwap(changed).at(-1)!;
+    const actual = vwapReclaimSetup.screen(ctx(changed), P).evidence.find((e) => e.ref === 'session_vwap');
+    expect(Number(actual!.value)).toBeCloseTo(Number(expected), 6);
+  });
 });
 
 describe('vwap-reclaim wick / volume / reclaim rules (fixed fixtures)', () => {

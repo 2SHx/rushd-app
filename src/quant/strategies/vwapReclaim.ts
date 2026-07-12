@@ -107,6 +107,51 @@ export function cumulativeSessionVwap(bars: readonly IntradayBar[]): Prisma.Deci
   return out;
 }
 
+interface VwapPrefixCache {
+  bars: IntradayBar[];
+  values: Prisma.Decimal[];
+  priceVolume: Prisma.Decimal;
+  volume: Prisma.Decimal;
+}
+
+// Simulation hands the setup growing slices that share the same bar objects. Memoizing that exact
+// prefix removes repeated Decimal work without changing the pure public calculation or any signal.
+const VWAP_PREFIX_CACHE = new WeakMap<IntradayBar, VwapPrefixCache>();
+
+function cachedSessionVwap(bars: IntradayBar[]): Prisma.Decimal[] {
+  if (!bars.length) return [];
+  const first = bars[0];
+  const cached = VWAP_PREFIX_CACHE.get(first);
+  const prefixLength = cached ? Math.min(cached.bars.length, bars.length) : 0;
+  let samePrefix = cached !== undefined && prefixLength > 0;
+  for (let i = 0; samePrefix && i < prefixLength; i++) samePrefix = cached!.bars[i] === bars[i];
+  if (cached && samePrefix) {
+    if (bars.length <= cached.bars.length) return cached.values.slice(0, bars.length);
+    let pv = cached.priceVolume;
+    let volume = cached.volume;
+    for (let i = cached.bars.length; i < bars.length; i++) {
+      const typical = bars[i].high.plus(bars[i].low).plus(bars[i].close).div(3);
+      pv = pv.plus(typical.mul(bars[i].volume));
+      volume = volume.plus(bars[i].volume);
+      cached.bars.push(bars[i]);
+      cached.values.push(volume.gt(0) ? pv.div(volume) : bars[i].close);
+    }
+    cached.priceVolume = pv;
+    cached.volume = volume;
+    return cached.values;
+  }
+  let pv = new D(0);
+  let volume = new D(0);
+  const values = bars.map((bar) => {
+    const typical = bar.high.plus(bar.low).plus(bar.close).div(3);
+    pv = pv.plus(typical.mul(bar.volume));
+    volume = volume.plus(bar.volume);
+    return volume.gt(0) ? pv.div(volume) : bar.close;
+  });
+  VWAP_PREFIX_CACHE.set(first, { bars: [...bars], values, priceVolume: pv, volume });
+  return values;
+}
+
 const meanDecimal = (a: readonly Prisma.Decimal[]): Prisma.Decimal =>
   a.length ? a.reduce((sum, value) => sum.plus(value), new D(0)).div(a.length) : new D(0);
 
@@ -153,7 +198,7 @@ export const vwapReclaimSetup: StrategySetup<VwapReclaimParams> = {
     if (!isUniverse(ctx.symbol)) return check(false, ['symbol_not_in_liquid_universe'], []);
     const bars = sessionBars(ctx, p);
     if (!bars.length) return check(false, ['no_session_bars'], []);
-    const vwap = cumulativeSessionVwap(bars);
+    const vwap = cachedSessionVwap(bars);
     return check(true, [], [
       evidence('session_vwap', vwap.at(-1)!.toFixed(6)),
       evidence('session_bars', bars.length),
@@ -175,7 +220,7 @@ export const vwapReclaimSetup: StrategySetup<VwapReclaimParams> = {
     if (confirm.ts.getTime() !== ctx.asOf.getTime()) return check(false, ['confirm_bar_not_current'], screened.evidence);
     const minute = nasdaqMinuteOfDay(confirm.ts);
     if (minute < p.entryStartMinute || minute > p.entryEndMinute) return check(false, ['outside_entry_window'], screened.evidence);
-    const vwap = cumulativeSessionVwap(bars);
+    const vwap = cachedSessionVwap(bars);
     const matched = isConfirmBar(bars, vwap, n - 1, p);
     const closes = bars.map((b) => num(b.close));
     const sizeFraction = matched
@@ -195,7 +240,7 @@ export const vwapReclaimSetup: StrategySetup<VwapReclaimParams> = {
     if (ctx.positionQty.lte(0)) return check(false, ['no_long_position'], []);
     const bars = sessionBars(ctx, p);
     if (!bars.length) return check(false, ['no_session_bars'], []);
-    const vwap = cumulativeSessionVwap(bars);
+    const vwap = cachedSessionVwap(bars);
     const j = ctx.entrySignalTs
       ? bars.findIndex((bar) => bar.ts.getTime() === ctx.entrySignalTs!.getTime())
       : -1;
