@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
@@ -10,13 +10,113 @@ interface StrategyLeagueClientProps {
   teams: StrategyLeagueTeam[];
 }
 
+type TFunction = ReturnType<typeof useTranslations>;
+type Formatter = (value: number | null) => string;
+
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
+
+// Sharia state -> {icon, semantic token}. Only VERIFIED_NON_COMPLIANT gets the
+// noncompliant (amber) token per DR-12; unscreened states are neutral, not amber.
+const SHARIA_STATE_STYLE: Record<string, { Icon: typeof CheckCircle2; className: string }> = {
+  VERIFIED_COMPLIANT: { Icon: CheckCircle2, className: 'text-up' },
+  VERIFIED_NON_COMPLIANT: { Icon: ShieldAlert, className: 'text-noncompliant' },
+  UNSCREENED_EXECUTION_BLOCKED: { Icon: AlertTriangle, className: 'text-foreground/70' },
+  UNVERIFIED: { Icon: AlertTriangle, className: 'text-foreground/70' },
+};
+
+function Disclosures({ t }: { t: TFunction }) {
+  return (
+    <div className="grid gap-3 text-start sm:grid-cols-2">
+      <p className="rounded-xl bg-foreground/[0.04] p-4 text-xs leading-relaxed text-foreground/70">
+        {t('simulatedDisclosure')}
+      </p>
+      <p className="rounded-xl bg-foreground/[0.04] p-4 text-xs leading-relaxed text-foreground/70">
+        {t('shariaDisclosure')}
+      </p>
+    </div>
+  );
+}
+
+function Standings({
+  t,
+  rankedTeams,
+  selectedRunId,
+  onSelect,
+  percent,
+  decimal,
+}: {
+  t: TFunction;
+  rankedTeams: StrategyLeagueTeam[];
+  selectedRunId: string;
+  onSelect: (runId: string) => void;
+  percent: Formatter;
+  decimal: Formatter;
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6" aria-labelledby="league-standings-title">
+      <div className="text-start">
+        <h2 id="league-standings-title" className="text-lg font-semibold">{t('teamListLabel')}</h2>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/60">{t('standingsDescription')}</p>
+      </div>
+
+      <div className="mt-5 overflow-x-auto">
+        <div className="min-w-[46rem]">
+          <div
+            className="grid grid-cols-[2.5rem_minmax(10rem,1.4fr)_6.5rem_6rem_5.5rem_5.5rem_7rem_5rem] gap-3 border-b border-[var(--border-color)] pb-2 text-[11px] font-medium text-foreground/60"
+          >
+            <span>{t('standingsRank')}</span>
+            <span className="text-start">{t('standingsTeam')}</span>
+            <span className="text-start">{t('standingsStatus')}</span>
+            <span className="text-end">{t('oosShort')}</span>
+            <span className="text-end">{t('metricSharpe')}</span>
+            <span className="text-end">{t('metricDsr')}</span>
+            <span className="text-end">{t('standingsMcDrawdown')}</span>
+            <span className="text-end">{t('metricTrades')}</span>
+          </div>
+          <div className="divide-y divide-[var(--border-color)]">
+            {rankedTeams.map((team, index) => {
+              const active = team.runId === selectedRunId;
+              const StatusIcon = team.status === 'ACCEPTED' ? CheckCircle2 : XCircle;
+              return (
+                <button
+                  key={team.runId}
+                  type="button"
+                  onClick={() => onSelect(team.runId)}
+                  aria-pressed={active}
+                  className={`grid w-full grid-cols-[2.5rem_minmax(10rem,1.4fr)_6.5rem_6rem_5.5rem_5.5rem_7rem_5rem] items-center gap-3 py-3 text-start transition-colors duration-150 ${
+                    active ? 'bg-accent/10' : 'hover:bg-foreground/[0.04]'
+                  }`}
+                >
+                  <span className="text-xs tabular-nums text-foreground/60">{index + 1}</span>
+                  <span className="min-w-0 truncate font-mono text-xs" dir="ltr">{team.setupId}</span>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${team.status === 'ACCEPTED' ? 'text-up' : 'text-down'}`}>
+                    <StatusIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                    {t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}
+                  </span>
+                  <span className="text-end text-sm font-semibold tabular-nums" dir="ltr">{percent(team.oos.cagr)}</span>
+                  <span className="text-end text-xs tabular-nums text-foreground/70" dir="ltr">{decimal(team.oos.sharpe)}</span>
+                  <span className="text-end text-xs tabular-nums text-foreground/70" dir="ltr">{decimal(team.oos.deflatedSharpe)}</span>
+                  <span className="text-end text-xs tabular-nums text-foreground/70" dir="ltr">{percent(team.bootstrap.maxDrawdown.p95)}</span>
+                  <span className="text-end text-xs tabular-nums text-foreground/70" dir="ltr">{decimal(team.full.trades)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProps) {
   const t = useTranslations('QuantResults');
   const locale = useLocale();
-  const [selectedRunId, setSelectedRunId] = useState(teams[0]?.runId ?? '');
-  const selected = teams.find(team => team.runId === selectedRunId) ?? teams[0];
+  const rankedTeams = [...teams].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'ACCEPTED' ? -1 : 1;
+    return b.oos.cagr - a.oos.cagr;
+  });
+  const [selectedRunId, setSelectedRunId] = useState(rankedTeams[0]?.runId ?? '');
+  const selected = teams.find(team => team.runId === selectedRunId) ?? rankedTeams[0];
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const percent = (value: number | null) => value === null
     ? t('unavailable')
@@ -24,6 +124,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   const decimal = (value: number | null) => value === null
     ? t('unavailable')
     : new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 3 }).format(value);
+  const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
 
   if (!selected) {
     return (
@@ -32,7 +133,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
           <h1 id="strategy-league-title" className="text-3xl font-semibold ltr:tracking-tight">{t('title')}</h1>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/60">{t('subtitle')}</p>
         </header>
-        <Disclosures />
+        <Disclosures t={t} />
         <div className="rounded-2xl bg-surface-card p-8 text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)]">
           <h2 className="text-lg font-semibold">{t('emptyTitle')}</h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-foreground/60">{t('emptyBody')}</p>
@@ -83,19 +184,8 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     { label: t('gateRuin'), value: percent(riskOfRuin), pass: selected.checklist.mcRiskOfRuinWithinLimit, progress: selected.checklist.mcRiskOfRuinWithinLimit ? 1 : 0 },
     { label: t('gateTrades'), value: decimal(selected.full.trades), pass: selected.checklist.enoughTrades, progress: selected.checklist.enoughTrades ? 1 : 0 },
   ];
-
-  function Disclosures() {
-    return (
-      <div className="grid gap-3 text-start sm:grid-cols-2">
-        <p className="rounded-xl bg-foreground/[0.04] p-4 text-xs leading-relaxed text-foreground/70">
-          {t('simulatedDisclosure')}
-        </p>
-        <p className="rounded-xl bg-foreground/[0.04] p-4 text-xs leading-relaxed text-foreground/70">
-          {t('shariaDisclosure')}
-        </p>
-      </div>
-    );
-  }
+  const shariaStyle = SHARIA_STATE_STYLE[selected.shariaState] ?? SHARIA_STATE_STYLE.UNVERIFIED;
+  const ShariaIcon = shariaStyle.Icon;
 
   return (
     <section className="min-w-0 max-w-full space-y-8" aria-labelledby="strategy-league-title">
@@ -107,28 +197,37 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         <div className="flex gap-4 text-xs tabular-nums" aria-label={t('statusSummary')}>
           <span className="inline-flex items-center gap-1.5 text-up">
             <CheckCircle2 className="size-4" aria-hidden="true" />
-            {t('acceptedCount', { count: teams.filter(team => team.status === 'ACCEPTED').length })}
+            {t('acceptedCount', { count: count(teams.filter(team => team.status === 'ACCEPTED').length) })}
           </span>
           <span className="inline-flex items-center gap-1.5 text-down">
             <XCircle className="size-4" aria-hidden="true" />
-            {t('rejectedCount', { count: teams.filter(team => team.status === 'REJECTED').length })}
+            {t('rejectedCount', { count: count(teams.filter(team => team.status === 'REJECTED').length) })}
           </span>
         </div>
       </header>
 
-      <Disclosures />
+      <Disclosures t={t} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
-          <figcaption className="text-start">
-            <h2 className="font-semibold">{t('plotTitle')}</h2>
-            <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('plotDescription')}</p>
-          </figcaption>
-          {plottableTeams.length === 0 ? (
-            <p className="mt-5 rounded-xl bg-foreground/[0.04] p-5 text-start text-sm leading-relaxed text-foreground/65" role="status">
-              {t('plotUnavailable')}
-            </p>
-          ) : (
+      <Standings
+        t={t}
+        rankedTeams={rankedTeams}
+        selectedRunId={selected.runId}
+        onSelect={setSelectedRunId}
+        percent={percent}
+        decimal={decimal}
+      />
+
+      <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
+        <figcaption className="text-start">
+          <h2 className="font-semibold">{t('plotTitle')}</h2>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('plotDescription')}</p>
+        </figcaption>
+        {plottableTeams.length === 0 ? (
+          <p className="mt-5 rounded-xl bg-foreground/[0.04] p-5 text-start text-sm leading-relaxed text-foreground/65" role="status">
+            {t('plotUnavailable')}
+          </p>
+        ) : (
+          <>
             <div className="mt-5 overflow-x-auto" dir="ltr">
               <svg
               viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
@@ -181,42 +280,24 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
               </text>
               </svg>
             </div>
-          )}
-          {plottableTeams.length > 0 && plottableTeams.length < teams.length ? (
-            <p className="mt-3 text-start text-xs text-foreground/55">
-              {t('plotOmittedCount', { count: teams.length - plottableTeams.length })}
-            </p>
-          ) : null}
-        </figure>
-
-        <div className="rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-5">
-          <h2 className="text-sm font-semibold text-start">{t('teamListLabel')}</h2>
-          <div className="mt-3 grid gap-2">
-            {teams.map(team => {
-              const active = team.runId === selected.runId;
-              const StatusIcon = team.status === 'ACCEPTED' ? CheckCircle2 : XCircle;
-              return (
-                <button
-                  key={team.runId}
-                  type="button"
-                  onClick={() => setSelectedRunId(team.runId)}
-                  className={`flex min-w-0 items-center gap-3 rounded-xl px-3 py-3 text-start transition-colors duration-150 ${
-                    active ? 'bg-accent/10 text-foreground' : 'text-foreground/60 hover:bg-foreground/[0.04] hover:text-foreground'
-                  }`}
-                  aria-pressed={active}
-                >
-                  <StatusIcon className={`size-4 shrink-0 ${team.status === 'ACCEPTED' ? 'text-up' : 'text-down'}`} aria-hidden="true" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-xs" dir="ltr">{team.setupId}</span>
-                    <span className="mt-0.5 block text-[10px] tabular-nums">{percent(team.oos.cagr)} {t('oosShort')}</span>
-                  </span>
-                  <span className={team.status === 'ACCEPTED' ? 'text-up' : 'text-down'}>{t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+            <ul className="mt-4 flex flex-wrap items-center gap-4 text-[11px] text-foreground/60" aria-hidden="true">
+              <li className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: 'var(--up)' }} />
+                {t('accepted')}
+              </li>
+              <li className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: 'var(--down)' }} />
+                {t('rejected')}
+              </li>
+            </ul>
+          </>
+        )}
+        {plottableTeams.length > 0 && plottableTeams.length < teams.length ? (
+          <p className="mt-3 text-start text-xs text-foreground/55">
+            {t('plotOmittedCount', { count: teams.length - plottableTeams.length })}
+          </p>
+        ) : null}
+      </figure>
 
       <HistoricalComparisonChart comparison={selected.comparison} />
 
@@ -224,7 +305,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         <article className="min-w-0 rounded-2xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4 text-start">
             <div>
-              <p className="font-mono text-xs text-foreground/50" dir="ltr">{selected.setupId}</p>
+              <p className="font-mono text-xs text-foreground/60" dir="ltr">{selected.setupId}</p>
               <h2 className="mt-1 text-xl font-semibold">{t('selectedEvidence')}</h2>
             </div>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${selected.status === 'ACCEPTED' ? 'bg-up/10 text-up' : 'bg-down/10 text-down'}`}>
@@ -233,14 +314,14 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
             </span>
           </div>
           <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2">
-            <div><dt className="text-foreground/50">{t('period')}</dt><dd className="mt-1 tabular-nums" dir="ltr">{selected.from} — {selected.to}</dd></div>
-            <div><dt className="text-foreground/50">{t('dataFeed')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.dataFeed}</dd></div>
-            <div><dt className="text-foreground/50">{t('shariaState')}</dt><dd className="mt-1 inline-flex items-center gap-1.5"><ShieldAlert className="size-4 text-noncompliant" />{t(`sharia.${selected.shariaState}`)}</dd></div>
-            <div><dt className="text-foreground/50">{t('sourceCommit')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.gitSha}</dd></div>
+            <div><dt className="text-foreground/60">{t('period')}</dt><dd className="mt-1 tabular-nums" dir="ltr">{selected.from} — {selected.to}</dd></div>
+            <div><dt className="text-foreground/60">{t('dataFeed')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.dataFeed}</dd></div>
+            <div><dt className="text-foreground/60">{t('shariaState')}</dt><dd className="mt-1 inline-flex items-center gap-1.5"><ShariaIcon className={`size-4 ${shariaStyle.className}`} aria-hidden="true" />{t(`sharia.${selected.shariaState}`)}</dd></div>
+            <div><dt className="text-foreground/60">{t('sourceCommit')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.gitSha}</dd></div>
           </dl>
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[28rem] text-sm">
-              <thead className="text-foreground/50">
+              <thead className="text-foreground/60">
                 <tr><th className="py-2 text-start font-medium">{t('metric')}</th><th className="py-2 text-end font-medium">{t('fullPeriod')}</th><th className="py-2 text-end font-medium">{t('outOfSample')}</th></tr>
               </thead>
               <tbody>

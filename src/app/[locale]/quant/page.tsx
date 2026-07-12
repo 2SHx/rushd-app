@@ -1,11 +1,12 @@
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
-import { BarChart3, GraduationCap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, GraduationCap, XCircle } from 'lucide-react';
 import CommitteeClient from '@/components/quant/CommitteeClient';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
+import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
 
 export default async function QuantPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -86,8 +87,15 @@ export default async function QuantPage({ params }: { params: { locale: string }
     })),
   }));
 
+  const league = await loadStrategyLeagueViewModel();
+  const leagueAcceptedCount = league.teams.filter(team => team.status === 'ACCEPTED').length;
+  const leagueRejectedCount = league.teams.filter(team => team.status === 'REJECTED').length;
+
   const t = await getTranslations('Quant');
   const resultsT = await getTranslations('QuantResults');
+  const ForwardIcon = locale === 'ar' ? ArrowLeft : ArrowRight;
+  const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
+  const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
   const performanceWarning = {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
@@ -107,19 +115,36 @@ export default async function QuantPage({ params }: { params: { locale: string }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold text-foreground ltr:tracking-tight">{t('title')}</h1>
-          <p className="text-sm leading-6 text-foreground/65">{t('subtitle')}</p>
-        </div>
-        <Link
-          href={`/${locale}/quant/league`}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-        >
-          <BarChart3 className="h-4 w-4" aria-hidden="true" />
-          {resultsT('navLabel')}
-        </Link>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-semibold text-foreground ltr:tracking-tight">{t('title')}</h1>
+        <p className="text-sm leading-6 text-foreground/65">{t('subtitle')}</p>
       </div>
+
+      <Link
+        href={`/${locale}/quant/league`}
+        className="group flex items-center justify-between gap-4 rounded-2xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] transition-colors duration-150 hover:bg-foreground/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      >
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+            <BarChart3 className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase text-accent ltr:tracking-[0.14em]">{resultsT('eyebrow')}</p>
+            <h2 className="mt-1 text-lg font-semibold text-foreground">{resultsT('navLabel')}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs tabular-nums">
+              <span className="inline-flex items-center gap-1.5 text-up">
+                <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                {resultsT('acceptedCount', { count: count(leagueAcceptedCount) })}
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-down">
+                <XCircle className="size-3.5" aria-hidden="true" />
+                {resultsT('rejectedCount', { count: count(leagueRejectedCount) })}
+              </span>
+            </div>
+          </div>
+        </div>
+        <ForwardIcon className="size-5 shrink-0 text-foreground/40" aria-hidden="true" />
+      </Link>
 
       <div className="flex items-start gap-3 rounded-2xl bg-up/5 p-4 text-start shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
         <GraduationCap className="mt-0.5 h-5 w-5 shrink-0 text-up" />
@@ -130,13 +155,13 @@ export default async function QuantPage({ params }: { params: { locale: string }
       </div>
 
       {portfolio.unpricedSymbols.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="rounded-2xl border border-noncompliant/30 bg-noncompliant/10 p-4 text-sm text-noncompliant">
           {t('portfolioPricingIncomplete', { symbols: portfolio.unpricedSymbols.join(', ') })}
         </div>
       )}
 
       {performanceWarning && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="rounded-2xl border border-noncompliant/30 bg-noncompliant/10 p-4 text-sm text-noncompliant">
           {performanceWarning}
         </div>
       )}
@@ -155,7 +180,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
           initialAutonomyTier={initialAutonomyTier}
         />
       ) : (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="rounded-2xl border border-noncompliant/30 bg-noncompliant/10 p-4 text-sm text-noncompliant">
           {t('portfolioInteractiveUnavailable')}
         </div>
       )}

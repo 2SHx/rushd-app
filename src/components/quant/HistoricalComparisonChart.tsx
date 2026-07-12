@@ -162,7 +162,7 @@ function ComparisonPlot({
                   {change(endingValue)}
                 </span>
               </div>
-              <p className="mt-1 text-[10px] text-foreground/50">{t('historyEndingValue')}</p>
+              <p className="mt-1 text-[10px] text-foreground/60">{t('historyEndingValue')}</p>
             </li>
           );
         })}
@@ -172,7 +172,7 @@ function ComparisonPlot({
           {t('historyOosOutside', { oos: date(comparison.oosStart) })}
         </p>
       ) : null}
-      <p className="mt-3 text-start text-[10px] text-foreground/50">
+      <p className="mt-3 text-start text-[10px] text-foreground/60">
         {t('historySources', { spy: comparison.sources.spy.join(' + '), spus: comparison.sources.spus.join(' + ') })}
       </p>
     </div>
