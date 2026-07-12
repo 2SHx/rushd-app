@@ -13,7 +13,7 @@ function configuredCap(name: string, fallback: number, ceiling: number): number 
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, ceiling) : fallback;
 }
 
-export const MAX_INTRADAY_SYMBOLS = configuredCap('INTRADAY_MAX_SYMBOLS', 5, 25);
+const MAX_INTRADAY_SYMBOLS = configuredCap('INTRADAY_MAX_SYMBOLS', 5, 25);
 
 const bodySchema = z.object({
   symbols: z.array(z.string().regex(/^[A-Za-z]{1,10}$/).transform((symbol) => symbol.toUpperCase())).optional(),
