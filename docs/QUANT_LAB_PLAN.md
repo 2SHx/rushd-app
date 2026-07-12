@@ -89,6 +89,16 @@ Sharia state, exact ordered rejection reason codes, and strategy/params version 
 `BacktestRun`/result path. Missing values are labeled `n/a — not persisted`; they are never inferred.
 The binding reason-code definitions and ordering live in QDR-7.
 
+## Round 2 (USER-APPROVED 2026-07-12: "all, in order")
+
+| R2 unit | Owner | Status | Deliverable |
+|---|---|---|---|
+| R2-1 deep-history backfill | data-engineer | 🔄 | BACKWARDS daily backfill (Yahoo keyless, 6y+) for halal universe + liquid names; extended minute-bar history (Alpaca IEX, 2y) for liquid halal NASDAQ; ingest currently only extends forward — needs a backwards mode |
+| R2-2 stocks-in-play gapper v2 | quant-strategist | 🔄 | NEW hypothesis (Zarattini SiP): relative-volume ranking (vs 14d avg, cross-sectional from wide MarketBar) + trend alignment on LIQUID names + ORB; validate on available 90d minute data, re-run after R2-1 |
+| R2-3 B v2 + C v2 (per-name sizing, regime gates) | quant-strategist | ⏳ | new candidates, never retunes; validate after R2-1 depth |
+| R2-4 Tier-1 setups ×4 | quant-strategist | ⏳ | vwap-reclaim, stop-hunt-reversal-long, bagholder-bounce, time-of-day — one dispatch each, sequenced on ledger |
+| R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | ⏳ | build after validations; automation activates only for ACCEPTED teams (may be zero — league renders honestly empty) |
+
 ## Continuation protocol (for ANY AI picking this up)
 
 1. Read this file, `docs/JOURNAL.md` (top entries), `docs/QUANT_DESIGN.md` QDR-6 + §9b,

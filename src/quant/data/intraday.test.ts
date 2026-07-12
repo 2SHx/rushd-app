@@ -11,7 +11,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 vi.mock('./fixtureLoader', () => ({ loadFixturesForSymbol: h.loadFixturesForSymbol }));
 
-import { ingestIntradayBars, ingestIntradayBarsForDay, selectIntradayTier, sessionForTs } from './intraday';
+import { ingestIntradayBars, ingestIntradayBarsForDay, ingestIntradayBarsBackfill, selectIntradayTier, sessionForTs } from './intraday';
 
 describe('intraday data tiers', () => {
   beforeEach(() => {
@@ -151,6 +151,79 @@ describe('intraday data tiers', () => {
 
       const result = await ingestIntradayBarsForDay('MSFT', 'NASDAQ', '2026-07-06');
       expect(result).toMatchObject({ requested: 1, created: 0 });
+    });
+  });
+
+  describe('ingestIntradayBarsBackfill (BACKWARDS deep-history)', () => {
+    it('performs no I/O for unsupported TASI ingestion', async () => {
+      const result = await ingestIntradayBarsBackfill('2222', 'TASI');
+      expect(result).toEqual({ requested: 0, created: 0, chunks: 0, earliestBefore: null, earliestAfter: null });
+      expect(h.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('requires explicit live Alpaca mode', async () => {
+      await expect(ingestIntradayBarsBackfill('MSFT', 'NASDAQ')).rejects.toThrow(/live Alpaca mode/);
+    });
+
+    it('walks backward in chunks from the existing earliest bar down to the target floor, never mutating existing rows', async () => {
+      process.env.MARKET_DATA_MODE = 'live';
+      process.env.ALPACA_API_KEY = 'key';
+      const now = new Date('2026-07-11T12:00:00.000Z');
+      const earliestStored = new Date('2026-05-01T09:31:00.000Z'); // 71 days back from `now`
+      h.findFirst
+        .mockResolvedValueOnce({ ts: earliestStored }) // earliest-before
+        .mockResolvedValueOnce({ ts: new Date('2026-03-01T09:31:00.000Z') }); // earliest-after
+      h.createMany.mockResolvedValue({ count: 1 });
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        bars: { MSFT: [{ t: '2026-03-01T09:30:00.000Z', o: 1, h: 2, l: 1, c: 2, v: 10 }] },
+      }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      // 100-day target from `now`, chunked at 80 days: one chunk from (now-100d) to (earliest-1ms).
+      const result = await ingestIntradayBarsBackfill('MSFT', 'NASDAQ', { days: 100, now });
+
+      expect(result.chunks).toBe(1);
+      expect(result.requested).toBe(1);
+      expect(result.created).toBe(1);
+      expect(result.earliestBefore).toEqual(earliestStored);
+      const url = new URL(fetchMock.mock.calls[0][0] as URL);
+      expect(new Date(url.searchParams.get('end')!).getTime()).toBe(earliestStored.getTime() - 1);
+      // createMany is only ever called with fresh rows via skipDuplicates — never an update call exists on this model.
+      expect(h.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    });
+
+    it('makes multiple chunked requests when the target window exceeds the per-chunk cap', async () => {
+      process.env.MARKET_DATA_MODE = 'live';
+      process.env.ALPACA_API_KEY = 'key';
+      const now = new Date('2026-07-11T12:00:00.000Z');
+      h.findFirst.mockResolvedValue(null); // nothing stored yet
+      h.createMany.mockResolvedValue({ count: 0 });
+      const fetchMock = vi.fn().mockImplementation(async () =>
+        new Response(JSON.stringify({ bars: { MSFT: [] } }), { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      // 200-day target, 80-day chunks => 3 chunks (80 + 80 + 40).
+      const result = await ingestIntradayBarsBackfill('MSFT', 'NASDAQ', { days: 200, now });
+
+      expect(result.chunks).toBe(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('is idempotent: rerunning from the deepened earliest bar requests 0 further chunks once the floor is reached', async () => {
+      process.env.MARKET_DATA_MODE = 'live';
+      process.env.ALPACA_API_KEY = 'key';
+      const now = new Date('2026-07-11T12:00:00.000Z');
+      const floorReached = new Date(now.getTime() - 100 * 86_400_000 + 1);
+      h.findFirst.mockResolvedValue({ ts: floorReached }); // already sitting at the target floor
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await ingestIntradayBarsBackfill('MSFT', 'NASDAQ', { days: 100, now });
+
+      expect(result.chunks).toBe(0);
+      expect(result.requested).toBe(0);
+      expect(result.created).toBe(0);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

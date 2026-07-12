@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    marketBar: { findFirst: vi.fn(), upsert: vi.fn() },
+    marketBar: { findFirst: vi.fn(), upsert: vi.fn(), createMany: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
   },
 }));
@@ -18,7 +18,7 @@ vi.mock('@/services/marketData', async () => {
 
 import { prisma } from '@/lib/prisma';
 import { MockProvider, registry, YahooFinanceProvider } from '@/services/marketData';
-import { ingestBars } from './ingest';
+import { ingestBars, ingestBarsBackfill } from './ingest';
 
 const D = Prisma.Decimal;
 const candles = [
@@ -107,6 +107,71 @@ describe('ingestBars', () => {
     expect(result).toEqual({ upserted: 0, source: 'MOCK' });
     expect(provider.getCandles).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestBarsBackfill (BACKWARDS deep-history)', () => {
+  const deepCandles = [
+    { time: '2019-01-01', open: 10, high: 11, low: 9, close: 10.5, value: 500 },
+    { time: '2019-01-02', open: 10.5, high: 12, low: 10, close: 11, value: 600 },
+    { time: '2024-01-01', open: 100, high: 105, low: 99, close: 102, value: 1000 }, // == existing earliest
+    { time: '2024-01-05', open: 103, high: 106, low: 101, close: 104, value: 900 }, // newer than existing earliest
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.marketBar.createMany as any).mockResolvedValue({ count: 0 });
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('throws for a non-NASDAQ market', async () => {
+    await expect(ingestBarsBackfill('2222', 'TASI')).rejects.toThrow(/only supports NASDAQ/);
+    expect(prisma.marketBar.createMany).not.toHaveBeenCalled();
+  });
+
+  it('inserts only candles strictly older than the existing earliest bar, never touching or duplicating it', async () => {
+    (prisma.marketBar.findFirst as any)
+      .mockResolvedValueOnce({ ts: new Date('2024-01-01T00:00:00.000Z') }) // earliest-before lookup
+      .mockResolvedValueOnce({ ts: new Date('2019-01-01T00:00:00.000Z') }); // earliest-after lookup
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+    (prisma.marketBar.createMany as any).mockResolvedValue({ count: 2 });
+
+    const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
+
+    expect(result).toMatchObject({
+      inserted: 2,
+      source: 'YAHOO',
+      earliestBefore: new Date('2024-01-01T00:00:00.000Z'),
+      earliestAfter: new Date('2019-01-01T00:00:00.000Z'),
+    });
+    const call = (prisma.marketBar.createMany as any).mock.calls[0][0];
+    expect(call.skipDuplicates).toBe(true);
+    const insertedDates = call.data.map((r: any) => r.ts.toISOString().slice(0, 10));
+    expect(insertedDates).toEqual(['2019-01-01', '2019-01-02']); // strictly older only, no 2024-01-01/05
+    expect(call.data.every((r: any) => r.source === 'YAHOO')).toBe(true);
+  });
+
+  it('inserts everything when no existing bars are stored', async () => {
+    (prisma.marketBar.findFirst as any).mockResolvedValueOnce(null).mockResolvedValueOnce({ ts: new Date('2019-01-01T00:00:00.000Z') });
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+    (prisma.marketBar.createMany as any).mockResolvedValue({ count: 4 });
+
+    const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
+    expect(result.inserted).toBe(4);
+    expect((prisma.marketBar.createMany as any).mock.calls[0][0].data).toHaveLength(4);
+  });
+
+  it('is idempotent: a second run with the same fetched window inserts 0 rows and issues no createMany call', async () => {
+    (prisma.marketBar.findFirst as any).mockResolvedValue({ ts: new Date('2019-01-01T00:00:00.000Z') }); // already the oldest candle
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+
+    const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
+
+    expect(result.inserted).toBe(0);
+    expect(prisma.marketBar.createMany).not.toHaveBeenCalled();
   });
 });
 

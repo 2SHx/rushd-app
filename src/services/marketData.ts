@@ -317,7 +317,10 @@ export class YahooFinanceProvider implements MarketDataProvider {
 
   async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
     const ticker = market === 'TASI' && !symbol.endsWith('.SR') ? `${symbol}.SR` : symbol;
-    const range = days > 365 ? '5y' : (days > 90 ? '1y' : '90d');
+    // Tiers extend past 5y for deep-history backfill (QDR-6): Yahoo's keyless chart endpoint
+    // accepts up to 'max', so a 6y+ request (e.g. the daily halal-universe backfill) gets '10y'
+    // rather than being silently truncated to the 5y tier.
+    const range = days > 1825 ? '10y' : (days > 365 ? '5y' : (days > 90 ? '1y' : '90d'));
     const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=1d`);
     if (!res.ok) {
       throw new Error(`Yahoo Finance candles request failed with status ${res.status}`);

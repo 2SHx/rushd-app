@@ -9,7 +9,12 @@
 //     (symbol, day) pairs via ingestIntradayBarsForDay — never a bulk multi-month backfill for
 //     the whole candidate list's symbols.
 import fs from 'node:fs';
-import { ingestIntradayBars, ingestIntradayBarsForDay, INITIAL_INTRADAY_BACKFILL_DAYS } from '../src/quant/data/intraday';
+import {
+  ingestIntradayBars,
+  ingestIntradayBarsForDay,
+  ingestIntradayBarsBackfill,
+  INITIAL_INTRADAY_BACKFILL_DAYS,
+} from '../src/quant/data/intraday';
 import { compareCandidateDays, parsePositiveIntegerCap } from '../src/quant/data/gapperCandidates';
 
 process.loadEnvFile?.('.env');
@@ -68,10 +73,24 @@ async function main() {
     .map((symbol) => symbol.trim().toUpperCase())
     .filter((symbol) => /^[A-Z]{1,10}$/.test(symbol));
   const requestedDays = Number.parseInt(arg('days') ?? `${INITIAL_INTRADAY_BACKFILL_DAYS}`, 10);
-  const days = Number.isFinite(requestedDays) && requestedDays > 0
-    ? Math.min(requestedDays, INITIAL_INTRADAY_BACKFILL_DAYS)
-    : INITIAL_INTRADAY_BACKFILL_DAYS;
+  const rawDays = Number.isFinite(requestedDays) && requestedDays > 0 ? requestedDays : INITIAL_INTRADAY_BACKFILL_DAYS;
 
+  // `--deep-backfill` walks BACKWARDS in chunks past the 90-day initial window (QDR-6 deep
+  // history unlock). The plain (no-flag) path is untouched: forward-only, capped at 90 days.
+  const deepBackfill = process.argv.includes('--deep-backfill');
+  if (deepBackfill) {
+    for (const symbol of symbols) {
+      const before = await ingestIntradayBars(symbol, 'NASDAQ', { days: INITIAL_INTRADAY_BACKFILL_DAYS }); // ensure a recent anchor exists
+      const result = await ingestIntradayBarsBackfill(symbol, 'NASDAQ', { days: rawDays });
+      console.log(
+        `${symbol}: forward +${before.created} recent bars; backfill ${result.created}/${result.requested} new bars ` +
+        `over ${result.chunks} chunk(s); earliest ${result.earliestBefore?.toISOString() ?? 'none'} -> ${result.earliestAfter?.toISOString() ?? 'none'}`,
+      );
+    }
+    return;
+  }
+
+  const days = Math.min(rawDays, INITIAL_INTRADAY_BACKFILL_DAYS);
   for (const symbol of symbols) {
     const result = await ingestIntradayBars(symbol, 'NASDAQ', { days });
     console.log(`${symbol}: ${result.created}/${result.requested} new minute bars (${result.tier})`);

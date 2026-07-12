@@ -73,3 +73,84 @@ export async function ingestBars(
 
   return { upserted: candles.length, source };
 }
+
+/** ~6 calendar years — comfortably covers the ≥252-trading-day/year target for the halal universe. */
+export const BACKFILL_TARGET_DAYS = 365 * 6;
+
+export interface BackfillResult {
+  inserted: number;
+  source: string;
+  earliestBefore: Date | null;
+  earliestAfter: Date | null;
+}
+
+/**
+ * Deep-history BACKWARDS backfill (QDR-6): the forward-only `ingestBars` cursor above never
+ * looks earlier than the oldest stored bar, so once a symbol has *any* recent history it can
+ * never grow deeper. This fills the gap explicitly: fetch a wide keyless-Yahoo window and keep
+ * only candles strictly older than whatever is already stored, then `createMany` +
+ * `skipDuplicates` — never an `update`, so an existing row (real or legacy MOCK) can never be
+ * mutated or duplicated by this path. Idempotent: a rerun's fetched window has the same floor,
+ * so after the first run every candle is no longer strictly older than the new earliest row,
+ * and 0 rows are inserted.
+ *
+ * NASDAQ-only and keyless-only by design: this is the six-year real-history unlock, and Yahoo's
+ * keyless chart endpoint is the only free source with years of daily history. Refuses to write
+ * MOCK-sourced rows (hard user directive: no mock/synthetic bars from this path).
+ */
+export async function ingestBarsBackfill(
+  symbol: string,
+  market: Market,
+  opts?: { days?: number },
+): Promise<BackfillResult> {
+  if (market !== 'NASDAQ') {
+    throw new Error(`ingestBarsBackfill only supports NASDAQ (keyless Yahoo deep history); got market=${market}`);
+  }
+  const provider = new YahooFinanceProvider();
+  const source = sourceFor(provider);
+  if (source === 'MOCK') {
+    // Unreachable given sourceFor(YahooFinanceProvider) === 'YAHOO', but this is the hard
+    // no-mock-rows assertion the directive requires on every row this unit writes.
+    throw new Error('ingestBarsBackfill refuses to write MOCK-sourced bars');
+  }
+
+  const earliest = await prisma.marketBar.findFirst({
+    where: { symbol, market, interval: 'DAY' },
+    orderBy: { ts: 'asc' },
+    select: { ts: true },
+  });
+  const cutoff = earliest?.ts ?? null;
+
+  const days = opts?.days ?? BACKFILL_TARGET_DAYS;
+  const candles = await provider.getCandles(symbol, market, days);
+  const olderCandles = cutoff
+    ? candles.filter((c) => new Date(`${c.time}T00:00:00.000Z`) < cutoff)
+    : candles;
+
+  if (olderCandles.length === 0) {
+    return { inserted: 0, source, earliestBefore: cutoff, earliestAfter: cutoff };
+  }
+
+  const rows = olderCandles.map((c) => ({
+    symbol,
+    market,
+    interval: 'DAY' as const,
+    ts: new Date(`${c.time}T00:00:00.000Z`),
+    open: new Prisma.Decimal(c.open),
+    high: new Prisma.Decimal(c.high),
+    low: new Prisma.Decimal(c.low),
+    close: new Prisma.Decimal(c.close),
+    volume: new Prisma.Decimal(c.value ?? 0),
+    source,
+  }));
+
+  const result = await prisma.marketBar.createMany({ data: rows, skipDuplicates: true });
+
+  const newEarliest = await prisma.marketBar.findFirst({
+    where: { symbol, market, interval: 'DAY' },
+    orderBy: { ts: 'asc' },
+    select: { ts: true },
+  });
+
+  return { inserted: result.count, source, earliestBefore: cutoff, earliestAfter: newEarliest?.ts ?? null };
+}

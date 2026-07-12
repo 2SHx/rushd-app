@@ -264,6 +264,101 @@ export async function ingestIntradayBarsForDay(
   return { requested, created, source, tier: 'alpaca', latestTs, fixtureSnapshots: [] };
 }
 
+/** Chunk width for the BACKWARDS backfill below — stays under Alpaca's ~100k-bar (10-page) cap per request. */
+const BACKFILL_CHUNK_DAYS = 80;
+/** Gentle pacing between chunk requests so a multi-year backfill doesn't burst the free-tier rate limit. */
+const BACKFILL_CHUNK_DELAY_MS = 300;
+
+export interface IntradayBackfillResult {
+  requested: number;
+  created: number;
+  chunks: number;
+  earliestBefore: Date | null;
+  earliestAfter: Date | null;
+}
+
+/**
+ * Deep-history BACKWARDS minute-bar backfill (QDR-6): `ingestIntradayBars` above only ever
+ * extends forward from the latest stored bar, so once a symbol has any recent minute history
+ * it can never grow deeper. This walks backward in `BACKFILL_CHUNK_DAYS`-wide windows from
+ * whatever is already stored (or from `now` if nothing is stored yet) down to `opts.days`
+ * calendar days back, one Alpaca IEX request per chunk (each request is far smaller than the
+ * 100k-bar/10-page cap a single multi-year call would hit). `createMany` + `skipDuplicates`
+ * per chunk — never an `update` — so existing rows can never be mutated or duplicated.
+ * The cursor strictly decreases every iteration (by construction), so this always terminates.
+ * Idempotent: a rerun starts its cursor at the new (deeper) earliest row, which sits at or past
+ * the same target floor, so 0 further rows are inserted.
+ * Alpaca-only (real IEX data): throws unless `selectIntradayTier() === 'alpaca'`.
+ */
+export async function ingestIntradayBarsBackfill(
+  symbol: string,
+  market: Market,
+  opts?: { days?: number; now?: Date },
+): Promise<IntradayBackfillResult> {
+  if (market !== 'NASDAQ') {
+    return { requested: 0, created: 0, chunks: 0, earliestBefore: null, earliestAfter: null };
+  }
+  if (selectIntradayTier() !== 'alpaca') {
+    throw new Error(`ingestIntradayBarsBackfill requires live Alpaca mode (got tier=${selectIntradayTier()})`);
+  }
+
+  const now = opts?.now ?? new Date();
+  const targetDays = opts?.days ?? 504; // ~2 trading years
+  const earliestRow = await prisma.intradayBar.findFirst({
+    where: { symbol, market },
+    orderBy: { ts: 'asc' },
+    select: { ts: true },
+  });
+  const earliestBefore = earliestRow?.ts ?? null;
+  const floor = new Date(now.getTime() - targetDays * 86_400_000);
+
+  let cursor = earliestBefore ? new Date(earliestBefore.getTime() - 1) : now;
+  let requested = 0;
+  let created = 0;
+  let chunks = 0;
+
+  while (cursor.getTime() > floor.getTime()) {
+    const chunkStart = new Date(Math.max(floor.getTime(), cursor.getTime() - BACKFILL_CHUNK_DAYS * 86_400_000));
+    const rawBars = await fetchAlpacaMinuteBars(symbol, chunkStart, cursor);
+    chunks += 1;
+
+    const rows = rawBars.map((b) => {
+      const barStart = new Date(b.ts);
+      const ts = new Date(barStart.getTime() + 60_000); // provider timestamps are minute starts
+      return {
+        symbol,
+        market,
+        ts,
+        open: new D(b.open),
+        high: new D(b.high),
+        low: new D(b.low),
+        close: new D(b.close),
+        volume: new D(b.volume ?? 0),
+        session: sessionForTs(barStart),
+        source: 'ALPACA' as DataSource,
+      };
+    });
+    requested += rows.length;
+    if (rows.length) {
+      const res = await prisma.intradayBar.createMany({ data: rows, skipDuplicates: true });
+      created += res.count;
+    }
+
+    cursor = chunkStart; // strictly decreasing: guarantees loop termination
+    if (cursor.getTime() > floor.getTime()) {
+      await new Promise((resolve) => setTimeout(resolve, BACKFILL_CHUNK_DELAY_MS));
+    }
+  }
+
+  const newEarliest = await prisma.intradayBar.findFirst({
+    where: { symbol, market },
+    orderBy: { ts: 'asc' },
+    select: { ts: true },
+  });
+
+  return { requested, created, chunks, earliestBefore, earliestAfter: newEarliest?.ts ?? earliestBefore };
+}
+
 /**
  * Resumable per-symbol ingest: finds the latest stored bar and only requests forward from
  * (latest - overlap), or the full 90-day initial window when empty. `createMany` +
