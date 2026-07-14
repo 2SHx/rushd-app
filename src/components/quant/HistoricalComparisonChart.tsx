@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert, Info } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { HistoricalComparisonEvidence } from '@/quant/backtest/historicalComparison';
 
@@ -30,7 +30,15 @@ export default function HistoricalComparisonChart({ comparison }: HistoricalComp
   return (
     <section className="rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6" aria-labelledby="historical-comparison-title">
       <header className="text-start">
-        <h2 id="historical-comparison-title" className="text-xl font-semibold">{t('historyTitle')}</h2>
+        <h2 id="historical-comparison-title" className="text-xl font-semibold inline-flex items-center gap-1.5">
+          {t('historyTitle')}
+          <div className="group relative inline-flex items-center cursor-help">
+            <Info className="size-4 text-foreground/45 hover:text-foreground" />
+            <div className="absolute bottom-[125%] left-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-64 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+              {t('hintHistoryTitle')}
+            </div>
+          </div>
+        </h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-foreground/60">{t('historyDescription')}</p>
       </header>
 
@@ -87,9 +95,9 @@ function ComparisonPlot({
   const oosVisible = oosTime >= startTime && oosTime <= endTime;
   const oosX = x(comparison.oosStart);
   const series = [
-    { key: 'model', label: t('historyModel'), points: comparison.series.model, color: 'var(--accent)', dash: undefined },
-    { key: 'spy', label: t('historySpy'), points: comparison.series.spy, color: 'var(--foreground)', dash: '7 5' },
-    { key: 'spus', label: t('historySpus'), points: comparison.series.spus, color: 'var(--up)', dash: '2 5' },
+    { key: 'model', label: t('historyModel'), hint: t('hintHistoryModel'), points: comparison.series.model, color: 'var(--accent)', dash: undefined },
+    { key: 'spy', label: t('historySpy'), hint: t('hintHistorySpy'), points: comparison.series.spy, color: 'var(--foreground)', dash: '7 5' },
+    { key: 'spus', label: t('historySpus'), hint: t('hintHistorySpus'), points: comparison.series.spus, color: 'var(--up)', dash: '2 5' },
   ] as const;
 
   return (
@@ -154,6 +162,12 @@ function ComparisonPlot({
               <div className="flex items-center gap-2 text-xs font-semibold">
                 <span className="h-0.5 w-5" style={{ backgroundColor: item.color }} aria-hidden="true" />
                 {item.label}
+                <div className="group relative inline-flex items-center cursor-help">
+                  <Info className="size-3 text-foreground/45 hover:text-foreground" />
+                  <div className="absolute bottom-[125%] left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                    {item.hint}
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex items-end justify-between gap-3 tabular-nums" dir="ltr">
                 <span className="text-lg font-semibold">{number(endingValue)}</span>
