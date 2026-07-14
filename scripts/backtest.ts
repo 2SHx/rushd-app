@@ -18,6 +18,7 @@ import {
   tsMomentumV3BookPolicy,
   type TsMomentumHalalBasketV3Params,
 } from '../src/quant/strategies/tsMomentumHalalBasketV3';
+import { DUAL_MOMENTUM_UNIVERSE } from '../src/quant/strategies/dualMomentumRotation';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -53,13 +54,17 @@ import { buildHistoricalComparisonEvidence } from '../src/quant/backtest/histori
 import { assertWalkForward } from '../src/quant/backtest/walkForward';
 import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from '../src/quant/backtest/profitPlateau';
 import { buildShariaRunSnapshot } from '../src/quant/backtest/shariaSnapshot';
+import type { RiskLimits } from '../src/quant/risk/envelope';
 
 const D = Prisma.Decimal;
 
 export type DailyBacktestRoute = 'legacy' | 'shared';
 
 /** R3-1 may opt a strategy version into the shared route without changing any existing setup. */
-export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set(['ts-momentum-halal-basket-v3']);
+export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
+  'ts-momentum-halal-basket-v3',
+  'dual-momentum-rotation',
+]);
 
 export function selectDailyBacktestRoute(
   setupId: string,
@@ -95,12 +100,27 @@ export function validationReturnInputs(
 }
 
 export function validationTrialsForSetup(setupId: string, effectiveParams: unknown): number {
-  if (setupId !== 'ts-momentum-halal-basket-v3') return 1;
+  if (setupId !== 'ts-momentum-halal-basket-v3' && setupId !== 'dual-momentum-rotation') return 1;
   const trials = (effectiveParams as { validationTrials?: unknown } | null)?.validationTrials;
   if (!Number.isInteger(trials) || Number(trials) <= 1) {
-    throw new Error('ts-momentum-halal-basket-v3 requires validationTrials > 1');
+    throw new Error(`${setupId} requires validationTrials > 1`);
   }
   return Number(trials);
+}
+
+/** Fixed-universe setups cannot silently degrade to whichever symbols happen to have DB rows. */
+export function dailyUniverseForSetup(setupId: string, requested: readonly string[] | null): string[] | null {
+  if (setupId !== 'dual-momentum-rotation') return null;
+  if (requested && (
+    requested.length !== DUAL_MOMENTUM_UNIVERSE.length
+    || DUAL_MOMENTUM_UNIVERSE.some((symbol) => !requested.includes(symbol))
+  )) throw new Error('dual-momentum-rotation requires its exact seven-asset universe');
+  return [...DUAL_MOMENTUM_UNIVERSE];
+}
+
+/** Rotation is single-winner; the unchanged 25% name cap and all other envelope limits remain binding. */
+export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimits {
+  return setupId === 'dual-momentum-rotation' ? { ...base, maxOpenPositions: 1 } : base;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -533,6 +553,7 @@ async function main() {
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
   const effectiveParams = params ?? setup.defaultParams;
   const validationTrials = validationTrialsForSetup(setupId, effectiveParams);
+  const dailyLimits = limitsForDailySetup(setupId, DEFAULT_BT_LIMITS);
 
   let candidateArtifact: ParsedCandidateArtifact | null = null;
   let candidateEvidence: CandidateArtifactEvidence | null = null;
@@ -578,7 +599,7 @@ async function main() {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
-      symbols = await listDailySymbols(wantSymbols, from, to);
+      symbols = dailyUniverseForSetup(setupId, wantSymbols) ?? await listDailySymbols(wantSymbols, from, to);
       if (dailyRoute === 'shared') {
         const sharedSeries: StrategyBookSeries[] = [];
         for (const symbol of symbols) {
@@ -599,7 +620,7 @@ async function main() {
         }
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({
-          setup, params, series: sharedSeries, startingCash, limits: DEFAULT_BT_LIMITS,
+          setup, params, series: sharedSeries, startingCash, limits: dailyLimits,
           replayScope: sharedReplayScope,
           policy: setupId === 'ts-momentum-halal-basket-v3'
             ? tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined)
@@ -636,7 +657,7 @@ async function main() {
         const { bars, excludedMock: dropped } = await loadDailySymbol(symbol, from, to);
         excludedMock += dropped;
         if (bars.length) lastPrice = Number(bars.at(-1)!.close);
-        const sim = simulateSetupDaily({ setup, params, symbol, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+        const sim = simulateSetupDaily({ setup, params, symbol, market: 'NASDAQ', bars, startingCash, limits: dailyLimits });
         pitBarsProcessed += sim.barsProcessed;
         walkForwardWindows += sim.decisionWindows;
         pooledTradeReturns.push(...sim.tradeReturns);
@@ -840,7 +861,7 @@ async function main() {
         if (!sharedSeriesForPlateau) throw new Error('Shared plateau series unavailable');
         const sim = simulateStrategyBook({
           setup, params: variant.params, series: sharedSeriesForPlateau, startingCash,
-          limits: DEFAULT_BT_LIMITS,
+          limits: dailyLimits,
           replayScope: sharedReplayScope,
           policy: setupId === 'ts-momentum-halal-basket-v3'
             ? tsMomentumV3BookPolicy(variant.params as TsMomentumHalalBasketV3Params)
@@ -850,7 +871,7 @@ async function main() {
       } else {
         for (const s of symbols) {
           const { bars } = await loadDailySymbol(s, from, to);
-          const sim = simulateSetupDaily({ setup, params: variant.params, symbol: s, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+          const sim = simulateSetupDaily({ setup, params: variant.params, symbol: s, market: 'NASDAQ', bars, startingCash, limits: dailyLimits });
           variantRecords.push(...sim.tradeRecords);
         }
       }
