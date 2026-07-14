@@ -6,11 +6,13 @@ import type { HistoricalComparisonEvidence } from '@/quant/backtest/historicalCo
 
 interface HistoricalComparisonChartProps {
   comparison: HistoricalComparisonEvidence | null;
+  comparisons?: ReadonlyArray<{ setupId: string; comparison: HistoricalComparisonEvidence }>;
+  selectedSetupId?: string;
 }
 
 const CHART = { width: 820, height: 360, padX: 62, padY: 42 } as const;
 
-export default function HistoricalComparisonChart({ comparison }: HistoricalComparisonChartProps) {
+export default function HistoricalComparisonChart({ comparison, comparisons = [], selectedSetupId }: HistoricalComparisonChartProps) {
   const t = useTranslations('QuantResults');
   const locale = useLocale();
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
@@ -53,7 +55,7 @@ export default function HistoricalComparisonChart({ comparison }: HistoricalComp
           <p className="mt-2 text-sm leading-relaxed text-foreground/60">{t('historyUnavailableBody')}</p>
         </div>
       ) : (
-        <ComparisonPlot comparison={comparison} number={number} change={change} date={date} />
+        <ComparisonPlot comparison={comparison} comparisons={comparisons} selectedSetupId={selectedSetupId} number={number} change={change} date={date} />
       )}
     </section>
   );
@@ -61,18 +63,23 @@ export default function HistoricalComparisonChart({ comparison }: HistoricalComp
 
 function ComparisonPlot({
   comparison,
+  comparisons,
+  selectedSetupId,
   number,
   change,
   date,
 }: {
   comparison: HistoricalComparisonEvidence;
+  comparisons: ReadonlyArray<{ setupId: string; comparison: HistoricalComparisonEvidence }>;
+  selectedSetupId?: string;
   number: (value: number) => string;
   change: (value: number) => string;
   date: (value: string) => string;
 }) {
   const t = useTranslations('QuantResults');
+  const modelEntries = comparisons.length ? comparisons : [{ setupId: selectedSetupId ?? 'selected', comparison }];
   const allValues = [
-    ...comparison.series.model.map(point => point.value),
+    ...modelEntries.flatMap(entry => entry.comparison.series.model.map(point => point.value)),
     ...comparison.series.spy.map(point => point.value),
     ...comparison.series.spus.map(point => point.value),
   ];
@@ -94,8 +101,17 @@ function ComparisonPlot({
   const oosTime = new Date(comparison.oosStart).getTime();
   const oosVisible = oosTime >= startTime && oosTime <= endTime;
   const oosX = x(comparison.oosStart);
+  const modelSeries = modelEntries.map(entry => ({
+    key: entry.setupId,
+    label: entry.setupId === selectedSetupId ? `${entry.setupId} · ${t('historySelected')}` : entry.setupId,
+    hint: entry.setupId === selectedSetupId ? t('hintHistoryModel') : t('hintHistoryPeer'),
+    points: entry.comparison.series.model,
+    color: entry.setupId === selectedSetupId ? 'var(--accent)' : 'var(--foreground)',
+    opacity: entry.setupId === selectedSetupId ? 1 : 0.3,
+    dash: undefined as string | undefined,
+  }));
   const series = [
-    { key: 'model', label: t('historyModel'), hint: t('hintHistoryModel'), points: comparison.series.model, color: 'var(--accent)', dash: undefined },
+    ...modelSeries,
     { key: 'spy', label: t('historySpy'), hint: t('hintHistorySpy'), points: comparison.series.spy, color: 'var(--foreground)', dash: '7 5' },
     { key: 'spus', label: t('historySpus'), hint: t('hintHistorySpus'), points: comparison.series.spus, color: 'var(--up)', dash: '2 5' },
   ] as const;
@@ -140,7 +156,8 @@ function ComparisonPlot({
               d={path(item.points)}
               fill="none"
               stroke={item.color}
-              strokeWidth={item.key === 'model' ? 2.75 : 2}
+              strokeOpacity={'opacity' in item ? item.opacity : 0.85}
+              strokeWidth={item.key === selectedSetupId ? 2.75 : item.key.startsWith('spy') || item.key.startsWith('spus') ? 2 : 1.6}
               strokeDasharray={item.dash}
               strokeLinecap="round"
               strokeLinejoin="round"

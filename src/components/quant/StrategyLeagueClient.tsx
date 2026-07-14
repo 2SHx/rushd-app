@@ -359,7 +359,39 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         ) : null}
       </figure>
 
-      <HistoricalComparisonChart comparison={selected.comparison} />
+      <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
+        <figcaption className="text-start">
+          <h2 className="font-semibold">{t('plotReadingTitle')}</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('plotReadingDescription')}</p>
+        </figcaption>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label={t('plotReadingTitle')}>
+          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+            <p className="text-[11px] text-foreground/60">{t('plotSelectedTeam')}</p>
+            <p className="mt-2 truncate font-mono text-sm" dir="ltr">{selected.setupId}</p>
+          </div>
+          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+            <p className="text-[11px] text-foreground/60">{t('plotReturnReadout')}</p>
+            <p className={`mt-2 text-lg font-semibold tabular-nums ${selected.oos.cagr >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(selected.oos.cagr)}</p>
+            <p className="mt-1 text-[10px] text-foreground/55">{t('plotReturnReadoutHint')}</p>
+          </div>
+          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+            <p className="text-[11px] text-foreground/60">{t('plotRiskReadout')}</p>
+            <p className={`mt-2 text-lg font-semibold tabular-nums ${selected.checklist.mcMaxDDWithinBreaker ? 'text-up' : 'text-noncompliant'}`} dir="ltr">{percent(mcDrawdown)}</p>
+            <p className="mt-1 text-[10px] text-foreground/55">{selected.checklist.mcMaxDDWithinBreaker ? t('plotRiskWithin') : t('plotRiskOutside')}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-foreground/60">
+          <span>{t('plotLowerRisk')}</span>
+          <span>{t('plotHigherReturn')}</span>
+          <span>{t('plotIdealQuadrant')}</span>
+        </div>
+      </figure>
+
+      <HistoricalComparisonChart
+        comparison={selected.comparison}
+        comparisons={teams.flatMap(team => team.comparison ? [{ setupId: team.setupId, comparison: team.comparison }] : [])}
+        selectedSetupId={selected.setupId}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <article className="min-w-0 rounded-2xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
