@@ -19,7 +19,7 @@ All setups long-only cash (Sharia: no short, no margin). Every claim labeled sim
 | htf-trend-filter | T1 | Long entries only above the 1H 100-EMA improve every other setup's expectancy (composable filter, not standalone) | v1 | CANDIDATE | – | – | – | – | – | codify; A/B via harness |
 | vwap-reclaim | T1 | Long wick + volume + no-follow-through at regular-session VWAP marks absorption; next-bar confirmation continues up | v1 (regular-only VWAP, 1.5× wick/body, 1.5× trailing-20 volume, actual-fill 2R, next-open fills) | REJECTED | 347 | −0.29%/trade (net) | 0.000 | MC p95 67.43% | 0.00% (5,313 days) | `OOS_FAILURE`, `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; hit 17%, CAGR −40.62%, OOS −44.90%, ruin 100%, jitter p=1.000 — decisive negative expectancy; do not test premarket v1.1 because the a-priori branch required non-negative v1 expectancy |
 | rsi-exhaustion-long | T1 | RSI(2–14)≤10 + first reversal candle mean-reverts up (long side only) | v1 | CANDIDATE | – | – | – | – | – | codify after G1 |
-| stop-hunt-reversal-long | T1 | Fake break below prior-day low + hard reclaim = stop sweep; continuation up | v1 | CANDIDATE | – | – | – | – | – | codify after G1 |
+| stop-hunt-reversal-long | T1 | Fake break below prior-day low + hard reclaim = stop sweep; continuation up | v1 (0.2% sweep depth, 15-min reclaim, stop=sweep low, target=max(2R,VWAP), 09:35–15:00 ET, inverse-vol sizing) | REJECTED | 887 | −0.33%/trade (net) | 0.000 OOS | MC p95 97.0% | 0.00% | `NEGATIVE_EXPECTANCY`, `DRAWDOWN_RISK_FAILURE`, `SHARIA_UNVERIFIABLE`; decisive 2y/11-name run (seed 42, gitSha ed51992, BacktestRun in results/stop-hunt-reversal-long-2024-08-05-2026-07-10.json): hit 26.9%, OOS CAGR −90.8%, ruin 100%, jitter p=1.000, walkForward earned, sharia UNSCREENED_EXECUTION_BLOCKED — 7th intraday long-only falsification on this feed/cost model |
 | bagholder-bounce | T1 | Gap-down ≥20% + flush + first higher low bounces (long) | v1 | CANDIDATE | – | – | – | – | – | codify after G1 |
 | time-of-day | T1 | 9:45 reversal + first-hour trend lock as entry-window constraints improve fills | v1 | CANDIDATE | – | – | – | – | – | codify as constraints; A/B |
 | coint-statarb-long-leg | T2 | Engle–Granger cointegrated halal pairs: long the undervalued leg at spread ≥ k·σ, exit at mean (short leg Sharia-vetoed, never traded) | v1 (252d formation, k=2, EG-5% ADF≤−3.34, mean-reversion exit) | REJECTED | 9 | +2.09%/trade (net, 9-trade artifact — non-informative) | 0.823 full / 0.005 OOS | 20.52% | 0.00% | `INSUFFICIENT_SAMPLE`, `SHARIA_UNVERIFIABLE`; 9 ≪ 100 trades — only ~10 halal names carry ≥252d shared real history, and the strict EG cointegration gate + k=2 entry rarely fires; results in card below; v2 is a NEW candidate, not a retune |
@@ -35,6 +35,20 @@ These result cards are binding finalizations under QDR-7. `n/a — not persisted
 artifact gap; it never authorizes an inferred or fabricated value.
 Field mapping (QA 2026-07-12): "expectancy/trade (net)" in rows and cards = `permutation.observedMean`
 in the results/*.json artifact — verified present and matching in all four round-1 artifacts.
+
+**Full-checklist re-runs (2026-07-13, gitSha ed51992, acceptance capabilities live):**
+- `bollinger-mr-long-v2` re-run 2018-01-02→2026-07-10 seed 42: core metrics unchanged (240 trades,
+  +0.19%/trade, OOS DSR 0.931, MC p95 14.1%); walkForward EARNED (yes); Sharia persisted
+  UNSCREENED_EXECUTION_BLOCKED; **profitPlateau EVALUATED → FAIL** — the edge does not survive its
+  a-priori parameter neighborhood (entryStdev ±0.25, VR ±0.05). The prior "near-miss" framing is
+  corrected: v1's rejection codes now include an EARNED `NO_PROFIT_PLATEAU_OVERFIT` — the edge is
+  parameter-fragile. Any v3 must produce a structurally different, plateau-robust rule set.
+- `ts-momentum-halal-basket-v2` re-run same window/seed: core unchanged (1,334 trades, +0.11%/trade,
+  OOS DSR 0.894, MC p95 37.2%); walkForward EARNED; Sharia persisted UNSCREENED_EXECUTION_BLOCKED;
+  **profitPlateau EVALUATED → PASS** (robust across regimeSmaPeriod ±20, targetVolBudget ±0.001).
+  Momentum-v2 is now the book's strongest candidate: remaining binding gates are exactly two —
+  MC maxDD p95 37.2% > 30% breaker and OOS DSR 0.894 < 0.95 — plus Sharia verification (needs a
+  real screening source). v3 remedy stays a-priori basket-level vol targeting / concurrent-position cap.
 
 ### gapper-orb v1-iex — REJECTED
 
