@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-1 final QA-safe replay identity ✅
+Shipped: additive supersession record for the PIT/cache-purity and bilingual-rationale fix, preserving the prior v3 card while making `d3d0071` / `f9e5f702-253b-4a9d-bdec-d89144038ecb` the final replay identity.
+Decisions: metrics and REJECTED reasons have zero drift; `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `SHARIA_UNVERIFIABLE` still bind, with research-only execution blocked.
+Verify: focused 24/24, full 630/630, i18n parity 1/1, lint/typecheck/diff-check passed; exact post-commit run reproducible=true; frozen 9-cell heap 1.053s.
+Open: R3-2 remains next; the superseded `f9d788b` / `f841fa65-41e6-4932-ae65-906dd3e3bd99` evidence remains immutable for audit history.
+
 ## 2026-07-14 — R3-1 momentum-v3 terminally rejected ✅
 Shipped: promotion-grade v3 shared-book evidence over 49,243 real bars / 2,141 NAV days, with the exact terminal row/card and frozen 3×3 plateau recorded.
 Decisions: REJECTED on `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `SHARIA_UNVERIFIABLE`; plateau PASS and +11.83% OOS CAGR are informative but cannot override hard gates or authorize AUTO_PAPER.
