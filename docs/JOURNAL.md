@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-2 episode-unit correction ✅
+Shipped: collapsed 136 partial concentration trims + 11 final exits into 11 independent closed episodes for R3-2 sample, permutation and plateau inference; raw turnover remains separately audited.
+Decisions: REJECTED on `INSUFFICIENT_SAMPLE`, `DSR_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; `d3628d85` / docs `173b92a` are superseded for trim pseudo-replication.
+Verify: source `0aef451`; focused 30/30, full 645/645, lint/typecheck/diff-check; BacktestRun `13a95084-5890-4d17-92f5-c01d913e2d5c`, seed 42, reproducible=true.
+Open: execute R3-3 next; R3-2 remains research-only with 11≪100 episodes, no significant permutation edge (p=0.236), and AAOIFI execution blocked.
+
 ## 2026-07-14 — R3-2 dual-momentum terminally rejected ✅
 Shipped: fixed seven-asset monthly dual-momentum v1 plus continuous 25% shared-book cap; exact final run used 14,108 real bars / 0 MOCK and 2,141 NAV days.
 Decisions: REJECTED on `DSR_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; positive OOS CAGR and passing cap/MC risk gates cannot authorize AUTO_PAPER.
