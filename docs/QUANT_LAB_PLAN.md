@@ -165,6 +165,11 @@ the persisted BacktestRun rows — do not re-run.
   window can never promote a team (window-picking is data-snooping); short windows are labeled
   regime-specific and will usually be INSUFFICIENT_SAMPLE — that label is correct, not a bug.
 - Runs per preset are seeded + persisted separately; ledger rows keep quoting FULL-period metrics.
+- **Token/compute-economy rule (user directive 2026-07-14, binding):** during development and
+  iteration, ALWAYS test on a SHORT period first (1Y preset or `--diagnostic` where available) —
+  cheap, fast, catches wiring bugs; the expensive FULL-period run happens exactly ONCE per version,
+  as the terminal verdict. Composes with anti-snooping: short runs are for correctness, never for
+  verdicts; a version's card is decided only by its single FULL run.
 
 ## Continuation protocol (for ANY AI picking this up)
 
