@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — G3e/R3-0 shared strategy-book prerequisite contracted ✅
+Shipped: amended QDR-6/QDR-7 consequences and the binding lab DAG with a testable DB-free, date-major shared-cash daily portfolio engine before momentum-v3.
+Decisions: shared within each isolated mode and isolated across modes; canonical-symbol same-day priority is frozen a priori; legacy pooled-independent runs remain byte-stable but cannot evidence portfolio controls.
+Open: implement R3-0/G3e and pass its focused gate before R3-1 may test the 15% basket-vol governor and six-position cap.
+
 ## 2026-07-13 — Acceptance capabilities live + queue batch: stop-hunt rejected, plateau verdicts land ✅
 Shipped: profitPlateau sweep (frozen-center robustness), earned walkForward (decision-window assertion), per-run Sharia snapshots (ed51992); background queue.sh pattern (zero agent tokens) ran stop-hunt validation + both v2 full-checklist re-runs; league UI committed f739221 after design+i18n gates.
 Decisions: stop-hunt REJECTED decisively (887 trades, −0.33%/trade, ruin 100% — 7th intraday falsification); bollinger-v2 plateau FAIL (parameter-fragile — near-miss framing corrected); momentum-v2 plateau PASS → strongest candidate, blocked only by MC p95 37.2%>30% + OOS DSR 0.894<0.95 + Sharia verification.
