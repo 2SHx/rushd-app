@@ -287,6 +287,7 @@ describe('deterministic shared-cash daily strategy book', () => {
     const cells = [grid.center, ...grid.neighbors.map((neighbor) => neighbor.params)];
     const v3Parses = vi.spyOn(TsMomentumHalalBasketV3ParamsSchema, 'parse');
     const v2Parses = vi.spyOn(TsMomentumHalalBasketV2ParamsSchema, 'parse');
+    const replayScope = {};
 
     let tradeCounts: number[] = [];
     let v3ParseCount = 0;
@@ -299,6 +300,7 @@ describe('deterministic shared-cash daily strategy book', () => {
         startingCash: new D(100_000),
         limits: LIMITS,
         policy: tsMomentumV3BookPolicy(params),
+        replayScope,
       }).tradeRecords.length);
       v3ParseCount = v3Parses.mock.calls.length;
       v2ParseCount = v2Parses.mock.calls.length;

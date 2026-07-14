@@ -301,6 +301,8 @@ export interface StrategyBookInput<Params> {
   readonly startingCash: Prisma.Decimal;
   readonly limits: RiskLimits;
   readonly policy?: StrategyBookPolicy;
+  /** Shared only across simulations over the exact same immutable input series. */
+  readonly replayScope?: object;
 }
 
 export interface StrategyBookPolicy {
@@ -478,6 +480,7 @@ function bookContext(
   bars: readonly IntradayBar[],
   asOf: Date,
   position: OpenPosition | undefined,
+  replayScope?: object,
 ): StrategyPointInTimeContext {
   assertNoLookahead(bars, asOf, 'ts');
   return {
@@ -487,6 +490,7 @@ function bookContext(
     bars,
     snapshot: null,
     positionQty: position?.qty ?? new D(0),
+    replayScope,
     entryPrice: position?.entryPrice ?? null,
     entryTs: position?.entryTs ?? null,
     entrySignalTs: position?.entrySignalTs ?? null,
@@ -683,6 +687,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
         contextBarsBySymbol.get(item.symbol)!.slice(sliceStart, index + 1),
         date,
         position,
+        input.replayScope,
       );
       decisionWindows++;
       const next = item.bars[index + 1];

@@ -11,6 +11,7 @@ import {
   tsMomentumV3BookPolicy,
 } from './tsMomentumHalalBasketV3';
 import type { StrategyPointInTimeContext } from './types';
+import { LookaheadError } from '../data/pointInTime';
 
 const D = Prisma.Decimal;
 const DAY = 86_400_000;
@@ -47,6 +48,14 @@ function prepare(): void {
   });
 }
 
+function changeBar(ctx: StrategyPointInTimeContext, index: number, close: number): StrategyPointInTimeContext {
+  const bars = [...ctx.bars];
+  bars[index] = {
+    ...bars[index], open: new D(close), high: new D(close), low: new D(close), close: new D(close),
+  } as IntradayBar;
+  return { ...ctx, bars };
+}
+
 describe('ts-momentum-halal-basket-v3', () => {
   it('delegates entry and exit outcomes to v2 byte-for-byte', () => {
     prepare();
@@ -57,6 +66,67 @@ describe('ts-momentum-halal-basket-v3', () => {
     const exitCtx = context(10, 80);
     expect(tsMomentumHalalBasketV3Setup.exit(exitCtx))
       .toEqual(tsMomentumHalalBasketV2Setup.exit(exitCtx, TS_MOMENTUM_HALAL_BASKET_V2));
+  });
+
+  it('does not reuse an entry cache hit for changed bars or market', () => {
+    prepare();
+    const replayScope = {};
+    const original = { ...context(), replayScope };
+    const hit = tsMomentumHalalBasketV3Setup.entry(original);
+    expect(tsMomentumHalalBasketV3Setup.entry(original)).toBe(hit);
+
+    const changedBars = changeBar(context(), 300, 20);
+    const changedResult = tsMomentumHalalBasketV3Setup.entry(changedBars);
+    expect(changedResult).not.toBe(hit);
+    expect(changedResult).toEqual(tsMomentumHalalBasketV2Setup.entry(changedBars, TS_MOMENTUM_HALAL_BASKET_V2));
+
+    const changedMarket = { ...context(), market: 'TASI' as const };
+    const marketResult = tsMomentumHalalBasketV3Setup.entry(changedMarket);
+    expect(marketResult).not.toBe(hit);
+    expect(marketResult).toEqual(tsMomentumHalalBasketV2Setup.entry(changedMarket, TS_MOMENTUM_HALAL_BASKET_V2));
+  });
+
+  it('checks look-ahead before returning an entry cache hit', () => {
+    prepare();
+    const replayScope = {};
+    const original = { ...context(), replayScope };
+    tsMomentumHalalBasketV3Setup.entry(original);
+    const future = {
+      ...original,
+      bars: [...original.bars, {
+        ...original.bars.at(-1)!,
+        id: 'A-future',
+        ts: new Date(original.asOf.getTime() + DAY),
+      } as IntradayBar],
+    };
+    expect(() => tsMomentumHalalBasketV3Setup.entry(future)).toThrow(LookaheadError);
+  });
+
+  it('does not reuse a position-present exit cache hit for changed bars', () => {
+    prepare();
+    const replayScope = {};
+    const original = { ...context(10), replayScope };
+    const hit = tsMomentumHalalBasketV3Setup.exit(original);
+    expect(tsMomentumHalalBasketV3Setup.exit(original)).toBe(hit);
+
+    const changed = context(10, 80);
+    const changedResult = tsMomentumHalalBasketV3Setup.exit(changed);
+    expect(changedResult).not.toBe(hit);
+    expect(changedResult).toEqual(tsMomentumHalalBasketV2Setup.exit(changed, TS_MOMENTUM_HALAL_BASKET_V2));
+  });
+
+  it('identifies v3 as rejected, research-only, AAOIFI-unscreened and execution-blocked in both languages', () => {
+    prepare();
+    const result = tsMomentumHalalBasketV3Setup.signal(context());
+    expect(result.rationaleEn).toContain('ts-momentum-halal-basket-v3 v3');
+    expect(result.rationaleEn).toContain('REJECTED, research-only');
+    expect(result.rationaleEn).toContain('AAOIFI status unscreened, execution blocked');
+    expect(result.rationaleEn).not.toMatch(/certified halal|halal basket/i);
+    expect(result.rationaleAr).toContain('ts-momentum-halal-basket-v3 v3');
+    expect(result.rationaleAr).toContain('مرفوضة ومخصّصة للبحث فقط');
+    expect(result.rationaleAr).toContain('لم يُتحقّق من توافقها وفق معايير أيوفي');
+    expect(result.rationaleAr).toContain('يُحظر تنفيذها');
+    expect(result.rationaleAr).not.toContain('حلال');
   });
 
   it('exposes only the frozen 60d/15%/six-name book policy', () => {

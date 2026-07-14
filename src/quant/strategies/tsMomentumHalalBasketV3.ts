@@ -9,6 +9,7 @@ import {
   type TsMomentumHalalBasketV2Params,
 } from './tsMomentumHalalBasketV2';
 import type { StrategyBookPolicy } from '../backtest/portfolioEngine';
+import { assertNoLookahead } from '../data/pointInTime';
 import type {
   PlateauNeighborhood,
   StrategyCheck,
@@ -40,8 +41,22 @@ export const TS_MOMENTUM_HALAL_BASKET_V3: TsMomentumHalalBasketV3Params = Object
 
 const parsedV3Params = new WeakMap<object, TsMomentumHalalBasketV3Params>();
 const delegatedV2Params = new WeakMap<object, TsMomentumHalalBasketV2Params>();
-const entryReplay = new Map<string, StrategyCheck>();
-const exitReplay = new Map<string, StrategyCheck>();
+
+interface ReplayCache {
+  entry: Map<string, StrategyCheck>;
+  exit: Map<string, StrategyCheck>;
+}
+
+const replayByScope = new WeakMap<object, ReplayCache>();
+
+function replayCache(ctx: StrategyPointInTimeContext): ReplayCache | null {
+  if (!ctx.replayScope) return null;
+  const cached = replayByScope.get(ctx.replayScope);
+  if (cached) return cached;
+  const created = { entry: new Map<string, StrategyCheck>(), exit: new Map<string, StrategyCheck>() };
+  replayByScope.set(ctx.replayScope, created);
+  return created;
+}
 
 function paramsOrDefault(params?: TsMomentumHalalBasketV3Params): TsMomentumHalalBasketV3Params {
   const candidate = params ?? TS_MOMENTUM_HALAL_BASKET_V3;
@@ -64,7 +79,7 @@ function toV2(params?: TsMomentumHalalBasketV3Params): TsMomentumHalalBasketV2Pa
 
 function decisionKey(ctx: StrategyPointInTimeContext, p: TsMomentumHalalBasketV2Params): string {
   return [
-    ctx.symbol, ctx.asOf.getTime(), p.longMomLookback, p.shortMomLookback, p.emaExitPeriod,
+    ctx.symbol, ctx.market, ctx.asOf.getTime(), p.longMomLookback, p.shortMomLookback, p.emaExitPeriod,
     p.volLookback, p.targetVolBudget, p.maxNameFraction, p.regimeSmaPeriod,
   ].join('|');
 }
@@ -88,8 +103,6 @@ export const tsMomentumHalalBasketV3Setup: StrategySetup<TsMomentumHalalBasketV3
   defaultParams: TS_MOMENTUM_HALAL_BASKET_V3,
 
   prepareUniverse(input) {
-    entryReplay.clear();
-    exitReplay.clear();
     tsMomentumHalalBasketV2Setup.prepareUniverse(input);
   },
 
@@ -113,26 +126,42 @@ export const tsMomentumHalalBasketV3Setup: StrategySetup<TsMomentumHalalBasketV3
   },
 
   entry(ctx, params) {
+    assertNoLookahead(ctx.bars, ctx.asOf, 'ts');
     const p = toV2(params);
+    const replay = replayCache(ctx);
+    if (!replay) return tsMomentumHalalBasketV2Setup.entry(ctx, p);
     const key = decisionKey(ctx, p);
-    const cached = entryReplay.get(key);
+    const cached = replay.entry.get(key);
     if (cached) return cached;
     const result = tsMomentumHalalBasketV2Setup.entry(ctx, p);
-    entryReplay.set(key, result);
+    replay.entry.set(key, result);
     return result;
   },
 
   exit(ctx, params) {
+    assertNoLookahead(ctx.bars, ctx.asOf, 'ts');
     const p = toV2(params);
+    const replay = replayCache(ctx);
+    if (!replay) return tsMomentumHalalBasketV2Setup.exit(ctx, p);
     const key = `${decisionKey(ctx, p)}|position=${ctx.positionQty.gt(0) ? 1 : 0}`;
-    const cached = exitReplay.get(key);
+    const cached = replay.exit.get(key);
     if (cached) return cached;
     const result = tsMomentumHalalBasketV2Setup.exit(ctx, p);
-    exitReplay.set(key, result);
+    replay.exit.set(key, result);
     return result;
   },
 
   signal(ctx, params) {
-    return tsMomentumHalalBasketV2Setup.signal(ctx, toV2(params));
+    const delegated = tsMomentumHalalBasketV2Setup.signal(ctx, toV2(params));
+    const stanceAr = {
+      BULLISH: 'صعودية',
+      BEARISH: 'هبوطية',
+      NEUTRAL: 'محايدة',
+    }[delegated.stance];
+    return {
+      ...delegated,
+      rationaleEn: `ts-momentum-halal-basket-v3 v3: ${delegated.stance}; volatility-scaled dual momentum on a declared research basket. Terminal status: REJECTED, research-only; AAOIFI status unscreened, execution blocked.`,
+      rationaleAr: `ts-momentum-halal-basket-v3 v3: ${stanceAr}؛ زخم مزدوج بحجم معدّل حسب التقلب على سلة بحثية مُعلنة. الحالة النهائية: مرفوضة ومخصّصة للبحث فقط؛ لم يُتحقّق من توافقها وفق معايير أيوفي، لذا يُحظر تنفيذها.`,
+    };
   },
 };

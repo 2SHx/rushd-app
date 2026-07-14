@@ -10,6 +10,12 @@ export interface StrategyPointInTimeContext {
   readonly snapshot: SymbolSnapshot | null;
   readonly positionQty: Prisma.Decimal;
   /**
+   * Opaque engine-owned identity for an immutable replay batch. Set only when every context sharing
+   * the object is derived from the same frozen market series; ordinary/direct strategy calls omit
+   * it and therefore cannot reuse cached decisions.
+   */
+  readonly replayScope?: object;
+  /**
    * Open-position provenance, populated by the engine when a position is held (else null).
    * Lets a stateless `exit()` express entry-relative rules (ATR hard stop, max-holding-days)
    * without owning position state. Intraday setups that never need them may ignore both.

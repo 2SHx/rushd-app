@@ -572,6 +572,7 @@ async function main() {
   let sharedDailyCurve: EquityPoint[] | null = null;
   let sharedSeriesForPlateau: StrategyBookSeries[] | null = null;
   let sharedBookResult: StrategyBookResult | null = null;
+  const sharedReplayScope = {};
 
   try {
     if (cadence === 'daily') {
@@ -599,6 +600,7 @@ async function main() {
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({
           setup, params, series: sharedSeries, startingCash, limits: DEFAULT_BT_LIMITS,
+          replayScope: sharedReplayScope,
           policy: setupId === 'ts-momentum-halal-basket-v3'
             ? tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined)
             : undefined,
@@ -839,6 +841,7 @@ async function main() {
         const sim = simulateStrategyBook({
           setup, params: variant.params, series: sharedSeriesForPlateau, startingCash,
           limits: DEFAULT_BT_LIMITS,
+          replayScope: sharedReplayScope,
           policy: setupId === 'ts-momentum-halal-basket-v3'
             ? tsMomentumV3BookPolicy(variant.params as TsMomentumHalalBasketV3Params)
             : undefined,
