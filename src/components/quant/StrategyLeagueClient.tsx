@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, CheckCircle2, ShieldAlert, XCircle, Info } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
@@ -67,11 +67,51 @@ function Standings({
             <span>{t('standingsRank')}</span>
             <span className="text-start">{t('standingsTeam')}</span>
             <span className="text-start">{t('standingsStatus')}</span>
-            <span className="text-end">{t('oosShort')}</span>
-            <span className="text-end">{t('metricSharpe')}</span>
-            <span className="text-end">{t('metricDsr')}</span>
-            <span className="text-end">{t('standingsMcDrawdown')}</span>
-            <span className="text-end">{t('metricTrades')}</span>
+            <span className="text-end flex items-center justify-end gap-1">
+              {t('oosShort')}
+              <div className="group relative inline-flex items-center cursor-help">
+                <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  {t('hintOos')}
+                </div>
+              </div>
+            </span>
+            <span className="text-end flex items-center justify-end gap-1">
+              {t('metricSharpe')}
+              <div className="group relative inline-flex items-center cursor-help">
+                <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  {t('hintSharpe')}
+                </div>
+              </div>
+            </span>
+            <span className="text-end flex items-center justify-end gap-1">
+              {t('metricDsr')}
+              <div className="group relative inline-flex items-center cursor-help">
+                <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  {t('hintDsr')}
+                </div>
+              </div>
+            </span>
+            <span className="text-end flex items-center justify-end gap-1">
+              {t('standingsMcDrawdown')}
+              <div className="group relative inline-flex items-center cursor-help">
+                <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  {t('hintMcDrawdown')}
+                </div>
+              </div>
+            </span>
+            <span className="text-end flex items-center justify-end gap-1">
+              {t('metricTrades')}
+              <div className="group relative inline-flex items-center cursor-help">
+                <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  {t('hintTrades')}
+                </div>
+              </div>
+            </span>
           </div>
           <div className="divide-y divide-[var(--border-color)]">
             {rankedTeams.map((team, index) => {
@@ -111,6 +151,12 @@ function Standings({
 export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProps) {
   const t = useTranslations('QuantResults');
   const locale = useLocale();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const rankedTeams = [...teams].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'ACCEPTED' ? -1 : 1;
     return b.oos.cagr - a.oos.cagr;
@@ -125,6 +171,20 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     ? t('unavailable')
     : new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 3 }).format(value);
   const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
+
+  if (!mounted) {
+    return (
+      <div className="animate-pulse space-y-6">
+        <div className="h-8 w-1/3 bg-foreground/10 rounded-xl" />
+        <div className="h-4 w-2/3 bg-foreground/10 rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="h-20 bg-foreground/5 rounded-xl" />
+          <div className="h-20 bg-foreground/5 rounded-xl" />
+        </div>
+        <div className="h-[400px] bg-foreground/5 rounded-2xl" />
+      </div>
+    );
+  }
 
   if (!selected) {
     return (
@@ -157,12 +217,12 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   const y = (value: number) => PLOT.height - PLOT.pad - (value / maxY) * chartHeight;
 
   const comparisonRows = [
-    { label: t('metricCagr'), full: percent(selected.full.cagr), oos: percent(selected.oos.cagr) },
-    { label: t('metricSharpe'), full: decimal(selected.full.sharpe), oos: decimal(selected.oos.sharpe) },
-    { label: t('metricDsr'), full: decimal(selected.full.deflatedSharpe), oos: decimal(selected.oos.deflatedSharpe) },
-    { label: t('metricMaxDrawdown'), full: percent(selected.full.maxDrawdown), oos: percent(selected.oos.maxDrawdown) },
-    { label: t('metricHitRate'), full: percent(selected.full.hitRate), oos: percent(selected.oos.hitRate) },
-    { label: t('metricTrades'), full: decimal(selected.full.trades), oos: decimal(selected.oos.trades) },
+    { label: t('metricCagr'), hint: t('hintCagr'), full: percent(selected.full.cagr), oos: percent(selected.oos.cagr) },
+    { label: t('metricSharpe'), hint: t('hintSharpe'), full: decimal(selected.full.sharpe), oos: decimal(selected.oos.sharpe) },
+    { label: t('metricDsr'), hint: t('hintDsr'), full: decimal(selected.full.deflatedSharpe), oos: decimal(selected.oos.deflatedSharpe) },
+    { label: t('metricMaxDrawdown'), hint: t('hintMaxDrawdown'), full: percent(selected.full.maxDrawdown), oos: percent(selected.oos.maxDrawdown) },
+    { label: t('metricHitRate'), hint: t('hintHitRate'), full: percent(selected.full.hitRate), oos: percent(selected.oos.hitRate) },
+    { label: t('metricTrades'), hint: t('hintTrades'), full: decimal(selected.full.trades), oos: decimal(selected.oos.trades) },
   ];
   const mcDrawdown = selected.bootstrap.maxDrawdown.p95;
   const riskOfRuin = selected.bootstrap.riskOfRuin;
@@ -327,7 +387,17 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
               <tbody>
                 {comparisonRows.map(row => (
                   <tr key={row.label} className="border-t border-[var(--border-color)]">
-                    <th scope="row" className="py-3 text-start font-medium">{row.label}</th>
+                    <th scope="row" className="py-3 text-start font-medium">
+                      <div className="inline-flex items-center gap-1.5">
+                        {row.label}
+                        <div className="group relative inline-flex items-center cursor-help">
+                          <Info className="size-3 text-foreground/40 hover:text-foreground" />
+                          <div className="absolute bottom-[125%] left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                            {row.hint}
+                          </div>
+                        </div>
+                      </div>
+                    </th>
                     <td className="py-3 text-end tabular-nums" dir="ltr">{row.full}</td>
                     <td className="py-3 text-end tabular-nums" dir="ltr">{row.oos}</td>
                   </tr>
