@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-4 G6b linear factor codified; terminal run gated 🧪
+Shipped: `g6b-linear-factor@v1`, fixed 25-name panel, honest dollar-volume proxy, exact monthly 7-name target weights, shared-book resizing, active-month inference, replay isolation, and frozen 3×3 plateau.
+Decisions: true turnover rate is unavailable; proxy is labeled, AAOIFI remains unscreened/execution-blocked, and the 2018-01-02..2026-07-10 terminal run still requires explicit user authorization.
+Verify: source `f550c8e`; independent QA P1s closed; focused 31/31, full 710/710, lint/typecheck/diff-check; short diagnostic used 15,800 real bars / 0 MOCK and persisted no JSON/BacktestRun.
+Open: diagnostic-only 18 active months (10 OOS): CAGR 11.39% / 15.24%, DSR 0.303 / 0.195, MC p95 DD 42.17%, plateau FAIL; no terminal verdict or promotion claim.
+
 ## 2026-07-14 — R3-3 TOM overlay codified; terminal run gated 🧪
 Shipped: `tom-overlay@v1`, exact SPUS shared-book calendar, 25% continuous cap, closed-episode inference, frozen 3×3 plateau, monthly-block bootstrap, and no-write diagnostics.
 Decisions: `--diagnostic` is non-terminal and cannot persist results/BacktestRun; the 2018-01-02..2026-07-10 terminal run requires explicit user authorization.
