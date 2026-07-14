@@ -1,15 +1,60 @@
 import { Prisma } from '@prisma/client';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { getHalalUniverse } from '../data/universe';
 import { constructHalalPortfolio } from './construction';
 import { computePortfolioMetrics } from '../backtest/portfolioEngine';
 import { executePortfolioRebalance } from './rebalancer';
 
+const cleanupMarketBarFixtures = (createdIds: readonly string[]) =>
+  createdIds.length === 0
+    ? Promise.resolve({ count: 0 })
+    : prisma.marketBar.deleteMany({ where: { id: { in: [...createdIds] } } });
+
+describe('portfolio MarketBar fixture isolation', () => {
+  it('deletes only rows created by this test', async () => {
+    const sentinel = await prisma.marketBar.create({
+      data: {
+        symbol: 'MSFT', market: 'NASDAQ', interval: 'DAY', ts: new Date('1988-01-04T00:00:00.000Z'),
+        open: 1, high: 1, low: 1, close: 1, volume: 1, source: 'YAHOO',
+      },
+    });
+    const fixture = await prisma.marketBar.create({
+      data: {
+        symbol: 'NVDA', market: 'NASDAQ', interval: 'DAY', ts: new Date('1988-01-05T00:00:00.000Z'),
+        open: 1, high: 1, low: 1, close: 1, volume: 1, source: 'MOCK',
+      },
+    });
+
+    try {
+      await cleanupMarketBarFixtures([fixture.id]);
+
+      await expect(prisma.marketBar.findUnique({ where: { id: sentinel.id } })).resolves.toEqual(
+        expect.objectContaining({ id: sentinel.id, source: 'YAHOO' }),
+      );
+      await expect(prisma.marketBar.findUnique({ where: { id: fixture.id } })).resolves.toBeNull();
+    } finally {
+      await prisma.marketBar.deleteMany({ where: { id: { in: [sentinel.id, fixture.id] } } });
+    }
+  });
+});
+
 describe('Halal Quant Portfolio Tests', () => {
   const D = Prisma.Decimal;
   const userId = 'test-user-portfolio-id';
   const strategyId = 'test-strategy-portfolio-id';
+  const createdMarketBarIds: string[] = [];
+
+  const createMarketBarFixture = async (data: Prisma.MarketBarCreateManyInput) => {
+    const row = await prisma.marketBar.create({ data });
+    createdMarketBarIds.push(row.id);
+    return row;
+  };
+
+  afterEach(async () => {
+    await cleanupMarketBarFixtures(createdMarketBarIds);
+    createdMarketBarIds.length = 0;
+  });
 
   beforeEach(async () => {
     // Clear and clean DB for testing
@@ -46,21 +91,28 @@ describe('Halal Quant Portfolio Tests', () => {
     // Rebalancing fails closed unless both benchmark marks are current; seed real marks
     // instead of relying on the old synthetic SPY/SPUS price fallbacks.
     const markTs = new Date();
-    await prisma.marketBar.deleteMany({ where: { symbol: { in: ['SPY', 'SPUS'] }, market: 'NASDAQ' } });
-    await prisma.marketBar.createMany({
-      data: [
-        {
-          symbol: 'SPY', market: 'NASDAQ', interval: 'DAY', ts: markTs,
-          open: new D(500), high: new D(500), low: new D(500), close: new D(500),
-          volume: new D(1000000), source: 'MOCK'
-        },
-        {
-          symbol: 'SPUS', market: 'NASDAQ', interval: 'DAY', ts: markTs,
-          open: new D(40), high: new D(40), low: new D(40), close: new D(40),
-          volume: new D(1000000), source: 'MOCK'
-        }
-      ]
-    });
+    await Promise.all([
+      createMarketBarFixture({
+        symbol: 'SPY', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+        open: new D(500), high: new D(500), low: new D(500), close: new D(500),
+        volume: new D(1000000), source: 'MOCK'
+      }),
+      createMarketBarFixture({
+        symbol: 'SPUS', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+        open: new D(40), high: new D(40), low: new D(40), close: new D(40),
+        volume: new D(1000000), source: 'MOCK'
+      }),
+      createMarketBarFixture({
+        symbol: 'MSFT', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+        open: new D(300), high: new D(300), low: new D(300), close: new D(300),
+        volume: new D(1000000), source: 'MOCK'
+      }),
+      createMarketBarFixture({
+        symbol: 'NVDA', market: 'NASDAQ', interval: 'DAY', ts: markTs,
+        open: new D(100), high: new D(100), low: new D(100), close: new D(100),
+        volume: new D(1000000), source: 'MOCK'
+      }),
+    ]);
   });
 
   it('filters candidates correctly and returns compliant universe with ratios', async () => {
@@ -90,13 +142,11 @@ describe('Halal Quant Portfolio Tests', () => {
   it('constructs momentum weights deterministically conforming to risk rules', async () => {
     // Seed at least some historical bars for candidates to compute scores
     const now = new Date();
-    await prisma.marketBar.deleteMany({ where: { symbol: { in: ['MSFT', 'NVDA'] } } });
 
     // Seed MSFT bars (upwards momentum)
     for (let i = 0; i < 95; i++) {
       const ts = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      await prisma.marketBar.create({
-        data: {
+      await createMarketBarFixture({
           symbol: 'MSFT',
           market: 'NASDAQ',
           interval: 'DAY',
@@ -107,15 +157,13 @@ describe('Halal Quant Portfolio Tests', () => {
           close: 300 + (95 - i) * 1.5, // upward slope
           volume: 1000000,
           source: 'MOCK'
-        }
       });
     }
 
     // Seed NVDA bars (downwards momentum)
     for (let i = 0; i < 95; i++) {
       const ts = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      await prisma.marketBar.create({
-        data: {
+      await createMarketBarFixture({
           symbol: 'NVDA',
           market: 'NASDAQ',
           interval: 'DAY',
@@ -126,7 +174,6 @@ describe('Halal Quant Portfolio Tests', () => {
           close: 100 - (95 - i) * 0.2, // downward slope
           volume: 1000000,
           source: 'MOCK'
-        }
       });
     }
 
@@ -176,9 +223,7 @@ describe('Halal Quant Portfolio Tests', () => {
 
     // Seed mock market bars for pricing
     const now = new Date();
-    await prisma.marketBar.deleteMany({ where: { symbol: 'MSFT' } });
-    await prisma.marketBar.create({
-      data: {
+    await createMarketBarFixture({
         symbol: 'MSFT',
         market: 'NASDAQ',
         interval: 'DAY',
@@ -189,7 +234,6 @@ describe('Halal Quant Portfolio Tests', () => {
         close: 300, // current close price (above cost basis => profit realized!)
         volume: 1000000,
         source: 'MOCK'
-      }
     });
 
     const res = await executePortfolioRebalance(userId, strategyId, now);
@@ -206,9 +250,7 @@ describe('Halal Quant Portfolio Tests', () => {
 
   it('guarantees rebalance idempotency to avoid duplicate orders and snapshots', async () => {
     const now = new Date();
-    await prisma.marketBar.deleteMany({ where: { symbol: 'MSFT' } });
-    await prisma.marketBar.create({
-      data: {
+    await createMarketBarFixture({
         symbol: 'MSFT',
         market: 'NASDAQ',
         interval: 'DAY',
@@ -219,7 +261,6 @@ describe('Halal Quant Portfolio Tests', () => {
         close: 300,
         volume: 1000000,
         source: 'MOCK'
-      }
     });
 
     // Clean autoRunClaim
@@ -255,9 +296,7 @@ describe('Halal Quant Portfolio Tests', () => {
     });
 
     const now = new Date();
-    await prisma.marketBar.deleteMany({ where: { symbol: 'MSFT' } });
-    await prisma.marketBar.create({
-      data: {
+    await createMarketBarFixture({
         symbol: 'MSFT',
         market: 'NASDAQ',
         interval: 'DAY',
@@ -268,7 +307,6 @@ describe('Halal Quant Portfolio Tests', () => {
         close: 300, // sold at 300 -> realizedProfit = (300 - 200) * 10 = 1000
         volume: 1000000,
         source: 'MOCK'
-      }
     });
 
     await prisma.autoRunClaim.deleteMany({});
