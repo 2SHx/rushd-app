@@ -326,6 +326,45 @@ export interface StrategyBookResult {
   readonly decisionWindows: number;
 }
 
+/**
+ * Collapse max-one partial de-risk sells into independent CLOSED position episodes for inference.
+ * A group without a final (`partial=false`) exit is still open and therefore excluded.
+ */
+export function collapseMaxOnePositionEpisodes(records: readonly TradeRecord[]): TradeRecord[] {
+  const groups = new Map<string, TradeRecord[]>();
+  const ordered = [...records].sort((a, b) => (
+    a.entryTs.getTime() - b.entryTs.getTime() || a.exitTs.getTime() - b.exitTs.getTime()
+  ));
+  for (const record of ordered) {
+    const key = `${record.entryTs.getTime()}|${record.entryPrice}`;
+    const group = groups.get(key) ?? [];
+    group.push(record);
+    groups.set(key, group);
+  }
+
+  const episodes: TradeRecord[] = [];
+  for (const group of Array.from(groups.values())) {
+    const final = group.findLast((record) => !record.partial);
+    if (!final) continue;
+    const closed = group.filter((record) => record.exitTs <= final.exitTs);
+    const qty = closed.reduce((sum, record) => sum + record.qty, 0);
+    if (!(qty > 0)) continue;
+    const entryPrice = closed[0].entryPrice;
+    const exitPrice = closed.reduce((sum, record) => sum + record.qty * record.exitPrice, 0) / qty;
+    episodes.push({
+      entryTs: closed[0].entryTs,
+      exitTs: final.exitTs,
+      qty,
+      entryPrice,
+      exitPrice,
+      ret: entryPrice > 0 ? exitPrice / entryPrice - 1 : 0,
+      reason: 'position_episode_exit',
+      partial: false,
+    });
+  }
+  return episodes.sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
+}
+
 interface OpenPosition {
   symbol: string;
   qty: Prisma.Decimal;

@@ -6,6 +6,7 @@ import {
   runPortfolioBacktest,
   basketVolExposureScalar,
   strategyBookExposureScalar,
+  collapseMaxOnePositionEpisodes,
   simulateStrategyBook,
   type StrategyBookBar,
   type StrategyBookPolicy,
@@ -123,6 +124,23 @@ describe('portfolio backtest isolation helpers', () => {
 });
 
 describe('deterministic shared-cash daily strategy book', () => {
+  it('collapses partial trims into one qty-weighted closed position episode and excludes open episodes', () => {
+    const records = [
+      { entryTs: new Date(BASE), exitTs: new Date(BASE + DAY), qty: 2, entryPrice: 100, exitPrice: 110, ret: 0.1, reason: 'risk_trim', partial: true },
+      { entryTs: new Date(BASE), exitTs: new Date(BASE + 2 * DAY), qty: 8, entryPrice: 100, exitPrice: 120, ret: 0.2, reason: 'strategy_exit', partial: false },
+      { entryTs: new Date(BASE + 3 * DAY), exitTs: new Date(BASE + 4 * DAY), qty: 3, entryPrice: 200, exitPrice: 210, ret: 0.05, reason: 'risk_trim', partial: true },
+    ];
+
+    const episodes = collapseMaxOnePositionEpisodes(records);
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      entryTs: new Date(BASE), exitTs: new Date(BASE + 2 * DAY), qty: 10,
+      entryPrice: 100, exitPrice: 118,
+      reason: 'position_episode_exit', partial: false,
+    });
+    expect(episodes[0].ret).toBeCloseTo(0.18, 12);
+  });
+
   it('combines volatility and fixed gross ceilings by taking the smaller scale', () => {
     expect(strategyBookExposureScalar(0.3, 0.15, 0.25)).toBe(0.25);
     expect(strategyBookExposureScalar(1, 0.15, 0.8)).toBe(0.15);

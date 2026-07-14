@@ -16,6 +16,8 @@ import {
   selectDailyBacktestRoute,
   strategyBookPolicyForSetup,
   validationTrialsForSetup,
+  validationTradeRecordsForSetup,
+  validationReturnInputs,
 } from '../../../scripts/backtest';
 
 const D = Prisma.Decimal;
@@ -236,6 +238,21 @@ describe('dual-momentum-rotation v1', () => {
       series: [{ ...toSeries(monthEndBook('AAPL')).find((item) => item.symbol === 'NVDA')!, bars: [{ ...toSeries(monthEndBook('AAPL')).find((item) => item.symbol === 'NVDA')!.bars[0], source: 'MOCK' }] }],
       startingCash: new D(100_000), limits: DEFAULT_BT_LIMITS,
     })).toThrow(/requires YAHOO\/ALPACA/);
+  });
+
+  it('uses independent closed episodes for R3-2 inference while preserving legacy/v3 records', () => {
+    const raw = [
+      { entryTs: new Date(0), exitTs: new Date(1), qty: 1, entryPrice: 100, exitPrice: 110, ret: 0.1, reason: 'trim', partial: true },
+      { entryTs: new Date(0), exitTs: new Date(2), qty: 3, entryPrice: 100, exitPrice: 120, ret: 0.2, reason: 'exit', partial: false },
+    ];
+    const episodes = validationTradeRecordsForSetup(dualMomentumRotationSetup.id, raw);
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0].ret).toBeCloseTo(0.175, 12);
+    expect(validationReturnInputs('shared', [{ ts: new Date(0), equity: 100 }, { ts: new Date(1), equity: 101 }], episodes.map((record) => record.ret)).permutationReturns)
+      .toEqual([episodes[0].ret]);
+    expect(validationTradeRecordsForSetup('ts-momentum-halal-basket-v3', raw)).toBe(raw);
+    expect(validationTradeRecordsForSetup('legacy-setup', raw)).toBe(raw);
   });
 
   it('uses bilingual result-neutral research-only and unscreened execution-blocked copy', () => {

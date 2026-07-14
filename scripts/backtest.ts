@@ -44,6 +44,7 @@ import {
   type BacktestBar, type DailyBarInput,
 } from '../src/quant/backtest/engine';
 import {
+  collapseMaxOnePositionEpisodes,
   simulateStrategyBook,
   type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
 } from '../src/quant/backtest/portfolioEngine';
@@ -129,6 +130,14 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
     return tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined);
   }
   return setupId === 'dual-momentum-rotation' ? dualMomentumRotationBookPolicy() : undefined;
+}
+
+/** R3-2 alone needs position episodes as its independent statistical unit; all other routes are unchanged. */
+export function validationTradeRecordsForSetup(
+  setupId: string,
+  records: readonly TradeRecord[],
+): readonly TradeRecord[] {
+  return setupId === 'dual-momentum-rotation' ? collapseMaxOnePositionEpisodes(records) : records;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -752,7 +761,11 @@ async function main() {
   if (cadence === 'daily') console.log(`\nexcluded ${excludedMock} MOCK bar(s) across the universe (no-mock directive)`);
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
-  const sortedTrades = [...pooledTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
+  const validationTradeRecords = validationTradeRecordsForSetup(setupId, pooledTradeRecords);
+  const validationTradeReturns = setupId === 'dual-momentum-rotation'
+    ? validationTradeRecords.map((record) => record.ret)
+    : pooledTradeReturns;
+  const sortedTrades = [...validationTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
   const curve: EquityPoint[] = sharedDailyCurve ?? [{ ts: new Date(`${from}T00:00:00.000Z`), equity: Number(startingCash) }];
   if (!sharedDailyCurve) {
     let running = Number(startingCash);
@@ -775,8 +788,11 @@ async function main() {
   const oosTrades = sharedDailyCurve
     ? sortedTrades.filter((trade) => trade.exitTs >= curve[oosStart].ts).length
     : transitionCountInsideSlice(curve.length, oosStart);
+  const oosTurnover = sharedDailyCurve
+    ? pooledTradeRecords.filter((trade) => trade.exitTs >= curve[oosStart].ts).length
+    : oosTrades;
   const oos = computeMetrics(curve.slice(oosStart), {
-    trades: oosTrades, turnover: oosTrades,
+    trades: oosTrades, turnover: oosTurnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
     trials: validationTrials,
   });
@@ -809,7 +825,7 @@ async function main() {
   }
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
-  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, pooledTradeReturns);
+  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, validationTradeReturns);
   const bootstrap = bootstrapTradeOutcomes(validationReturns.riskReturns, {
     resamples: 1000, seed, startEquity: Number(startingCash),
     ...(validationReturns.observationUnit === 'book-day' ? { observationUnit: 'book-day' as const } : {}),
@@ -860,7 +876,7 @@ async function main() {
   let plateauEvaluation: PlateauEvaluation | null = null;
   if (cadence === 'daily' && setup.plateauNeighborhood) {
     const neighborhood = setup.plateauNeighborhood(params);
-    const centerExpectancy = oosMeanTradeReturn(pooledTradeRecords);
+    const centerExpectancy = oosMeanTradeReturn([...validationTradeRecords]);
     const neighborResults: PlateauNeighborResult[] = [];
     for (const variant of neighborhood.neighbors) {
       const variantRecords: TradeRecord[] = [];
@@ -880,7 +896,7 @@ async function main() {
           variantRecords.push(...sim.tradeRecords);
         }
       }
-      const oosExpectancy = oosMeanTradeReturn(variantRecords);
+      const oosExpectancy = oosMeanTradeReturn([...validationTradeRecordsForSetup(setupId, variantRecords)]);
       neighborResults.push({ label: variant.label, oosExpectancy });
       console.log(`  plateau neighbor ${variant.label}: OOS expectancy ${(oosExpectancy * 100).toFixed(4)}%`);
     }
@@ -935,6 +951,20 @@ async function main() {
               : max
           ), 0),
         },
+        ...(setupId === 'dual-momentum-rotation' ? {
+          executionAudit: {
+            buyEntries: sharedBookResult.fills.filter((fill) => fill.action === 'BUY').length,
+            closedEpisodes: validationTradeRecords.length,
+            rawSellRecords: pooledTradeRecords.length,
+            partialTrims: pooledTradeRecords.filter((record) => record.partial).length,
+            fullExits: pooledTradeRecords.filter((record) => !record.partial).length,
+            oosBuyEntries: sharedBookResult.fills.filter((fill) => (
+              fill.action === 'BUY' && fill.ts >= curve[oosStart].ts
+            )).length,
+            oosClosedEpisodes: oosTrades,
+            oosRawSellRecords: oosTurnover,
+          },
+        } : {}),
         daily: sharedBookResult.daily.map((point) => ({
           ts: point.ts.toISOString(), nav: point.nav.toString(), cash: point.cash.toString(),
           drawdown: point.drawdown.toString(), realizedVolAnnual: point.realizedVolAnnual,
