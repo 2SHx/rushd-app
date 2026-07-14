@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-1 momentum-v3 terminally rejected ✅
+Shipped: promotion-grade v3 shared-book evidence over 49,243 real bars / 2,141 NAV days, with the exact terminal row/card and frozen 3×3 plateau recorded.
+Decisions: REJECTED on `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `SHARIA_UNVERIFIABLE`; plateau PASS and +11.83% OOS CAGR are informative but cannot override hard gates or authorize AUTO_PAPER.
+Verify: source `f9d788b`; focused 67/67 and full 626/626 passed with lint/typecheck/diff-check; BacktestRun `f841fa65-41e6-4932-ae65-906dd3e3bd99`, seed 42, reproducible=true.
+Open: execute R3-2 dual-momentum rotation next; v3 remains research evidence only, with no profit promise and no AUTO_REAL path.
+
 ## 2026-07-14 — G3e/R3-0 shared strategy-book engine ✅
 Shipped: DB-free Decimal `simulateStrategyBook`, date-major shared cash/NAV/positions, true daily drawdown, real-position envelope calls, and explicit shared CLI routing with legacy default preserved.
 Decisions: next-open exits precede entries; each side is canonical-symbol ascending; YAHOO/ALPACA only; lazy-dev rung 7 added no dependency/schema/service/API and left the legacy single-symbol engine untouched.
