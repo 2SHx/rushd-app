@@ -139,6 +139,45 @@ describe('AlpacaPaperBroker client-order idempotency', () => {
   });
 });
 
+describe('AlpacaPaperBroker portfolio snapshot', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads account, positions, and open orders together with Decimal-derived day P&L', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'ACTIVE', currency: 'USD', equity: '101250.50', last_equity: '100000',
+        cash: '-825.25', buying_power: '198349.50', trading_blocked: false,
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        symbol: 'SPUS', side: 'long', qty: '12.5', avg_entry_price: '42', current_price: '44',
+        market_value: '550', unrealized_pl: '25', unrealized_plpc: '0.047619', change_today: '0.01',
+      }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        id: 'order-1', symbol: 'AAPL', side: 'buy', type: 'limit', status: 'new', qty: '2',
+        filled_qty: '0', submitted_at: '2026-07-15T08:00:00Z',
+      }]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets')
+      .getPortfolioSnapshot();
+
+    expect(result.account).toMatchObject({
+      equity: '101250.5',
+      cash: '-825.25',
+      dayPnl: '1250.5',
+      dayPnlPct: '0.012505',
+      cashNegative: true,
+    });
+    expect(result.positions[0]).toMatchObject({ symbol: 'SPUS', qty: '12.5', unrealizedPnl: '25' });
+    expect(result.openOrders[0]).toMatchObject({ id: 'order-1', symbol: 'AAPL', submittedAt: '2026-07-15T08:00:00.000Z' });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://paper-api.alpaca.markets/v2/account',
+      'https://paper-api.alpaca.markets/v2/positions',
+      'https://paper-api.alpaca.markets/v2/orders?status=open&direction=desc&limit=50',
+    ]);
+  });
+});
+
 describe('broker registry', () => {
   it('selects Alpaca paper for NASDAQ with a key, else InternalSim', () => {
     expect(pickBrokerKind('NASDAQ' as any, { MARKET_DATA_MODE: 'live', ALPACA_API_KEY: 'sk-real' } as any)).toBe('ALPACA_PAPER');

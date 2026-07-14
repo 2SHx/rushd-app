@@ -8,7 +8,57 @@ import type { BrokerAdapter, OrderRequest, OrderResult, Position } from './broke
 import { assertLiveExecutionAllowed } from './liveGuard';
 
 const D = Prisma.Decimal;
-const PAPER_BASE = 'https://paper-api.alpaca.markets';
+export const ALPACA_PAPER_BASE_URL = 'https://paper-api.alpaca.markets';
+const READ_TIMEOUT_MS = 5_000;
+
+export interface AlpacaPaperPortfolioSnapshot {
+  retrievedAt: string;
+  account: {
+    status: string;
+    currency: string;
+    equity: string;
+    cash: string;
+    buyingPower: string;
+    dayPnl: string;
+    dayPnlPct: string;
+    cashNegative: boolean;
+    tradingBlocked: boolean;
+  };
+  positions: Array<{
+    symbol: string;
+    side: string;
+    qty: string;
+    avgEntryPrice: string;
+    currentPrice: string;
+    marketValue: string;
+    unrealizedPnl: string;
+    unrealizedPnlPct: string;
+    changeToday: string;
+  }>;
+  openOrders: Array<{
+    id: string;
+    symbol: string;
+    side: string;
+    type: string;
+    status: string;
+    qty: string;
+    filledQty: string;
+    submittedAt: string | null;
+  }>;
+}
+
+function decimal(value: unknown): Prisma.Decimal {
+  try {
+    return new D(String(value ?? '0'));
+  } catch {
+    throw new Error('Alpaca returned invalid numeric account data');
+  }
+}
+
+function timestamp(value: unknown): string | null {
+  const date = new Date(String(value ?? ''));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
 
 function mapStatus(s: string): OrderStatus {
   switch (s) {
@@ -32,7 +82,7 @@ export class AlpacaPaperBroker implements BrokerAdapter {
   constructor(
     private readonly key: string,
     private readonly secret: string,
-    private readonly baseUrl: string = process.env.ALPACA_BASE_URL || PAPER_BASE,
+    private readonly baseUrl: string = process.env.ALPACA_BASE_URL || ALPACA_PAPER_BASE_URL,
   ) {
     // A live (non-paper) URL is only permitted behind the full live-execution gate.
     // This is the enforcement point that keeps real-money orders dark by default.
@@ -46,6 +96,16 @@ export class AlpacaPaperBroker implements BrokerAdapter {
       'APCA-API-SECRET-KEY': this.secret,
       'Content-Type': 'application/json',
     };
+  }
+
+  private async read(path: string): Promise<unknown> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      headers: this.headers(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`Alpaca paper read failed: ${res.status}`);
+    return res.json();
   }
 
   private mapOrder(j: Record<string, unknown>, fallbackPrice = new D(0)): OrderResult {
@@ -104,6 +164,59 @@ export class AlpacaPaperBroker implements BrokerAdapter {
 
   async cancelOrder(ref: string): Promise<void> {
     await fetch(`${this.baseUrl}/v2/orders/${ref}`, { method: 'DELETE', headers: this.headers() });
+  }
+
+  /** One batched read model for the authenticated paper-portfolio UI. Never used for execution math. */
+  async getPortfolioSnapshot(): Promise<AlpacaPaperPortfolioSnapshot> {
+    const [accountRaw, positionsRaw, ordersRaw] = await Promise.all([
+      this.read('/v2/account'),
+      this.read('/v2/positions'),
+      this.read('/v2/orders?status=open&direction=desc&limit=50'),
+    ]);
+    const account = accountRaw as Record<string, unknown>;
+    const positions = positionsRaw as Record<string, unknown>[];
+    const orders = ordersRaw as Record<string, unknown>[];
+    const equity = decimal(account.equity);
+    const lastEquity = decimal(account.last_equity);
+    const dayPnl = equity.minus(lastEquity);
+    const dayPnlPct = lastEquity.isPositive() ? dayPnl.div(lastEquity) : new D(0);
+    const cash = decimal(account.cash);
+
+    return {
+      retrievedAt: new Date().toISOString(),
+      account: {
+        status: String(account.status ?? 'UNKNOWN'),
+        currency: String(account.currency ?? 'USD'),
+        equity: equity.toString(),
+        cash: cash.toString(),
+        buyingPower: decimal(account.buying_power).toString(),
+        dayPnl: dayPnl.toString(),
+        dayPnlPct: dayPnlPct.toString(),
+        cashNegative: cash.isNegative(),
+        tradingBlocked: account.trading_blocked === true,
+      },
+      positions: positions.map((position) => ({
+        symbol: String(position.symbol ?? ''),
+        side: String(position.side ?? 'long'),
+        qty: decimal(position.qty).toString(),
+        avgEntryPrice: decimal(position.avg_entry_price).toString(),
+        currentPrice: decimal(position.current_price).toString(),
+        marketValue: decimal(position.market_value).toString(),
+        unrealizedPnl: decimal(position.unrealized_pl).toString(),
+        unrealizedPnlPct: decimal(position.unrealized_plpc).toString(),
+        changeToday: decimal(position.change_today).toString(),
+      })),
+      openOrders: orders.map((order) => ({
+        id: String(order.id ?? ''),
+        symbol: String(order.symbol ?? ''),
+        side: String(order.side ?? ''),
+        type: String(order.type ?? ''),
+        status: String(order.status ?? ''),
+        qty: decimal(order.qty).toString(),
+        filledQty: decimal(order.filled_qty).toString(),
+        submittedAt: timestamp(order.submitted_at),
+      })),
+    };
   }
 
   async getPositions(): Promise<Position[]> {

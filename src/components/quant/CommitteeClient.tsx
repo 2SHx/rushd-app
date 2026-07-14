@@ -6,6 +6,8 @@ import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSceneAvailability } from '@/hooks/useSceneAvailability';
 import CommitteePipeline2D from './CommitteePipeline2D';
+import AlpacaPaperPortfolioView from './AlpacaPaperPortfolioView';
+import type { AlpacaPaperViewModel } from '@/quant/portfolio/alpacaPaperView';
 import {
   Bot,
   TrendingUp,
@@ -27,6 +29,7 @@ import {
   Check,
   X,
   GraduationCap,
+  Landmark,
 } from 'lucide-react';
 
 type MarketKind = 'TASI' | 'NASDAQ';
@@ -146,6 +149,8 @@ interface CommitteeClientProps {
   initialTrades?: Trade[];
   initialDecisions?: DecisionRecord[];
   initialAutonomyTier?: 'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL';
+  initialAlpacaPaper?: AlpacaPaperViewModel;
+  initialInternalPortfolioAvailable?: boolean;
 }
 
 const DEFAULT_SYMBOL: Record<MarketKind, string> = {
@@ -203,12 +208,16 @@ export default function CommitteeClient({
   initialMetrics,
   initialTrades = [],
   initialDecisions = [],
-  initialAutonomyTier = 'HUMAN_APPROVE'
+  initialAutonomyTier = 'HUMAN_APPROVE',
+  initialAlpacaPaper = { status: 'hidden' },
+  initialInternalPortfolioAvailable = true,
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
 
-  const [activeTab, setActiveTab] = useState<'board' | 'portfolio'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'portfolio' | 'alpaca'>(
+    initialInternalPortfolioAvailable ? 'board' : initialAlpacaPaper.status !== 'hidden' ? 'alpaca' : 'board',
+  );
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
   const [decisions, setDecisions] = useState<DecisionRecord[]>(initialDecisions ?? []);
 
@@ -718,29 +727,47 @@ export default function CommitteeClient({
   return (
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
-      <div className="flex space-x-1 p-1 bg-[#080c14] border border-white/5 rounded-2xl w-fit">
-        <button
-          onClick={() => setActiveTab('board')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-            activeTab === 'board'
-              ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Cpu className="w-3.5 h-3.5" />
-          <span>{isAr ? 'لجنة مستشاري الذكاء الاصطناعي' : 'AI Committee Board'}</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('portfolio')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-            activeTab === 'portfolio'
-              ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Coins className="w-3.5 h-3.5" />
-          <span>{isAr ? 'تحليلات المحفظة' : 'Portfolio Analytics'}</span>
-        </button>
+      <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-white/5 bg-[#080c14] p-1 sm:w-fit">
+        {initialInternalPortfolioAvailable ? (
+          <>
+            <button
+              onClick={() => setActiveTab('board')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                activeTab === 'board'
+                  ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>{isAr ? 'لجنة مستشاري الذكاء الاصطناعي' : 'AI Committee Board'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('portfolio')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                activeTab === 'portfolio'
+                  ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Coins className="w-3.5 h-3.5" />
+              <span>{isAr ? 'تحليلات المحفظة' : 'Portfolio Analytics'}</span>
+            </button>
+          </>
+        ) : null}
+        {initialAlpacaPaper.status !== 'hidden' ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab('alpaca')}
+            className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all ${
+              activeTab === 'alpaca'
+                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Landmark className="size-3.5" aria-hidden="true" />
+            <span>{t('alpacaTab')}</span>
+          </button>
+        ) : null}
       </div>
 
       {activeTab === 'board' && (
@@ -1328,6 +1355,10 @@ export default function CommitteeClient({
           </div>
         </div>
       )}
+
+      {activeTab === 'alpaca' && initialAlpacaPaper.status !== 'hidden' ? (
+        <AlpacaPaperPortfolioView data={initialAlpacaPaper} />
+      ) : null}
     </div>
   );
 }

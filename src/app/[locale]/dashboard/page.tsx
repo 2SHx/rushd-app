@@ -4,6 +4,8 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
+import { loadAlpacaPaperView } from '@/quant/portfolio/alpacaPaperView';
+import PortfolioViewSwitcher from '@/components/portfolio/PortfolioViewSwitcher';
 
 export default async function DashboardPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -15,7 +17,10 @@ export default async function DashboardPage({ params }: { params: { locale: stri
 
   const userId = session.user.id;
 
-  const portfolio = await loadPortfolioViewModel(userId);
+  const [portfolio, alpacaPaper] = await Promise.all([
+    loadPortfolioViewModel(userId),
+    loadAlpacaPaperView(session.user),
+  ]);
 
   if (!portfolio) {
     redirect(`/${locale}/login`);
@@ -55,7 +60,7 @@ export default async function DashboardPage({ params }: { params: { locale: stri
   }[portfolio.performanceStatus];
 
   return (
-    <>
+    <PortfolioViewSwitcher data={alpacaPaper}>
       {portfolio.unpricedSymbols.length > 0 && (
         <div className="mx-auto mt-6 max-w-6xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
           {t('portfolioPricingIncomplete', { symbols: portfolio.unpricedSymbols.join(', ') })}
@@ -78,6 +83,6 @@ export default async function DashboardPage({ params }: { params: { locale: stri
         performanceStatus={portfolio.performanceStatus}
         currencyTotals={portfolio.currencyTotals}
       />
-    </>
+    </PortfolioViewSwitcher>
   );
 }

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
+import { loadAlpacaPaperView } from '@/quant/portfolio/alpacaPaperView';
 
 export default async function QuantPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -18,7 +19,10 @@ export default async function QuantPage({ params }: { params: { locale: string }
 
   const userId = session.user.id;
 
-  const portfolio = await loadPortfolioViewModel(userId);
+  const [portfolio, alpacaPaper] = await Promise.all([
+    loadPortfolioViewModel(userId),
+    loadAlpacaPaperView(session.user),
+  ]);
 
   if (!portfolio) {
     redirect(`/${locale}/login`);
@@ -166,18 +170,20 @@ export default async function QuantPage({ params }: { params: { locale: string }
         </div>
       )}
 
-      {canRenderCommittee ? (
+      {canRenderCommittee || alpacaPaper.status !== 'hidden' ? (
         <CommitteeClient
           locale={locale}
-          initialNAV={portfolio.initialNAV as number}
+          initialNAV={portfolio.initialNAV ?? 0}
           initialCash={portfolio.initialCash}
-          initialPositions={committeePositions}
+          initialPositions={committeePositions ?? []}
           initialSnapshots={portfolio.initialSnapshots}
           initialPurification={initialPurification}
           initialMetrics={portfolio.initialMetrics}
           initialTrades={initialTrades}
           initialDecisions={initialDecisions}
           initialAutonomyTier={initialAutonomyTier}
+          initialAlpacaPaper={alpacaPaper}
+          initialInternalPortfolioAvailable={canRenderCommittee}
         />
       ) : (
         <div className="rounded-2xl border border-noncompliant/30 bg-noncompliant/10 p-4 text-sm text-noncompliant">

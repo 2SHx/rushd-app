@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Alpaca paper portfolio view ✅
+Shipped: Parent-only read-only Alpaca Paper view on the canonical Portfolio switcher and Quant, with live equity/cash/buying power/day P&L, positions, open orders, and bilingual honest states.
+Decisions: broker values stay separate from Rushd NAV; paper URL only, no polling/schema/dependency, negative cash stays visible, Sharia status is never inferred, and production requires `ALPACA_PORTFOLIO_VIEWER_USER_IDS`.
+Verify: focused 14/14; full 96 files / 719 tests; lint, TypeScript, i18n parity, and diff-check clean; browser-verified the connected 6-position account and zero fresh console/hydration errors in English/Arabic.
+Open: reload refreshes the snapshot after paper execution; automated reconciliation and polling remain deliberately out of scope, and the prohibited 2018-01-02→2026-07-10 evidence run was not executed.
+
 ## 2026-07-15 — Strategy learning simulation contract + visible market heat ✅
 Shipped: DR-14/M10 and L0–L5 continuation briefs for sealed bounded learner replays; market theme cards now use continuous signed percentage tint with neutral zero in light/dark.
 Decisions: lazy-dev rung 2 reuses the team simulator, risk/Sharia envelope, benchmark evidence, chart, and `addXP`; rewards follow mastery, never P&L, and the full 2018-01-02→2026-07-10 run remains explicitly gated.
