@@ -37,6 +37,22 @@ describe('bootstrapTradeOutcomes — seeded reproducibility', () => {
     const r = bootstrapTradeOutcomes(TRADES, { resamples: 10, seed: 1 });
     expect(r.resamples).toBe(1000);
   });
+
+  it('labels shared-book daily observations without changing legacy trade output', () => {
+    const legacy = bootstrapTradeOutcomes(TRADES, { resamples: 1000, seed: 7, startEquity: 100_000 });
+    const bookDays = [0.004, -0.003, 0.002, -0.001, 0.003, -0.002];
+    const sharedA = bootstrapTradeOutcomes(bookDays, {
+      resamples: 1000, seed: 7, startEquity: 100_000, observationUnit: 'book-day',
+    });
+    const sharedB = bootstrapTradeOutcomes(bookDays, {
+      resamples: 1000, seed: 7, startEquity: 100_000, observationUnit: 'book-day',
+    });
+
+    expect(legacy).not.toHaveProperty('observationUnit');
+    expect(sharedA.observationUnit).toBe('book-day');
+    expect(sharedA).toEqual(sharedB);
+    expect(sharedA.maxDrawdown.p95).toBeLessThan(0.1);
+  });
 });
 
 describe('signFlipPermutationTest — seeded', () => {

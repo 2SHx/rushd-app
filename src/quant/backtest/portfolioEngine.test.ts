@@ -1,17 +1,26 @@
 import { Prisma } from '@prisma/client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   getBenchmarkAtOrBefore,
   normalizeSymbolAllowlist,
   runPortfolioBacktest,
+  basketVolExposureScalar,
   simulateStrategyBook,
   type StrategyBookBar,
+  type StrategyBookPolicy,
   type StrategyBookSeries,
 } from './portfolioEngine';
 import type { RiskLimits } from '../risk/envelope';
 import type { StrategyPointInTimeContext, StrategySetup } from '../strategies/types';
 import type { AnalystSignal } from '../types';
-import { selectDailyBacktestRoute } from '../../../scripts/backtest';
+import { selectDailyBacktestRoute, validationReturnInputs } from '../../../scripts/backtest';
+import {
+  TS_MOMENTUM_HALAL_BASKET_V3,
+  TsMomentumHalalBasketV3ParamsSchema,
+  tsMomentumHalalBasketV3Setup,
+  tsMomentumV3BookPolicy,
+} from '../strategies/tsMomentumHalalBasketV3';
+import { TsMomentumHalalBasketV2ParamsSchema } from '../strategies/tsMomentumHalalBasketV2';
 
 const D = Prisma.Decimal;
 const DAY = 86_400_000;
@@ -62,9 +71,10 @@ function run(
   bookSeries: readonly StrategyBookSeries[],
   testSetup: StrategySetup<undefined> = setup(),
   limits: RiskLimits = LIMITS,
+  policy?: StrategyBookPolicy,
 ) {
   return simulateStrategyBook({
-    setup: testSetup, series: bookSeries, startingCash: new D(100_000), limits,
+    setup: testSetup, series: bookSeries, startingCash: new D(100_000), limits, policy,
   });
 }
 
@@ -132,7 +142,10 @@ describe('deterministic shared-cash daily strategy book', () => {
 
   it('hands actual concurrent positions to applyEnvelope and caps seven signals at six holdings', () => {
     const names = ['G', 'F', 'E', 'D', 'C', 'B', 'A'];
-    const result = run(names.map((name) => series(name)));
+    const result = run(
+      names.map((name) => series(name)), setup(), { ...LIMITS, maxOpenPositions: 10 },
+      { realizedVolLookback: 60, targetAnnualVol: 0.15, maxOpenPositions: 6 },
+    );
     const buyChecks = result.riskChecks.filter((check) => check.action === 'BUY');
 
     expect(buyChecks.slice(0, 7).map((check) => check.positionsSeen.length)).toEqual([0, 1, 2, 3, 4, 5, 6]);
@@ -195,4 +208,107 @@ describe('deterministic shared-cash daily strategy book', () => {
     expect(day2Fills.map((fill) => `${fill.action}:${fill.symbol}`)).toEqual(['SELL:A', 'BUY:B']);
     expect(day2Fills.at(-1)!.cashAfter.gte(0)).toBe(true);
   });
+
+  it('uses only prior basket NAV and actively sells existing holdings when volatility spikes', () => {
+    const volatileBars = (futureMultiplier = 1): StrategyBookBar[] => Array.from({ length: 70 }, (_, i) => {
+      const prefixPrice = 100 * (1 + (i % 2 === 0 ? 0.03 : -0.03));
+      const price = i < 65 ? prefixPrice : prefixPrice * futureMultiplier;
+      return {
+        ts: new Date(BASE + i * DAY), open: new D(price), high: new D(price), low: new D(price),
+        close: new D(price), volume: new D(1_000_000_000), source: 'YAHOO',
+      };
+    });
+    const fullEntry = setup({
+      entry: () => ({ matched: true, reasons: ['entry'], evidence: [], sizeFraction: 1 }),
+    });
+    const policy = { realizedVolLookback: 60, targetAnnualVol: 0.15, maxOpenPositions: 6 };
+    const base = run([{ symbol: 'A', market: 'NASDAQ', bars: volatileBars() }], fullEntry, LIMITS, policy);
+    const changedFuture = run([{ symbol: 'A', market: 'NASDAQ', bars: volatileBars(4) }], fullEntry, LIMITS, policy);
+
+    expect(base.daily.slice(0, 65).map((point) => point.grossExposureScalar))
+      .toEqual(changedFuture.daily.slice(0, 65).map((point) => point.grossExposureScalar));
+    const firstCut = base.daily.findIndex((point) => point.grossExposureScalar < 1);
+    expect(firstCut).toBeGreaterThanOrEqual(60);
+    expect(base.fills.some((fill) => fill.action === 'SELL' && fill.signalTs.getTime() >= base.daily[firstCut].ts.getTime()))
+      .toBe(true);
+    expect(base.daily.slice(firstCut + 1).some((point) => point.cash.gt(0))).toBe(true);
+  });
+
+  it('maps 30% basket volatility to 50% gross and never scales above one', () => {
+    expect(basketVolExposureScalar(0.30, 0.15)).toBeCloseTo(0.5, 12);
+    expect(basketVolExposureScalar(0.15, 0.15)).toBe(1);
+    expect(basketVolExposureScalar(0.10, 0.15)).toBe(1);
+  });
+
+  it('uses exact shared-NAV daily returns for risk while retaining actual trades for permutation', () => {
+    const book = run([series('A')]);
+    const curve = book.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
+    const actualTrades = [0.91, -0.73];
+    const selected = validationReturnInputs('shared', curve, actualTrades);
+    const expected = curve.slice(1).map((point, index) => point.equity / curve[index].equity - 1);
+
+    expect(selected).toEqual({
+      riskReturns: expected,
+      permutationReturns: actualTrades,
+      observationUnit: 'book-day',
+    });
+    expect(selected.riskReturns).not.toBe(actualTrades);
+    expect(validationReturnInputs('legacy', null, actualTrades)).toEqual({
+      riskReturns: actualTrades,
+      permutationReturns: actualTrades,
+      observationUnit: 'trade',
+    });
+  });
+
+  it('completes the frozen v3 center-plus-eight-cell plateau under a bounded heap', () => {
+    const plateauSeries: StrategyBookSeries[] = Array.from({ length: 7 }, (_, symbolIndex) => {
+      const symbol = `S${String(symbolIndex).padStart(2, '0')}`;
+      return {
+        symbol,
+        market: 'NASDAQ' as const,
+        bars: Array.from({ length: 320 }, (_, dayIndex) => {
+          const price = 100 + symbolIndex + dayIndex * 0.12 + Math.sin(dayIndex / 11) * 3;
+          return {
+            ts: new Date(BASE + dayIndex * DAY),
+            open: new D(price), high: new D(price + 1), low: new D(price - 1), close: new D(price),
+            volume: new D(1_000_000_000), source: 'YAHOO' as const,
+          };
+        }),
+      };
+    });
+    tsMomentumHalalBasketV3Setup.prepareUniverse({
+      symbols: plateauSeries.map((item) => item.symbol),
+      closesBySymbol: new Map(plateauSeries.map((item) => [
+        item.symbol,
+        item.bars.map((bar) => ({ ts: bar.ts, close: Number(bar.close) })),
+      ])),
+    });
+    const grid = tsMomentumHalalBasketV3Setup.plateauNeighborhood!(TS_MOMENTUM_HALAL_BASKET_V3);
+    const cells = [grid.center, ...grid.neighbors.map((neighbor) => neighbor.params)];
+    const v3Parses = vi.spyOn(TsMomentumHalalBasketV3ParamsSchema, 'parse');
+    const v2Parses = vi.spyOn(TsMomentumHalalBasketV2ParamsSchema, 'parse');
+
+    let tradeCounts: number[] = [];
+    let v3ParseCount = 0;
+    let v2ParseCount = 0;
+    try {
+      tradeCounts = cells.map((params) => simulateStrategyBook({
+        setup: tsMomentumHalalBasketV3Setup,
+        params,
+        series: plateauSeries,
+        startingCash: new D(100_000),
+        limits: LIMITS,
+        policy: tsMomentumV3BookPolicy(params),
+      }).tradeRecords.length);
+      v3ParseCount = v3Parses.mock.calls.length;
+      v2ParseCount = v2Parses.mock.calls.length;
+    } finally {
+      v3Parses.mockRestore();
+      v2Parses.mockRestore();
+    }
+
+    expect(tradeCounts).toHaveLength(9);
+    expect(v3ParseCount).toBeLessThanOrEqual(cells.length);
+    expect(v2ParseCount).toBeLessThanOrEqual(2 * plateauSeries.length * 320 + cells.length);
+  }, 12_000);
 });

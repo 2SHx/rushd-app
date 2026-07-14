@@ -63,6 +63,14 @@ describe('terminal validation report card', () => {
     expect(rendered).not.toContain('Turnover:');
   });
 
+  it('labels shared Monte Carlo paths as book-day observations', () => {
+    const rendered = renderReportCard(assembleReportCard(args({
+      bootstrap: { ...bootstrap, observationUnit: 'book-day' },
+    })), false);
+    expect(rendered).toContain('book-days/path');
+    expect(rendered).not.toContain('120 trades/path');
+  });
+
   it('emits ACCEPTED only when every actual gate passes and explains its limited meaning', () => {
     const card = assembleReportCard(args());
     expect(card.status).toBe('ACCEPTED');

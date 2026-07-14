@@ -267,6 +267,8 @@ export interface StrategyBookDailyPoint {
   readonly nav: Prisma.Decimal;
   readonly peakNav: Prisma.Decimal;
   readonly drawdown: Prisma.Decimal;
+  readonly realizedVolAnnual: number | null;
+  readonly grossExposureScalar: number;
   readonly positions: readonly StrategyBookPosition[];
 }
 
@@ -298,6 +300,15 @@ export interface StrategyBookInput<Params> {
   readonly series: readonly StrategyBookSeries[];
   readonly startingCash: Prisma.Decimal;
   readonly limits: RiskLimits;
+  readonly policy?: StrategyBookPolicy;
+}
+
+export interface StrategyBookPolicy {
+  readonly realizedVolLookback: number;
+  readonly targetAnnualVol: number;
+  readonly maxOpenPositions: number;
+  /** Strategy-declared bounded decision window; omitted means the full expanding history. */
+  readonly decisionHistoryBars?: number;
 }
 
 export interface StrategyBookResult {
@@ -328,9 +339,36 @@ interface PendingOrder {
   proposalQty: Prisma.Decimal;
   atr: Prisma.Decimal;
   adv: Prisma.Decimal;
+  grossExposureScalar: number;
 }
 
 const bookMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
+
+/** Down-only basket governor. Null/unavailable volatility leaves exposure unchanged. */
+export function basketVolExposureScalar(
+  realizedAnnualVol: number | null,
+  targetAnnualVol: number,
+): number {
+  if (realizedAnnualVol === null || !Number.isFinite(realizedAnnualVol) || realizedAnnualVol <= 0) return 1;
+  return Math.min(1, targetAnnualVol / realizedAnnualVol);
+}
+
+export function trailingBasketAnnualVol(
+  navs: readonly Prisma.Decimal[],
+  lookback: number,
+): number | null {
+  if (navs.length < lookback + 1) return null;
+  const window = navs.slice(-(lookback + 1));
+  const returns: number[] = [];
+  for (let i = 1; i < window.length; i++) {
+    if (window[i - 1].lte(0) || window[i].lte(0)) return null;
+    returns.push(Math.log(Number(window[i].div(window[i - 1]).toString())));
+  }
+  const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+  const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / returns.length;
+  const annual = Math.sqrt(variance) * Math.sqrt(252);
+  return annual > 0 ? annual : null;
+}
 
 function decimalMax(values: readonly Prisma.Decimal[]): Prisma.Decimal {
   return values.reduce((max, value) => value.gt(max) ? value : max, new D(0));
@@ -437,17 +475,16 @@ function portfolioState(
 
 function bookContext(
   series: StrategyBookSeries,
-  bars: readonly StrategyBookBar[],
+  bars: readonly IntradayBar[],
   asOf: Date,
   position: OpenPosition | undefined,
 ): StrategyPointInTimeContext {
-  const contextBars = bars.map((bar) => toContextBar(series.symbol, series.market, bar));
-  assertNoLookahead(contextBars, asOf, 'ts');
+  assertNoLookahead(bars, asOf, 'ts');
   return {
     symbol: series.symbol,
     market: series.market,
     asOf,
-    bars: contextBars,
+    bars,
     snapshot: null,
     positionQty: position?.qty ?? new D(0),
     entryPrice: position?.entryPrice ?? null,
@@ -463,8 +500,19 @@ function bookContext(
 export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): StrategyBookResult {
   if (input.setup.cadence !== 'daily') throw new Error('Strategy-book engine accepts daily setups only');
   if (input.startingCash.lte(0)) throw new Error('Strategy-book starting cash must be positive');
+  if (input.policy && (
+    !Number.isInteger(input.policy.realizedVolLookback) || input.policy.realizedVolLookback <= 0
+    || !Number.isFinite(input.policy.targetAnnualVol) || input.policy.targetAnnualVol <= 0
+    || !Number.isInteger(input.policy.maxOpenPositions) || input.policy.maxOpenPositions <= 0
+    || (input.policy.decisionHistoryBars !== undefined
+      && (!Number.isInteger(input.policy.decisionHistoryBars) || input.policy.decisionHistoryBars <= 0))
+  )) throw new Error('Strategy-book policy parameters must be positive');
   const series = validateSeries(input.series);
   const bySymbol = new Map(series.map((item) => [item.symbol, item]));
+  const contextBarsBySymbol = new Map(series.map((item) => [
+    item.symbol,
+    item.bars.map((bar) => toContextBar(item.symbol, item.market, bar)),
+  ]));
   const indexBySymbolTs = new Map(series.flatMap((item) => item.bars.map((bar, index) => [
     `${item.symbol}:${bar.ts.getTime()}`,
     index,
@@ -534,8 +582,13 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           adv: order.adv,
           stopPrice: bar.open.minus(order.atr.mul(2)),
         };
+        const effectiveLimits = input.policy ? {
+          ...input.limits,
+          maxOpenPositions: input.policy.maxOpenPositions,
+          maxGrossExposure: Math.min(input.limits.maxGrossExposure, order.grossExposureScalar),
+        } : input.limits;
         const envelope = applyEnvelope(
-          { action, qty: order.proposalQty }, pf, market, input.limits, false,
+          { action, qty: order.proposalQty }, pf, market, effectiveLimits, false,
         );
         if (envelope.action !== action || envelope.qty.lte(0)) continue;
 
@@ -567,7 +620,8 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           const fillPrice = bar.open
             .plus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS))
             .plus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
-          qty = bookMin(qty, cash.div(fillPrice));
+          // Round affordability DOWN so Decimal division precision can never overspend by a tail unit.
+          qty = bookMin(qty, cash.div(fillPrice).toDecimalPlaces(12, D.ROUND_DOWN));
           if (qty.lte(0)) continue;
           const notional = qty.mul(fillPrice);
           cash = cash.minus(notional);
@@ -588,12 +642,48 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       if (position) position.markPrice = bar.close;
     }
 
+    const closePositionsValue = positionValue(positions);
+    const closeNav = cash.plus(closePositionsValue);
+    const navHistory = input.policy
+      ? [...daily.slice(-input.policy.realizedVolLookback).map((point) => point.nav), closeNav]
+      : [];
+    const realizedVolAnnual = input.policy
+      ? trailingBasketAnnualVol(navHistory, input.policy.realizedVolLookback)
+      : null;
+    const grossExposureScalar = input.policy
+      ? basketVolExposureScalar(realizedVolAnnual, input.policy.targetAnnualVol)
+      : 1;
+
+    // A falling cap actively de-risks the held book at next open; it never waits for new entries.
+    if (input.policy && closePositionsValue.gt(closeNav.mul(grossExposureScalar))) {
+      const keepFraction = closeNav.mul(grossExposureScalar).div(closePositionsValue);
+      for (const position of Array.from(positions.values()).sort((a, b) => a.symbol.localeCompare(b.symbol))) {
+        const item = bySymbol.get(position.symbol)!;
+        const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
+        if (index === undefined || index >= item.bars.length - 1) continue;
+        const slice = item.bars.slice(0, index + 1);
+        pending.set(item.symbol, {
+          action: 'SELL', symbol: item.symbol, signalTs: date, fillTs: item.bars[index + 1].ts,
+          proposalQty: position.qty.mul(new D(1).minus(keepFraction)),
+          atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+        });
+      }
+    }
+
     for (const item of series) {
       const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
       if (index === undefined || index >= item.bars.length - 1) continue;
-      const slice = item.bars.slice(0, index + 1);
+      const sliceStart = input.policy?.decisionHistoryBars
+        ? Math.max(0, index + 1 - input.policy.decisionHistoryBars)
+        : 0;
+      const slice = item.bars.slice(sliceStart, index + 1);
       const position = positions.get(item.symbol);
-      const ctx = bookContext(item, slice, date, position);
+      const ctx = bookContext(
+        item,
+        contextBarsBySymbol.get(item.symbol)!.slice(sliceStart, index + 1),
+        date,
+        position,
+      );
       decisionWindows++;
       const next = item.bars[index + 1];
       if (position) {
@@ -601,7 +691,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
         if (check.matched) {
           pending.set(item.symbol, {
             action: 'SELL', symbol: item.symbol, signalTs: date, fillTs: next.ts,
-            proposalQty: position.qty, atr: bookAtr(slice), adv: bookAvgVolume(slice),
+            proposalQty: position.qty, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
           });
         }
       } else {
@@ -616,7 +706,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
             : new D(0);
           pending.set(item.symbol, {
             action: 'BUY', symbol: item.symbol, signalTs: date, fillTs: next.ts,
-            proposalQty, atr: bookAtr(slice), adv: bookAvgVolume(slice),
+            proposalQty, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
           });
         }
       }
@@ -628,6 +718,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     const drawdown = peakNav.gt(0) ? new D(1).minus(nav.div(peakNav)) : new D(0);
     daily.push({
       ts: date, cash, positionsValue, nav, peakNav, drawdown,
+      realizedVolAnnual, grossExposureScalar,
       positions: positionSnapshots(positions),
     });
   }

@@ -15,6 +15,10 @@ import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../src/quant/strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../src/quant/strategies/gapperOrb';
 import {
+  tsMomentumV3BookPolicy,
+  type TsMomentumHalalBasketV3Params,
+} from '../src/quant/strategies/tsMomentumHalalBasketV3';
+import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
   type SourcedDailyRow, type SourcedMinuteRow, type StocksInPlayAggregate,
@@ -39,7 +43,7 @@ import {
 } from '../src/quant/backtest/engine';
 import {
   simulateStrategyBook,
-  type StrategyBookSeries,
+  type StrategyBookResult, type StrategyBookSeries,
 } from '../src/quant/backtest/portfolioEngine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
@@ -55,7 +59,7 @@ const D = Prisma.Decimal;
 export type DailyBacktestRoute = 'legacy' | 'shared';
 
 /** R3-1 may opt a strategy version into the shared route without changing any existing setup. */
-export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set();
+export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set(['ts-momentum-halal-basket-v3']);
 
 export function selectDailyBacktestRoute(
   setupId: string,
@@ -65,6 +69,38 @@ export function selectDailyBacktestRoute(
     throw new Error('--engine must be legacy or shared');
   }
   return requested ?? (SHARED_BOOK_SETUP_IDS.has(setupId) ? 'shared' : 'legacy');
+}
+
+export interface ValidationReturnInputs {
+  riskReturns: number[];
+  permutationReturns: number[];
+  observationUnit: 'book-day' | 'trade';
+}
+
+/** Shared risk evidence uses true book NAV; entry permutation remains position-trade based. */
+export function validationReturnInputs(
+  route: DailyBacktestRoute,
+  sharedCurve: readonly EquityPoint[] | null,
+  tradeReturns: number[],
+): ValidationReturnInputs {
+  if (route === 'legacy') {
+    return { riskReturns: tradeReturns, permutationReturns: tradeReturns, observationUnit: 'trade' };
+  }
+  if (!sharedCurve) throw new Error('Shared validation requires the shared daily NAV curve');
+  const riskReturns = sharedCurve.slice(1).map((point, index) => {
+    const previous = sharedCurve[index].equity;
+    return previous !== 0 ? point.equity / previous - 1 : 0;
+  });
+  return { riskReturns, permutationReturns: tradeReturns, observationUnit: 'book-day' };
+}
+
+export function validationTrialsForSetup(setupId: string, effectiveParams: unknown): number {
+  if (setupId !== 'ts-momentum-halal-basket-v3') return 1;
+  const trials = (effectiveParams as { validationTrials?: unknown } | null)?.validationTrials;
+  if (!Number.isInteger(trials) || Number(trials) <= 1) {
+    throw new Error('ts-momentum-halal-basket-v3 requires validationTrials > 1');
+  }
+  return Number(trials);
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -101,9 +137,27 @@ function gitWorktreeStatus(): string | null {
   }
 }
 
-/** A deterministic run is reproducible only when its recorded SHA exactly describes the input code. */
+const QUANT_RUNTIME_FILES = new Set([
+  'scripts/backtest.ts', 'prisma/schema.prisma', 'package.json', 'package-lock.json', 'tsconfig.json',
+]);
+
+function isQuantRuntimeDependencyPath(filePath: string): boolean {
+  const normalized = filePath.replace(/^"|"$/g, '');
+  return normalized.startsWith('src/quant/') || QUANT_RUNTIME_FILES.has(normalized);
+}
+
+function hasDirtyQuantRuntimeDependency(porcelainStatus: string): boolean {
+  return porcelainStatus.split(/\r?\n/).some((line) => {
+    if (!line.trim()) return false;
+    const paths = line.slice(3).split(' -> ');
+    return paths.some(isQuantRuntimeDependencyPath);
+  });
+}
+
+/** A deterministic run is reproducible when HEAD describes every exact quant runtime dependency. */
 export function isReproducibleRun(seed: number, sha: string, porcelainStatus: string | null): boolean {
-  return Number.isSafeInteger(seed) && seed >= 0 && sha !== 'unknown' && porcelainStatus !== null && !porcelainStatus.trim();
+  return Number.isSafeInteger(seed) && seed >= 0 && sha !== 'unknown'
+    && porcelainStatus !== null && !hasDirtyQuantRuntimeDependency(porcelainStatus);
 }
 
 /** Strict candidate runs are reproducible only from a clean tracked/untracked, non-ignored tree. */
@@ -477,6 +531,8 @@ async function main() {
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
+  const effectiveParams = params ?? setup.defaultParams;
+  const validationTrials = validationTrialsForSetup(setupId, effectiveParams);
 
   let candidateArtifact: ParsedCandidateArtifact | null = null;
   let candidateEvidence: CandidateArtifactEvidence | null = null;
@@ -514,6 +570,8 @@ async function main() {
   // intraday engine's PIT-guarded bars serve the same role.
   let walkForwardWindows = 0;
   let sharedDailyCurve: EquityPoint[] | null = null;
+  let sharedSeriesForPlateau: StrategyBookSeries[] | null = null;
+  let sharedBookResult: StrategyBookResult | null = null;
 
   try {
     if (cadence === 'daily') {
@@ -541,7 +599,12 @@ async function main() {
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({
           setup, params, series: sharedSeries, startingCash, limits: DEFAULT_BT_LIMITS,
+          policy: setupId === 'ts-momentum-halal-basket-v3'
+            ? tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined)
+            : undefined,
         });
+        sharedSeriesForPlateau = sharedSeries;
+        sharedBookResult = sim;
         pitBarsProcessed += sim.barsProcessed;
         walkForwardWindows += sim.decisionWindows;
         pooledTradeReturns.push(...sim.tradeReturns);
@@ -676,6 +739,7 @@ async function main() {
   const full = computeMetrics(curve, {
     trades: sortedTrades.length, turnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
+    trials: validationTrials,
   });
   const oosStart = Math.floor(curve.length * (1 - oosFraction));
   const oosTrades = sharedDailyCurve
@@ -684,6 +748,7 @@ async function main() {
   const oos = computeMetrics(curve.slice(oosStart), {
     trades: oosTrades, turnover: oosTrades,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
+    trials: validationTrials,
   });
 
   // Persist a truthful, compact learning comparison when both real ETF benchmark histories exist.
@@ -714,15 +779,17 @@ async function main() {
   }
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
-  const bootstrap = bootstrapTradeOutcomes(pooledTradeReturns, {
+  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, pooledTradeReturns);
+  const bootstrap = bootstrapTradeOutcomes(validationReturns.riskReturns, {
     resamples: 1000, seed, startEquity: Number(startingCash),
+    ...(validationReturns.observationUnit === 'book-day' ? { observationUnit: 'book-day' as const } : {}),
   });
-  const permutation = signFlipPermutationTest(pooledTradeReturns, { permutations: 1000, seed });
+  const permutation = signFlipPermutationTest(validationReturns.permutationReturns, { permutations: 1000, seed });
 
   // Fractional-Kelly sizing, clamped by the envelope (never bypassed).
   const price = new D((lastPrice || 1).toFixed(4));
   const kelly = kellySizedDecision(
-    pooledTradeReturns,
+    validationReturns.riskReturns,
     { equity: startingCash, cash: startingCash, positions: [], peakEquity: startingCash },
     { symbol: symbols[0] ?? 'NA', price, atr: price.mul(0.02), adv: new D(1_000_000), stopPrice: price.mul(0.95) },
     DEFAULT_INTRADAY_LIMITS,
@@ -767,10 +834,22 @@ async function main() {
     const neighborResults: PlateauNeighborResult[] = [];
     for (const variant of neighborhood.neighbors) {
       const variantRecords: TradeRecord[] = [];
-      for (const s of symbols) {
-        const { bars } = await loadDailySymbol(s, from, to);
-        const sim = simulateSetupDaily({ setup, params: variant.params, symbol: s, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+      if (dailyRoute === 'shared') {
+        if (!sharedSeriesForPlateau) throw new Error('Shared plateau series unavailable');
+        const sim = simulateStrategyBook({
+          setup, params: variant.params, series: sharedSeriesForPlateau, startingCash,
+          limits: DEFAULT_BT_LIMITS,
+          policy: setupId === 'ts-momentum-halal-basket-v3'
+            ? tsMomentumV3BookPolicy(variant.params as TsMomentumHalalBasketV3Params)
+            : undefined,
+        });
         variantRecords.push(...sim.tradeRecords);
+      } else {
+        for (const s of symbols) {
+          const { bars } = await loadDailySymbol(s, from, to);
+          const sim = simulateSetupDaily({ setup, params: variant.params, symbol: s, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+          variantRecords.push(...sim.tradeRecords);
+        }
       }
       const oosExpectancy = oosMeanTradeReturn(variantRecords);
       neighborResults.push({ label: variant.label, oosExpectancy });
@@ -802,6 +881,25 @@ async function main() {
     plateau: plateauEvaluation,
     sharia: shariaSnapshot,
     comparison,
+    setupVersion: setup.version,
+    effectiveParams,
+    validationTrials,
+    engineRoute: cadence === 'daily' ? dailyRoute : 'legacy',
+    ...(sharedBookResult ? {
+      sharedBook: {
+        turnoverNotional: sharedBookResult.turnoverNotional.toString(),
+        averageExposure: sharedBookResult.daily.length
+          ? sharedBookResult.daily.reduce((sum, point) => (
+            sum + (point.nav.gt(0) ? Number(point.positionsValue.div(point.nav).toString()) : 0)
+          ), 0) / sharedBookResult.daily.length
+          : 0,
+        daily: sharedBookResult.daily.map((point) => ({
+          ts: point.ts.toISOString(), nav: point.nav.toString(), cash: point.cash.toString(),
+          drawdown: point.drawdown.toString(), realizedVolAnnual: point.realizedVolAnnual,
+          grossExposureScalar: point.grossExposureScalar, positions: point.positions.length,
+        })),
+      },
+    } : {}),
     ...(candidateEvidence ? {
       candidateArtifact: {
         ...candidateEvidence,

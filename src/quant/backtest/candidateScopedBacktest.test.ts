@@ -112,7 +112,10 @@ describe('candidate-scoped intraday DB loading', () => {
 
   it('requires a clean worktree, deterministic seed, and known SHA for reproducibility', () => {
     expect(isReproducibleRun(42, 'abc1234', '')).toBe(true);
-    expect(isReproducibleRun(42, 'abc1234', ' M strategy.ts\n')).toBe(false);
+    expect(isReproducibleRun(42, 'abc1234', ' M messages/en.json\n M src/components/quant/Chart.tsx\n')).toBe(true);
+    expect(isReproducibleRun(42, 'abc1234', ' M src/quant/backtest/metrics.ts\n')).toBe(false);
+    expect(isReproducibleRun(42, 'abc1234', '?? src/quant/newRuntimeDependency.ts\n')).toBe(false);
+    expect(isReproducibleRun(42, 'abc1234', ' M scripts/backtest.ts\n')).toBe(false);
     expect(isReproducibleRun(42, 'unknown', '')).toBe(false);
     expect(isReproducibleRun(-1, 'abc1234', '')).toBe(false);
     expect(isReproducibleRun(42, 'abc1234', null)).toBe(false);

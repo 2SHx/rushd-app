@@ -34,6 +34,8 @@ function percentile(sortedAsc: number[], p: number): number {
 export interface BootstrapResult {
   resamples: number;
   tradesPerPath: number;
+  /** Omitted for legacy byte-stable trade bootstrap; shared books persist `book-day`. */
+  observationUnit?: 'book-day';
   finalEquity: { p5: number; p50: number; p95: number };
   maxDrawdown: { p5: number; p50: number; p95: number };
   riskOfRuin: number; // fraction of paths that touched ≤ ruinFraction × startEquity
@@ -45,6 +47,8 @@ export interface BootstrapOpts {
   startEquity?: number;
   ruinFraction?: number; // ruin threshold as a fraction of start equity
   seed: number;
+  /** Shared strategy-book validation bootstraps close-to-close NAV days, not position trades. */
+  observationUnit?: 'book-day';
 }
 
 /**
@@ -59,11 +63,13 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
   const ruinLevel = startEquity * (opts.ruinFraction ?? 0.5);
   const rng = mulberry32(opts.seed);
 
+  const observationLabel = opts.observationUnit ? { observationUnit: opts.observationUnit } : {};
   const empty: BootstrapResult = {
     resamples, tradesPerPath,
     finalEquity: { p5: startEquity, p50: startEquity, p95: startEquity },
     maxDrawdown: { p5: 0, p50: 0, p95: 0 },
     riskOfRuin: 0,
+    ...observationLabel,
   };
   if (tradeReturns.length === 0 || tradesPerPath === 0) return empty;
 
@@ -96,6 +102,7 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
     finalEquity: { p5: percentile(finals, 5), p50: percentile(finals, 50), p95: percentile(finals, 95) },
     maxDrawdown: { p5: percentile(maxDDs, 5), p50: percentile(maxDDs, 50), p95: percentile(maxDDs, 95) },
     riskOfRuin: ruined / resamples,
+    ...observationLabel,
   };
 }
 

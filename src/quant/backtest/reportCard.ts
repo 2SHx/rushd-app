@@ -166,7 +166,8 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  Mean / Std (daily):   ${pct(c.distribution.mean)} / ${pct(c.distribution.std)}`);
   L.push(`  ${paint(`P(day ≥ +5%): ${pct(c.distribution.probDayGe5pct)}`, YELLOW)}   ${paint(`P(day ≤ −5%): ${pct(c.distribution.probDayLe5pct)}`, YELLOW)}`);
   L.push('──── Monte Carlo gate (seeded) ────');
-  L.push(`  Bootstrap resamples:  ${c.bootstrap.resamples}  (${c.bootstrap.tradesPerPath} trades/path)`);
+  const bootstrapUnits = c.bootstrap.observationUnit === 'book-day' ? 'book-days' : 'trades';
+  L.push(`  Bootstrap resamples:  ${c.bootstrap.resamples}  (${c.bootstrap.tradesPerPath} ${bootstrapUnits}/path)`);
   L.push(`  Max DD p5/p50/p95:    ${pct(c.bootstrap.maxDrawdown.p5)} / ${pct(c.bootstrap.maxDrawdown.p50)} / ${pct(c.bootstrap.maxDrawdown.p95)}`);
   L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
   L.push(`  Entry-jitter p-value: ${c.permutation.pValue.toFixed(3)}  (mean/trade ${pct(c.permutation.observedMean)})`);
