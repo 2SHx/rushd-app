@@ -148,6 +148,24 @@ real Yahoo history + purged strays + re-ran both v2 daily cards to repopulate `c
 card has no comparison (62-min re-run not worth it; UI falls back honestly). Rule for Codex: NEVER
 delete benchmark symbols (SPY, SPUS, HLAL) from MarketBar during universe cleanups.
 
+## R3-3 terminal authorization + R3-3.5 period presets (user directives 2026-07-14)
+
+**R3-3:** the user authorized the terminal TOM run ("Continue the plan"). Orchestrator ran it via CLI
+(full 2018–2026 + 3Y + 1Y views, seed 42, background queue3.sh). Codex: close the ledger row/card from
+the persisted BacktestRun rows — do not re-run.
+
+**R3-3.5 — period presets (NEW unit, user: "customize the period — Full 2018–2026, or 1/2/3 years"):**
+- CLI: `--period FULL|3Y|2Y|1Y` resolving to date ranges anchored at the latest complete trading date
+  in MarketBar (FULL = 2018-01-02→latest). Explicit `--from/--to` still wins. Tag every BacktestRun +
+  results JSON with `periodPreset` (or `CUSTOM`).
+- League UI: period selector (segmented control) on the team detail — renders the persisted card for
+  the selected preset; missing preset = honest "not yet run" state, NEVER computed client-side.
+- **Anti-period-snooping rule (binding, expert):** promotion/ACCEPTED verdicts bind ONLY to the FULL
+  period. Shorter presets are EVIDENCE VIEWS: gates are evaluated and shown per-view, but a passing 1Y
+  window can never promote a team (window-picking is data-snooping); short windows are labeled
+  regime-specific and will usually be INSUFFICIENT_SAMPLE — that label is correct, not a bug.
+- Runs per preset are seeded + persisted separately; ledger rows keep quoting FULL-period metrics.
+
 ## Continuation protocol (for ANY AI picking this up)
 
 1. Read this file, `docs/JOURNAL.md` (top entries), `docs/QUANT_DESIGN.md` QDR-6 + §9b,
