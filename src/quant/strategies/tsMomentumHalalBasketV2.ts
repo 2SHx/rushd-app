@@ -38,7 +38,7 @@ import type { AnalystSignal, Evidence, Stance } from '../types';
 import { NASDAQ_HALAL_UNIVERSE } from './bollingerMrLong';
 import { momentum, ema, annualizedRealizedVol } from './tsMomentumHalalBasket';
 import { sma, realizedDailyVol, volScaledWeight } from './bollingerMrLongV2';
-import type { StrategyCheck, StrategyPointInTimeContext, StrategySetup, UniversePrepareInput } from './types';
+import type { PlateauNeighborhood, StrategyCheck, StrategyPointInTimeContext, StrategySetup, UniversePrepareInput } from './types';
 
 export { NASDAQ_HALAL_UNIVERSE };
 
@@ -195,6 +195,26 @@ export const tsMomentumHalalBasketV2Setup: StrategySetup<TsMomentumHalalBasketV2
 
   prepareUniverse(input: UniversePrepareInput) {
     configureRegimeIndex(input.closesBySymbol);
+  },
+
+  // QDR-6 profit-plateau neighborhood. The 1–2 MOST sensitive params are the two v2 layers under
+  // test: the market-regime kill-switch (`regimeSmaPeriod`, ±20d) and the inverse-vol sizing budget
+  // (`targetVolBudget`, ±0.001/day). ROBUSTNESS probes only — `center` is the frozen a-priori
+  // calibration and is NEVER updated from a neighbor's OOS result. The regime index itself is
+  // params-independent (equal-weight basket), so a neighbor only changes the SMA period read from it;
+  // the harness re-runs each neighbor on the same real bars (see backtest/profitPlateau.ts).
+  plateauNeighborhood(params): PlateauNeighborhood<TsMomentumHalalBasketV2Params> {
+    const p = paramsOrDefault(params);
+    return {
+      axes: ['regimeSmaPeriod', 'targetVolBudget'],
+      center: p,
+      neighbors: [
+        { label: 'regimeSmaPeriod-20', params: { ...p, regimeSmaPeriod: p.regimeSmaPeriod - 20 } },
+        { label: 'regimeSmaPeriod+20', params: { ...p, regimeSmaPeriod: p.regimeSmaPeriod + 20 } },
+        { label: 'targetVolBudget-0.001', params: { ...p, targetVolBudget: p.targetVolBudget - 0.001 } },
+        { label: 'targetVolBudget+0.001', params: { ...p, targetVolBudget: p.targetVolBudget + 0.001 } },
+      ],
+    };
   },
 
   screen(ctx, params) {

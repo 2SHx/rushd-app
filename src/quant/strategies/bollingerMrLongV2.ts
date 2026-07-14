@@ -33,7 +33,7 @@ import { z } from 'zod';
 import { assertNoLookahead } from '../data/pointInTime';
 import type { AnalystSignal, Evidence, Stance } from '../types';
 import { NASDAQ_HALAL_UNIVERSE, bollinger, varianceRatio } from './bollingerMrLong';
-import type { StrategyCheck, StrategyPointInTimeContext, StrategySetup } from './types';
+import type { PlateauNeighborhood, StrategyCheck, StrategyPointInTimeContext, StrategySetup } from './types';
 
 export { NASDAQ_HALAL_UNIVERSE };
 
@@ -159,6 +159,26 @@ export const bollingerMrLongV2Setup: StrategySetup<BollingerMrLongV2Params> = {
   version: 'v2',
   cadence: 'daily',
   defaultParams: BOLLINGER_MR_LONG_V2,
+
+  // QDR-6 profit-plateau neighborhood. The 1–2 MOST sensitive params are the two v2 layers under
+  // test: the band entry threshold (`entryStdev`, ±0.25σ) and the stricter regime gate
+  // (`varianceRatioMax`, ±0.05). These are ROBUSTNESS probes only — `center` is the frozen chosen
+  // calibration and is NEVER updated from a neighbor's OOS result (that would be optimization, not a
+  // plateau proof). The harness re-runs each neighbor on the same real bars and checks OOS
+  // expectancy stays same-sign and within the degradation bound (see backtest/profitPlateau.ts).
+  plateauNeighborhood(params): PlateauNeighborhood<BollingerMrLongV2Params> {
+    const p = paramsOrDefault(params);
+    return {
+      axes: ['entryStdev', 'varianceRatioMax'],
+      center: p,
+      neighbors: [
+        { label: 'entryStdev-0.25', params: { ...p, entryStdev: p.entryStdev - 0.25 } },
+        { label: 'entryStdev+0.25', params: { ...p, entryStdev: p.entryStdev + 0.25 } },
+        { label: 'varianceRatioMax-0.05', params: { ...p, varianceRatioMax: p.varianceRatioMax - 0.05 } },
+        { label: 'varianceRatioMax+0.05', params: { ...p, varianceRatioMax: p.varianceRatioMax + 0.05 } },
+      ],
+    };
+  },
 
   screen(ctx, params) {
     const p = paramsOrDefault(params);

@@ -42,6 +42,9 @@ import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } fro
 import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ShariaValidationState } from '../src/quant/backtest/reportCard';
 import { buildHistoricalComparisonEvidence } from '../src/quant/backtest/historicalComparison';
+import { assertWalkForward } from '../src/quant/backtest/walkForward';
+import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from '../src/quant/backtest/profitPlateau';
+import { buildShariaRunSnapshot } from '../src/quant/backtest/shariaSnapshot';
 
 const D = Prisma.Decimal;
 
@@ -130,7 +133,7 @@ export function shariaStateForSetup(
   candidateState?: ShariaValidationState,
 ): ShariaValidationState {
   return candidateState ?? (
-    setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim'
+    setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long'
       ? 'UNSCREENED_EXECUTION_BLOCKED'
       : 'UNVERIFIED'
   );
@@ -483,6 +486,11 @@ async function main() {
   // (simulateSetupDaily / simulateIntraday abort the whole run via LookaheadError on violation).
   // Counting bars actually simulated is the observable proof both guards executed and passed.
   let pitBarsProcessed = 0;
+  // Walk-forward evidence: total PIT-guarded decision windows the engine evaluated (one per bar it
+  // decided on using only ≤ asOf data). Accumulated so the walkForward flag is EARNED via a window-
+  // count assertion, not aliased to the trade count. The daily engine reports its own count; the
+  // intraday engine's PIT-guarded bars serve the same role.
+  let walkForwardWindows = 0;
 
   try {
     if (cadence === 'daily') {
@@ -512,6 +520,7 @@ async function main() {
         if (bars.length) lastPrice = Number(bars.at(-1)!.close);
         const sim = simulateSetupDaily({ setup, params, symbol, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
         pitBarsProcessed += sim.barsProcessed;
+        walkForwardWindows += sim.decisionWindows;
         pooledTradeReturns.push(...sim.tradeReturns);
         pooledTradeRecords.push(...sim.tradeRecords);
         pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
@@ -527,19 +536,24 @@ async function main() {
         entries.push(candidate);
         candidatesBySymbol.set(candidate.symbol, entries);
       }
+      // Setups that reason over the shared stocks-in-play PIT book (OR facts + REAL consolidated
+      // DAY-spine liquidity/levels) on the fixed 11-name deep-minute liquid universe. stop-hunt
+      // reads the book's dailyLow to derive prior-day lows PIT; the verified metrics/annualization/
+      // PIT/reproducibility path below is untouched — this only routes the already-built book in.
+      const usesStocksInPlayBook = setupId === 'stocks-in-play-orb' || setupId === 'stop-hunt-reversal-long';
       symbols = candidateArtifact
         ? Array.from(candidatesBySymbol.keys()).sort()
-        : setupId === 'stocks-in-play-orb'
+        : usesStocksInPlayBook
           ? [...STOCKS_IN_PLAY_UNIVERSE_V1]
         : source === 'db'
           ? await listDbSymbols(wantSymbols, from, to)
         : fixtureSeries!.map((s) => s.symbol);
-      if (setupId === 'stocks-in-play-orb') {
+      if (usesStocksInPlayBook) {
         const requested = wantSymbols?.slice().sort().join(',');
         const v1 = [...STOCKS_IN_PLAY_UNIVERSE_V1].sort().join(',');
-        if (requested && requested !== v1) throw new Error('stocks-in-play-orb@v1 requires its exact 11-symbol deep-minute universe');
+        if (requested && requested !== v1) throw new Error(`${setupId}@v1 requires its exact 11-symbol deep-minute universe`);
         symbols = [...STOCKS_IN_PLAY_UNIVERSE_V1];
-        if (source !== 'db' || feed !== 'alpaca-iex') throw new Error('stocks-in-play-orb@v1 requires --source db --feed alpaca-iex');
+        if (source !== 'db' || feed !== 'alpaca-iex') throw new Error(`${setupId}@v1 requires --source db --feed alpaca-iex`);
         const prepared = await loadStocksInPlayReferenceBook(from, to);
         excludedMock += prepared.excludedUnsupportedDaily + prepared.excludedNonAlpacaMinute;
         setup.prepareUniverse?.({ symbols, closesBySymbol: new Map(), stocksInPlayBook: prepared.book });
@@ -568,6 +582,7 @@ async function main() {
             limits: DEFAULT_INTRADAY_LIMITS,
           });
           pitBarsProcessed += sim.barsProcessed;
+          walkForwardWindows += sim.barsProcessed; // intraday PIT-guarded bars are the walk-forward windows
           pooledTradeReturns.push(...sim.tradeReturns);
           pooledTradeRecords.push(...sim.tradeRecords);
           pooledDailyReturns.push(...(
@@ -665,15 +680,63 @@ async function main() {
   // Capture cleanliness before simulation: a SHA cannot reproduce uncommitted input code.
   const reproducible = isReproducibleRun(seed, runGitSha, initialWorktreeStatus);
 
+  // Walk-forward flag EARNED via a window-count assertion (never aliased to trade count): the daily
+  // engine is structurally expanding-window and reported one PIT-guarded decision window per bar.
+  const walkForwardEvidence = assertWalkForward(walkForwardWindows);
+  const walkForward = walkForwardEvidence.passed;
+
+  // ── QDR-6 profit-plateau robustness sweep. For daily setups that declare a neighborhood, re-run
+  // each off-center neighbor on the SAME real bars, measure OOS expectancy, and confirm the edge
+  // stays same-sign and within the degradation bound. ROBUSTNESS PROOF ONLY — the chosen params are
+  // NEVER updated from the sweep; a better neighbor does not become the headline calibration.
+  const oosMeanTradeReturn = (records: TradeRecord[]): number => {
+    const sorted = [...records].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
+    const start = Math.floor(sorted.length * (1 - oosFraction));
+    const slice = sorted.slice(start);
+    return slice.length ? slice.reduce((s, r) => s + r.ret, 0) / slice.length : 0;
+  };
+  let profitPlateau: boolean | undefined;
+  let plateauEvaluation: PlateauEvaluation | null = null;
+  if (cadence === 'daily' && setup.plateauNeighborhood) {
+    const neighborhood = setup.plateauNeighborhood(params);
+    const centerExpectancy = oosMeanTradeReturn(pooledTradeRecords);
+    const neighborResults: PlateauNeighborResult[] = [];
+    for (const variant of neighborhood.neighbors) {
+      const variantRecords: TradeRecord[] = [];
+      for (const s of symbols) {
+        const { bars } = await loadDailySymbol(s, from, to);
+        const sim = simulateSetupDaily({ setup, params: variant.params, symbol: s, market: 'NASDAQ', bars, startingCash, limits: DEFAULT_BT_LIMITS });
+        variantRecords.push(...sim.tradeRecords);
+      }
+      const oosExpectancy = oosMeanTradeReturn(variantRecords);
+      neighborResults.push({ label: variant.label, oosExpectancy });
+      console.log(`  plateau neighbor ${variant.label}: OOS expectancy ${(oosExpectancy * 100).toFixed(4)}%`);
+    }
+    plateauEvaluation = evaluateProfitPlateau(centerExpectancy, neighborResults);
+    profitPlateau = plateauEvaluation.passed;
+    console.log(`profit-plateau sweep [${neighborhood.axes.join(' × ')}]: ${plateauEvaluation.passed ? 'PLATEAU' : 'SPIKY'} — ${plateauEvaluation.reason}`);
+  }
+
+  // ── Per-run, per-symbol Sharia snapshot. Keyless ⇒ UNSCREENED honestly (no mock verdict presented
+  // as truth); a real source (Zoya, live) ⇒ VERIFIED_* from real verdicts. Intraday micro-cap lanes
+  // stay execution-blocked; a candidate artifact's own screening status still takes priority.
+  const shariaSnapshot = await buildShariaRunSnapshot(symbols, 'NASDAQ');
+  const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long';
+  const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
+    ?? (isIntradayUnscreened ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);
+
   const card = {
     ...assembleReportCard({
       setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: runGitSha,
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
-      shariaState: shariaStateForSetup(setupId, candidateArtifact?.shariaStatus),
+      shariaState, walkForward, profitPlateau,
       dataQualityPitOk, reproducible,
     }),
+    walkForwardEvidence,
+    plateau: plateauEvaluation,
+    sharia: shariaSnapshot,
     comparison,
     ...(candidateEvidence ? {
       candidateArtifact: {

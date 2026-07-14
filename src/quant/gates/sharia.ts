@@ -5,7 +5,7 @@
 // keyed, MockScreener otherwise) from src/services/marketData.ts; does not reimplement
 // screening. Screener unavailable/throws ⇒ FAIL-CLOSED (treated as non-compliant).
 import type { Market } from '@prisma/client';
-import { registry } from '@/services/marketData';
+import { registry, type ShariaScreener } from '@/services/marketData';
 
 export type ShariaGate = {
   compliant: boolean;
@@ -14,9 +14,22 @@ export type ShariaGate = {
   source: string;
 };
 
-export async function evaluateShariaGate(symbol: string, market: Market): Promise<ShariaGate> {
+/**
+ * Is a REAL (non-mock) Sharia screening source configured? Only then is a per-symbol verdict
+ * TRUSTWORTHY. Keyless, the registry falls back to MockScreener, whose verdicts are fixtures — so a
+ * keyless run must record UNSCREENED honestly and NEVER present a mock verdict as compliance truth.
+ * Pure read of the same env gate `ProviderRegistry.getScreener()` uses to pick the Zoya adapter.
+ */
+export function isRealShariaSourceConfigured(): boolean {
+  return Boolean(process.env.MARKET_DATA_MODE === 'live' && process.env.ZOYA_API_KEY);
+}
+
+export async function evaluateShariaGate(
+  symbol: string,
+  market: Market,
+  screener: ShariaScreener = registry.getScreener(),
+): Promise<ShariaGate> {
   try {
-    const screener = registry.getScreener();
     const verdict = await screener.screen(symbol, market as 'TASI' | 'NASDAQ');
     if (!verdict) {
       return { compliant: false, reason: 'screener_unavailable_fail_closed', standard: 'AAOIFI', source: 'none' };

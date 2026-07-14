@@ -211,6 +211,13 @@ export interface DailySetupSimResult {
   tradeReturns: number[];
   tradeRecords: TradeRecord[];
   barsProcessed: number;
+  /**
+   * Count of PIT-guarded decision windows evaluated (one per bar the engine decided on using only
+   * the ≤ asOf slice, each re-asserted look-ahead-free). This is the walk-forward evidence the
+   * harness accumulates and asserts against MIN_WALK_FORWARD_WINDOWS — the flag is earned, not
+   * aliased to trade count.
+   */
+  decisionWindows: number;
 }
 
 function toDailyIntradayBar(symbol: string, market: Market, b: BacktestBar): IntradayBar {
@@ -248,11 +255,13 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
   const equityCurve: EquityPoint[] = [];
   const tradeReturns: number[] = [];
   const tradeRecords: TradeRecord[] = [];
+  let decisionWindows = 0;
 
   for (let t = 0; t < bars.length - 1; t++) {
     const asOf = bars[t].ts;
     const slice = ibars.slice(0, t + 1);
     assertNoLookahead(slice, asOf, 'ts');
+    decisionWindows++; // one PIT-guarded, look-ahead-free decision window (walk-forward evidence)
     const ctx = {
       symbol, market, asOf, bars: slice, snapshot: null, positionQty: qty,
       entryPrice: qty.gt(0) ? entryPrice : null, entryTs: qty.gt(0) ? entryTs : null,
@@ -344,7 +353,7 @@ export function simulateSetupDaily<P>(inp: DailySetupSimInput<P>): DailySetupSim
   const avgEquity = meanN(equityCurve.map((p) => p.equity)) || 1;
   return {
     equityCurve, trades, turnover: num(turnoverNotional) / avgEquity,
-    tradeReturns, tradeRecords, barsProcessed: bars.length,
+    tradeReturns, tradeRecords, barsProcessed: bars.length, decisionWindows,
   };
 }
 

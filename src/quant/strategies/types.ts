@@ -58,6 +58,30 @@ export interface UniversePrepareInput {
   }[]>;
 }
 
+/**
+ * One off-center parameter variant in a profit-plateau neighborhood (§6). `label` names the single
+ * perturbed axis + step (e.g. `entryStdev+0.25`); `params` is a full, valid parameter set differing
+ * from the center by exactly that step. Robustness probe only — never a candidate to REPLACE center.
+ */
+export interface PlateauVariant<Params> {
+  readonly label: string;
+  readonly params: Params;
+}
+
+/**
+ * A-priori robustness neighborhood declared by a setup for the QDR-6 profit-plateau gate. `center`
+ * MUST equal the setup's chosen (default) params — the sweep is a ROBUSTNESS PROOF, not an
+ * optimization, so the chosen params are NEVER updated from any neighbor's result. `axes` are the
+ * 1–2 MOST sensitive params being perturbed; `neighbors` are small fixed ± steps on those axes. The
+ * gate passes iff OOS expectancy stays same-sign and within a documented degradation bound across
+ * ALL neighbors (see backtest/profitPlateau.ts).
+ */
+export interface PlateauNeighborhood<Params> {
+  readonly axes: readonly string[];
+  readonly center: Params;
+  readonly neighbors: readonly PlateauVariant<Params>[];
+}
+
 /** Pure, versioned G2 setup contract. Loading, sizing, Sharia veto, and execution stay outside it. */
 export interface StrategySetup<Params> {
   readonly id: string;
@@ -71,6 +95,14 @@ export interface StrategySetup<Params> {
    * setup's own reference state — never the LLM, DB, or randomness.
    */
   prepareUniverse?(input: UniversePrepareInput): void;
+  /**
+   * Optional a-priori robustness neighborhood for the QDR-6 profit-plateau gate. A setup that
+   * declares its 1–2 most sensitive params here becomes plateau-EVALUABLE; setups that omit it stay
+   * plateau-unproven (⇒ the gate defaults to NOT proven, honestly). The returned `center` MUST equal
+   * the params the headline run used; the harness only READS the neighbors' OOS expectancy and never
+   * feeds a neighbor back as the chosen params.
+   */
+  plateauNeighborhood?(params?: Params): PlateauNeighborhood<Params>;
   screen(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
   entry(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
   exit(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
