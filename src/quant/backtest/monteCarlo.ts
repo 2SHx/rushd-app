@@ -31,6 +31,62 @@ function percentile(sortedAsc: number[], p: number): number {
   return sortedAsc[idx];
 }
 
+export interface MonthlyBlockBootstrapResult {
+  readonly observationUnit: 'monthly-block';
+  readonly resamples: number;
+  readonly nBlocks: number;
+  readonly blocksPerPath: number;
+  readonly observedBlockReturns: number[];
+  readonly compoundedReturn: { p5: number; p50: number; p95: number };
+}
+
+/**
+ * Resample complete contiguous TOM exposure windows. Daily observations are first compounded inside
+ * their original window; the bootstrap never draws individual days and therefore preserves each
+ * month's within-window dependence structure.
+ */
+export function bootstrapMonthlyBlocks(
+  blocks: readonly (readonly number[])[],
+  opts: { readonly seed: number; readonly resamples?: number },
+): MonthlyBlockBootstrapResult {
+  const resamples = Math.max(1000, opts.resamples ?? 1000);
+  if (blocks.some((block) => block.some((dailyReturn) => !Number.isFinite(dailyReturn) || dailyReturn < -1))) {
+    throw new Error('Monthly-block returns must be finite and no smaller than -1');
+  }
+  const observedBlockReturns = blocks
+    .filter((block) => block.length > 0)
+    .map((block) => block.reduce((wealth, dailyReturn) => wealth * (1 + dailyReturn), 1) - 1);
+  const nBlocks = observedBlockReturns.length;
+  const empty = {
+    observationUnit: 'monthly-block' as const,
+    resamples,
+    nBlocks,
+    blocksPerPath: nBlocks,
+    observedBlockReturns,
+    compoundedReturn: { p5: 0, p50: 0, p95: 0 },
+  };
+  if (nBlocks === 0) return empty;
+
+  const rng = mulberry32(opts.seed);
+  const outcomes: number[] = [];
+  for (let sample = 0; sample < resamples; sample++) {
+    let wealth = 1;
+    for (let block = 0; block < nBlocks; block++) {
+      wealth *= 1 + observedBlockReturns[Math.floor(rng() * nBlocks)];
+    }
+    outcomes.push(wealth - 1);
+  }
+  outcomes.sort((a, b) => a - b);
+  return {
+    ...empty,
+    compoundedReturn: {
+      p5: percentile(outcomes, 5),
+      p50: percentile(outcomes, 50),
+      p95: percentile(outcomes, 95),
+    },
+  };
+}
+
 export interface BootstrapResult {
   resamples: number;
   tradesPerPath: number;

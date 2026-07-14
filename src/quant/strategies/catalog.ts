@@ -9,6 +9,7 @@ import { cointStatArbLongLegSetup } from './cointStatArbLongLeg';
 import { vwapReclaimSetup } from './vwapReclaim';
 import { stopHuntReversalLongSetup } from './stopHuntReversalLong';
 import { dualMomentumRotationSetup } from './dualMomentumRotation';
+import { tomOverlaySetup } from './tomOverlay';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -22,4 +23,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [tsMomentumHalalBasketV3Setup.id]: tsMomentumHalalBasketV3Setup,
   [cointStatArbLongLegSetup.id]: cointStatArbLongLegSetup,
   [dualMomentumRotationSetup.id]: dualMomentumRotationSetup,
+  [tomOverlaySetup.id]: tomOverlaySetup,
 });

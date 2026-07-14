@@ -1,13 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
 import {
-  mulberry32, bootstrapTradeOutcomes, signFlipPermutationTest,
+  mulberry32, bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest,
   fractionalKellyFraction, kellySizedDecision,
 } from './monteCarlo';
 import type { MarketState, PortfolioState, RiskLimits } from '../risk/envelope';
 
 const D = Prisma.Decimal;
 const TRADES = [0.03, -0.02, 0.05, -0.01, 0.02, -0.03, 0.04, -0.015, 0.025, -0.02];
+
+describe('monthly-block bootstrap', () => {
+  it('is seeded and resamples compounded contiguous blocks rather than iid days', () => {
+    const blocks = [[0.1, -0.05], [0.02], [-0.01, 0.03]];
+    const first = bootstrapMonthlyBlocks(blocks, { seed: 77, resamples: 1_000 });
+    const second = bootstrapMonthlyBlocks(blocks, { seed: 77, resamples: 1_000 });
+
+    expect(first).toEqual(second);
+    expect(first.observationUnit).toBe('monthly-block');
+    expect(first.nBlocks).toBe(3);
+    expect(first.blocksPerPath).toBe(3);
+    expect(first.observedBlockReturns[0]).toBeCloseTo(0.045, 12);
+  });
+});
 
 describe('mulberry32 determinism', () => {
   it('same seed ⇒ identical stream, different seed ⇒ different stream', () => {

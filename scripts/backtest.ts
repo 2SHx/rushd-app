@@ -4,7 +4,8 @@
 //
 // Runs a cataloged StrategySetup against stored historical minute bars with ZERO LLM calls,
 // prints the QDR-6 report card, writes results/<setup>-<from>-<to>.json, and persists a
-// BacktestRun (seed + gitSha) for reproducibility. Reads ONLY real fixtures / IntradayBar rows —
+// BacktestRun (seed + gitSha) for reproducibility. `--diagnostic` prints but performs neither write.
+// Reads ONLY real fixtures / IntradayBar rows —
 // no synthetic bars anywhere. Exits nonzero on any look-ahead detection.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +21,7 @@ import {
 } from '../src/quant/strategies/tsMomentumHalalBasketV3';
 import { DUAL_MOMENTUM_UNIVERSE } from '../src/quant/strategies/dualMomentumRotation';
 import { dualMomentumRotationBookPolicy } from '../src/quant/strategies/dualMomentumRotation';
+import { TOM_OVERLAY_UNIVERSE, tomOverlayBookPolicy } from '../src/quant/strategies/tomOverlay';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -46,11 +48,13 @@ import {
 import {
   collapseMaxOnePositionEpisodes,
   simulateStrategyBook,
-  type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
+  type StrategyBookDailyPoint, type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
 } from '../src/quant/backtest/portfolioEngine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
-import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
+import {
+  bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision,
+} from '../src/quant/backtest/monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ShariaValidationState } from '../src/quant/backtest/reportCard';
 import { buildHistoricalComparisonEvidence } from '../src/quant/backtest/historicalComparison';
 import { assertWalkForward } from '../src/quant/backtest/walkForward';
@@ -61,11 +65,27 @@ import type { RiskLimits } from '../src/quant/risk/envelope';
 const D = Prisma.Decimal;
 
 export type DailyBacktestRoute = 'legacy' | 'shared';
+export type BacktestRunMode = 'TERMINAL' | 'DIAGNOSTIC_NON_TERMINAL';
+
+export function backtestRunMode(value?: string): BacktestRunMode {
+  if (value === undefined || value === 'false') return 'TERMINAL';
+  if (value === 'true') return 'DIAGNOSTIC_NON_TERMINAL';
+  throw new Error('--diagnostic must be true or false');
+}
+
+export function diagnosticReportOutput(rendered: string, runMode: BacktestRunMode): string {
+  if (runMode === 'TERMINAL') return rendered;
+  return `DIAGNOSTIC_NON_TERMINAL\n${rendered.replace(
+    /  STATUS: [^\n]*/,
+    '  DIAGNOSTIC CHECKLIST (NON-TERMINAL): standard gates shown for context only',
+  )}`;
+}
 
 /** R3-1 may opt a strategy version into the shared route without changing any existing setup. */
 export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v3',
   'dual-momentum-rotation',
+  'tom-overlay',
 ]);
 
 export function selectDailyBacktestRoute(
@@ -102,7 +122,7 @@ export function validationReturnInputs(
 }
 
 export function validationTrialsForSetup(setupId: string, effectiveParams: unknown): number {
-  if (setupId !== 'ts-momentum-halal-basket-v3' && setupId !== 'dual-momentum-rotation') return 1;
+  if (!SHARED_BOOK_SETUP_IDS.has(setupId)) return 1;
   const trials = (effectiveParams as { validationTrials?: unknown } | null)?.validationTrials;
   if (!Number.isInteger(trials) || Number(trials) <= 1) {
     throw new Error(`${setupId} requires validationTrials > 1`);
@@ -112,32 +132,63 @@ export function validationTrialsForSetup(setupId: string, effectiveParams: unkno
 
 /** Fixed-universe setups cannot silently degrade to whichever symbols happen to have DB rows. */
 export function dailyUniverseForSetup(setupId: string, requested: readonly string[] | null): string[] | null {
-  if (setupId !== 'dual-momentum-rotation') return null;
-  if (requested && (
-    requested.length !== DUAL_MOMENTUM_UNIVERSE.length
-    || DUAL_MOMENTUM_UNIVERSE.some((symbol) => !requested.includes(symbol))
-  )) throw new Error('dual-momentum-rotation requires its exact seven-asset universe');
-  return [...DUAL_MOMENTUM_UNIVERSE];
+  const universe = setupId === 'dual-momentum-rotation'
+    ? DUAL_MOMENTUM_UNIVERSE
+    : setupId === 'tom-overlay'
+      ? TOM_OVERLAY_UNIVERSE
+      : null;
+  if (!universe) return null;
+  if (requested && (requested.length !== universe.length || universe.some((symbol) => !requested.includes(symbol)))) {
+    const label = setupId === 'tom-overlay' ? 'exact SPUS universe' : 'exact seven-asset universe';
+    throw new Error(`${setupId} requires its ${label}`);
+  }
+  return [...universe];
 }
 
 /** Rotation is single-winner; the unchanged 25% name cap and all other envelope limits remain binding. */
 export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimits {
-  return setupId === 'dual-momentum-rotation' ? { ...base, maxOpenPositions: 1 } : base;
+  return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
+    ? { ...base, maxOpenPositions: 1 }
+    : base;
 }
 
 export function strategyBookPolicyForSetup(setupId: string, params: unknown): StrategyBookPolicy | undefined {
   if (setupId === 'ts-momentum-halal-basket-v3') {
     return tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined);
   }
-  return setupId === 'dual-momentum-rotation' ? dualMomentumRotationBookPolicy() : undefined;
+  if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
+  return setupId === 'tom-overlay' ? tomOverlayBookPolicy() : undefined;
 }
 
-/** R3-2 alone needs position episodes as its independent statistical unit; all other routes are unchanged. */
+/** Max-one setups use closed position episodes as their independent statistical unit. */
 export function validationTradeRecordsForSetup(
   setupId: string,
   records: readonly TradeRecord[],
 ): readonly TradeRecord[] {
-  return setupId === 'dual-momentum-rotation' ? collapseMaxOnePositionEpisodes(records) : records;
+  return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
+    ? collapseMaxOnePositionEpisodes(records)
+    : records;
+}
+
+/** Include entry-close through exit-open NAV moves, grouped as whole contiguous TOM windows. */
+export function exposureReturnBlocks(daily: readonly StrategyBookDailyPoint[]): number[][] {
+  const blocks: number[][] = [];
+  let current: number[] | null = null;
+  for (let index = 1; index < daily.length; index++) {
+    const previous = daily[index - 1];
+    const point = daily[index];
+    const exposed = previous.positions.length > 0 || point.positions.length > 0;
+    if (!exposed) {
+      current = null;
+      continue;
+    }
+    if (!current) {
+      current = [];
+      blocks.push(current);
+    }
+    current.push(previous.nav.eq(0) ? 0 : Number(point.nav.div(previous.nav).minus(1).toString()));
+  }
+  return blocks;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -533,6 +584,7 @@ export async function loadStocksInPlayReferenceBook(from: string, to: string) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const runMode = backtestRunMode(args.diagnostic);
   const setupId = args.setup;
   const from = args.from;
   const to = args.to;
@@ -541,7 +593,7 @@ async function main() {
   const initialWorktreeStatus = gitWorktreeStatus();
 
   if (!setupId || !from || !to) {
-    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N] [--engine legacy|shared]');
+    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N] [--engine legacy|shared] [--diagnostic]');
     process.exit(2);
   }
   const setup = (STRATEGY_SETUP_CATALOG as Record<string, StrategySetup<unknown>>)[setupId] as
@@ -762,7 +814,7 @@ async function main() {
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
   const validationTradeRecords = validationTradeRecordsForSetup(setupId, pooledTradeRecords);
-  const validationTradeReturns = setupId === 'dual-momentum-rotation'
+  const validationTradeReturns = setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
     ? validationTradeRecords.map((record) => record.ret)
     : pooledTradeReturns;
   const sortedTrades = [...validationTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
@@ -831,6 +883,19 @@ async function main() {
     ...(validationReturns.observationUnit === 'book-day' ? { observationUnit: 'book-day' as const } : {}),
   });
   const permutation = signFlipPermutationTest(validationReturns.permutationReturns, { permutations: 1000, seed });
+  const tomExposureBlocks = setupId === 'tom-overlay' && sharedBookResult
+    ? exposureReturnBlocks(sharedBookResult.daily)
+    : [];
+  const tomWindowValidation = setupId === 'tom-overlay'
+    ? {
+      exposureDayDistribution: summarizeDailyReturns(tomExposureBlocks.flat()),
+      nDays: tomExposureBlocks.reduce((sum, block) => sum + block.length, 0),
+      nWindows: tomExposureBlocks.length,
+      monthlyBlockBootstrap: bootstrapMonthlyBlocks(tomExposureBlocks, { resamples: 1000, seed }),
+      windowPermutation: permutation,
+      observationNote: 'Adapted TOM evidence is diagnostic only; it cannot override the standard <100 sample rejection gate.',
+    }
+    : null;
 
   // Fractional-Kelly sizing, clamped by the envelope (never bypassed).
   const price = new D((lastPrice || 1).toFixed(4));
@@ -929,7 +994,9 @@ async function main() {
     setupVersion: setup.version,
     effectiveParams,
     validationTrials,
+    runMode,
     engineRoute: cadence === 'daily' ? dailyRoute : 'legacy',
+    ...(tomWindowValidation ? { tomWindowValidation } : {}),
     ...(sharedBookResult ? {
       sharedBook: {
         turnoverNotional: sharedBookResult.turnoverNotional.toString(),
@@ -951,7 +1018,7 @@ async function main() {
               : max
           ), 0),
         },
-        ...(setupId === 'dual-momentum-rotation' ? {
+        ...(setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay' ? {
           executionAudit: {
             buyEntries: sharedBookResult.fills.filter((fill) => fill.action === 'BUY').length,
             closedEpisodes: validationTradeRecords.length,
@@ -981,7 +1048,12 @@ async function main() {
     } : {}),
   };
 
-  console.log('\n' + renderReportCard(card));
+  console.log('\n' + diagnosticReportOutput(renderReportCard(card), runMode));
+
+  if (runMode === 'DIAGNOSTIC_NON_TERMINAL') {
+    console.log('\nDIAGNOSTIC_NON_TERMINAL: result JSON and BacktestRun persistence skipped');
+    process.exit(0);
+  }
 
   // ── Persist results JSON.
   fs.mkdirSync(resultsDir, { recursive: true });
