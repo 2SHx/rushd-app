@@ -58,7 +58,7 @@ function signal(ctx: StrategyPointInTimeContext): AnalystSignal {
   };
 }
 
-function setup(overrides: Partial<Pick<StrategySetup<undefined>, 'entry' | 'exit'>> = {}): StrategySetup<undefined> {
+function setup(overrides: Partial<Pick<StrategySetup<undefined>, 'entry' | 'exit' | 'targetWeight'>> = {}): StrategySetup<undefined> {
   return {
     id: 'shared-test', version: 'v1', cadence: 'daily', defaultParams: undefined,
     screen: () => ({ matched: true, reasons: [], evidence: [] }),
@@ -275,6 +275,43 @@ describe('deterministic shared-cash daily strategy book', () => {
 
     expect(day2Fills.map((fill) => `${fill.action}:${fill.symbol}`)).toEqual(['SELL:A', 'BUY:B']);
     expect(day2Fills.at(-1)!.cashAfter.gte(0)).toBe(true);
+  });
+
+  it('rebalances retained positions toward target weights with reductions before additions', () => {
+    const targetDates = [0, 1, 2, 3].map((offset) => new Date(BASE + offset * DAY));
+    const targetSeries = (symbol: string, prices: number[]): StrategyBookSeries => ({
+      symbol, market: 'NASDAQ',
+      bars: prices.map((price, index) => ({
+        ts: targetDates[index], open: new D(price), high: new D(price), low: new D(price), close: new D(price),
+        volume: new D(1_000_000_000), source: 'YAHOO',
+      })),
+    });
+    const targetSetup = setup({
+      targetWeight: (ctx) => (ctx.asOf.getTime() === targetDates[0].getTime()
+        || ctx.asOf.getTime() === targetDates[2].getTime()) ? 0.5 : null,
+    });
+    const result = run([
+      targetSeries('A', [100, 100, 200, 200]),
+      targetSeries('B', [100, 100, 100, 100]),
+    ], targetSetup, { ...LIMITS, maxGrossExposure: 1, maxOpenPositions: 2 }, {
+      maxGrossFraction: 1, maxOpenPositions: 2,
+    });
+    const rebalance = result.fills.filter((fill) => fill.ts.getTime() === targetDates[3].getTime());
+
+    expect(rebalance.map((fill) => `${fill.action}:${fill.symbol}`)).toEqual(['SELL:A', 'BUY:B']);
+    expect(rebalance[1].positionsAfter.map((position) => position.symbol)).toEqual(['A', 'B']);
+    const weights = rebalance[1].positionsAfter.map((position) => (
+      Number(position.qty.mul(position.price).div(rebalance[1].navAfter).toString())
+    ));
+    expect(Math.abs(weights[0] - weights[1])).toBeLessThan(0.005);
+    expect(result.fills.every((fill) => fill.cashAfter.gte(0))).toBe(true);
+  });
+
+  it('rejects target-weight batches above 100%', () => {
+    const overweight = setup({ targetWeight: () => 0.6 });
+    expect(() => run([series('A'), series('B')], overweight, {
+      ...LIMITS, maxGrossExposure: 1, maxOpenPositions: 2,
+    }, { maxGrossFraction: 1, maxOpenPositions: 2 })).toThrow(/target weights exceed 100%/);
   });
 
   it('uses only prior basket NAV and actively sells existing holdings when volatility spikes', () => {

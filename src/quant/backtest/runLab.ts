@@ -18,6 +18,10 @@ import { DUAL_MOMENTUM_UNIVERSE } from '../strategies/dualMomentumRotation';
 import { dualMomentumRotationBookPolicy } from '../strategies/dualMomentumRotation';
 import { TOM_OVERLAY_UNIVERSE, tomOverlayBookPolicy } from '../strategies/tomOverlay';
 import {
+  G6B_LINEAR_FACTOR_UNIVERSE,
+  g6bLinearFactorBookPolicy,
+} from '../strategies/g6bLinearFactor';
+import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
   type SourcedDailyRow, type SourcedMinuteRow, type StocksInPlayAggregate,
@@ -81,6 +85,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v3',
   'dual-momentum-rotation',
   'tom-overlay',
+  'g6b-linear-factor',
 ]);
 
 export function selectDailyBacktestRoute(
@@ -258,10 +263,16 @@ export function dailyUniverseForSetup(setupId: string, requested: readonly strin
     ? DUAL_MOMENTUM_UNIVERSE
     : setupId === 'tom-overlay'
       ? TOM_OVERLAY_UNIVERSE
+      : setupId === 'g6b-linear-factor'
+        ? G6B_LINEAR_FACTOR_UNIVERSE
       : null;
   if (!universe) return null;
   if (requested && (requested.length !== universe.length || universe.some((symbol) => !requested.includes(symbol)))) {
-    const label = setupId === 'tom-overlay' ? 'exact SPUS universe' : 'exact seven-asset universe';
+    const label = setupId === 'tom-overlay'
+      ? 'exact SPUS universe'
+      : setupId === 'g6b-linear-factor'
+        ? 'exact 25-name halal research universe'
+        : 'exact seven-asset universe';
     throw new Error(`${setupId} requires its ${label}`);
   }
   return [...universe];
@@ -279,7 +290,8 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
     return tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined);
   }
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
-  return setupId === 'tom-overlay' ? tomOverlayBookPolicy() : undefined;
+  if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
+  return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
 /** Max-one setups use closed position episodes as their independent statistical unit. */
@@ -290,6 +302,39 @@ export function validationTradeRecordsForSetup(
   return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
     ? collapseMaxOnePositionEpisodes(records)
     : records;
+}
+
+/**
+ * Independent inference unit for monthly target-weight books: one active month-end-to-month-end
+ * NAV return. Partial name trims are execution details and must never inflate the sample gate.
+ */
+export function activeMonthlyBookReturnRecords(
+  points: readonly StrategyBookDailyPoint[],
+): TradeRecord[] {
+  const ordered = [...points].sort((a, b) => a.ts.getTime() - b.ts.getTime());
+  const monthEnds = new Map<string, StrategyBookDailyPoint>();
+  for (const point of ordered) {
+    const key = `${point.ts.getUTCFullYear()}-${String(point.ts.getUTCMonth() + 1).padStart(2, '0')}`;
+    monthEnds.set(key, point);
+  }
+  const ends = Array.from(monthEnds.values()).sort((a, b) => a.ts.getTime() - b.ts.getTime());
+  const records: TradeRecord[] = [];
+  for (let index = 1; index < ends.length; index++) {
+    const entry = ends[index - 1];
+    const exit = ends[index];
+    const active = ordered.some((point) => (
+      point.ts > entry.ts && point.ts <= exit.ts && point.positionsValue.gt(0)
+    ));
+    if (!active || entry.nav.lte(0)) continue;
+    const entryNav = Number(entry.nav.toString());
+    const exitNav = Number(exit.nav.toString());
+    records.push({
+      entryTs: entry.ts, exitTs: exit.ts, qty: 1,
+      entryPrice: entryNav, exitPrice: exitNav, ret: exitNav / entryNav - 1,
+      reason: 'active_monthly_book_return', partial: false,
+    });
+  }
+  return records;
 }
 
 /** Include entry-close through exit-open NAV moves, grouped as whole contiguous TOM windows. */
@@ -838,6 +883,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   if (cadence !== 'daily' && dailyRoute === 'shared') {
     throw new Error('--engine shared is valid only for daily setups');
   }
+  if (setup.targetWeight && dailyRoute !== 'shared') {
+    throw new Error(`${setupId} target-weight rebalancing requires --engine shared`);
+  }
   const feed = (options.feed ?? (cadence === 'daily' ? 'yahoo-daily' : (options.candidatesPath || source === 'db') ? 'alpaca-iex' : 'fixtures-real')) as DataFeed;
 
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
@@ -909,12 +957,20 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           sharedSeries.push({ symbol, market: 'NASDAQ', bars: loaded.bars });
         }
         if (setup.prepareUniverse) {
+          const dailyBarsBySymbol = new Map(sharedSeries.map((item) => [
+            item.symbol,
+            item.bars.map((bar) => ({
+              ts: bar.ts, close: Number(bar.close), volume: Number(bar.volume),
+            })),
+          ]));
           setup.prepareUniverse({
             symbols,
+            replayScope: sharedReplayScope,
             closesBySymbol: new Map(sharedSeries.map((item) => [
               item.symbol,
               item.bars.map((bar) => ({ ts: bar.ts, close: Number(bar.close) })),
             ])),
+            dailyBarsBySymbol,
           });
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
         }
@@ -940,11 +996,15 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       // the setup PIT-filters ≤ asOf on read. Single-name setups omit prepareUniverse (no-op here).
       if (setup.prepareUniverse) {
         const closesBySymbol = new Map<string, { ts: Date; close: number }[]>();
+        const dailyBarsBySymbol = new Map<string, { ts: Date; close: number; volume: number }[]>();
         for (const s of symbols) {
           const { bars: sb } = await loadDailySymbol(s, from, to);
           closesBySymbol.set(s, sb.map((b) => ({ ts: b.ts, close: Number(b.close) })));
+          dailyBarsBySymbol.set(s, sb.map((b) => ({
+            ts: b.ts, close: Number(b.close), volume: Number(b.volume),
+          })));
         }
-        setup.prepareUniverse({ symbols, closesBySymbol });
+        setup.prepareUniverse({ symbols, closesBySymbol, dailyBarsBySymbol });
         console.log(`prepared cross-name book for ${closesBySymbol.size} symbol(s) [pairs/cross-sectional]`);
       }
       console.log(`\nprocessing ${symbols.length} symbol(s) [source=daily MarketBar, YAHOO/ALPACA only] …`);
@@ -1042,8 +1102,12 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   if (cadence === 'daily') console.log(`\nexcluded ${excludedMock} MOCK bar(s) across the universe (no-mock directive)`);
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
-  const validationTradeRecords = validationTradeRecordsForSetup(setupId, pooledTradeRecords);
-  const validationTradeReturns = setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
+  const validationTradeRecords = setupId === 'g6b-linear-factor'
+    ? activeMonthlyBookReturnRecords(sharedBookResult?.daily ?? [])
+    : validationTradeRecordsForSetup(setupId, pooledTradeRecords);
+  const validationTradeReturns = setupId === 'dual-momentum-rotation'
+    || setupId === 'tom-overlay'
+    || setupId === 'g6b-linear-factor'
     ? validationTradeRecords.map((record) => record.ret)
     : pooledTradeReturns;
   const sortedTrades = [...validationTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
@@ -1182,7 +1246,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           replayScope: sharedReplayScope,
           policy: strategyBookPolicyForSetup(setupId, variant.params),
         });
-        variantRecords.push(...sim.tradeRecords);
+        variantRecords.push(...(
+          setupId === 'g6b-linear-factor'
+            ? activeMonthlyBookReturnRecords(sim.daily)
+            : sim.tradeRecords
+        ));
       } else {
         for (const s of symbols) {
           const { bars } = await loadDailySymbol(s, from, to);
@@ -1190,7 +1258,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           variantRecords.push(...sim.tradeRecords);
         }
       }
-      const oosExpectancy = oosMeanTradeReturn([...validationTradeRecordsForSetup(setupId, variantRecords)]);
+      const oosExpectancy = oosMeanTradeReturn([
+        ...(setupId === 'g6b-linear-factor'
+          ? variantRecords
+          : validationTradeRecordsForSetup(setupId, variantRecords)),
+      ]);
       neighborResults.push({ label: variant.label, oosExpectancy });
       console.log(`  plateau neighbor ${variant.label}: OOS expectancy ${(oosExpectancy * 100).toFixed(4)}%`);
     }

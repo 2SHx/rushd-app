@@ -49,6 +49,14 @@ export interface StrategyCheck {
 export interface UniversePrepareInput {
   readonly symbols: string[];
   readonly closesBySymbol: Map<string, { ts: Date; close: number }[]>;
+  /** Engine-owned identity isolating prepared state across concurrent immutable replays. */
+  readonly replayScope?: object;
+  /** Optional REAL daily OHLCV subset for cross-sectional price-volume factors. */
+  readonly dailyBarsBySymbol?: ReadonlyMap<string, readonly {
+    ts: Date;
+    close: number;
+    volume: number;
+  }[]>;
   /** Optional compact PIT aggregates for setups whose screen depends on same-day cross-section. */
   readonly stocksInPlayBook?: ReadonlyMap<string, readonly {
     date: string;
@@ -126,6 +134,12 @@ export interface StrategySetup<Params> {
    * feeds a neighbor back as the chosen params.
    */
   plateauNeighborhood?(params?: Params): PlateauNeighborhood<Params>;
+  /**
+   * Optional shared-book target weight. `null` means hold the current weight; a finite value in
+   * [0,1] schedules a next-open rebalance through the unchanged risk/ADV/cash envelope. The book
+   * executes reductions before additions in canonical symbol order. Legacy setups omit this hook.
+   */
+  targetWeight?(ctx: StrategyPointInTimeContext, params?: Params): number | null;
   screen(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
   entry(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;
   exit(ctx: StrategyPointInTimeContext, params?: Params): StrategyCheck;

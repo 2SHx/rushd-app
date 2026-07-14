@@ -374,7 +374,7 @@ interface OpenPosition {
   entrySignalTs: Date;
 }
 
-interface PendingOrder {
+interface PendingDirectionalOrder {
   action: 'BUY' | 'SELL';
   symbol: string;
   signalTs: Date;
@@ -386,6 +386,19 @@ interface PendingOrder {
   /** Present only for the new continuous fixed-cap path; undefined preserves legacy/v3 fills. */
   targetGrossFraction?: number;
 }
+
+interface PendingTargetOrder {
+  action: 'TARGET';
+  symbol: string;
+  signalTs: Date;
+  fillTs: Date;
+  targetWeight: number;
+  atr: Prisma.Decimal;
+  adv: Prisma.Decimal;
+  grossExposureScalar: number;
+}
+
+type PendingOrder = PendingDirectionalOrder | PendingTargetOrder;
 
 const bookMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
 
@@ -605,7 +618,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   let decisionWindows = 0;
 
   const recordFill = (
-    order: PendingOrder,
+    order: PendingDirectionalOrder,
     qty: Prisma.Decimal,
     fillPrice: Prisma.Decimal,
     envelope: EnvelopeResult,
@@ -637,10 +650,35 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       .filter((order) => order.fillTs.getTime() === time)
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
+    for (const order of due) pending.delete(order.symbol);
+    const targetOrders = due.filter((order): order is PendingTargetOrder => order.action === 'TARGET');
+    const targetWeightSum = targetOrders.reduce((sum, order) => sum + order.targetWeight, 0);
+    if (targetWeightSum > 1 + 1e-12) {
+      throw new Error(`Strategy-book target weights exceed 100%: ${targetWeightSum}`);
+    }
+    const targetNav = cash.plus(positionValue(positions));
+    const executable: PendingDirectionalOrder[] = due.flatMap((order) => {
+      if (order.action !== 'TARGET') return [order];
+      const bar = todaysBars.get(order.symbol)!;
+      const currentValue = positions.get(order.symbol)?.qty.mul(bar.open) ?? new D(0);
+      const desiredValue = targetNav.mul(order.targetWeight);
+      const delta = desiredValue.minus(currentValue);
+      if (delta.abs().lte('0.00000001')) return [];
+      return [{
+        action: delta.gt(0) ? 'BUY' as const : 'SELL' as const,
+        symbol: order.symbol,
+        signalTs: order.signalTs,
+        fillTs: order.fillTs,
+        proposalQty: delta.abs().div(bar.open),
+        atr: order.atr,
+        adv: order.adv,
+        grossExposureScalar: order.grossExposureScalar,
+      }];
+    });
+
     // Shared-open ordering is binding: cash from all exits is available to canonical entries.
     for (const action of ['SELL', 'BUY'] as const) {
-      for (const order of due.filter((candidate) => candidate.action === action)) {
-        pending.delete(order.symbol);
+      for (const order of executable.filter((candidate) => candidate.action === action)) {
         const bar = todaysBars.get(order.symbol)!;
         const pf = portfolioState(cash, positions, peakNav);
         riskChecks.push({
@@ -707,7 +745,6 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           if (position.qty.lte(0)) positions.delete(order.symbol);
           recordFill(order, qty, fillPrice, envelope);
         } else {
-          if (positions.has(order.symbol)) continue;
           const fillPrice = executionPrice;
           // Round affordability DOWN so Decimal division precision can never overspend by a tail unit.
           qty = bookMin(qty, cash.div(fillPrice).toDecimalPlaces(12, D.ROUND_DOWN));
@@ -716,10 +753,18 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           cash = cash.minus(notional);
           if (cash.lt(0)) throw new Error('Strategy-book invariant violated: negative cash');
           turnoverNotional = turnoverNotional.plus(notional);
-          positions.set(order.symbol, {
-            symbol: order.symbol, qty, markPrice: bar.open, entryPrice: fillPrice,
-            entryTs: date, entrySignalTs: order.signalTs,
-          });
+          const existing = positions.get(order.symbol);
+          if (existing) {
+            const totalQty = existing.qty.plus(qty);
+            existing.entryPrice = existing.entryPrice.mul(existing.qty).plus(fillPrice.mul(qty)).div(totalQty);
+            existing.qty = totalQty;
+            existing.markPrice = bar.open;
+          } else {
+            positions.set(order.symbol, {
+              symbol: order.symbol, qty, markPrice: bar.open, entryPrice: fillPrice,
+              entryTs: date, entrySignalTs: order.signalTs,
+            });
+          }
           recordFill(order, qty, fillPrice, envelope);
         }
       }
@@ -777,6 +822,19 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       );
       decisionWindows++;
       const next = item.bars[index + 1];
+      if (input.setup.targetWeight) {
+        const targetWeight = input.setup.targetWeight(ctx, input.params);
+        if (targetWeight !== null) {
+          if (!Number.isFinite(targetWeight) || targetWeight < 0 || targetWeight > 1) {
+            throw new Error(`${input.setup.id} emitted invalid target weight for ${item.symbol}`);
+          }
+          pending.set(item.symbol, {
+            action: 'TARGET', symbol: item.symbol, signalTs: date, fillTs: next.ts,
+            targetWeight, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+          });
+        }
+        continue;
+      }
       if (position) {
         const check = input.setup.exit(ctx, input.params);
         if (check.matched) {
