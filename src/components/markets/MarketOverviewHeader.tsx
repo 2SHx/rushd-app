@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Activity, Clock, TrendingUp, Sparkles } from 'lucide-react';
 import type { FearGreed } from './marketOverviewUtils';
 import { fgInfo } from './marketOverviewUtils';
@@ -18,6 +19,19 @@ interface Props {
 // Title strip + the four-card index summary. The numbers lead; everything
 // else (labels, live pill) recedes (ui-craft: "numbers are the hero").
 export default function MarketOverviewHeader({ isAr, locale, market, avgPct, upCount, dnCount, upPct, fg }: Props) {
+  const [currentTime, setCurrentTime] = useState('--:--:--');
+
+  useEffect(() => {
+    const updateClock = () => {
+      if (document.visibilityState !== 'visible') return;
+      setCurrentTime(new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    };
+
+    updateClock();
+    const intervalId = window.setInterval(updateClock, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [locale]);
+
   // Fear & Greed gauge calculations
   const score = fg?.score ?? 50;
   const ARC_LEN = 125.66;
@@ -37,7 +51,7 @@ export default function MarketOverviewHeader({ isAr, locale, market, avgPct, upC
           <p className="text-xs text-foreground/50 mt-1 flex items-center gap-2">
             <Clock className="w-3.5 h-3.5" />
             <span className="font-mono tabular-nums">
-              {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {currentTime}
             </span>
             <span className="text-foreground/15">|</span>
             <Activity className="w-3.5 h-3.5 text-up" />

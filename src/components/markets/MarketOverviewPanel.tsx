@@ -7,6 +7,7 @@ import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRigh
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
+import MarketSectorHeatmap from './MarketSectorHeatmap';
 import MarketSectorModal from './MarketSectorModal';
 import { YAHOO_STOCK_METRICS, type YahooStockMetric } from './yahooFinanceData';
 import type { SectorGroup, FearGreed } from './marketOverviewUtils';
@@ -183,10 +184,10 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
     );
   }, [filteredStocks, searchQuery]);
 
-  // Group all screener stocks by sector for the Heatmap sector mapping
+  // Group the full visible universe by sector for theme rankings and heatmap filtering.
   const sectors = useMemo((): SectorGroup[] => {
     const map = new Map<string, typeof searchedStocks>();
-    searchedStocks.forEach((stock) => {
+    screenerStocks.forEach((stock) => {
       const sec = stock.sector;
       if (!map.has(sec)) map.set(sec, []);
       map.get(sec)!.push(stock);
@@ -210,7 +211,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         })),
       };
     }).sort((a, b) => b.stocks.length - a.stocks.length);
-  }, [searchedStocks]);
+  }, [screenerStocks]);
 
   const stats = useMemo(() => {
     const up = screenerStocks.filter((t) => t.pct > 0);
@@ -270,6 +271,14 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         dnCount={stats.dn.length}
         upPct={upPct}
         fg={fg}
+      />
+
+      <MarketSectorHeatmap
+        sectors={sectors}
+        market={market}
+        isAr={isAr}
+        loading={loadingQuotes}
+        onSelectSector={setSelectedSector}
       />
 
       {/* 2. Screener Options (Yahoo Finance Styled Filter & Layout Toggles) */}
@@ -447,7 +456,7 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
               {sectors.map((sec) => {
                 // Filter sector stocks to show active items in filter list
                 const sectorStocks = sec.stocks.filter(s =>
-                  filteredStocks.some(fs => fs.symbol === s.symbol)
+                  searchedStocks.some(fs => fs.symbol === s.symbol)
                 );
 
                 if (sectorStocks.length === 0) return null;
@@ -507,6 +516,8 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
       <MarketSectorModal
         sector={selectedSector}
         isAr={isAr}
+        locale={locale}
+        market={market}
         onClose={() => setSelectedSector(null)}
         onSelectStock={onSelectStock}
       />
