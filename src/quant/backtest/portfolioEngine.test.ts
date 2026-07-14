@@ -1,9 +1,72 @@
+import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   getBenchmarkAtOrBefore,
   normalizeSymbolAllowlist,
-  runPortfolioBacktest
+  runPortfolioBacktest,
+  simulateStrategyBook,
+  type StrategyBookBar,
+  type StrategyBookSeries,
 } from './portfolioEngine';
+import type { RiskLimits } from '../risk/envelope';
+import type { StrategyPointInTimeContext, StrategySetup } from '../strategies/types';
+import type { AnalystSignal } from '../types';
+import { selectDailyBacktestRoute } from '../../../scripts/backtest';
+
+const D = Prisma.Decimal;
+const DAY = 86_400_000;
+const BASE = new Date('2024-01-02T00:00:00.000Z').getTime();
+
+const LIMITS: RiskLimits = {
+  maxNameWeight: 1,
+  maxGrossExposure: 10,
+  maxOpenPositions: 6,
+  maxRiskPct: 100,
+  volTargetPct: 100,
+  liquidityAdvFraction: 1,
+  drawdownHaltPct: 1,
+};
+
+function bars(source: StrategyBookBar['source'] = 'YAHOO'): StrategyBookBar[] {
+  return Array.from({ length: 4 }, (_, i) => ({
+    ts: new Date(BASE + i * DAY),
+    open: new D(100 + i), high: new D(101 + i), low: new D(99 + i), close: new D(100 + i),
+    volume: new D(1_000_000), source,
+  }));
+}
+
+function series(symbol: string, source: StrategyBookBar['source'] = 'YAHOO'): StrategyBookSeries {
+  return { symbol, market: 'NASDAQ', bars: bars(source) };
+}
+
+function signal(ctx: StrategyPointInTimeContext): AnalystSignal {
+  return {
+    agent: 'PATTERN_ANALOG', symbol: ctx.symbol, market: ctx.market, asOf: ctx.asOf,
+    stance: 'NEUTRAL', conviction: 0, horizonDays: 1, rationaleEn: '', rationaleAr: '',
+    evidence: [], determinism: 'deterministic', failureMode: 'ok', costCents: 0,
+  };
+}
+
+function setup(overrides: Partial<Pick<StrategySetup<undefined>, 'entry' | 'exit'>> = {}): StrategySetup<undefined> {
+  return {
+    id: 'shared-test', version: 'v1', cadence: 'daily', defaultParams: undefined,
+    screen: () => ({ matched: true, reasons: [], evidence: [] }),
+    entry: () => ({ matched: true, reasons: ['entry'], evidence: [], sizeFraction: 0.1 }),
+    exit: () => ({ matched: false, reasons: [], evidence: [] }),
+    signal,
+    ...overrides,
+  };
+}
+
+function run(
+  bookSeries: readonly StrategyBookSeries[],
+  testSetup: StrategySetup<undefined> = setup(),
+  limits: RiskLimits = LIMITS,
+) {
+  return simulateStrategyBook({
+    setup: testSetup, series: bookSeries, startingCash: new D(100_000), limits,
+  });
+}
 
 describe('portfolio backtest isolation helpers', () => {
   it('never attaches a future benchmark point to an earlier portfolio date', () => {
@@ -45,5 +108,91 @@ describe('portfolio backtest isolation helpers', () => {
     );
 
     expect(result.equityCurve).toEqual([]);
+  });
+});
+
+describe('deterministic shared-cash daily strategy book', () => {
+  it('keeps every existing setup on legacy unless the CLI explicitly opts into shared', () => {
+    expect(selectDailyBacktestRoute('ts-momentum-halal-basket-v2')).toBe('legacy');
+    expect(selectDailyBacktestRoute('ts-momentum-halal-basket-v2', 'legacy')).toBe('legacy');
+    expect(selectDailyBacktestRoute('ts-momentum-halal-basket-v2', 'shared')).toBe('shared');
+    expect(() => selectDailyBacktestRoute('x', 'other')).toThrow(/legacy or shared/);
+  });
+
+  it('conserves cash + marked positions = NAV after every fill and daily mark', () => {
+    const result = run([series('B'), series('A')]);
+    expect(result.fills.length).toBeGreaterThan(0);
+    for (const fill of result.fills) {
+      expect(fill.cashAfter.plus(fill.positionsValueAfter).eq(fill.navAfter)).toBe(true);
+    }
+    for (const point of result.daily) {
+      expect(point.cash.plus(point.positionsValue).eq(point.nav)).toBe(true);
+    }
+  });
+
+  it('hands actual concurrent positions to applyEnvelope and caps seven signals at six holdings', () => {
+    const names = ['G', 'F', 'E', 'D', 'C', 'B', 'A'];
+    const result = run(names.map((name) => series(name)));
+    const buyChecks = result.riskChecks.filter((check) => check.action === 'BUY');
+
+    expect(buyChecks.slice(0, 7).map((check) => check.positionsSeen.length)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(result.daily.flatMap((point) => point.positions).length).toBeGreaterThan(0);
+    expect(Math.max(...result.daily.map((point) => point.positions.length))).toBe(6);
+    expect(result.daily.at(-1)!.positions.map((position) => position.symbol)).toEqual(['A', 'B', 'C', 'D', 'E', 'F']);
+  });
+
+  it('uses canonical-symbol same-day priority and replays identical NAV/drawdown', () => {
+    const reversed = ['G', 'F', 'E', 'D', 'C', 'B', 'A'].map((name) => series(name));
+    const first = run(reversed);
+    const second = run([...reversed].reverse());
+    const digest = (result: typeof first) => ({
+      fills: result.fills.map((fill) => `${fill.ts.toISOString()}:${fill.action}:${fill.symbol}:${fill.qty}`),
+      daily: result.daily.map((point) => `${point.ts.toISOString()}:${point.nav}:${point.drawdown}`),
+    });
+
+    expect(digest(first)).toEqual(digest(second));
+    expect(first.fills.filter((fill) => fill.action === 'BUY').slice(0, 6).map((fill) => fill.symbol))
+      .toEqual(['A', 'B', 'C', 'D', 'E', 'F']);
+  });
+
+  it('fails closed on a MOCK bar', () => {
+    expect(() => run([series('A', 'MOCK')])).toThrow(/requires YAHOO\/ALPACA bars/);
+  });
+
+  it('fails the run when an out-of-order future bar is injected into a decision series', () => {
+    const injected = bars();
+    injected.splice(2, 0, { ...injected[0], ts: new Date(BASE + 10 * DAY) });
+    expect(() => run([{ symbol: 'A', market: 'NASDAQ', bars: injected }]))
+      .toThrow(/strictly chronological/);
+  });
+
+  it('never lets long-only shared cash go negative', () => {
+    const hungry = setup({
+      entry: () => ({ matched: true, reasons: ['entry'], evidence: [], sizeFraction: 1 }),
+    });
+    const result = run(['A', 'B', 'C'].map((name) => series(name)), hungry);
+    expect(result.daily.every((point) => point.cash.gte(0))).toBe(true);
+    expect(result.fills.every((fill) => fill.cashAfter.gte(0))).toBe(true);
+  });
+
+  it('fills exits before entries at the same next open, freeing shared cash deterministically', () => {
+    const day0 = BASE;
+    const day1 = BASE + DAY;
+    const ordered = setup({
+      entry: (ctx) => ({
+        matched: (ctx.symbol === 'A' && ctx.asOf.getTime() === day0)
+          || (ctx.symbol === 'B' && ctx.asOf.getTime() === day1),
+        reasons: ['entry'], evidence: [], sizeFraction: 1,
+      }),
+      exit: (ctx) => ({
+        matched: ctx.symbol === 'A' && ctx.asOf.getTime() === day1,
+        reasons: ['exit'], evidence: [],
+      }),
+    });
+    const result = run([series('B'), series('A')], ordered, { ...LIMITS, maxOpenPositions: 1 });
+    const day2Fills = result.fills.filter((fill) => fill.ts.getTime() === BASE + 2 * DAY);
+
+    expect(day2Fills.map((fill) => `${fill.action}:${fill.symbol}`)).toEqual(['SELL:A', 'BUY:B']);
+    expect(day2Fills.at(-1)!.cashAfter.gte(0)).toBe(true);
   });
 });

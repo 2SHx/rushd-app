@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — G3e/R3-0 shared strategy-book engine ✅
+Shipped: DB-free Decimal `simulateStrategyBook`, date-major shared cash/NAV/positions, true daily drawdown, real-position envelope calls, and explicit shared CLI routing with legacy default preserved.
+Decisions: next-open exits precede entries; each side is canonical-symbol ascending; YAHOO/ALPACA only; lazy-dev rung 7 added no dependency/schema/service/API and left the legacy single-symbol engine untouched.
+Verify: focused 12/12 and full 616/616 Vitest tests passed; lint, TypeScript and diff-check passed.
+Open: R3-1 may now opt momentum-v3 into this route to validate the frozen 15% basket-vol governor and six-position cap; persistence remains separately scoped.
+
 ## 2026-07-14 — G3e/R3-0 shared strategy-book prerequisite contracted ✅
 Shipped: amended QDR-6/QDR-7 consequences and the binding lab DAG with a testable DB-free, date-major shared-cash daily portfolio engine before momentum-v3.
 Decisions: shared within each isolated mode and isolated across modes; canonical-symbol same-day priority is frozen a priori; legacy pooled-independent runs remain byte-stable but cannot evidence portfolio controls.

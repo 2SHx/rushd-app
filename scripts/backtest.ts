@@ -37,6 +37,10 @@ import {
   simulateSetupDaily, filterRealDailyBars, DEFAULT_BT_LIMITS,
   type BacktestBar, type DailyBarInput,
 } from '../src/quant/backtest/engine';
+import {
+  simulateStrategyBook,
+  type StrategyBookSeries,
+} from '../src/quant/backtest/portfolioEngine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
 import { bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision } from '../src/quant/backtest/monteCarlo';
@@ -47,6 +51,21 @@ import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResu
 import { buildShariaRunSnapshot } from '../src/quant/backtest/shariaSnapshot';
 
 const D = Prisma.Decimal;
+
+export type DailyBacktestRoute = 'legacy' | 'shared';
+
+/** R3-1 may opt a strategy version into the shared route without changing any existing setup. */
+export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set();
+
+export function selectDailyBacktestRoute(
+  setupId: string,
+  requested?: string,
+): DailyBacktestRoute {
+  if (requested !== undefined && requested !== 'legacy' && requested !== 'shared') {
+    throw new Error('--engine must be legacy or shared');
+  }
+  return requested ?? (SHARED_BOOK_SETUP_IDS.has(setupId) ? 'shared' : 'legacy');
+}
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -352,7 +371,7 @@ function buildFixtureSeries(want: string[] | null, from: string, to: string): Sy
  */
 async function loadDailySymbol(
   symbol: string, from: string, to: string,
-): Promise<{ bars: BacktestBar[]; excludedMock: number }> {
+): Promise<{ bars: DailyBarInput[]; excludedMock: number }> {
   const { prisma } = await import('../src/lib/prisma');
   const rows = await prisma.marketBar.findMany({
     where: {
@@ -367,8 +386,7 @@ async function loadDailySymbol(
   const { real, excludedMock } = filterRealDailyBars(withSource);
   // Assertion (no-mock guard): no MOCK bar may reach the simulator.
   if (real.some((b) => b.source === 'MOCK')) throw new Error(`MOCK bar leaked into ${symbol} daily series`);
-  const bars: BacktestBar[] = real.map((b) => ({ ts: b.ts, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }));
-  return { bars, excludedMock };
+  return { bars: real, excludedMock };
 }
 
 /** Distinct NASDAQ-halal symbols with REAL daily bars in [from,to] (MOCK excluded at source). */
@@ -432,7 +450,7 @@ async function main() {
   const initialWorktreeStatus = gitWorktreeStatus();
 
   if (!setupId || !from || !to) {
-    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N]');
+    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N] [--engine legacy|shared]');
     process.exit(2);
   }
   const setup = (STRATEGY_SETUP_CATALOG as Record<string, StrategySetup<unknown>>)[setupId] as
@@ -450,6 +468,10 @@ async function main() {
   const source = (args.source ?? (setupId === 'stocks-in-play-orb' ? 'db' : 'fixtures')) as 'fixtures' | 'db';
 
   const cadence = setup.cadence;
+  const dailyRoute = selectDailyBacktestRoute(setupId, args.engine);
+  if (cadence !== 'daily' && dailyRoute === 'shared') {
+    throw new Error('--engine shared is valid only for daily setups');
+  }
   const feed = (args.feed ?? (cadence === 'daily' ? 'yahoo-daily' : (args.candidates || source === 'db') ? 'alpaca-iex' : 'fixtures-real')) as DataFeed;
 
   // Versioned-config selection (QDR-6): gapper-orb on the IEX feed uses the MEASURED v1-iex
@@ -491,12 +513,43 @@ async function main() {
   // count assertion, not aliased to the trade count. The daily engine reports its own count; the
   // intraday engine's PIT-guarded bars serve the same role.
   let walkForwardWindows = 0;
+  let sharedDailyCurve: EquityPoint[] | null = null;
 
   try {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
       symbols = await listDailySymbols(wantSymbols, from, to);
+      if (dailyRoute === 'shared') {
+        const sharedSeries: StrategyBookSeries[] = [];
+        for (const symbol of symbols) {
+          const loaded = await loadDailySymbol(symbol, from, to);
+          excludedMock += loaded.excludedMock;
+          if (loaded.bars.length) lastPrice = Number(loaded.bars.at(-1)!.close);
+          sharedSeries.push({ symbol, market: 'NASDAQ', bars: loaded.bars });
+        }
+        if (setup.prepareUniverse) {
+          setup.prepareUniverse({
+            symbols,
+            closesBySymbol: new Map(sharedSeries.map((item) => [
+              item.symbol,
+              item.bars.map((bar) => ({ ts: bar.ts, close: Number(bar.close) })),
+            ])),
+          });
+          console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
+        }
+        console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
+        const sim = simulateStrategyBook({
+          setup, params, series: sharedSeries, startingCash, limits: DEFAULT_BT_LIMITS,
+        });
+        pitBarsProcessed += sim.barsProcessed;
+        walkForwardWindows += sim.decisionWindows;
+        pooledTradeReturns.push(...sim.tradeReturns);
+        pooledTradeRecords.push(...sim.tradeRecords);
+        sharedDailyCurve = sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
+        pooledDailyReturns.push(...toDailyReturns(sharedDailyCurve, nasdaqDateKey));
+        console.log(`${sim.barsProcessed} real bars → ${sim.fills.length} fills / ${sim.tradeRecords.length} closed trades`);
+      } else {
       // Cross-name preload (pairs/cross-sectional setups): hand the setup every symbol's REAL daily
       // closes once, before the per-symbol loop, so a setup whose ctx is single-symbol (the engine
       // is single-symbol) can still reason across names. MOCK is already excluded by loadDailySymbol;
@@ -525,6 +578,7 @@ async function main() {
         pooledTradeRecords.push(...sim.tradeRecords);
         pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
         console.log(`${bars.length} real bars (${dropped} MOCK excl.) → ${sim.trades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
+      }
       }
     } else {
       // ── INTRADAY path (unchanged). DB is STREAMED one symbol at a time (bounded memory); fixtures
@@ -606,21 +660,31 @@ async function main() {
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
   const sortedTrades = [...pooledTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
-  const curve: EquityPoint[] = [{ ts: new Date(`${from}T00:00:00.000Z`), equity: Number(startingCash) }];
-  let running = Number(startingCash);
-  for (const tr of sortedTrades) {
-    running *= 1 + tr.ret;
-    curve.push({ ts: tr.exitTs, equity: running });
+  const curve: EquityPoint[] = sharedDailyCurve ?? [{ ts: new Date(`${from}T00:00:00.000Z`), equity: Number(startingCash) }];
+  if (!sharedDailyCurve) {
+    let running = Number(startingCash);
+    for (const tr of sortedTrades) {
+      running *= 1 + tr.ret;
+      curve.push({ ts: tr.exitTs, equity: running });
+    }
   }
   const turnover = pooledTradeRecords.length; // count proxy; per-symbol notional pooled below is noisy
   // `curve` is a POOLED TRADE-SEQUENCED curve (one point per trade exit), NOT a per-trading-day
   // series — so it must be annualized by its OWN calendar span (trades/year), never a fixed √252.
   // Fixed √252 here treated ~28 sparse trades/year as consecutive daily returns and false-tripped
   // the Sharpe>3 implausible guard (v2 at 3.06). See computeMetrics `annualization` doc.
-  const full = computeMetrics(curve, { trades: sortedTrades.length, turnover, annualization: 'calendar' });
+  const full = computeMetrics(curve, {
+    trades: sortedTrades.length, turnover,
+    annualization: sharedDailyCurve ? 'fixed' : 'calendar',
+  });
   const oosStart = Math.floor(curve.length * (1 - oosFraction));
-  const oosTrades = transitionCountInsideSlice(curve.length, oosStart);
-  const oos = computeMetrics(curve.slice(oosStart), { trades: oosTrades, turnover: oosTrades, annualization: 'calendar' });
+  const oosTrades = sharedDailyCurve
+    ? sortedTrades.filter((trade) => trade.exitTs >= curve[oosStart].ts).length
+    : transitionCountInsideSlice(curve.length, oosStart);
+  const oos = computeMetrics(curve.slice(oosStart), {
+    trades: oosTrades, turnover: oosTrades,
+    annualization: sharedDailyCurve ? 'fixed' : 'calendar',
+  });
 
   // Persist a truthful, compact learning comparison when both real ETF benchmark histories exist.
   // Legacy/missing data remains null; the UI must never synthesize a replacement curve.

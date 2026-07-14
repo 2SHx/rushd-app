@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import type { DataSource, IntradayBar, Market } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { constructHalalPortfolio } from '../portfolio/construction';
 import {
@@ -6,6 +7,15 @@ import {
   type NormalizedBenchmarkPoint
 } from '../data/benchmarks';
 import { assertNoLookahead } from '../data/pointInTime';
+import {
+  applyEnvelope,
+  type EnvelopeResult,
+  type MarketState,
+  type PortfolioState,
+  type RiskLimits,
+} from '../risk/envelope';
+import type { StrategyPointInTimeContext, StrategySetup } from '../strategies/types';
+import type { TradeRecord } from './intradayEngine';
 import {
   computePortfolioMetrics,
   type PortfolioEquityPoint,
@@ -216,4 +226,414 @@ export async function runPortfolioBacktest(
 
   const metrics = computePortfolioMetrics(equityCurve);
   return { equityCurve, metrics };
+}
+
+// ── QDR-6/G3e deterministic shared-cash strategy book ───────────────────────
+
+const BOOK_BPS = new D(10_000);
+const BOOK_COMMISSION_BPS = new D(10);
+const BOOK_SLIPPAGE_BPS = new D(5);
+const REAL_DAILY_SOURCES = new Set<DataSource>(['YAHOO', 'ALPACA']);
+
+export interface StrategyBookBar {
+  readonly ts: Date;
+  readonly open: Prisma.Decimal;
+  readonly high: Prisma.Decimal;
+  readonly low: Prisma.Decimal;
+  readonly close: Prisma.Decimal;
+  readonly volume: Prisma.Decimal;
+  readonly source: DataSource;
+}
+
+export interface StrategyBookSeries {
+  readonly symbol: string;
+  readonly market: Market;
+  readonly bars: readonly StrategyBookBar[];
+}
+
+export interface StrategyBookPosition {
+  readonly symbol: string;
+  readonly qty: Prisma.Decimal;
+  readonly price: Prisma.Decimal;
+  readonly entryPrice: Prisma.Decimal;
+  readonly entryTs: Date;
+  readonly entrySignalTs: Date;
+}
+
+export interface StrategyBookDailyPoint {
+  readonly ts: Date;
+  readonly cash: Prisma.Decimal;
+  readonly positionsValue: Prisma.Decimal;
+  readonly nav: Prisma.Decimal;
+  readonly peakNav: Prisma.Decimal;
+  readonly drawdown: Prisma.Decimal;
+  readonly positions: readonly StrategyBookPosition[];
+}
+
+export interface StrategyBookFill {
+  readonly ts: Date;
+  readonly signalTs: Date;
+  readonly symbol: string;
+  readonly action: 'BUY' | 'SELL';
+  readonly qty: Prisma.Decimal;
+  readonly fillPrice: Prisma.Decimal;
+  readonly cashAfter: Prisma.Decimal;
+  readonly positionsValueAfter: Prisma.Decimal;
+  readonly navAfter: Prisma.Decimal;
+  readonly positionsAfter: readonly StrategyBookPosition[];
+  readonly envelope: EnvelopeResult;
+}
+
+export interface StrategyBookRiskCheck {
+  readonly ts: Date;
+  readonly symbol: string;
+  readonly action: 'BUY' | 'SELL';
+  /** Canonical snapshot handed to applyEnvelope, before its decision. */
+  readonly positionsSeen: readonly string[];
+}
+
+export interface StrategyBookInput<Params> {
+  readonly setup: StrategySetup<Params>;
+  readonly params?: Params;
+  readonly series: readonly StrategyBookSeries[];
+  readonly startingCash: Prisma.Decimal;
+  readonly limits: RiskLimits;
+}
+
+export interface StrategyBookResult {
+  readonly daily: readonly StrategyBookDailyPoint[];
+  readonly fills: readonly StrategyBookFill[];
+  readonly riskChecks: readonly StrategyBookRiskCheck[];
+  readonly tradeReturns: readonly number[];
+  readonly tradeRecords: readonly TradeRecord[];
+  readonly turnoverNotional: Prisma.Decimal;
+  readonly barsProcessed: number;
+  readonly decisionWindows: number;
+}
+
+interface OpenPosition {
+  symbol: string;
+  qty: Prisma.Decimal;
+  markPrice: Prisma.Decimal;
+  entryPrice: Prisma.Decimal;
+  entryTs: Date;
+  entrySignalTs: Date;
+}
+
+interface PendingOrder {
+  action: 'BUY' | 'SELL';
+  symbol: string;
+  signalTs: Date;
+  fillTs: Date;
+  proposalQty: Prisma.Decimal;
+  atr: Prisma.Decimal;
+  adv: Prisma.Decimal;
+}
+
+const bookMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
+
+function decimalMax(values: readonly Prisma.Decimal[]): Prisma.Decimal {
+  return values.reduce((max, value) => value.gt(max) ? value : max, new D(0));
+}
+
+function bookAtr(bars: readonly StrategyBookBar[], period = 14): Prisma.Decimal {
+  if (bars.length < 2) return new D(0);
+  const ranges: Prisma.Decimal[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    ranges.push(decimalMax([
+      bars[i].high.minus(bars[i].low),
+      bars[i].high.minus(bars[i - 1].close).abs(),
+      bars[i].low.minus(bars[i - 1].close).abs(),
+    ]));
+  }
+  const window = ranges.slice(-period);
+  return window.reduce((sum, value) => sum.plus(value), new D(0)).div(window.length);
+}
+
+function bookAvgVolume(bars: readonly StrategyBookBar[], period = 20): Prisma.Decimal {
+  const window = bars.slice(-period);
+  return window.length
+    ? window.reduce((sum, bar) => sum.plus(bar.volume), new D(0)).div(window.length)
+    : new D(0);
+}
+
+function validateSeries(series: readonly StrategyBookSeries[]): StrategyBookSeries[] {
+  const ordered = [...series].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const symbols = new Set<string>();
+  for (const item of ordered) {
+    if (!item.symbol || item.symbol !== item.symbol.trim().toUpperCase()) {
+      throw new Error(`Strategy-book symbol must be canonical uppercase: ${item.symbol}`);
+    }
+    if (symbols.has(item.symbol)) throw new Error(`Duplicate strategy-book symbol: ${item.symbol}`);
+    symbols.add(item.symbol);
+    let previous = Number.NEGATIVE_INFINITY;
+    for (const bar of item.bars) {
+      if (!REAL_DAILY_SOURCES.has(bar.source)) {
+        throw new Error(`Strategy-book requires YAHOO/ALPACA bars; ${item.symbol} has ${bar.source}`);
+      }
+      const time = bar.ts.getTime();
+      if (!Number.isFinite(time) || time <= previous) {
+        throw new Error(`Strategy-book bars must be strictly chronological: ${item.symbol}`);
+      }
+      if (bar.open.lte(0) || bar.high.lte(0) || bar.low.lte(0) || bar.close.lte(0) || bar.volume.lt(0)) {
+        throw new Error(`Strategy-book bar has invalid OHLCV: ${item.symbol} ${bar.ts.toISOString()}`);
+      }
+      previous = time;
+    }
+  }
+  return ordered;
+}
+
+function toContextBar(symbol: string, market: Market, bar: StrategyBookBar): IntradayBar {
+  return {
+    id: `${symbol}-${bar.ts.getTime()}`,
+    symbol,
+    market,
+    ts: bar.ts,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+    session: 'REGULAR',
+    source: bar.source,
+    createdAt: bar.ts,
+  } as IntradayBar;
+}
+
+function positionSnapshots(positions: ReadonlyMap<string, OpenPosition>): StrategyBookPosition[] {
+  return Array.from(positions.values())
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map((position) => ({
+      symbol: position.symbol,
+      qty: position.qty,
+      price: position.markPrice,
+      entryPrice: position.entryPrice,
+      entryTs: position.entryTs,
+      entrySignalTs: position.entrySignalTs,
+    }));
+}
+
+function positionValue(positions: ReadonlyMap<string, OpenPosition>): Prisma.Decimal {
+  return Array.from(positions.values()).reduce(
+    (sum, position) => sum.plus(position.qty.mul(position.markPrice)),
+    new D(0),
+  );
+}
+
+function portfolioState(
+  cash: Prisma.Decimal,
+  positions: ReadonlyMap<string, OpenPosition>,
+  peakNav: Prisma.Decimal,
+): PortfolioState {
+  const snapshots = positionSnapshots(positions);
+  return {
+    cash,
+    equity: cash.plus(snapshots.reduce((sum, position) => sum.plus(position.qty.mul(position.price)), new D(0))),
+    positions: snapshots.map(({ symbol, qty, price }) => ({ symbol, qty, price })),
+    peakEquity: peakNav,
+  };
+}
+
+function bookContext(
+  series: StrategyBookSeries,
+  bars: readonly StrategyBookBar[],
+  asOf: Date,
+  position: OpenPosition | undefined,
+): StrategyPointInTimeContext {
+  const contextBars = bars.map((bar) => toContextBar(series.symbol, series.market, bar));
+  assertNoLookahead(contextBars, asOf, 'ts');
+  return {
+    symbol: series.symbol,
+    market: series.market,
+    asOf,
+    bars: contextBars,
+    snapshot: null,
+    positionQty: position?.qty ?? new D(0),
+    entryPrice: position?.entryPrice ?? null,
+    entryTs: position?.entryTs ?? null,
+    entrySignalTs: position?.entrySignalTs ?? null,
+  };
+}
+
+/**
+ * Pure daily strategy-book simulation. Decisions use bars through close t; fills occur at each
+ * symbol's next open. At a shared open, exits run before entries and symbols are always ascending.
+ */
+export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): StrategyBookResult {
+  if (input.setup.cadence !== 'daily') throw new Error('Strategy-book engine accepts daily setups only');
+  if (input.startingCash.lte(0)) throw new Error('Strategy-book starting cash must be positive');
+  const series = validateSeries(input.series);
+  const bySymbol = new Map(series.map((item) => [item.symbol, item]));
+  const indexBySymbolTs = new Map(series.flatMap((item) => item.bars.map((bar, index) => [
+    `${item.symbol}:${bar.ts.getTime()}`,
+    index,
+  ] as const)));
+  const dates = Array.from(new Set(series.flatMap((item) => item.bars.map((bar) => bar.ts.getTime()))))
+    .sort((a, b) => a - b);
+
+  let cash = input.startingCash;
+  let peakNav = input.startingCash;
+  let turnoverNotional = new D(0);
+  const positions = new Map<string, OpenPosition>();
+  const pending = new Map<string, PendingOrder>();
+  const daily: StrategyBookDailyPoint[] = [];
+  const fills: StrategyBookFill[] = [];
+  const riskChecks: StrategyBookRiskCheck[] = [];
+  const tradeReturns: number[] = [];
+  const tradeRecords: TradeRecord[] = [];
+  let decisionWindows = 0;
+
+  const recordFill = (
+    order: PendingOrder,
+    qty: Prisma.Decimal,
+    fillPrice: Prisma.Decimal,
+    envelope: EnvelopeResult,
+  ) => {
+    const positionsValueAfter = positionValue(positions);
+    fills.push({
+      ts: new Date(order.fillTs), signalTs: order.signalTs, symbol: order.symbol,
+      action: order.action, qty, fillPrice, cashAfter: cash,
+      positionsValueAfter, navAfter: cash.plus(positionsValueAfter),
+      positionsAfter: positionSnapshots(positions), envelope,
+    });
+  };
+
+  for (const time of dates) {
+    const date = new Date(time);
+    const todaysBars = new Map<string, StrategyBookBar>();
+    for (const item of series) {
+      const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
+      if (index !== undefined) todaysBars.set(item.symbol, item.bars[index]);
+    }
+
+    // Open marks are the only prices known at the instant pending orders fill.
+    for (const [symbol, bar] of Array.from(todaysBars.entries())) {
+      const position = positions.get(symbol);
+      if (position) position.markPrice = bar.open;
+    }
+
+    const due = Array.from(pending.values())
+      .filter((order) => order.fillTs.getTime() === time)
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+    // Shared-open ordering is binding: cash from all exits is available to canonical entries.
+    for (const action of ['SELL', 'BUY'] as const) {
+      for (const order of due.filter((candidate) => candidate.action === action)) {
+        pending.delete(order.symbol);
+        const bar = todaysBars.get(order.symbol)!;
+        const pf = portfolioState(cash, positions, peakNav);
+        riskChecks.push({
+          ts: date, symbol: order.symbol, action,
+          positionsSeen: pf.positions.map((position) => position.symbol),
+        });
+        const market: MarketState = {
+          symbol: order.symbol,
+          price: bar.open,
+          atr: order.atr,
+          adv: order.adv,
+          stopPrice: bar.open.minus(order.atr.mul(2)),
+        };
+        const envelope = applyEnvelope(
+          { action, qty: order.proposalQty }, pf, market, input.limits, false,
+        );
+        if (envelope.action !== action || envelope.qty.lte(0)) continue;
+
+        const advCap = bar.volume.mul(new D(input.limits.liquidityAdvFraction));
+        let qty = bookMin(envelope.qty, advCap);
+        if (action === 'SELL') {
+          const position = positions.get(order.symbol);
+          if (!position) continue;
+          qty = bookMin(qty, position.qty);
+          if (qty.lte(0)) continue;
+          const fillPrice = bar.open
+            .minus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS))
+            .minus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
+          const proceeds = qty.mul(fillPrice);
+          cash = cash.plus(proceeds);
+          turnoverNotional = turnoverNotional.plus(proceeds);
+          const ret = fillPrice.minus(position.entryPrice).div(position.entryPrice);
+          tradeReturns.push(Number(ret.toString()));
+          tradeRecords.push({
+            entryTs: position.entryTs, exitTs: date, qty: Number(qty.toString()),
+            entryPrice: Number(position.entryPrice.toString()), exitPrice: Number(fillPrice.toString()),
+            ret: Number(ret.toString()), reason: 'strategy_exit', partial: qty.lt(position.qty),
+          });
+          position.qty = position.qty.minus(qty);
+          if (position.qty.lte(0)) positions.delete(order.symbol);
+          recordFill(order, qty, fillPrice, envelope);
+        } else {
+          if (positions.has(order.symbol)) continue;
+          const fillPrice = bar.open
+            .plus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS))
+            .plus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
+          qty = bookMin(qty, cash.div(fillPrice));
+          if (qty.lte(0)) continue;
+          const notional = qty.mul(fillPrice);
+          cash = cash.minus(notional);
+          if (cash.lt(0)) throw new Error('Strategy-book invariant violated: negative cash');
+          turnoverNotional = turnoverNotional.plus(notional);
+          positions.set(order.symbol, {
+            symbol: order.symbol, qty, markPrice: bar.open, entryPrice: fillPrice,
+            entryTs: date, entrySignalTs: order.signalTs,
+          });
+          recordFill(order, qty, fillPrice, envelope);
+        }
+      }
+    }
+
+    // Close marks precede decisions; no future bar is ever present in a setup context.
+    for (const [symbol, bar] of Array.from(todaysBars.entries())) {
+      const position = positions.get(symbol);
+      if (position) position.markPrice = bar.close;
+    }
+
+    for (const item of series) {
+      const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
+      if (index === undefined || index >= item.bars.length - 1) continue;
+      const slice = item.bars.slice(0, index + 1);
+      const position = positions.get(item.symbol);
+      const ctx = bookContext(item, slice, date, position);
+      decisionWindows++;
+      const next = item.bars[index + 1];
+      if (position) {
+        const check = input.setup.exit(ctx, input.params);
+        if (check.matched) {
+          pending.set(item.symbol, {
+            action: 'SELL', symbol: item.symbol, signalTs: date, fillTs: next.ts,
+            proposalQty: position.qty, atr: bookAtr(slice), adv: bookAvgVolume(slice),
+          });
+        }
+      } else {
+        const check = input.setup.entry(ctx, input.params);
+        if (check.matched) {
+          const nav = cash.plus(positionValue(positions));
+          const fraction = typeof check.sizeFraction === 'number' && Number.isFinite(check.sizeFraction)
+            ? Math.max(0, Math.min(1, check.sizeFraction))
+            : 1;
+          const proposalQty = item.bars[index].close.gt(0)
+            ? nav.mul(new D(fraction)).div(item.bars[index].close)
+            : new D(0);
+          pending.set(item.symbol, {
+            action: 'BUY', symbol: item.symbol, signalTs: date, fillTs: next.ts,
+            proposalQty, atr: bookAtr(slice), adv: bookAvgVolume(slice),
+          });
+        }
+      }
+    }
+
+    const positionsValue = positionValue(positions);
+    const nav = cash.plus(positionsValue);
+    if (nav.gt(peakNav)) peakNav = nav;
+    const drawdown = peakNav.gt(0) ? new D(1).minus(nav.div(peakNav)) : new D(0);
+    daily.push({
+      ts: date, cash, positionsValue, nav, peakNav, drawdown,
+      positions: positionSnapshots(positions),
+    });
+  }
+
+  return {
+    daily, fills, riskChecks, tradeReturns, tradeRecords, turnoverNotional,
+    barsProcessed: series.reduce((sum, item) => sum + item.bars.length, 0), decisionWindows,
+  };
 }
