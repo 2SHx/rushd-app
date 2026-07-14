@@ -246,6 +246,8 @@
     "searchError": "Failed to load search results.",
     "loading": "Deliberating...",
     "screenerSubtitle": "Market screener with live quotes when available",
+    "advancedScreener": "Advanced market screener",
+    "advancedScreenerDescription": "Open filters, heatmap, and the full ticker table",
     "screenerDemoNote": "Some screener prices, volumes, fundamentals, and ranges are simulated estimates. Verify live data before acting.",
     "themeRankingsEyebrow": "Theme rankings",
     "themeRankingsTitle": "Market themes · session performance",
@@ -370,6 +372,84 @@
     "q2": "Q2",
     "q3": "Q3",
     "q4": "Q4"
+  },
+  "Quiz": {
+    "eyebrow": "Financial learning path",
+    "title": "Build judgement, one lesson at a time",
+    "subtitle": "Short, focused challenges that turn market concepts and Sharia principles into practical financial habits.",
+    "pathLabel": "Financial learning stages",
+    "stage": "Stage {number}",
+    "lesson": "Lesson {number}",
+    "dismiss": "Dismiss",
+    "resultPassed": "Lesson complete. Your progress was recorded.",
+    "resultRetry": "Good attempt. Review the explanation and try again.",
+    "resultRecord": "Learning record: {xp} XP · level {level}",
+    "resultNotSaved": "The lesson result could not be added to your learning record.",
+    "closeLesson": "Close lesson",
+    "progressLabel": "Lesson progress",
+    "questionProgress": "Question 1 of 1",
+    "singleLesson": "Focused lesson",
+    "loadingQuestion": "Loading lesson question",
+    "loadErrorTitle": "The lesson could not be loaded",
+    "loadErrorBody": "Your progress has not changed. Check the connection and try again.",
+    "retry": "Try again",
+    "answerChoices": "Answer choices",
+    "answerCorrect": "Correct — well reasoned",
+    "answerIncorrect": "Not quite — learn from the explanation",
+    "checkAnswer": "Check answer",
+    "finishLesson": "Finish lesson",
+    "tiers": {
+      "1": {
+        "title": "Foundations",
+        "description": "Learn the language of ownership, saving, and growth."
+      },
+      "2": {
+        "title": "Decision making",
+        "description": "Practice compliance, risk control, and disciplined valuation."
+      },
+      "3": {
+        "title": "Market mastery",
+        "description": "Connect funds and market structure across Saudi and US exchanges."
+      }
+    },
+    "topics": {
+      "stockBasics": {
+        "title": "Stock market basics",
+        "description": "Understand shares, ownership, prices, and market participants."
+      },
+      "savingsJars": {
+        "title": "Savings and jars",
+        "description": "Build goal-based saving habits and understand Mudarabah roles."
+      },
+      "compoundInterest": {
+        "title": "Compound interest",
+        "description": "Study conventional compounding and distinguish it from Sharia-compliant growth."
+      },
+      "shariaCompliance": {
+        "title": "Sharia compliance",
+        "description": "Learn the sector and financial-ratio screens used in AAOIFI-based review."
+      },
+      "riskManagement": {
+        "title": "Risk management",
+        "description": "Use diversification and position awareness to limit avoidable risk."
+      },
+      "valueInvesting": {
+        "title": "Value investing",
+        "description": "Compare price with business fundamentals without chasing market noise."
+      },
+      "halalFunds": {
+        "title": "Halal mutual funds",
+        "description": "Explore pooled portfolios built from screened instruments."
+      },
+      "tasiMarkets": {
+        "title": "TASI markets",
+        "description": "Understand Tadawul conventions, calendars, and Saudi stock symbols."
+      },
+      "nasdaqMarkets": {
+        "title": "NASDAQ markets",
+        "description": "Learn the structure of a technology-heavy US equity market."
+      }
+    }
   },
   "QuantResults": {
     "backToCommittee": "Back to Quant Committee",

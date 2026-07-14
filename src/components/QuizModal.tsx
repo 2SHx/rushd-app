@@ -1,147 +1,213 @@
-// src/components/QuizModal.tsx
 'use client';
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, X, HelpCircle, Trophy, Sparkles } from 'lucide-react';
 
-export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }: any) {
-  const [quiz, setQuiz] = useState<any>(null);
+import { useCallback, useEffect, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { CheckCircle2, RotateCcw, X, XCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
+interface QuizData {
+  topic: string;
+  topicAr?: string;
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+  explanation: string;
+}
+
+interface QuizModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onComplete: (passed: boolean, topic: string) => void | Promise<void>;
+  topic: string | null;
+  locale: string;
+}
+
+const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+
+export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }: QuizModalProps) {
+  const t = useTranslations('Quiz');
+  const reduceMotion = useReducedMotion();
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const isAr = locale === 'ar';
+
+  const fetchQuiz = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(false);
+    setQuiz(null);
+    setSelected(null);
+    setShowResult(false);
+
+    try {
+      const url = topic
+        ? `/api/quiz?topic=${encodeURIComponent(topic)}&locale=${locale || 'en'}`
+        : `/api/quiz?locale=${locale || 'en'}`;
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error('quiz_load_failed');
+      setQuiz(await response.json());
+    } catch (fetchError) {
+      if (fetchError instanceof DOMException && fetchError.name === 'AbortError') return;
+      console.error('Failed to load quiz:', fetchError);
+      setError(true);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [locale, topic]);
 
   useEffect(() => {
-    if (isOpen) {
-      setLoading(true);
-      const url = topic 
-        ? `/api/quiz?topic=${encodeURIComponent(topic)}&locale=${locale || 'en'}` 
-        : `/api/quiz?locale=${locale || 'en'}`;
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          setQuiz(data);
-          setLoading(false);
-          setSelected(null);
-          setShowResult(false);
-        });
-    }
-  }, [isOpen, topic, locale]);
+    if (!isOpen) return;
+    const controller = new AbortController();
+    void fetchQuiz(controller.signal);
+    return () => controller.abort();
+  }, [fetchQuiz, isOpen]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  const passed = quiz !== null && selected === quiz.correctOptionIndex;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-md">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-        className="w-full max-w-xl glass-panel p-6 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl relative text-start overflow-hidden bg-white/95 dark:bg-[#0A0E1A]/95 text-slate-900 dark:text-white"
-      >
-        {/* Glow circle details */}
-        <div className="absolute -right-16 -top-16 w-36 h-36 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 space-y-4">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-            <p className="text-gray-400 text-xs font-mono font-bold tracking-wider animate-pulse">
-              {isAr ? 'جاري استدعاء الأسئلة من المعلم الذكي...' : 'GENERATING STRATEGIST INTELLIGENCE...'}
-            </p>
-          </div>
-        ) : quiz ? (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-3">
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-extrabold uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-accent bg-clip-text text-transparent">
-                  {isAr && quiz.topicAr ? quiz.topicAr : quiz.topic}
-                </h2>
+    <AnimatePresence>
+      {isOpen ? (
+        <motion.div
+          className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-background/80 p-3 backdrop-blur-md sm:p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
+        >
+          <motion.section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quiz-dialog-title"
+            className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl bg-surface-card shadow-[0_2px_6px_rgba(0,0,0,0.08),0_32px_90px_rgba(0,0,0,0.18)]"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.99 }}
+            transition={{ duration: reduceMotion ? 0 : 0.24, ease: 'easeOut' }}
+          >
+            <header className="flex items-center gap-4 px-5 pb-4 pt-5 sm:px-7 sm:pt-7">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={t('closeLesson')}
+                className="grid size-9 shrink-0 place-items-center rounded-full text-foreground/50 transition-colors hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/[0.07]" aria-label={t('progressLabel')}>
+                  <div className="h-full w-full rounded-full bg-accent" />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-foreground/45">
+                  <span>{t('questionProgress')}</span>
+                  <span>{t('singleLesson')}</span>
+                </div>
               </div>
-              <button 
-                onClick={onClose} 
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-gray-400 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="space-y-2">
-              <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 font-mono block">Question Quest</span>
-              <p className="text-base font-extrabold text-slate-800 dark:text-gray-150 leading-relaxed">
-                {quiz.question}
-              </p>
-            </div>
+            </header>
 
-            <div className="space-y-3">
-              {quiz.options.map((opt: string, i: number) => {
-                const isSelected = selected === i;
-                const isCorrect = i === quiz.correctOptionIndex;
-                let bgClass = "bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/10";
-                
-                if (showResult) {
-                  if (isCorrect) {
-                    bgClass = "bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-500/40 text-emerald-500 dark:text-emerald-400 font-bold shadow-[0_0_15px_rgba(16,185,129,0.15)]";
-                  } else if (isSelected && !isCorrect) {
-                    bgClass = "bg-rose-500/10 dark:bg-rose-500/5 border-rose-500/40 text-rose-500 dark:text-rose-450 font-bold";
-                  } else {
-                    bgClass = "bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/5 text-gray-500 dark:text-gray-600 opacity-60";
-                  }
-                } else if (isSelected) {
-                  bgClass = "bg-emerald-500/10 dark:bg-emerald-500/5 border-emerald-400 text-emerald-600 dark:text-emerald-400 font-bold ring-2 ring-emerald-500/20";
-                }
-
-                return (
-                  <button 
-                    key={i}
-                    disabled={showResult}
-                    onClick={() => setSelected(i)}
-                    className={`w-full text-start p-4 rounded-2xl border transition-all text-xs font-semibold active:scale-98 ${bgClass}`}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </div>
-
-            <AnimatePresence>
-              {showResult && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4 pt-4 border-t border-slate-200 dark:border-white/5"
-                >
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 block mb-1">Concept Explanation</span>
-                    {quiz.explanation}
+            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-5 pb-6 sm:px-7 sm:pb-7">
+              {loading ? (
+                <div className="space-y-5 py-4" aria-label={t('loadingQuestion')}>
+                  <div className="h-4 w-28 animate-pulse rounded bg-foreground/[0.06] motion-reduce:animate-none" />
+                  <div className="h-16 animate-pulse rounded-xl bg-foreground/[0.06] motion-reduce:animate-none" />
+                  <div className="space-y-3">
+                    {OPTION_LABELS.map((label) => <div key={label} className="h-14 animate-pulse rounded-2xl bg-foreground/[0.05] motion-reduce:animate-none" />)}
                   </div>
-                  <button 
-                    onClick={() => {
-                      onComplete(selected === quiz.correctOptionIndex, quiz.topic);
-                      onClose();
-                    }}
-                    className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 font-extrabold text-xs uppercase tracking-wider text-black shadow-lg shadow-emerald-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                </div>
+              ) : error ? (
+                <div className="py-14 text-center">
+                  <XCircle className="mx-auto size-8 text-down" aria-hidden="true" />
+                  <h2 id="quiz-dialog-title" className="mt-4 text-lg font-semibold">{t('loadErrorTitle')}</h2>
+                  <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-foreground/55">{t('loadErrorBody')}</p>
+                  <button
+                    type="button"
+                    onClick={() => void fetchQuiz()}
+                    className="mt-6 inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-xs font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <Trophy className="w-4 h-4 text-black" />
-                    <span>{isAr ? 'متابعة المحفظة' : 'Continue Portfolio'}</span>
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                    {t('retry')}
                   </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+              ) : quiz ? (
+                <div className="pt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent rtl:tracking-normal">
+                    {locale === 'ar' && quiz.topicAr ? quiz.topicAr : quiz.topic}
+                  </p>
+                  <h2 id="quiz-dialog-title" className="mt-4 text-xl font-semibold leading-relaxed sm:text-2xl">{quiz.question}</h2>
 
-            {!showResult && (
-              <button 
-                onClick={() => setShowResult(true)}
-                disabled={selected === null}
-                className="w-full py-3 rounded-2xl bg-emerald-500 disabled:opacity-50 font-extrabold text-xs uppercase tracking-wider text-black transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5 active:scale-95 disabled:pointer-events-none"
-              >
-                <HelpCircle className="w-4 h-4 text-black" />
-                <span>{isAr ? 'إرسال الإجابة' : 'Submit Answer'}</span>
-              </button>
-            )}
-          </div>
-        ) : null}
-      </motion.div>
-    </div>
+                  <div className="mt-7 space-y-3" role="group" aria-label={t('answerChoices')}>
+                    {quiz.options.map((option, index) => {
+                      const isSelected = selected === index;
+                      const isCorrect = index === quiz.correctOptionIndex;
+                      const resultClass = showResult
+                        ? isCorrect
+                          ? 'bg-up/10 ring-1 ring-up/40 text-foreground'
+                          : isSelected
+                            ? 'bg-down/10 ring-1 ring-down/40 text-foreground'
+                            : 'bg-foreground/[0.025] text-foreground/45'
+                        : isSelected
+                          ? 'bg-accent/10 ring-2 ring-accent text-foreground'
+                          : 'bg-foreground/[0.035] text-foreground hover:bg-foreground/[0.06]';
+
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          disabled={showResult}
+                          aria-pressed={isSelected}
+                          onClick={() => setSelected(index)}
+                          className={`flex w-full items-start gap-3 rounded-2xl p-4 text-start text-sm leading-relaxed transition-[background-color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.99] disabled:cursor-default motion-reduce:transform-none ${resultClass}`}
+                        >
+                          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-background/70 font-mono text-[11px] font-semibold" dir="ltr">{OPTION_LABELS[index]}</span>
+                          <span className="pt-1">{option}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {showResult ? (
+                    <div className={`mt-6 rounded-2xl p-5 ${passed ? 'bg-up/10' : 'bg-down/10'}`} aria-live="polite">
+                      <div className="flex items-center gap-2">
+                        {passed ? <CheckCircle2 className="size-5 text-up" /> : <XCircle className="size-5 text-down" />}
+                        <p className="font-semibold">{t(passed ? 'answerCorrect' : 'answerIncorrect')}</p>
+                      </div>
+                      <p className="mt-3 text-sm leading-relaxed text-foreground/65">{quiz.explanation}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void onComplete(passed, quiz.topic);
+                          onClose();
+                        }}
+                        className="mt-5 w-full rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition-transform duration-150 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
+                      >
+                        {t('finishLesson')}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowResult(true)}
+                      disabled={selected === null}
+                      className="mt-6 w-full rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition-[transform,opacity] duration-150 ease-out active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
+                    >
+                      {t('checkAnswer')}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </motion.section>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { Zap, Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Table, Grid, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Search, ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
 import { TASI_UNIVERSE } from '@/lib/stockUniverse';
 import MarketOverviewHeader from './MarketOverviewHeader';
@@ -281,19 +281,25 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         onSelectSector={setSelectedSector}
       />
 
-      {/* 2. Screener Options (Yahoo Finance Styled Filter & Layout Toggles) */}
-      <div className="glass-panel rounded-3xl p-6 space-y-6 border border-white/5 relative overflow-hidden">
-        {/* Header & View Mode Switcher */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4">
-          <div>
-            <h2 className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              {isAr ? 'شاشة أسهم رشد' : 'Rushd Ticker Screener'}
-            </h2>
-            <p className="text-xs text-foreground/50 mt-0.5">{t('screenerSubtitle')}</p>
-          </div>
+      {/* Advanced screener stays available without competing with the market overview. */}
+      <details className="group overflow-hidden rounded-3xl bg-surface-card shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.06)]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-start outline-none transition-colors hover:bg-foreground/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden sm:px-6">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground/[0.05] text-foreground/65">
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">{t('advancedScreener')}</span>
+              <span className="mt-0.5 block text-xs text-foreground/50">{t('advancedScreenerDescription')}</span>
+            </span>
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-foreground/45 transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+        </summary>
 
-          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/5 self-end md:self-auto">
+        <div className="space-y-6 px-5 pb-6 pt-2 sm:px-6">
+        {/* View Mode Switcher */}
+        <div className="flex justify-end border-b border-foreground/[0.06] pb-4">
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/5">
             <button
               onClick={() => setViewMode('heatmap')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -510,7 +516,8 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </details>
 
       {/* Sector zoom detail modal */}
       <MarketSectorModal
