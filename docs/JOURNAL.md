@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-2 dual-momentum terminally rejected ✅
+Shipped: fixed seven-asset monthly dual-momentum v1 plus continuous 25% shared-book cap; exact final run used 14,108 real bars / 0 MOCK and 2,141 NAV days.
+Decisions: REJECTED on `DSR_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; positive OOS CAGR and passing cap/MC risk gates cannot authorize AUTO_PAPER.
+Verify: source `d48638c`; focused 28/28, full 643/643, lint/typecheck/diff-check; BacktestRun `d3628d85-43a8-43c2-a327-44f642104729`, seed 42, reproducible=true, post-fill gross≤25%.
+Open: execute R3-3 turn-of-month next; `abe70156…` (deleted data) and `7fc795e8…` (entry-only cap) remain superseded audit records, not strategy evidence.
+
 ## 2026-07-14 — R3-1 final QA-safe replay identity ✅
 Shipped: additive supersession record for the PIT/cache-purity and bilingual-rationale fix, preserving the prior v3 card while making `d3d0071` / `f9e5f702-253b-4a9d-bdec-d89144038ecb` the final replay identity.
 Decisions: metrics and REJECTED reasons have zero drift; `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `SHARIA_UNVERIFIABLE` still bind, with research-only execution blocked.
