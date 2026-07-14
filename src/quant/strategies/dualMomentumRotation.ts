@@ -13,6 +13,7 @@ import type {
   StrategySetup,
   UniversePrepareInput,
 } from './types';
+import type { StrategyBookPolicy } from '../backtest/portfolioEngine';
 
 const D = Prisma.Decimal;
 
@@ -37,6 +38,11 @@ export const DUAL_MOMENTUM_ROTATION_V1: DualMomentumRotationParams = Object.free
   absoluteThreshold: 0,
   validationTrials: 9,
 });
+
+/** Fixed-cap-only shared-book policy; no synthetic volatility target. */
+export function dualMomentumRotationBookPolicy(): StrategyBookPolicy {
+  return { maxGrossFraction: 0.25, maxOpenPositions: 1, decisionHistoryBars: 295 };
+}
 
 interface ClosePoint {
   readonly ts: Date;

@@ -19,6 +19,7 @@ import {
   type TsMomentumHalalBasketV3Params,
 } from '../src/quant/strategies/tsMomentumHalalBasketV3';
 import { DUAL_MOMENTUM_UNIVERSE } from '../src/quant/strategies/dualMomentumRotation';
+import { dualMomentumRotationBookPolicy } from '../src/quant/strategies/dualMomentumRotation';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -44,7 +45,7 @@ import {
 } from '../src/quant/backtest/engine';
 import {
   simulateStrategyBook,
-  type StrategyBookResult, type StrategyBookSeries,
+  type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
 } from '../src/quant/backtest/portfolioEngine';
 import { computeMetrics, type EquityPoint } from '../src/quant/backtest/metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from '../src/quant/backtest/distribution';
@@ -121,6 +122,13 @@ export function dailyUniverseForSetup(setupId: string, requested: readonly strin
 /** Rotation is single-winner; the unchanged 25% name cap and all other envelope limits remain binding. */
 export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimits {
   return setupId === 'dual-momentum-rotation' ? { ...base, maxOpenPositions: 1 } : base;
+}
+
+export function strategyBookPolicyForSetup(setupId: string, params: unknown): StrategyBookPolicy | undefined {
+  if (setupId === 'ts-momentum-halal-basket-v3') {
+    return tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined);
+  }
+  return setupId === 'dual-momentum-rotation' ? dualMomentumRotationBookPolicy() : undefined;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -554,6 +562,7 @@ async function main() {
   const effectiveParams = params ?? setup.defaultParams;
   const validationTrials = validationTrialsForSetup(setupId, effectiveParams);
   const dailyLimits = limitsForDailySetup(setupId, DEFAULT_BT_LIMITS);
+  const sharedPolicy = strategyBookPolicyForSetup(setupId, params);
 
   let candidateArtifact: ParsedCandidateArtifact | null = null;
   let candidateEvidence: CandidateArtifactEvidence | null = null;
@@ -622,9 +631,7 @@ async function main() {
         const sim = simulateStrategyBook({
           setup, params, series: sharedSeries, startingCash, limits: dailyLimits,
           replayScope: sharedReplayScope,
-          policy: setupId === 'ts-momentum-halal-basket-v3'
-            ? tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined)
-            : undefined,
+          policy: sharedPolicy,
         });
         sharedSeriesForPlateau = sharedSeries;
         sharedBookResult = sim;
@@ -863,9 +870,7 @@ async function main() {
           setup, params: variant.params, series: sharedSeriesForPlateau, startingCash,
           limits: dailyLimits,
           replayScope: sharedReplayScope,
-          policy: setupId === 'ts-momentum-halal-basket-v3'
-            ? tsMomentumV3BookPolicy(variant.params as TsMomentumHalalBasketV3Params)
-            : undefined,
+          policy: strategyBookPolicyForSetup(setupId, variant.params),
         });
         variantRecords.push(...sim.tradeRecords);
       } else {
@@ -917,6 +922,19 @@ async function main() {
             sum + (point.nav.gt(0) ? Number(point.positionsValue.div(point.nav).toString()) : 0)
           ), 0) / sharedBookResult.daily.length
           : 0,
+        capAudit: {
+          targetGrossFraction: sharedPolicy?.maxGrossFraction ?? null,
+          maxPostFillGrossExposure: sharedBookResult.fills.reduce((max, fill) => (
+            fill.navAfter.gt(0)
+              ? Math.max(max, Number(fill.positionsValueAfter.div(fill.navAfter).toString()))
+              : max
+          ), 0),
+          maxCloseGrossExposure: sharedBookResult.daily.reduce((max, point) => (
+            point.nav.gt(0)
+              ? Math.max(max, Number(point.positionsValue.div(point.nav).toString()))
+              : max
+          ), 0),
+        },
         daily: sharedBookResult.daily.map((point) => ({
           ts: point.ts.toISOString(), nav: point.nav.toString(), cash: point.cash.toString(),
           drawdown: point.drawdown.toString(), realizedVolAnnual: point.realizedVolAnnual,

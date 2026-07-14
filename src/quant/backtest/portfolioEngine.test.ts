@@ -5,6 +5,7 @@ import {
   normalizeSymbolAllowlist,
   runPortfolioBacktest,
   basketVolExposureScalar,
+  strategyBookExposureScalar,
   simulateStrategyBook,
   type StrategyBookBar,
   type StrategyBookPolicy,
@@ -122,6 +123,55 @@ describe('portfolio backtest isolation helpers', () => {
 });
 
 describe('deterministic shared-cash daily strategy book', () => {
+  it('combines volatility and fixed gross ceilings by taking the smaller scale', () => {
+    expect(strategyBookExposureScalar(0.3, 0.15, 0.25)).toBe(0.25);
+    expect(strategyBookExposureScalar(1, 0.15, 0.8)).toBe(0.15);
+    expect(strategyBookExposureScalar(0.3, 0.15)).toBe(basketVolExposureScalar(0.3, 0.15));
+  });
+
+  it('fails fast on an invalid fixed gross ceiling', () => {
+    for (const maxGrossFraction of [0, -0.1, 1.01]) {
+      expect(() => run([series('A')], setup(), LIMITS, {
+        maxOpenPositions: 1,
+        maxGrossFraction,
+      })).toThrow(/maxGrossFraction/);
+    }
+  });
+
+  it('trims appreciated concentration next-open to the fixed cap without violating cash invariants', () => {
+    const prices = [100, 100, 400, 400, 800, 800, 800];
+    const appreciated: StrategyBookSeries = {
+      symbol: 'A', market: 'NASDAQ',
+      bars: prices.map((price, index) => ({
+        ts: new Date(BASE + index * DAY), open: new D(price), high: new D(price), low: new D(price),
+        close: new D(price), volume: new D(1_000_000_000), source: 'YAHOO',
+      })),
+    };
+    const enterOnce = setup({
+      entry: (ctx) => ({ matched: ctx.asOf.getTime() === BASE, reasons: [], evidence: [], sizeFraction: 1 }),
+    });
+    const result = run([appreciated], enterOnce, { ...LIMITS, maxNameWeight: 1 }, {
+      maxOpenPositions: 1,
+      maxGrossFraction: 0.25,
+    });
+    const sells = result.fills.filter((fill) => fill.action === 'SELL');
+
+    expect(sells).toHaveLength(2);
+    expect(sells.map((fill) => Number(fill.positionsValueAfter.div(fill.navAfter).toString())))
+      .toEqual([0.25, 0.25]);
+    expect(result.fills.every((fill) => fill.cashAfter.gte(0) && fill.cashAfter.plus(fill.positionsValueAfter).eq(fill.navAfter))).toBe(true);
+    expect(result.daily.every((point) => point.positions.every((position) => position.qty.gte(0)))).toBe(true);
+    expect(Math.max(...result.daily.map((point) => point.positions.length))).toBe(1);
+  });
+
+  it('does not trim a position whose marked exposure stays within the fixed ceiling', () => {
+    const result = run([series('A')], setup({
+      entry: (ctx) => ({ matched: ctx.asOf.getTime() === BASE, reasons: [], evidence: [], sizeFraction: 0.1 }),
+    }), LIMITS, { maxOpenPositions: 1, maxGrossFraction: 0.25 });
+
+    expect(result.fills.filter((fill) => fill.action === 'SELL')).toHaveLength(0);
+  });
+
   it('keeps every existing setup on legacy unless the CLI explicitly opts into shared', () => {
     expect(selectDailyBacktestRoute('ts-momentum-halal-basket-v2')).toBe('legacy');
     expect(selectDailyBacktestRoute('ts-momentum-halal-basket-v2', 'legacy')).toBe('legacy');

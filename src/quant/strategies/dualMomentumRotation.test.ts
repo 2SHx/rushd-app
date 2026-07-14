@@ -8,11 +8,13 @@ import {
   DUAL_MOMENTUM_UNIVERSE,
   dualMomentumMetrics,
   dualMomentumRotationSetup,
+  dualMomentumRotationBookPolicy,
 } from './dualMomentumRotation';
 import {
   dailyUniverseForSetup,
   limitsForDailySetup,
   selectDailyBacktestRoute,
+  strategyBookPolicyForSetup,
   validationTrialsForSetup,
 } from '../../../scripts/backtest';
 
@@ -209,6 +211,13 @@ describe('dual-momentum-rotation v1', () => {
       maxNameWeight: 0.25,
       maxOpenPositions: 1,
     });
+    expect(dualMomentumRotationBookPolicy()).toEqual({
+      maxGrossFraction: 0.25,
+      maxOpenPositions: 1,
+      decisionHistoryBars: 295,
+    });
+    expect(strategyBookPolicyForSetup(dualMomentumRotationSetup.id, DUAL_MOMENTUM_ROTATION_V1))
+      .toEqual(dualMomentumRotationBookPolicy());
     const plateau = dualMomentumRotationSetup.plateauNeighborhood!(DUAL_MOMENTUM_ROTATION_V1);
     expect(plateau.center).toEqual(DUAL_MOMENTUM_ROTATION_V1);
     expect(plateau.neighbors).toHaveLength(8);

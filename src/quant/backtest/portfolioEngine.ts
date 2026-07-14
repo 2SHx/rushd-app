@@ -306,9 +306,11 @@ export interface StrategyBookInput<Params> {
 }
 
 export interface StrategyBookPolicy {
-  readonly realizedVolLookback: number;
-  readonly targetAnnualVol: number;
+  readonly realizedVolLookback?: number;
+  readonly targetAnnualVol?: number;
   readonly maxOpenPositions: number;
+  /** Optional continuous gross ceiling; appreciation above it is trimmed at the next open. */
+  readonly maxGrossFraction?: number;
   /** Strategy-declared bounded decision window; omitted means the full expanding history. */
   readonly decisionHistoryBars?: number;
 }
@@ -342,6 +344,8 @@ interface PendingOrder {
   atr: Prisma.Decimal;
   adv: Prisma.Decimal;
   grossExposureScalar: number;
+  /** Present only for the new continuous fixed-cap path; undefined preserves legacy/v3 fills. */
+  targetGrossFraction?: number;
 }
 
 const bookMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
@@ -353,6 +357,18 @@ export function basketVolExposureScalar(
 ): number {
   if (realizedAnnualVol === null || !Number.isFinite(realizedAnnualVol) || realizedAnnualVol <= 0) return 1;
   return Math.min(1, targetAnnualVol / realizedAnnualVol);
+}
+
+/** Compose independent down-only risk governors without allowing either to increase exposure. */
+export function strategyBookExposureScalar(
+  realizedAnnualVol: number | null,
+  targetAnnualVol?: number,
+  maxGrossFraction?: number,
+): number {
+  const volatilityScale = targetAnnualVol === undefined
+    ? 1
+    : basketVolExposureScalar(realizedAnnualVol, targetAnnualVol);
+  return Math.min(volatilityScale, maxGrossFraction ?? 1);
 }
 
 export function trailingBasketAnnualVol(
@@ -504,13 +520,26 @@ function bookContext(
 export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): StrategyBookResult {
   if (input.setup.cadence !== 'daily') throw new Error('Strategy-book engine accepts daily setups only');
   if (input.startingCash.lte(0)) throw new Error('Strategy-book starting cash must be positive');
-  if (input.policy && (
-    !Number.isInteger(input.policy.realizedVolLookback) || input.policy.realizedVolLookback <= 0
-    || !Number.isFinite(input.policy.targetAnnualVol) || input.policy.targetAnnualVol <= 0
-    || !Number.isInteger(input.policy.maxOpenPositions) || input.policy.maxOpenPositions <= 0
-    || (input.policy.decisionHistoryBars !== undefined
-      && (!Number.isInteger(input.policy.decisionHistoryBars) || input.policy.decisionHistoryBars <= 0))
-  )) throw new Error('Strategy-book policy parameters must be positive');
+  if (input.policy) {
+    const hasVolLookback = input.policy.realizedVolLookback !== undefined;
+    const hasVolTarget = input.policy.targetAnnualVol !== undefined;
+    if (hasVolLookback !== hasVolTarget) {
+      throw new Error('Strategy-book volatility policy requires both realizedVolLookback and targetAnnualVol');
+    }
+    if ((hasVolLookback && (
+      !Number.isInteger(input.policy.realizedVolLookback) || input.policy.realizedVolLookback! <= 0
+      || !Number.isFinite(input.policy.targetAnnualVol) || input.policy.targetAnnualVol! <= 0
+    )) || !Number.isInteger(input.policy.maxOpenPositions) || input.policy.maxOpenPositions <= 0
+      || (input.policy.decisionHistoryBars !== undefined
+        && (!Number.isInteger(input.policy.decisionHistoryBars) || input.policy.decisionHistoryBars <= 0))) {
+      throw new Error('Strategy-book policy parameters must be positive');
+    }
+    if (input.policy.maxGrossFraction !== undefined && (
+      !Number.isFinite(input.policy.maxGrossFraction)
+      || input.policy.maxGrossFraction <= 0
+      || input.policy.maxGrossFraction > 1
+    )) throw new Error('Strategy-book maxGrossFraction must be in (0, 1]');
+  }
   const series = validateSeries(input.series);
   const bySymbol = new Map(series.map((item) => [item.symbol, item]));
   const contextBarsBySymbol = new Map(series.map((item) => [
@@ -591,9 +620,30 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           maxOpenPositions: input.policy.maxOpenPositions,
           maxGrossExposure: Math.min(input.limits.maxGrossExposure, order.grossExposureScalar),
         } : input.limits;
-        const envelope = applyEnvelope(
-          { action, qty: order.proposalQty }, pf, market, effectiveLimits, false,
-        );
+        const executionPrice = action === 'SELL'
+          ? bar.open.minus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).minus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS))
+          : bar.open.plus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).plus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
+        let proposalQty = order.proposalQty;
+        if (order.targetGrossFraction !== undefined) {
+          const target = new D(order.targetGrossFraction);
+          const gross = positionValue(positions);
+          if (action === 'BUY') {
+            const room = pf.equity.mul(target).minus(gross);
+            const executionCostPerShare = executionPrice.minus(bar.open);
+            const denominator = bar.open.plus(target.mul(executionCostPerShare));
+            const fillAwareCap = room.gt(0) && denominator.gt(0) ? room.div(denominator) : new D(0);
+            proposalQty = bookMin(proposalQty, fillAwareCap);
+          } else {
+            const excess = gross.minus(pf.equity.mul(target));
+            if (excess.gt(0)) {
+              const executionLossFraction = new D(1).minus(executionPrice.div(bar.open));
+              const denominator = new D(1).minus(target.mul(executionLossFraction));
+              const requiredQty = denominator.gt(0) ? excess.div(denominator).div(bar.open) : new D(0);
+              if (requiredQty.gt(proposalQty)) proposalQty = requiredQty;
+            }
+          }
+        }
+        const envelope = applyEnvelope({ action, qty: proposalQty }, pf, market, effectiveLimits, false);
         if (envelope.action !== action || envelope.qty.lte(0)) continue;
 
         const advCap = bar.volume.mul(new D(input.limits.liquidityAdvFraction));
@@ -603,9 +653,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           if (!position) continue;
           qty = bookMin(qty, position.qty);
           if (qty.lte(0)) continue;
-          const fillPrice = bar.open
-            .minus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS))
-            .minus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
+          const fillPrice = executionPrice;
           const proceeds = qty.mul(fillPrice);
           cash = cash.plus(proceeds);
           turnoverNotional = turnoverNotional.plus(proceeds);
@@ -621,9 +669,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           recordFill(order, qty, fillPrice, envelope);
         } else {
           if (positions.has(order.symbol)) continue;
-          const fillPrice = bar.open
-            .plus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS))
-            .plus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
+          const fillPrice = executionPrice;
           // Round affordability DOWN so Decimal division precision can never overspend by a tail unit.
           qty = bookMin(qty, cash.div(fillPrice).toDecimalPlaces(12, D.ROUND_DOWN));
           if (qty.lte(0)) continue;
@@ -648,14 +694,14 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
 
     const closePositionsValue = positionValue(positions);
     const closeNav = cash.plus(closePositionsValue);
-    const navHistory = input.policy
+    const navHistory = input.policy?.realizedVolLookback
       ? [...daily.slice(-input.policy.realizedVolLookback).map((point) => point.nav), closeNav]
       : [];
-    const realizedVolAnnual = input.policy
+    const realizedVolAnnual = input.policy?.realizedVolLookback
       ? trailingBasketAnnualVol(navHistory, input.policy.realizedVolLookback)
       : null;
     const grossExposureScalar = input.policy
-      ? basketVolExposureScalar(realizedVolAnnual, input.policy.targetAnnualVol)
+      ? strategyBookExposureScalar(realizedVolAnnual, input.policy.targetAnnualVol, input.policy.maxGrossFraction)
       : 1;
 
     // A falling cap actively de-risks the held book at next open; it never waits for new entries.
@@ -670,6 +716,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           action: 'SELL', symbol: item.symbol, signalTs: date, fillTs: item.bars[index + 1].ts,
           proposalQty: position.qty.mul(new D(1).minus(keepFraction)),
           atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+          ...(input.policy.maxGrossFraction !== undefined ? { targetGrossFraction: grossExposureScalar } : {}),
         });
       }
     }
@@ -712,6 +759,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           pending.set(item.symbol, {
             action: 'BUY', symbol: item.symbol, signalTs: date, fillTs: next.ts,
             proposalQty, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+            ...(input.policy?.maxGrossFraction !== undefined ? { targetGrossFraction: grossExposureScalar } : {}),
           });
         }
       }
