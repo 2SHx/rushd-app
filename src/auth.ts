@@ -138,21 +138,28 @@ export const auth = async (...args: any[]) => {
     return session;
   }
 
-  // Fallback: Skip Auth Mode (Seeds mock child user if not already present in the DB)
+  // Fallback: Skip Auth Mode (Seeds mock parent user if not already present in the DB)
   const mockUserId = 'mock-child-id';
   try {
     let mockUser = await prisma.user.findUnique({
       where: { id: mockUserId },
     });
-    if (!mockUser) {
+    if (mockUser) {
+      if (mockUser.role !== 'PARENT' || mockUser.tier !== 'ULTRA') {
+        await prisma.user.update({
+          where: { id: mockUserId },
+          data: { role: 'PARENT', tier: 'ULTRA' }
+        });
+      }
+    } else {
       mockUser = await prisma.user.create({
         data: {
           id: mockUserId,
           name: 'Mock Investor',
           username: 'mock_investor',
           passwordHash: 'dummy-hash',
-          role: 'CHILD',
-          tier: 'BASIC',
+          role: 'PARENT',
+          tier: 'ULTRA',
         },
       });
       await prisma.savingsJar.create({
@@ -171,7 +178,7 @@ export const auth = async (...args: any[]) => {
       });
     }
   } catch (err) {
-    console.error('Failed to seed mock child user:', err);
+    console.error('Failed to seed mock parent user:', err);
   }
 
   return {
@@ -179,8 +186,8 @@ export const auth = async (...args: any[]) => {
       id: mockUserId,
       name: 'Mock Investor',
       username: 'mock_investor',
-      role: 'CHILD' as const,
-      tier: 'BASIC' as const,
+      role: 'PARENT' as const,
+      tier: 'ULTRA' as const,
       parentId: null,
     },
   };
