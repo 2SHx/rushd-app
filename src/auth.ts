@@ -132,10 +132,25 @@ export const handlers = nextAuthResult.handlers;
 export const signIn = nextAuthResult.signIn;
 export const signOut = nextAuthResult.signOut;
 
+let skipAuthWarned = false;
+
 export const auth = async (...args: any[]) => {
   const session = await (nextAuthResult.auth as any)(...args);
   if (session?.user) {
     return session;
+  }
+
+  // Skip Auth Mode: strictly opt-in, dev-only. Both gates are required —
+  // there is no scenario in which a missing session silently becomes an
+  // authenticated one unless a developer has explicitly set SKIP_AUTH=1
+  // outside of production.
+  const skipAuthEnabled = process.env.SKIP_AUTH === '1' && process.env.NODE_ENV !== 'production';
+  if (!skipAuthEnabled) {
+    return null;
+  }
+  if (!skipAuthWarned) {
+    skipAuthWarned = true;
+    console.warn('[AUTH_AUDIT] SKIP_AUTH=1 — fabricating a mock ULTRA/PARENT session. Never enable this in production.');
   }
 
   // Fallback: Skip Auth Mode (Seeds mock parent user if not already present in the DB)
