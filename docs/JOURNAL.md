@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-14 — R3-3 TOM overlay codified; terminal run gated 🧪
+Shipped: `tom-overlay@v1`, exact SPUS shared-book calendar, 25% continuous cap, closed-episode inference, frozen 3×3 plateau, monthly-block bootstrap, and no-write diagnostics.
+Decisions: `--diagnostic` is non-terminal and cannot persist results/BacktestRun; the 2018-01-02..2026-07-10 terminal run requires explicit user authorization.
+Verify: source `c1420f5` + boundary/risk fix `8346472`; focused 39/39, full 655/655, lint/typecheck/diff-check; short diagnostic used 632 real bars / 0 MOCK and left zero artifacts/runs.
+Open: 2024-01-02..2026-07-10 diagnostic only: 30 episodes (9 OOS), CAGR −0.74% / −0.47%, DSR 0.023 / 0.044, plateau FAIL; no terminal verdict or promotion claim.
+
 ## 2026-07-14 — R3-2 episode-unit correction ✅
 Shipped: collapsed 136 partial concentration trims + 11 final exits into 11 independent closed episodes for R3-2 sample, permutation and plateau inference; raw turnover remains separately audited.
 Decisions: REJECTED on `INSUFFICIENT_SAMPLE`, `DSR_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; `d3628d85` / docs `173b92a` are superseded for trim pseudo-replication.
