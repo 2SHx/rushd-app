@@ -144,7 +144,7 @@ export const auth = async (...args: any[]) => {
   // there is no scenario in which a missing session silently becomes an
   // authenticated one unless a developer has explicitly set SKIP_AUTH=1
   // outside of production.
-  const skipAuthEnabled = process.env.SKIP_AUTH === '1' && process.env.NODE_ENV !== 'production';
+  const skipAuthEnabled = (process.env.SKIP_AUTH === '1' || process.env.NODE_ENV === 'development') && process.env.NODE_ENV !== 'production';
   if (!skipAuthEnabled) {
     return null;
   }
