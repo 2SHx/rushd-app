@@ -117,6 +117,33 @@ The binding reason-code definitions and ordering live in QDR-7.
    evidence after at least one ACCEPTED team exists. RL/G6a remains experimental and cannot weaken a
    deterministic Sharia veto, risk envelope, or AUTO_REAL gate.
 
+## R3 — Codex continuation briefs (written 2026-07-14; execute in order, one unit per session/dispatch)
+
+Shared rules for every unit: seed 42 · ≥25% OOS · net of costs · a-priori params (NO sweeps except the
+plateau evaluator's fixed neighborhood) · <100 trades ⇒ INSUFFICIENT_SAMPLE · implausible flag binds ·
+MOCK/source exclusion proof · terminal QDR-7 evidence card + ledger row + JOURNAL line + commit.
+Acceptance commands: `npm run lint` · `npx tsc --noEmit` · `npx vitest run --no-file-parallelism` ·
+`npm run backtest -- --setup <id> --from 2018-01-02 --to 2026-07-10 --seed 42`.
+
+| # | Unit | Spec (binding) |
+|---|---|---|
+| R3-1 | **momentum-v3** (strongest candidate's shot) | ts-momentum-halal-basket-v2 + ONE new a-priori layer: basket-level exposure governor — total deployed fraction scaled so trailing 60d realized BASKET vol ≤ 15% annualized (down-only to cash, never >1×) AND max 6 concurrent positions. Entry/exit family unchanged from v2 (import-only). Target: MC maxDD p95 ≤30% + OOS DSR ≥0.95. Files: new src/quant/strategies/tsMomentumHalalBasketV3.ts + tests, catalog, ledger. v2 stays untouched |
+| R3-2 | **dual-momentum-rotation** (NEW, research-anchored) | Antonacci dual momentum, halal adaptation, MONTHLY decision cadence (month-end): rank halal sleeve {SPUS, HLAL, top-5 halal mega-caps by 12-1M relative momentum}; hold top asset ONLY if its 12M absolute momentum > 0, else 100% cash. Anchor: centuries-scale OOS evidence; absolute filter truncates left tail; 2024 study — outperformed static benchmark across ALL parameter combos (plateau-robust by construction); post-2015 crowding decay is real (expect ~half the pre-2015 premium — teens% annual, Sharpe ~0.8, NOT more). Monthly cadence matches Quantformer finding. Data: daily MarketBar (already 6y for names; ingest SPUS/HLAL daily if missing — keyless Yahoo, real). plateauNeighborhood: lookback 12M±2M, absolute threshold 0±1% |
+| R3-3 | **tom-overlay** (NEW, research-anchored) | Turn-of-month: long the halal index sleeve (SPUS proxy) ONLY last-4 + first-3 trading days of each month, cash otherwise. Anchor: 30 countries × 30y, ~10bps/day TOM vs ~0 other days, persists through 2023 incl. US peak in final 5y; expect ~0.6–1%/yr edge over T-bill baseline with tiny turnover — a LOW-RETURN HIGH-RELIABILITY book stabilizer, honest about magnitude. Trades = ~84 entries/6y ⇒ may be INSUFFICIENT_SAMPLE by trade count — evaluate on daily-return distribution + bootstrap over TOM-day returns instead; document the adapted gate honestly |
+| R3-4 | **g6b-linear-factor** (already contracted, QDR-6/G6b) | LINEAR cross-sectional rank on {12-1M momentum, turnover} over the halal universe, top-quartile equal-weight, MONTHLY rebalance (Quantformer inputs, rung-1 ladder). Calibration: 17–25%/yr Sharpe 0.9–1.0 is the paper's ceiling with 0.3% costs |
+| R3-5 | **allocator core** (QDR-7) | Pure module src/quant/allocation/allocator.ts per QDR-7: shrinkage blend (w = priorWeight/(priorWeight+liveDays)), deflated-Sharpe-style score with drawdown penalty, ≤40%/mode cap, bench=0%, immediate mid-cycle drawdown bench, TE-breach ⇒ REQUIRE_REVALIDATION, implausible ⇒ DISQUALIFY, empty league ⇒ 100% cash, seeded tie-breaks only. DB-free tests. NO cron/persistence wiring in this unit |
+| R3-6 | **G4 automation wiring + G4b TradingView + league expansion** | Only after ≥1 ACCEPTED team. Security-auditor gate MANDATORY (money path). Envelope limits by CASH not buying power (paper acct has margin debt −$82.8k). AllocationDecision model via generated migration |
+
+**Parked with evidence (do NOT build):** PEAD long-only on liquid names — 2024 literature: 0.04–0.14%/mo
+for liquid stocks (edge lives in illiquid + short side); Q4-2025 drift ≈ half historical. **Calibration
+warning:** volatility-managed-portfolio ALPHA claims fail OOS (Cederburg et al.) and costs
+(Barroso–Detzel) — vol targeting is a RISK layer here (R3-1), never an alpha claim.
+**Chart fix (2026-07-14):** league benchmark chart emptied because real SPY/SPUS daily bars were swept
+in the eval-universe cleanup (only MOCK strays remained; builder rightly refused them) — re-ingested
+real Yahoo history + purged strays + re-ran both v2 daily cards to repopulate `comparison`. Stop-hunt's
+card has no comparison (62-min re-run not worth it; UI falls back honestly). Rule for Codex: NEVER
+delete benchmark symbols (SPY, SPUS, HLAL) from MarketBar during universe cleanups.
+
 ## Continuation protocol (for ANY AI picking this up)
 
 1. Read this file, `docs/JOURNAL.md` (top entries), `docs/QUANT_DESIGN.md` QDR-6 + §9b,
