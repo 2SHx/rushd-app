@@ -154,6 +154,8 @@ export const tomOverlaySetup: StrategySetup<TomOverlayParams> & {
   id: 'tom-overlay',
   version: 'v1',
   cadence: 'daily',
+  // Owns the fixed single-name SPUS observed-session book; a --universe/--symbols override is rejected.
+  universeCompatibility: 'fixed',
   defaultParams: TOM_OVERLAY_V1,
 
   prepareUniverse(input) {

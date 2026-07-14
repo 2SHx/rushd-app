@@ -158,6 +158,9 @@ export const bollingerMrLongV2Setup: StrategySetup<BollingerMrLongV2Params> = {
   id: 'bollinger-mr-long-v2',
   version: 'v2',
   cadence: 'daily',
+  // The band+VR+trend rule family is mechanically well-defined on any equity series; the CLI may run
+  // it on `wide` or a custom basket (flagged Sharia UNSCREENED_EXECUTION_BLOCKED off the halal core).
+  universeCompatibility: 'any-equities',
   defaultParams: BOLLINGER_MR_LONG_V2,
 
   // QDR-6 profit-plateau neighborhood. The 1–2 MOST sensitive params are the two v2 layers under

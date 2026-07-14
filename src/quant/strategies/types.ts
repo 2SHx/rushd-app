@@ -88,12 +88,29 @@ export interface PlateauNeighborhood<Params> {
   readonly neighbors: readonly PlateauVariant<Params>[];
 }
 
+/**
+ * Declares how the CLI `--universe halal|wide|custom` override may replace a setup's symbol list:
+ *   'halal-only'   — the edge is defined only on the NASDAQ halal core; the CLI ACCEPTS `halal` and
+ *                    fully-halal custom baskets but REJECTS `wide` and any custom basket containing
+ *                    unscreened names.
+ *   'any-equities' — mechanically runs on any equities; `wide` and unscreened custom baskets are
+ *                    allowed but flagged Sharia UNSCREENED_EXECUTION_BLOCKED downstream (never halal).
+ *   'fixed'        — the setup owns a fixed research book (e.g. dual-momentum's seven assets,
+ *                    tom-overlay's SPUS); ANY `--universe`/`--symbols` override is rejected with a
+ *                    clear error, so it can never silently degrade to whichever names have DB rows.
+ * Absent ⇒ the CLI applies a conservative fallback (fixed-book / intraday micro-cap setups → 'fixed',
+ * every other daily setup → 'halal-only').
+ */
+export type UniverseCompatibility = 'halal-only' | 'any-equities' | 'fixed';
+
 /** Pure, versioned G2 setup contract. Loading, sizing, Sharia veto, and execution stay outside it. */
 export interface StrategySetup<Params> {
   readonly id: string;
   readonly version: string;
   /** Bar granularity the setup reasons over — routes the CLI to the intraday vs daily engine path. */
   readonly cadence: 'daily' | 'intraday';
+  /** Declared universe-override policy for the CLI `--universe` flag (see UniverseCompatibility). */
+  readonly universeCompatibility?: UniverseCompatibility;
   readonly defaultParams: Params;
   /**
    * Optional cross-name preload, invoked once by the CLI daily path before simulation. Cross-

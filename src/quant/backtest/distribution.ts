@@ -28,12 +28,20 @@ export function summarizeDailyReturns(dailyReturns: number[]): DailyReturnDistri
     return { count: 0, mean: 0, std: 0, min: 0, max: 0, probDayGe5pct: 0, probDayLe5pct: 0 };
   }
   const m = mean(dailyReturns);
+  // Single-pass min/max: `Math.min(...arr)` blows the call stack on a wide-universe pooled series
+  // (hundreds of thousands of daily returns spread as function arguments). A fold is O(n) + O(1) stack.
+  let min = dailyReturns[0];
+  let max = dailyReturns[0];
+  for (const r of dailyReturns) {
+    if (r < min) min = r;
+    if (r > max) max = r;
+  }
   return {
     count: dailyReturns.length,
     mean: m,
     std: popStd(dailyReturns, m),
-    min: Math.min(...dailyReturns),
-    max: Math.max(...dailyReturns),
+    min,
+    max,
     probDayGe5pct: dailyReturns.filter((r) => r >= 0.05).length / dailyReturns.length,
     probDayLe5pct: dailyReturns.filter((r) => r <= -0.05).length / dailyReturns.length,
   };

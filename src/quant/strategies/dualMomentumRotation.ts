@@ -180,6 +180,8 @@ export const dualMomentumRotationSetup: StrategySetup<DualMomentumRotationParams
   id: 'dual-momentum-rotation',
   version: 'v1',
   cadence: 'daily',
+  // Owns the fixed seven-asset research sleeve; a --universe/--symbols override is rejected.
+  universeCompatibility: 'fixed',
   defaultParams: DUAL_MOMENTUM_ROTATION_V1,
 
   prepareUniverse(input) {

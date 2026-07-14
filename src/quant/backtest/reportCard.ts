@@ -47,6 +47,10 @@ export interface PromotionChecklist {
 export interface ReportCard {
   setup: string;
   symbols: string[];
+  /** Resolved universe tag: 'halal' | 'wide' | 'custom:N-symbols' | 'fixed'. */
+  universe: string;
+  /** Period preset the run resolved to: 'FULL' | '3Y' | '2Y' | '1Y' | 'CUSTOM'. */
+  periodPreset: string;
   from: string;
   to: string;
   dataFeed: DataFeed;
@@ -71,6 +75,10 @@ export interface ReportCard {
 export interface AssembleArgs {
   setup: string;
   symbols: string[];
+  /** Resolved universe tag ('halal' | 'wide' | 'custom:N-symbols' | 'fixed'); defaults to 'custom'. */
+  universe?: string;
+  /** Period preset ('FULL' | '3Y' | '2Y' | '1Y' | 'CUSTOM'); defaults to 'CUSTOM'. */
+  periodPreset?: string;
   from: string;
   to: string;
   dataFeed: DataFeed;
@@ -131,7 +139,8 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
   const status: TerminalValidationStatus = rejectionReasonCodes.length === 0 ? 'ACCEPTED' : 'REJECTED';
 
   return {
-    setup: a.setup, symbols: a.symbols, from: a.from, to: a.to, dataFeed: a.dataFeed,
+    setup: a.setup, symbols: a.symbols, universe: a.universe ?? 'custom',
+    periodPreset: a.periodPreset ?? 'CUSTOM', from: a.from, to: a.to, dataFeed: a.dataFeed,
     seed: a.seed, gitSha: a.gitSha, full: a.full, oos: a.oos, distribution: a.distribution,
     bootstrap: a.bootstrap, permutation: a.permutation, kellyFraction: a.kellyFraction,
     kellyClampedQty: a.kellyClampedQty, checklist, implausible, shariaState, status,
@@ -153,8 +162,15 @@ export function renderReportCard(c: ReportCard, color = true): string {
   const L: string[] = [];
   L.push('════════════════════════════════════════════════════════════════');
   L.push(`  QDR-6 VALIDATION REPORT CARD — ${c.setup}`);
-  L.push(`  ${c.symbols.join(', ')}  |  ${c.from} → ${c.to}`);
+  const symbolsLine = c.symbols.length > 12
+    ? `${c.symbols.slice(0, 12).join(', ')} … (+${c.symbols.length - 12} more)`
+    : c.symbols.join(', ');
+  L.push(`  ${symbolsLine}  |  ${c.from} → ${c.to}`);
+  L.push(paint(`  universe=${c.universe}  periodPreset=${c.periodPreset}`, DIM));
   L.push(paint(`  dataFeed=${c.dataFeed}  seed=${c.seed}  gitSha=${c.gitSha}`, DIM));
+  if (c.periodPreset !== 'FULL' && c.periodPreset !== 'CUSTOM') {
+    L.push(paint('  NOTE: shorter-preset run — EVIDENCE VIEW only; ACCEPTED verdicts bind to FULL period', YELLOW));
+  }
   L.push('────────────────────────────────────────────────────────────────');
   L.push(`  Trades (full/OOS):    ${c.full.trades} / ${c.oos.trades}`);
   L.push(`  CAGR:                 ${pct(c.full.cagr)}   (OOS ${pct(c.oos.cagr)})`);

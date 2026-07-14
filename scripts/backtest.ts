@@ -28,7 +28,7 @@ import {
   type SourcedDailyRow, type SourcedMinuteRow, type StocksInPlayAggregate,
 } from '../src/quant/strategies/stocksInPlayOrb';
 import { NASDAQ_HALAL_UNIVERSE } from '../src/quant/strategies/bollingerMrLong';
-import type { StrategySetup } from '../src/quant/strategies/types';
+import type { StrategySetup, UniverseCompatibility } from '../src/quant/strategies/types';
 import { loadAllFixtures } from '../src/quant/data/fixtureLoader';
 import { nasdaqDateKey } from '../src/quant/data/snapshot';
 import {
@@ -128,6 +128,133 @@ export function validationTrialsForSetup(setupId: string, effectiveParams: unkno
     throw new Error(`${setupId} requires validationTrials > 1`);
   }
   return Number(trials);
+}
+
+// ── R3-3.5 first-class universe + period selection ──────────────────────────────────────────────
+export type UniverseSelection = 'halal' | 'wide' | 'custom';
+export type PeriodPreset = 'FULL' | '3Y' | '2Y' | '1Y' | 'CUSTOM';
+
+/** FULL preset lower bound (contract R3-3.5): FULL = 2018-01-02 → latest complete trading date. */
+export const FULL_PERIOD_START = '2018-01-02';
+/**
+ * `--universe wide` threshold: a symbol joins the wide universe only if it has ≥ this many REAL
+ * (YAHOO/ALPACA) daily MarketBar rows inside the resolved range — one trading month of history, so
+ * a symbol with a scrap of data does not enter as noise. Documented + exported so it is test-pinned.
+ */
+export const WIDE_MIN_DAILY_BARS = 20;
+
+/** Setups whose fixed research book the CLI must never override, absent an explicit declaration. */
+const FIXED_BOOK_FALLBACK_SETUP_IDS: ReadonlySet<string> = new Set([
+  'dual-momentum-rotation', 'tom-overlay',
+  'stocks-in-play-orb', 'stop-hunt-reversal-long', 'vwap-reclaim', 'gapper-orb',
+]);
+
+/** Resolved universe compatibility for a setup: its declaration, else the conservative fallback. */
+export function universeCompatibilityForSetup(setup: StrategySetup<unknown>): UniverseCompatibility {
+  return setup.universeCompatibility
+    ?? (FIXED_BOOK_FALLBACK_SETUP_IDS.has(setup.id) ? 'fixed' : 'halal-only');
+}
+
+/** Subtract whole calendar years from a YYYY-MM-DD date (UTC), returning YYYY-MM-DD. */
+export function subtractYears(dateYmd: string, years: number): string {
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  if (![y, m, d].every(Number.isFinite)) throw new Error(`invalid date "${dateYmd}"`);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCFullYear(dt.getUTCFullYear() - years);
+  return dt.toISOString().slice(0, 10);
+}
+
+function isPeriodPreset(value: string): value is Exclude<PeriodPreset, 'CUSTOM'> {
+  return value === 'FULL' || value === '3Y' || value === '2Y' || value === '1Y';
+}
+
+/**
+ * Resolve `--period` + explicit dates to a concrete [from,to] and a periodPreset tag. Explicit
+ * `--from/--to` ALWAYS wins (⇒ 'CUSTOM'); otherwise the named preset anchors `to` at the latest
+ * complete MarketBar trading date and `from` at FULL_PERIOD_START (FULL) or latest−N years.
+ */
+export function resolvePeriodDates(
+  periodArg: string | undefined,
+  latestTradingDate: string | null,
+  explicit: { from?: string; to?: string },
+): { from: string; to: string; periodPreset: PeriodPreset } {
+  if (explicit.from && explicit.to) return { from: explicit.from, to: explicit.to, periodPreset: 'CUSTOM' };
+  if (explicit.from || explicit.to) throw new Error('provide BOTH --from and --to, or use --period');
+  if (!periodArg) throw new Error('provide --period FULL|3Y|2Y|1Y or explicit --from/--to');
+  if (!isPeriodPreset(periodArg)) throw new Error('--period must be FULL, 3Y, 2Y, or 1Y');
+  if (!latestTradingDate) throw new Error('--period presets require MarketBar data to anchor the latest trading date');
+  const to = latestTradingDate;
+  const from = periodArg === 'FULL'
+    ? FULL_PERIOD_START
+    : subtractYears(latestTradingDate, periodArg === '3Y' ? 3 : periodArg === '2Y' ? 2 : 1);
+  return { from, to, periodPreset: periodArg };
+}
+
+/** Normalize the `--universe` flag; default 'custom' when --symbols present, else 'halal'. */
+export function resolveUniverseSelection(
+  universeArg: string | undefined,
+  wantSymbols: readonly string[] | null,
+): UniverseSelection {
+  if (universeArg === undefined) return wantSymbols && wantSymbols.length ? 'custom' : 'halal';
+  if (universeArg === 'halal' || universeArg === 'wide' || universeArg === 'custom') return universeArg;
+  throw new Error('--universe must be halal, wide, or custom');
+}
+
+/** A custom basket is unscreened when any name is outside the NASDAQ halal core; wide is always. */
+export function universeUnscreened(selection: UniverseSelection, symbols: readonly string[]): boolean {
+  if (selection === 'wide') return true;
+  if (selection === 'custom') return symbols.some((s) => !NASDAQ_HALAL_UNIVERSE.includes(s));
+  return false;
+}
+
+/** Human/UI universe tag written onto the card and BacktestRun. */
+export function universeLabel(selection: UniverseSelection, symbols: readonly string[]): string {
+  if (selection === 'custom') return `custom:${symbols.length}-symbols`;
+  return selection;
+}
+
+/**
+ * Enforce a setup's declared universe policy against the requested selection. `fixed` setups reject
+ * ANY explicit override; `halal-only` setups reject `wide` and unscreened custom baskets; `any-
+ * equities` accepts everything. Throws a clear, user-facing error on rejection.
+ */
+export function assertUniverseAllowed(
+  setup: StrategySetup<unknown>,
+  compat: UniverseCompatibility,
+  selection: UniverseSelection,
+  symbols: readonly string[],
+  overrideProvided: boolean,
+): void {
+  if (compat === 'fixed') {
+    if (overrideProvided) {
+      throw new Error(`${setup.id} owns a fixed research book; --universe/--symbols overrides are rejected (run it without a universe override)`);
+    }
+    return;
+  }
+  if (compat === 'halal-only') {
+    if (selection === 'wide') {
+      throw new Error(`${setup.id} is halal-only: --universe wide is not allowed (its edge is defined only on the NASDAQ halal core)`);
+    }
+    if (selection === 'custom' && universeUnscreened('custom', symbols)) {
+      const bad = symbols.filter((s) => !NASDAQ_HALAL_UNIVERSE.includes(s));
+      throw new Error(`${setup.id} is halal-only: custom basket has unscreened name(s) ${bad.join(', ')} outside the halal core`);
+    }
+  }
+}
+
+/**
+ * Guard against accidental multi-hour `--universe wide` runs (thousands of symbols): a wide run is
+ * only permitted on the 1Y preset OR with explicit --from/--to, unless --confirm-full is passed.
+ */
+export function assertWideRunBounded(
+  selection: UniverseSelection,
+  periodPreset: PeriodPreset,
+  hasExplicitDates: boolean,
+  confirmFull: boolean,
+): void {
+  if (selection !== 'wide') return;
+  if (confirmFull || hasExplicitDates || periodPreset === '1Y') return;
+  throw new Error('--universe wide requires --period 1Y OR explicit --from/--to (guards multi-hour runs); pass --confirm-full to override');
 }
 
 /** Fixed-universe setups cannot silently degrade to whichever symbols happen to have DB rows. */
@@ -317,9 +444,15 @@ export function backtestResultFilename(
   from: string,
   to: string,
   candidateDigest?: string,
+  universeTag?: string,
 ): string {
-  const suffix = candidateDigest ? `-${candidateDigest.slice(0, 16)}` : '';
-  return `${setup}-${from}-${to}${suffix}.json`;
+  const digestSuffix = candidateDigest ? `-${candidateDigest.slice(0, 16)}` : '';
+  // 'halal'/'fixed'/'custom' default runs keep the historical filename; wide + custom baskets get a
+  // universe token so two universes over the same period don't clobber each other's artifact.
+  const universeSuffix = universeTag && universeTag !== 'halal' && universeTag !== 'fixed'
+    ? `-${universeTag.replace(/[^a-zA-Z0-9]+/g, '_')}`
+    : '';
+  return `${setup}-${from}-${to}${universeSuffix}${digestSuffix}.json`;
 }
 
 function loadCandidateArtifactFile(inputPath: string): {
@@ -531,6 +664,37 @@ async function loadDailySymbol(
   return { bars: real, excludedMock };
 }
 
+/** Latest complete NASDAQ trading date (YYYY-MM-DD) in the REAL daily MarketBar spine, for presets. */
+async function latestCompleteTradingDate(): Promise<string | null> {
+  const { prisma } = await import('../src/lib/prisma');
+  const row = await prisma.marketBar.aggregate({
+    where: { market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] } },
+    _max: { ts: true },
+  });
+  return row._max.ts ? row._max.ts.toISOString().slice(0, 10) : null;
+}
+
+/**
+ * `--universe wide`: every distinct NASDAQ symbol with ≥ WIDE_MIN_DAILY_BARS REAL (YAHOO/ALPACA)
+ * daily bars inside [from,to]. Grouped in one query; only symbols are held (each series is streamed
+ * later, one at a time, so peak memory stays bounded exactly as the halal path).
+ */
+async function listWideDailySymbols(from: string, to: string, minBars: number): Promise<string[]> {
+  const { prisma } = await import('../src/lib/prisma');
+  const grouped = await prisma.marketBar.groupBy({
+    by: ['symbol'],
+    where: {
+      market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] },
+      ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+    },
+    _count: { symbol: true },
+  });
+  return grouped
+    .filter((g) => g._count.symbol >= minBars)
+    .map((g) => g.symbol)
+    .sort();
+}
+
 /** Distinct NASDAQ-halal symbols with REAL daily bars in [from,to] (MOCK excluded at source). */
 async function listDailySymbols(want: string[] | null, from: string, to: string): Promise<string[]> {
   const { prisma } = await import('../src/lib/prisma');
@@ -586,14 +750,12 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const runMode = backtestRunMode(args.diagnostic);
   const setupId = args.setup;
-  const from = args.from;
-  const to = args.to;
   const seed = Number(args.seed ?? '42');
   const oosFraction = Number(args.oos ?? '0.3');
   const initialWorktreeStatus = gitWorktreeStatus();
 
-  if (!setupId || !from || !to) {
-    console.error('usage: npm run backtest -- --setup <id> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--symbols A,B] [--candidates=path.json] [--seed N] [--engine legacy|shared] [--diagnostic]');
+  if (!setupId) {
+    console.error('usage: npm run backtest -- --setup <id> (--period FULL|3Y|2Y|1Y | --from <YYYY-MM-DD> --to <YYYY-MM-DD>) [--universe halal|wide|custom] [--symbols A,B] [--confirm-full] [--candidates=path.json] [--seed N] [--engine legacy|shared] [--diagnostic]');
     process.exit(2);
   }
   const setup = (STRATEGY_SETUP_CATALOG as Record<string, StrategySetup<unknown>>)[setupId] as
@@ -604,6 +766,13 @@ async function main() {
     process.exit(2);
   }
 
+  // ── R3-3.5 period: explicit --from/--to wins; else a --period preset anchored at the latest
+  // complete MarketBar trading date. Every card + BacktestRun is tagged with the resolved preset.
+  const hasExplicitDates = Boolean(args.from && args.to);
+  const latestTradingDate = hasExplicitDates ? null : await latestCompleteTradingDate();
+  const { from, to, periodPreset } = resolvePeriodDates(args.period, latestTradingDate, { from: args.from, to: args.to });
+  const confirmFull = args['confirm-full'] === 'true';
+
   const wantSymbols = args.symbols ? args.symbols.split(',').map((s) => s.trim()) : null;
   const startingCash = new D(100_000);
   // stocks-in-play-orb validates on the REAL Alpaca-IEX minute spine (DB), not the small committed
@@ -611,6 +780,39 @@ async function main() {
   const source = (args.source ?? (setupId === 'stocks-in-play-orb' ? 'db' : 'fixtures')) as 'fixtures' | 'db';
 
   const cadence = setup.cadence;
+
+  // ── R3-3.5 universe: resolve --universe halal|wide|custom against the setup's declared policy.
+  // Fixed-book setups reject any override; halal-only setups reject wide/unscreened custom baskets;
+  // any-equities accepts everything (wide + unscreened custom ⇒ Sharia execution-blocked below).
+  const universeCompat = universeCompatibilityForSetup(setup);
+  const universeOverrideProvided = args.universe !== undefined || Boolean(wantSymbols);
+  let universeTag: string;
+  let universeIsUnscreened: boolean;
+  let dailySelection: UniverseSelection | null = null;
+  if (cadence === 'daily' && universeCompat !== 'fixed') {
+    const selection = resolveUniverseSelection(args.universe, wantSymbols);
+    if (selection === 'custom' && (!wantSymbols || !wantSymbols.length)) {
+      throw new Error('--universe custom requires --symbols A,B,…');
+    }
+    if (selection === 'wide' && wantSymbols) {
+      throw new Error('--universe wide is the whole real-bar spine and cannot be combined with --symbols');
+    }
+    assertUniverseAllowed(setup, universeCompat, selection, wantSymbols ?? [], universeOverrideProvided);
+    assertWideRunBounded(selection, periodPreset, hasExplicitDates, confirmFull);
+    dailySelection = selection;
+    universeTag = universeLabel(selection, wantSymbols ?? []);
+    universeIsUnscreened = universeUnscreened(selection, wantSymbols ?? []);
+  } else if (universeCompat === 'fixed') {
+    // Reject a --universe/--symbols override for a fixed-book setup (daily or intraday).
+    assertUniverseAllowed(setup, universeCompat, 'halal', [], universeOverrideProvided);
+    universeTag = 'fixed';
+    universeIsUnscreened = false;
+  } else {
+    // Intraday non-fixed: keep existing --symbols behavior; tag the card honestly.
+    universeTag = wantSymbols ? `custom:${wantSymbols.length}-symbols` : 'halal';
+    universeIsUnscreened = universeUnscreened(wantSymbols ? 'custom' : 'halal', wantSymbols ?? []);
+  }
+
   const dailyRoute = selectDailyBacktestRoute(setupId, args.engine);
   if (cadence !== 'daily' && dailyRoute === 'shared') {
     throw new Error('--engine shared is valid only for daily setups');
@@ -669,7 +871,14 @@ async function main() {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
-      symbols = dailyUniverseForSetup(setupId, wantSymbols) ?? await listDailySymbols(wantSymbols, from, to);
+      if (universeCompat === 'fixed') {
+        symbols = dailyUniverseForSetup(setupId, null)!;
+      } else if (dailySelection === 'wide') {
+        symbols = await listWideDailySymbols(from, to, WIDE_MIN_DAILY_BARS);
+        console.log(`resolved --universe wide → ${symbols.length} symbol(s) with ≥${WIDE_MIN_DAILY_BARS} real daily bars in ${from}..${to}`);
+      } else {
+        symbols = await listDailySymbols(wantSymbols, from, to);
+      }
       if (dailyRoute === 'shared') {
         const sharedSeries: StrategyBookSeries[] = [];
         for (const symbol of symbols) {
@@ -909,7 +1118,7 @@ async function main() {
   const resultsDir = path.join(process.cwd(), 'results');
   const outFile = path.join(
     resultsDir,
-    backtestResultFilename(setupId, from, to, candidateEvidence?.sha256Digest),
+    backtestResultFilename(setupId, from, to, candidateEvidence?.sha256Digest, universeTag),
   );
 
   const runGitSha = gitSha();
@@ -976,11 +1185,11 @@ async function main() {
   const shariaSnapshot = await buildShariaRunSnapshot(symbols, 'NASDAQ');
   const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
-    ?? (isIntradayUnscreened ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);
+    ?? ((isIntradayUnscreened || universeIsUnscreened) ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);
 
   const card = {
     ...assembleReportCard({
-      setup: setupId, symbols, from, to, dataFeed: feed, seed, gitSha: runGitSha,
+      setup: setupId, symbols, universe: universeTag, periodPreset, from, to, dataFeed: feed, seed, gitSha: runGitSha,
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
@@ -1066,7 +1275,8 @@ async function main() {
     const run = await prisma.backtestRun.create({
       data: {
         strategyId: null,
-        symbol: symbols.join(',') || 'NONE',
+        // Wide/large baskets store the compact universe tag; small books keep the explicit list.
+        symbol: symbols.length > 40 ? `${universeTag}(${symbols.length})` : (symbols.join(',') || 'NONE'),
         market: 'NASDAQ',
         fromDate: new Date(`${from}T00:00:00.000Z`),
         toDate: new Date(`${to}T23:59:59.999Z`),
