@@ -63,6 +63,20 @@ function series(source = rows()): StrategyBookSeries[] {
   }];
 }
 
+function flatSeries(
+  source: readonly { ts: Date; close: number }[],
+  opts: { high?: number; low?: number; volumeAt?: (ts: Date) => number } = {},
+): StrategyBookSeries[] {
+  return [{
+    symbol: 'SPUS', market: 'NASDAQ',
+    bars: source.map((row) => ({
+      ts: row.ts, open: new D(row.close), high: new D(opts.high ?? row.close),
+      low: new D(opts.low ?? row.close), close: new D(row.close),
+      volume: new D(opts.volumeAt?.(row.ts) ?? 1_000_000_000), source: 'YAHOO',
+    })),
+  }];
+}
+
 describe('tom-overlay v1', () => {
   it('builds contiguous last-4/first-3 windows and fails closed at both boundaries', () => {
     const eligible = buildTomEligibility(DATES, 4, 3);
@@ -84,7 +98,7 @@ describe('tom-overlay v1', () => {
       ref: 'calendar_basis', value: 'observed_SPUS_sessions_missing_bar_indistinguishable_from_holiday',
     }));
     expect(exit.matched).toBe(true);
-    expect(tomOverlaySetup.entry(context(new Date('2023-12-26T00:00:00.000Z'))).matched).toBe(true);
+    expect(tomOverlaySetup.entry(context(new Date('2023-12-26T00:00:00.000Z'))).matched).toBe(false);
   });
 
   it('depends only on timestamps, rejects future bars, and validates the exact positive chronological spine', () => {
@@ -124,6 +138,44 @@ describe('tom-overlay v1', () => {
     expect(blocks.every((block) => block.length > 0)).toBe(true);
   });
 
+  it('retries a liquidity-partial boundary exit on later opens until flat, without a late entry retry', () => {
+    const flat = rows().map((row) => ({ ...row, close: 100 }));
+    prepare(flat);
+    const thinExitOpens = new Set(['2024-01-05', '2024-01-08', '2024-01-25']);
+    const result = simulateStrategyBook({
+      setup: tomOverlaySetup,
+      series: flatSeries(flat, {
+        volumeAt: (ts) => thinExitOpens.has(ts.toISOString().slice(0, 10)) ? 1 : 1_000_000_000,
+      }),
+      startingCash: new D(1_000),
+      limits: { ...DEFAULT_BT_LIMITS, liquidityAdvFraction: 1 },
+      policy: tomOverlayBookPolicy(),
+    });
+    const januarySells = result.fills
+      .filter((fill) => fill.action === 'SELL' && fill.ts.getUTCMonth() === 0)
+      .map((fill) => fill.ts.toISOString().slice(0, 10));
+    const january25 = result.daily.find((point) => point.ts.toISOString().startsWith('2024-01-25'))!;
+
+    expect(januarySells).toEqual(['2024-01-05', '2024-01-08', '2024-01-25']);
+    expect(january25.positions).toHaveLength(0);
+  });
+
+  it('passes trailing high-range history into both volatility and max-risk clamps', () => {
+    const flat = rows().map((row) => ({ ...row, close: 100 }));
+    prepare(flat);
+    const result = simulateStrategyBook({
+      setup: tomOverlaySetup,
+      series: flatSeries(flat, { high: 150, low: 50 }),
+      startingCash: new D(100_000), limits: DEFAULT_BT_LIMITS,
+      policy: tomOverlayBookPolicy(),
+    });
+    const buy = result.fills.find((fill) => fill.action === 'BUY')!;
+
+    expect(buy.envelope.adjustments).toContain('clamped_by_vol_target');
+    expect(buy.envelope.adjustments).toContain('clamped_by_max_risk_pct');
+    expect(buy.qty.lt(250)).toBe(true);
+  });
+
   it('pins exact routing, nine trials, center+8 plateau, and the fixed-cap policy', () => {
     expect(TOM_OVERLAY_UNIVERSE).toEqual(['SPUS']);
     expect(selectDailyBacktestRoute(tomOverlaySetup.id)).toBe('shared');
@@ -132,7 +184,7 @@ describe('tom-overlay v1', () => {
     expect(validationTrialsForSetup(tomOverlaySetup.id, TOM_OVERLAY_V1)).toBe(9);
     expect(limitsForDailySetup(tomOverlaySetup.id, DEFAULT_BT_LIMITS).maxOpenPositions).toBe(1);
     expect(strategyBookPolicyForSetup(tomOverlaySetup.id, TOM_OVERLAY_V1)).toEqual(tomOverlayBookPolicy());
-    expect(tomOverlayBookPolicy()).toEqual({ maxGrossFraction: 0.25, maxOpenPositions: 1, decisionHistoryBars: 1 });
+    expect(tomOverlayBookPolicy()).toEqual({ maxGrossFraction: 0.25, maxOpenPositions: 1 });
     const plateau = tomOverlaySetup.plateauNeighborhood!(TOM_OVERLAY_V1);
     expect(plateau.neighbors).toHaveLength(8);
     expect(new Set(plateau.neighbors.map((item) => `${item.params.lastSessions}|${item.params.firstSessions}`)))

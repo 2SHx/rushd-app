@@ -30,7 +30,7 @@ export const TOM_OVERLAY_V1: TomOverlayParams = Object.freeze({
 });
 
 export function tomOverlayBookPolicy(): StrategyBookPolicy {
-  return { maxGrossFraction: 0.25, maxOpenPositions: 1, decisionHistoryBars: 1 };
+  return { maxGrossFraction: 0.25, maxOpenPositions: 1 };
 }
 
 let SESSION_TIMES: readonly number[] | null = null;
@@ -188,7 +188,7 @@ export const tomOverlaySetup: StrategySetup<TomOverlayParams> & {
     const pair = sessionPair(ctx.asOf)!;
     if (pair.next === null) return check(false, ['next_session_unavailable'], screened.evidence);
     const eligible = eligibility(p);
-    const matched = eligible.has(pair.next);
+    const matched = !eligible.has(pair.current) && eligible.has(pair.next);
     return check(matched, matched ? ['enter_next_open_before_tom_window'] : ['outside_tom_entry_boundary'], screened.evidence);
   },
 
@@ -201,8 +201,8 @@ export const tomOverlaySetup: StrategySetup<TomOverlayParams> & {
     const proof = scheduleEvidence(p, pair.next);
     if (pair.next === null) return check(false, ['next_session_unavailable'], proof);
     const eligible = eligibility(p);
-    const matched = eligible.has(pair.current) && !eligible.has(pair.next);
-    return check(matched, matched ? ['exit_next_open_after_first_sessions'] : ['hold_tom_window'], proof);
+    const matched = !eligible.has(pair.next);
+    return check(matched, matched ? ['exit_or_retry_next_open_outside_tom'] : ['hold_tom_window'], proof);
   },
 
   signal(ctx, params): AnalystSignal {
