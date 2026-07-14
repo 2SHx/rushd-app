@@ -198,6 +198,13 @@ Revisit when: the Arabic-quality eval score drops below the bar, triggering a mo
 
 **Eval approach.** A golden set of prompts (quiz topics + signal cases, incl. an injection probe like `topic="ignore your rules and…"`) runs in `vitest` against mock (and optionally live) and asserts: schema-valid, `complianceTag` present, `reasoningArabic` non-empty and free of banned jargon, injection probe still yields valid schema. This is M5's exit gate.
 
+### DR-14: Strategy lessons compile bounded learner choices into a sealed deterministic replay
+Decision: bind each strategy lesson to one exact league `setupId` + version; present 5–8 scenario questions split into `KNOWLEDGE_CHECK` and `POLICY_DECISION`; compile only policy decisions into prevalidated, versioned parameters; seal the first attempt before any outcome is revealed; and replay it deterministically beside the team, SPUS, and the S&P 500 price proxy (SPY) on the same frozen point-in-time OOS interval, universe, fills, costs, Sharia gate, and risk envelope.
+Options: factual quiz only (teaches vocabulary but cannot demonstrate consequences) / generate executable strategy logic from free-form or LLM answers (unsafe, irreproducible, and invites look-ahead) / bounded policy choices + deterministic replay (chosen — meaningful agency with auditability and risk parity).
+Rationale: the learner should experience how entry, exit, sizing, holding period, and risk choices change both return and drawdown without mistaking a lucky result for skill. Retrieval practice plus immediate explanatory feedback supports retention; autonomy and visible mastery support motivation; sealing outcomes prevents hindsight edits and loss-chasing.
+Consequences: knowledge checks may have a correct answer and immediate explanation but never alter the replay; policy decisions show their mechanism/trade-off without revealing P&L, map through a pure policy compiler, and cannot weaken Sharia or risk caps. `StrategyLearningAttempt` is immutable after sealing and records user/setup/question-set/policy versions, answers, policy hash, replay configuration/data provenance, and result references; every retry creates a labeled new attempt. The result surface normalizes all four lines to 100 on one common interval and shows return, max drawdown, volatility, trade count, and choice-to-outcome explanations; SPY is labeled a price-only S&P 500 ETF proxy, not the index or total return. XP rewards completion, retrieval, and reflection through `addXP`—never portfolio profit, rank, or risk-taking. No variable-ratio rewards, loss-chasing streak pressure, loot-box mechanics, or winner/loser language. Development uses a fixed ≤6-month fixture first; the prohibited 2018-01-02→2026-07-10 evidence run is never triggered by this learning flow and still requires explicit user authorization.
+Revisit when: evidence shows the bounded choices cannot express a strategy's defining decisions; add another reviewed policy branch, never arbitrary executable code.
+
 ---
 
 ## 7. i18n/RTL & compliance
@@ -361,6 +368,16 @@ Goal: every surface re-skinned to the DR-12 token system; 3D lands on exactly tw
 | U5 — Remaining surfaces (dashboard, quiz, profile, auth screens) re-skinned; RTL logical props preserved | frontend-expert | no legacy token remains repo-wide (`grep -rn "neon" src` empty); design-reviewer PASS |
 | en/ar parity + regression suite for the revamp | test-engineer | `npm run lint` + `npx tsc --noEmit` + `npx vitest run` green incl. en/ar key-parity test |
 
+### M10: Strategy learning simulations
+Goal: a learner can understand one strategy team, commit bounded decisions, and inspect an honest sealed replay against the team, SPUS, and SPY without outcome leakage.
+| Work item | Owner | Exit criterion |
+|---|---|---|
+| L1 — Versioned 5–8-question curriculum + pure policy compiler; knowledge checks cannot affect policy and all decisions stay inside reviewed parameter bounds | ai-features-expert | focused tests prove identical answers → identical policy hash; invalid/out-of-range answers fail closed; changing a knowledge answer leaves the policy byte-identical |
+| L2 — DB-free short-fixture replay adapter using the selected team's PIT context, costs, fills, OOS boundary, Sharia veto, and risk envelope | backend-expert | `npx vitest run strategy-learning` proves deterministic replay, future-bar failure, no MOCK bars, risk/Sharia parity, and four normalized-100 series over one common ≤6-month interval |
+| L3 — Auth-scoped immutable `StrategyLearningAttempt` persistence and completion API through a generated Prisma migration | backend-expert | integration tests prove first attempt seals before results, mutation after sealing returns 409, retries create new labeled rows, cross-family access returns 403, and no money/order path is called |
+| L4 — Mastery-loop UI: choose team → learn → decide → seal → compare; immediate mechanism feedback, four-line chart, return/maxDD/volatility/trades, process-first explanation, en/ar + RTL | frontend-expert | browser walk-through in en/ar at desktop/mobile shows loading/empty/error/populated states, keyboard completion, reduced motion, outcome hidden pre-seal, and honest simulated/price-only labels |
+| L5 — Retrieval revisit + XP for mastery effort only | i18n-fintech-expert | a delayed knowledge revisit is offered; XP is written only via `addXP` for completion/retrieval/reflection and remains unchanged when simulated return changes |
+
 ---
 
 ## 10. Testing & CI
@@ -388,6 +405,11 @@ Goal: every surface re-skinned to the DR-12 token system; 3D lands on exactly tw
 | DR-7 | Keep Qwen via OpenAI-compatible base URL, mock-first, add schema compliance tags + injection-safe inputs. |
 | DR-8 | Daily jobs run on Render Cron → a signed internal route; no queue, no worker. |
 | DR-9 | Play-money MVP is SAMA-credible via disclaimers + audit + PDPL minimization + documented sandbox path. |
+| DR-10 | Rushd Quant is an extractable eight-agent committee whose LLM decides only inside deterministic Sharia and risk gates. |
+| DR-11 | Quant execution is paper-first; real brokerage remains dark behind CMA licensing and KYC/AML. |
+| DR-12 | Institutional-minimal tokens, semantic finance colors, and honest data-led surfaces govern the UI. |
+| DR-13 | Exactly two lazy-loaded 3D surfaces may ship within explicit performance and fallback constraints. |
+| DR-14 | Strategy lessons compile bounded choices into immutable deterministic replays; mastery—not simulated profit—drives rewards. |
 
 **Open questions (each with its deciding trigger).**
 - **OQ-1 — Real-money rails (PSP/KYC/AML).** Trigger: SAMA sandbox admission or a real-deposit pilot. Until then, v1 is play-money only.

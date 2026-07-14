@@ -1,9 +1,9 @@
 'use client';
 
-import { ArrowDownRight, ArrowUpRight, Flame, Layers3 } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Flame, Layers3, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { SectorGroup } from './marketOverviewUtils';
-import { heatBg, heatBorder, heatText } from './marketOverviewUtils';
+import { heatStyle, heatText } from './marketOverviewUtils';
 
 interface Props {
   sectors: SectorGroup[];
@@ -51,9 +51,10 @@ export default function MarketSectorHeatmap({ sectors, market, isAr, loading, on
       ) : (
         <ol className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {rankedSectors.map((sector, index) => {
-            const isUp = sector.avgPct >= 0;
+            const isUp = sector.avgPct > 0;
+            const isDown = sector.avgPct < 0;
             const name = isAr ? sector.nameAr : sector.name;
-            const DirectionIcon = isUp ? ArrowUpRight : ArrowDownRight;
+            const DirectionIcon = isUp ? ArrowUpRight : isDown ? ArrowDownRight : Minus;
 
             return (
               <li key={sector.name}>
@@ -61,7 +62,8 @@ export default function MarketSectorHeatmap({ sectors, market, isAr, loading, on
                   type="button"
                   onClick={() => onSelectSector(sector)}
                   aria-label={t('themeCardLabel', { name, value: `${isUp ? '+' : ''}${sector.avgPct.toFixed(2)}%` })}
-                  className={`group flex min-h-36 w-full flex-col rounded-2xl border p-4 text-start shadow-[0_1px_1px_rgba(0,0,0,0.03)] transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none ${heatBg(sector.avgPct)} ${heatBorder(sector.avgPct)}`}
+                  style={heatStyle(sector.avgPct)}
+                  className="group flex min-h-36 w-full flex-col rounded-2xl border p-4 text-start shadow-[0_1px_1px_rgba(0,0,0,0.03)] transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="rounded-md bg-foreground/[0.06] px-2 py-1 font-mono text-[10px] font-semibold tabular-nums text-foreground/60">

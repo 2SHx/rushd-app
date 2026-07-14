@@ -20,29 +20,25 @@ export interface FGInfo {
   textClass: string;
 }
 
-// Heat-scale utility classes for the sector heatmap tiles. Magnitude controls
-// opacity; direction controls hue via the up/down semantic tokens — never a
-// one-off hex (ui-craft §5).
-export function heatBg(pct: number): string {
-  if (pct >= 4) return 'bg-up/[0.22]';
-  if (pct >= 2) return 'bg-up/[0.16]';
-  if (pct >= 0.5) return 'bg-up/10';
-  if (pct >= 0) return 'bg-up/[0.04]';
-  if (pct >= -0.5) return 'bg-down/[0.04]';
-  if (pct >= -2) return 'bg-down/10';
-  if (pct >= -4) return 'bg-down/[0.16]';
-  return 'bg-down/[0.22]';
-}
-
-export function heatBorder(pct: number): string {
-  if (pct >= 0.5) return 'border-up/25';
-  if (pct >= 0) return 'border-up/10';
-  if (pct >= -0.5) return 'border-down/10';
-  return 'border-down/25';
+// Continuous theme-aware heat scale. A non-zero move starts visibly at 8%;
+// magnitude then grows to 24% at |4%|, while zero remains a neutral card.
+export function heatStyle(pct: number): { backgroundColor: string; borderColor: string } {
+  if (pct === 0) {
+    return { backgroundColor: 'var(--surface-card)', borderColor: 'var(--border-color)' };
+  }
+  const signal = pct > 0 ? 'var(--up)' : 'var(--down)';
+  const strength = Math.round(8 + Math.min(Math.abs(pct), 4) / 4 * 16);
+  const borderStrength = Math.min(36, strength + 14);
+  return {
+    backgroundColor: `color-mix(in srgb, ${signal} ${strength}%, var(--surface-card))`,
+    borderColor: `color-mix(in srgb, ${signal} ${borderStrength}%, var(--border-color))`,
+  };
 }
 
 export function heatText(pct: number): string {
-  return pct >= 0 ? 'text-up' : 'text-down';
+  if (pct > 0) return 'text-up';
+  if (pct < 0) return 'text-down';
+  return 'text-foreground/60';
 }
 
 export function fgInfo(score: number): FGInfo {

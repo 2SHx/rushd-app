@@ -138,6 +138,24 @@ unless the user explicitly authorizes it. Short `--diagnostic` runs are non-term
 | R3-5 | **allocator core** (QDR-7) | Pure module src/quant/allocation/allocator.ts per QDR-7: shrinkage blend (w = priorWeight/(priorWeight+liveDays)), deflated-Sharpe-style score with drawdown penalty, ≤40%/mode cap, bench=0%, immediate mid-cycle drawdown bench, TE-breach ⇒ REQUIRE_REVALIDATION, implausible ⇒ DISQUALIFY, empty league ⇒ 100% cash, seeded tie-breaks only. DB-free tests. NO cron/persistence wiring in this unit |
 | R3-6 | **G4 automation wiring + G4b TradingView + league expansion** | Only after ≥1 ACCEPTED team. Security-auditor gate MANDATORY (money path). Envelope limits by CASH not buying power (paper acct has margin debt −$82.8k). AllocationDecision model via generated migration |
 
+## Strategy learning simulation — continuation briefs (approved 2026-07-15; one unit per session/dispatch)
+
+Binding contract: `docs/SYSTEM_DESIGN.md` DR-14 + M10. This track is educational and does not alter
+QDR-6 promotion evidence, team status, or allocator eligibility. Shared rules: no LLM-generated
+executable logic; policy answers stay inside versioned reviewed bounds; knowledge answers never affect
+returns; exact PIT/OOS/universe/cost/fill/Sharia/risk parity with the chosen team; first attempt sealed
+before outcome reveal; retries are new labeled attempts; XP rewards mastery only; normalized-100 learner,
+team, SPUS, and price-only SPY; short ≤6-month fixture first; never trigger 2018-01-02→2026-07-10.
+
+| # | Unit | Spec (binding) |
+|---|---|---|
+| L0 | **contract + experience guardrails — ✅ DONE** | DR-14/M10 fixes question roles, policy bounds, sealing, replay parity, four-series comparison, immutable retries, process-first metrics, mastery rewards, anti-gambling rules, and the terminal-period prohibition. |
+| L1 | **versioned curriculum + pure policy compiler** | One existing team/setup version; 5–8 bilingual scenario questions spanning entry, exit, sizing, holding, and risk; `KNOWLEDGE_CHECK` has correct answer + explanation but zero policy effect; `POLICY_DECISION` maps to a reviewed parameter enum/range; DB-free, deterministic policy hash; no replay/API/schema/UI in this unit. |
+| L2 | **short deterministic learner replay** | Reuse the team's PIT context, simulator, costs, fills, OOS boundary, Sharia veto, and risk envelope; committed ≤6-month real fixture; return learner/team/SPUS/SPY normalized-100 series + return/maxDD/volatility/trades; no persistence, no full-period command, no promotion verdict. |
+| L3 | **sealed attempt persistence + API** | Generated migration only; authenticated/family-scoped immutable attempts with question/policy/setup/data versions and replay provenance; seal before result; retry appends; idempotent completion; no broker/order/money mutation. Security review required because this adds an authenticated API/schema surface. |
+| L4 | **mastery-loop UI + comparison** | Choose team → concept → retrieve → decide → seal → compare; immediate mechanism feedback without P&L leakage; learner/team/SPUS/price-only-SPY chart; return/maxDD/volatility/trades and choice-to-outcome explanations; all four states, keyboard, reduced motion, en/ar/RTL, simulated/not-advice labels. |
+| L5 | **retrieval revisit + XP** | Delayed knowledge revisit and reflection; XP only through `addXP`, based on completion/retrieval/reflection and invariant to P&L; no punitive streak or random reward mechanic. |
+
 **Parked with evidence (do NOT build):** PEAD long-only on liquid names — 2024 literature: 0.04–0.14%/mo
 for liquid stocks (edge lives in illiquid + short side); Q4-2025 drift ≈ half historical. **Calibration
 warning:** volatility-managed-portfolio ALPHA claims fail OOS (Cederburg et al.) and costs

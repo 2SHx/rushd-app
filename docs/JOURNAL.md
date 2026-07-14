@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Strategy learning simulation contract + visible market heat ✅
+Shipped: DR-14/M10 and L0–L5 continuation briefs for sealed bounded learner replays; market theme cards now use continuous signed percentage tint with neutral zero in light/dark.
+Decisions: lazy-dev rung 2 reuses the team simulator, risk/Sharia envelope, benchmark evidence, chart, and `addXP`; rewards follow mastery, never P&L, and the full 2018-01-02→2026-07-10 run remains explicitly gated.
+Verify: focused 3/3; full 95 files / 713 tests; lint and TypeScript clean; browser-verified perceptible emerald/rose magnitude tint and neutral 0.00% in light/dark.
+Open: execute L1 next for one exact existing team—5–8 bilingual questions plus a pure bounded policy compiler only; no replay/API/schema/UI or terminal backtest in that unit.
+
 ## 2026-07-14 — R3-4 G6b linear factor codified; terminal run gated 🧪
 Shipped: `g6b-linear-factor@v1`, fixed 25-name panel, honest dollar-volume proxy, exact monthly 7-name target weights, shared-book resizing, active-month inference, replay isolation, and frozen 3×3 plateau.
 Decisions: true turnover rate is unavailable; proxy is labeled, AAOIFI remains unscreened/execution-blocked, and the 2018-01-02..2026-07-10 terminal run still requires explicit user authorization.

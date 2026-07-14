@@ -418,6 +418,8 @@ G3e is an amendment to the existing QDR-6/QDR-7 consequences, not a new QDR: it 
 
 The committee is the **flagship tutor**: the Q7 reasoning UI lets a learner watch eight agents reason, watch the bull/bear debate, and watch the Sharia agent veto — each `AnalystSignal` already carries `rationaleAr`/`rationaleEn` and `evidence`, so the explanation is native, not bolted on. XP for watching/quizzing on a committee pass routes through the existing `addXP` (parent invariant — the sole XP writer). Curriculum attaches per agent: Quant Core → factor investing; Technical → technical analysis; Fundamental → valuation + the persona lenses; Sharia → AAOIFI screening; Risk Manager → position sizing and drawdown; PM/debate → portfolio construction. The mapping to CFA-X / CME-X modules and the XP/quiz wiring is **deferred to the learning track** and is not part of the Q-track exit criteria.
 
+The binding learning-simulation contract is parent DR-14 / M10 in `docs/SYSTEM_DESIGN.md`: one exact team/setup version, 5–8 knowledge + policy questions, a sealed bounded policy, and deterministic same-context replay against that team, SPUS, and price-only SPY. It is a learning surface, not a promotion backtest: rewards measure mastery effort rather than P&L, and it cannot trigger the gated terminal evidence period.
+
 ---
 
 ## 11. Open questions (each with its deciding trigger)
