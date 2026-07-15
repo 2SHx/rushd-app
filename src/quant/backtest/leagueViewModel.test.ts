@@ -6,6 +6,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import { loadStrategyLeagueViewModel } from './leagueViewModel';
+import { buildTradeEvidence } from './tradeEvidence';
 
 function card(setup: string, status: 'ACCEPTED' | 'REJECTED') {
   const metrics = {
@@ -107,9 +108,37 @@ describe('loadStrategyLeagueViewModel', () => {
     const { teams: [result] } = await loadStrategyLeagueViewModel();
 
     expect(result.comparison).toBeNull();
+    expect(result.tradeEvidence).toBeNull();
     expect(result.distribution).toEqual({
       count: null, mean: null, std: null, min: null, max: null,
       probDayGe5pct: null, probDayLe5pct: null,
+    });
+  });
+
+  it('retains reconciled trade evidence for team detail drill-downs', async () => {
+    const current = {
+      ...card('trade-team', 'ACCEPTED'),
+      tradeEvidence: buildTradeEvidence([{
+        symbol: 'AAPL',
+        entryTs: new Date('2026-01-02T14:30:00.000Z'),
+        exitTs: new Date('2026-01-05T14:30:00.000Z'),
+        qty: 10,
+        entryPrice: 100,
+        exitPrice: 110,
+        ret: 0.1,
+        reason: 'strategy_exit',
+        partial: false,
+      }], 'SHARED_BOOK'),
+    };
+    findMany.mockResolvedValue([row('trade-run', current, '2026-07-12T12:00:00Z')]);
+
+    const { teams: [result] } = await loadStrategyLeagueViewModel();
+
+    expect(result.tradeEvidence).toMatchObject({
+      basis: 'SHARED_BOOK',
+      totalClosedTrades: 1,
+      totalNetPnl: 100,
+      bySymbol: [{ symbol: 'AAPL', netPnl: 100 }],
     });
   });
 

@@ -56,6 +56,7 @@ import {
 } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ReportCard, type ShariaValidationState } from './reportCard';
 import { buildHistoricalComparisonEvidence } from './historicalComparison';
+import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence';
 import { assertWalkForward } from './walkForward';
 import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from './profitPlateau';
 import { buildShariaRunSnapshot } from './shariaSnapshot';
@@ -916,7 +917,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   }
 
   const pooledTradeReturns: number[] = [];
-  const pooledTradeRecords: TradeRecord[] = [];
+  const pooledTradeRecords: AttributedTradeRecord[] = [];
   const pooledDailyReturns: number[] = [];
   let lastPrice = 0;
   let symbols: string[] = [];
@@ -985,7 +986,14 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         pitBarsProcessed += sim.barsProcessed;
         walkForwardWindows += sim.decisionWindows;
         pooledTradeReturns.push(...sim.tradeReturns);
-        pooledTradeRecords.push(...sim.tradeRecords);
+        const sellFills = sim.fills.filter((fill) => fill.action === 'SELL');
+        if (sellFills.length !== sim.tradeRecords.length) {
+          throw new Error('Shared-book trade attribution invariant failed');
+        }
+        pooledTradeRecords.push(...sim.tradeRecords.map((record, index) => ({
+          ...record,
+          symbol: sellFills[index].symbol,
+        })));
         sharedDailyCurve = sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
         pooledDailyReturns.push(...toDailyReturns(sharedDailyCurve, nasdaqDateKey));
         console.log(`${sim.barsProcessed} real bars → ${sim.fills.length} fills / ${sim.tradeRecords.length} closed trades`);
@@ -1019,7 +1027,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         pitBarsProcessed += sim.barsProcessed;
         walkForwardWindows += sim.decisionWindows;
         pooledTradeReturns.push(...sim.tradeReturns);
-        pooledTradeRecords.push(...sim.tradeRecords);
+        pooledTradeRecords.push(...sim.tradeRecords.map((record) => ({ ...record, symbol })));
         pooledDailyReturns.push(...toDailyReturns(sim.equityCurve, nasdaqDateKey));
         console.log(`${bars.length} real bars (${dropped} MOCK excl.) → ${sim.trades} trades  (${((Date.now() - t0) / 1000).toFixed(1)}s; pooled ${pooledTradeRecords.length})`);
       }
@@ -1082,7 +1090,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           pitBarsProcessed += sim.barsProcessed;
           walkForwardWindows += sim.barsProcessed; // intraday PIT-guarded bars are the walk-forward windows
           pooledTradeReturns.push(...sim.tradeReturns);
-          pooledTradeRecords.push(...sim.tradeRecords);
+          pooledTradeRecords.push(...sim.tradeRecords.map((record) => ({ ...record, symbol })));
           pooledDailyReturns.push(...(
             batchPerDay
               ? toIndependentPeriodReturns([sim.equityCurve], Number(startingCash))
@@ -1292,6 +1300,10 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     plateau: plateauEvaluation,
     sharia: shariaSnapshot,
     comparison,
+    tradeEvidence: buildTradeEvidence(
+      pooledTradeRecords,
+      cadence === 'daily' && dailyRoute === 'shared' ? 'SHARED_BOOK' : 'INDEPENDENT_SYMBOL_SLEEVES',
+    ),
     setupVersion: setup.version,
     effectiveParams,
     validationTrials,

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle2, ShieldAlert, XCircle, Info } from 'lucide-react';
+import { useState, useEffect, useRef, type RefObject } from 'react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
@@ -12,6 +12,8 @@ interface StrategyLeagueClientProps {
 
 type TFunction = ReturnType<typeof useTranslations>;
 type Formatter = (value: number | null) => string;
+type MoneyFormatter = (value: number) => string;
+type DateFormatter = (value: string) => string;
 
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
 
@@ -123,6 +125,7 @@ function Standings({
                   type="button"
                   onClick={() => onSelect(team.runId)}
                   aria-pressed={active}
+                  aria-controls="selected-team-performance"
                   className={`grid w-full grid-cols-[2.5rem_minmax(10rem,1.4fr)_6.5rem_6rem_5.5rem_5.5rem_7rem_5rem] items-center gap-3 py-3 text-start transition-colors duration-150 ${
                     active ? 'bg-accent/10' : 'hover:bg-foreground/[0.04]'
                   }`}
@@ -148,6 +151,171 @@ function Standings({
   );
 }
 
+function TeamPerformanceDetail({
+  team,
+  t,
+  percent,
+  decimal,
+  money,
+  dateTime,
+  detailRef,
+}: {
+  team: StrategyLeagueTeam;
+  t: TFunction;
+  percent: Formatter;
+  decimal: Formatter;
+  money: MoneyFormatter;
+  dateTime: DateFormatter;
+  detailRef: RefObject<HTMLElement>;
+}) {
+  const evidence = team.tradeEvidence;
+  const statusUp = team.oos.cagr >= 0;
+  const StatusIcon = statusUp ? ArrowUpRight : ArrowDownRight;
+
+  return (
+    <section
+      ref={detailRef}
+      id="selected-team-performance"
+      className="scroll-mt-6 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6"
+      aria-labelledby="selected-team-performance-title"
+    >
+      <header className="flex flex-col gap-4 text-start sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-xs text-foreground/55" dir="ltr">{team.setupId}</p>
+          <h2 id="selected-team-performance-title" className="mt-1 text-xl font-semibold">{t('teamPerformanceTitle')}</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('teamPerformanceDescription')}</p>
+        </div>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${team.status === 'ACCEPTED' ? 'bg-up/10 text-up' : 'bg-down/10 text-down'}`}>
+          {team.status === 'ACCEPTED' ? <CheckCircle2 className="size-4" aria-hidden="true" /> : <XCircle className="size-4" aria-hidden="true" />}
+          {t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}
+        </span>
+      </header>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+          <p className="text-[11px] text-foreground/55">{t('teamOosCagr')}</p>
+          <p className={`mt-2 flex items-center gap-1 font-mono text-xl font-semibold tabular-nums ${statusUp ? 'text-up' : 'text-down'}`} dir="ltr">
+            <StatusIcon className="size-4" aria-hidden="true" />
+            {percent(team.oos.cagr)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+          <p className="text-[11px] text-foreground/55">{t('metricMaxDrawdown')}</p>
+          <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-down" dir="ltr">−{percent(Math.abs(team.full.maxDrawdown))}</p>
+        </div>
+        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+          <p className="text-[11px] text-foreground/55">{t('metricHitRate')}</p>
+          <p className="mt-2 font-mono text-xl font-semibold tabular-nums" dir="ltr">{percent(team.full.hitRate)}</p>
+        </div>
+        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
+          <p className="text-[11px] text-foreground/55">{t('metricTrades')}</p>
+          <p className="mt-2 font-mono text-xl font-semibold tabular-nums" dir="ltr">{decimal(team.full.trades)}</p>
+        </div>
+      </div>
+
+      {evidence === null ? (
+        <div className="mt-6 rounded-xl bg-foreground/[0.04] p-5 text-start" role="status">
+          <h3 className="text-sm font-semibold">{t('tradeLedgerUnavailableTitle')}</h3>
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('tradeLedgerUnavailableBody')}</p>
+        </div>
+      ) : evidence.totalClosedTrades === 0 ? (
+        <div className="mt-6 rounded-xl bg-foreground/[0.04] p-5 text-start" role="status">
+          <h3 className="text-sm font-semibold">{t('tradeLedgerEmptyTitle')}</h3>
+          <p className="mt-2 text-xs leading-relaxed text-foreground/60">{t('tradeLedgerEmptyBody')}</p>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-6">
+          <div className="flex flex-col gap-3 text-start sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold">{t('symbolPnlTitle')}</h3>
+              <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">
+                {t(evidence.basis === 'SHARED_BOOK' ? 'tradeBasisShared' : 'tradeBasisSleeves')}
+              </p>
+            </div>
+            <div className="shrink-0 text-start sm:text-end">
+              <p className="text-[11px] text-foreground/55">{t('realizedNetPnl')}</p>
+              <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+                {money(evidence.totalNetPnl)}
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl bg-foreground/[0.025]">
+            <table className="w-full min-w-[42rem] text-xs">
+              <thead className="text-foreground/55">
+                <tr>
+                  <th className="px-4 py-3 text-start font-medium">{t('tradeSymbol')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('closedRecords')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('winRate')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('averageReturn')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('realizedNetPnl')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {evidence.bySymbol.map((row) => (
+                  <tr key={row.symbol} className="border-t border-[var(--border-color)]">
+                    <th scope="row" className="px-4 py-3 text-start font-mono font-semibold" dir="ltr">{row.symbol}</th>
+                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{decimal(row.closedTrades)}</td>
+                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{percent(row.wins / row.closedTrades)}</td>
+                    <td className={`px-4 py-3 text-end tabular-nums ${row.averageReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(row.averageReturn)}</td>
+                    <td className={`px-4 py-3 text-end font-mono font-semibold tabular-nums ${row.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{money(row.netPnl)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <details open className="group overflow-hidden rounded-xl bg-foreground/[0.025]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-start text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+              <span>{t('exactTradeLedger', { count: evidence.totalClosedTrades })}</span>
+              <ChevronDown className="size-4 text-foreground/50 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+            </summary>
+            {evidence.truncated ? (
+              <p className="mx-4 mb-3 rounded-lg bg-noncompliant/10 px-3 py-2 text-xs leading-relaxed text-noncompliant" role="note">
+                {t('tradeLedgerTruncated', { shown: evidence.trades.length, total: evidence.totalClosedTrades })}
+              </p>
+            ) : null}
+            <div className="max-h-[32rem] overflow-auto border-t border-[var(--border-color)]">
+              <table className="w-full min-w-[78rem] text-xs">
+                <thead className="sticky top-0 bg-surface-card text-foreground/55">
+                  <tr>
+                    <th className="px-4 py-3 text-start font-medium">{t('tradeSymbol')}</th>
+                    <th className="px-4 py-3 text-start font-medium">{t('entryTime')}</th>
+                    <th className="px-4 py-3 text-start font-medium">{t('exitTime')}</th>
+                    <th className="px-4 py-3 text-end font-medium">{t('quantity')}</th>
+                    <th className="px-4 py-3 text-end font-medium">{t('entryPrice')}</th>
+                    <th className="px-4 py-3 text-end font-medium">{t('exitPrice')}</th>
+                    <th className="px-4 py-3 text-end font-medium">{t('netReturn')}</th>
+                    <th className="px-4 py-3 text-end font-medium">{t('realizedNetPnl')}</th>
+                    <th className="px-4 py-3 text-start font-medium">{t('exitReason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evidence.trades.map((trade, index) => (
+                    <tr key={`${trade.symbol}-${trade.exitTs}-${index}`} className="border-t border-[var(--border-color)]">
+                      <th scope="row" className="px-4 py-3 text-start font-mono font-semibold" dir="ltr">{trade.symbol}</th>
+                      <td className="px-4 py-3 text-start tabular-nums" dir="ltr">{dateTime(trade.entryTs)}</td>
+                      <td className="px-4 py-3 text-start tabular-nums" dir="ltr">{dateTime(trade.exitTs)}</td>
+                      <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{decimal(trade.qty)}</td>
+                      <td className="px-4 py-3 text-end font-mono tabular-nums" dir="ltr">{money(trade.entryPrice)}</td>
+                      <td className="px-4 py-3 text-end font-mono tabular-nums" dir="ltr">{money(trade.exitPrice)}</td>
+                      <td className={`px-4 py-3 text-end tabular-nums ${trade.netReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(trade.netReturn)}</td>
+                      <td className={`px-4 py-3 text-end font-mono font-semibold tabular-nums ${trade.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{money(trade.netPnl)}</td>
+                      <td className="px-4 py-3 text-start font-mono text-[11px] text-foreground/65" dir="ltr">
+                        {trade.reason}{trade.partial ? ` · ${t('partialExit')}` : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProps) {
   const t = useTranslations('QuantResults');
   const locale = useLocale();
@@ -162,6 +330,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     return b.oos.cagr - a.oos.cagr;
   });
   const [selectedRunId, setSelectedRunId] = useState(rankedTeams[0]?.runId ?? '');
+  const detailRef = useRef<HTMLElement>(null);
   const selected = teams.find(team => team.runId === selectedRunId) ?? rankedTeams[0];
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const percent = (value: number | null) => value === null
@@ -171,6 +340,19 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     ? t('unavailable')
     : new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 3 }).format(value);
   const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
+  const money = (value: number) => new Intl.NumberFormat(numberLocale, {
+    style: 'currency', currency: 'USD', maximumFractionDigits: 2,
+  }).format(value);
+  const dateTime = (value: string) => new Intl.DateTimeFormat(numberLocale, {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC',
+  }).format(new Date(value));
+  const handleTeamSelect = (runId: string) => {
+    setSelectedRunId(runId);
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    }));
+  };
 
   if (!mounted) {
     return (
@@ -272,9 +454,20 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         t={t}
         rankedTeams={rankedTeams}
         selectedRunId={selected.runId}
-        onSelect={setSelectedRunId}
+        onSelect={handleTeamSelect}
         percent={percent}
         decimal={decimal}
+      />
+
+      <TeamPerformanceDetail
+        key={selected.runId}
+        team={selected}
+        t={t}
+        percent={percent}
+        decimal={decimal}
+        money={money}
+        dateTime={dateTime}
+        detailRef={detailRef}
       />
 
       <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">

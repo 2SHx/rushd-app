@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { tradeEvidenceSchema } from './tradeEvidence';
 
 const finite = z.number().finite();
 const ratio = finite.min(0).max(1);
@@ -124,6 +125,7 @@ const reportCardSchema = z.object({
   rejectionReasonCodes: z.array(rejectionReasonSchema),
   acceptanceMeaning: z.literal('AUTO_PAPER_ADMISSION_ONLY'),
   comparison: comparisonSchema.nullish().transform((value) => value ?? null),
+  tradeEvidence: tradeEvidenceSchema.nullish().transform((value) => value ?? null),
 }).superRefine((card, context) => {
   const numericChecklistConsistent = card.checklist.enoughTrades === (card.full.trades >= 100)
     && card.checklist.deflatedSharpeOk === (card.oos.deflatedSharpe > 0.95)

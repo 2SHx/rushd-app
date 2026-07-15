@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Strategy-team performance and trade drill-down ✅
+Shipped: clicking a strategy team now scrolls to bilingual performance details; future terminal runs persist exact closed-trade records plus reconciled realized P&L by stock, with a bounded full ledger.
+Decisions: lazy-dev rung 2 extends the existing BacktestRun report-card JSON (no schema migration); shared-book vs independent-sleeve P&L is labeled, open/mark-to-market gains are excluded, and legacy runs never reconstruct missing trades.
+Verify: focused 54/54, lint, TypeScript, en/ar RTL browser click/scroll, and browser logs clean; full suite 721/724 with the same three pre-existing stale-AMD fixture failures.
+Open: existing eight terminal teams show the honest legacy-ledger state until a future authorized bounded validation run persists trade evidence; the prohibited full evidence run was not executed.
+
 ## 2026-07-15 — Broader Nasdaq market themes and heatmap ✅
 Shipped: expanded the shared market universe from 52 to 82 Nasdaq representatives across 10 themes; both theme rankings and the advanced heatmap now consume the same broader set, with visible coverage in en/ar.
 Decisions: used Nasdaq’s published 2026 constituents, kept one batched quote request, and left screener fundamentals explicitly disclosed as estimates; no new provider or dependency.
