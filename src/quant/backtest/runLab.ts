@@ -21,6 +21,7 @@ import {
   G6B_LINEAR_FACTOR_UNIVERSE,
   g6bLinearFactorBookPolicy,
 } from '../strategies/g6bLinearFactor';
+import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -87,6 +88,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'dual-momentum-rotation',
   'tom-overlay',
   'g6b-linear-factor',
+  'g6b-linear-factor-wide',
 ]);
 
 export function selectDailyBacktestRoute(
@@ -292,6 +294,7 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
+  if (setupId === 'g6b-linear-factor-wide') return g6bLinearFactorWideBookPolicy();
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 

@@ -11,6 +11,7 @@ import { stopHuntReversalLongSetup } from './stopHuntReversalLong';
 import { dualMomentumRotationSetup } from './dualMomentumRotation';
 import { tomOverlaySetup } from './tomOverlay';
 import { g6bLinearFactorSetup } from './g6bLinearFactor';
+import { g6bLinearFactorWideSetup } from './g6bLinearFactorWide';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -26,4 +27,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [dualMomentumRotationSetup.id]: dualMomentumRotationSetup,
   [tomOverlaySetup.id]: tomOverlaySetup,
   [g6bLinearFactorSetup.id]: g6bLinearFactorSetup,
+  [g6bLinearFactorWideSetup.id]: g6bLinearFactorWideSetup,
 });
