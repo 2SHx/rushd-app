@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Landmark, WalletCards } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import AlpacaPaperPortfolioView from '@/components/quant/AlpacaPaperPortfolioView';
 import type { AlpacaPaperViewModel } from '@/quant/portfolio/alpacaPaperView';
 
@@ -14,6 +14,7 @@ interface Props {
 
 export default function PortfolioViewSwitcher({ children, data }: Props) {
   const t = useTranslations('Quant');
+  const locale = useLocale();
   const [view, setView] = useState<'rushd' | 'alpaca'>('rushd');
 
   if (data.status === 'hidden') return children;
@@ -49,11 +50,7 @@ export default function PortfolioViewSwitcher({ children, data }: Props) {
         </div>
       </div>
 
-      {view === 'rushd' ? children : (
-        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
-          <AlpacaPaperPortfolioView data={data} />
-        </div>
-      )}
+      {view === 'rushd' ? children : <AlpacaPaperPortfolioView data={data} locale={locale} />}
     </>
   );
 }

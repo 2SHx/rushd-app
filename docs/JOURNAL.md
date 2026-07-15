@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Shared Rushd/Alpaca portfolio dashboard ✅
+Shipped: Alpaca Paper now renders through the same `DashboardClient` as Portfolio, with broker equity/cash/day P&L/positions, buying power, gross exposure, and open orders in the matching dashboard slots.
+Decisions: lazy-dev rung 2 reused the existing dashboard; short-side win rate is direction-aware, exposure weights use absolute notional, and missing Alpaca NAV history/risk metrics remain explicitly unavailable rather than synthesized.
+Verify: lint/TypeScript/focused 14/14 clean; live six-position account browser-verified in en/ar with zero fresh console/hydration errors; full suite 716/719 with three isolated pre-existing stale-AMD fixture failures in `portfolio.test.ts`.
+Open: repair that time-sensitive quant fixture separately; no broker-history persistence or polling was added, and the prohibited 2018-01-02→2026-07-10 evidence run was not executed.
+
 ## 2026-07-15 — Alpaca paper portfolio view ✅
 Shipped: Parent-only read-only Alpaca Paper view on the canonical Portfolio switcher and Quant, with live equity/cash/buying power/day P&L, positions, open orders, and bilingual honest states.
 Decisions: broker values stay separate from Rushd NAV; paper URL only, no polling/schema/dependency, negative cash stays visible, Sharia status is never inferred, and production requires `ALPACA_PORTFOLIO_VIEWER_USER_IDS`.

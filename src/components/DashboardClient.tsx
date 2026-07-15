@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { 
   Wallet, Briefcase, History, TrendingUp, CheckCircle2, Coins,
-  BarChart2, Target, Activity, ArrowUpRight, ArrowDownRight, Clock
+  ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark
 } from 'lucide-react';
 
 export interface Position {
@@ -18,6 +18,7 @@ export interface Position {
   value: number;
   weight: number | null;
   complianceStatus: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
+  side?: 'long' | 'short';
 }
 
 export interface Snapshot {
@@ -38,6 +39,23 @@ interface CurrencyTotal {
   totalValue: number | null;
 }
 
+interface PaperAccountView {
+  status: string;
+  retrievedAt: string;
+  buyingPower: number;
+  tradingBlocked: boolean;
+  dayPnl: { value: number; pct: number };
+  openOrders: Array<{
+    id: string;
+    symbol: string;
+    side: string;
+    type: string;
+    status: string;
+    qty: string;
+    filledQty: string;
+  }>;
+}
+
 interface DashboardClientProps {
   locale: string;
   initialNAV: number | null;
@@ -49,6 +67,8 @@ interface DashboardClientProps {
   initialTransactions: any[];
   performanceStatus: PerformanceStatus;
   currencyTotals: CurrencyTotal[];
+  accountKind?: 'rushd' | 'alpaca';
+  paperAccount?: PaperAccountView;
 }
 
 export default function DashboardClient({ 
@@ -61,21 +81,24 @@ export default function DashboardClient({
   initialMetrics,
   initialTransactions,
   performanceStatus,
-  currencyTotals
+  currencyTotals,
+  accountKind = 'rushd',
+  paperAccount,
 }: DashboardClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+  const isAlpaca = accountKind === 'alpaca';
 
   const formatMoney = (value: number, currency: 'SAR' | 'USD') => new Intl.NumberFormat(
     isAr ? 'ar-SA' : 'en-US',
     { style: 'currency', currency },
   ).format(value);
-  const performanceMessage = {
+  const performanceMessage = isAlpaca ? t('alpacaHistoryUnavailable') : ({
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
     mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
     available: '',
-  }[performanceStatus];
+  }[performanceStatus]);
   const hasPerformanceMetrics = performanceStatus === 'available' && initialSnapshots.length >= 2;
 
   const [jarBal, setJarBal] = useState(initialCash);
@@ -94,13 +117,14 @@ export default function DashboardClient({
     [initialSnapshots]
   );
   const prevSnap = initialSnapshots.length > 1 ? initialSnapshots[initialSnapshots.length - 2] : null;
-  const dailyReturn = lastSnap && prevSnap ? lastSnap.nav - prevSnap.nav : null;
-  const dailyReturnPct = dailyReturn !== null && prevSnap && prevSnap.nav > 0
+  const dailyReturn = paperAccount?.dayPnl.value ?? (lastSnap && prevSnap ? lastSnap.nav - prevSnap.nav : null);
+  const dailyReturnPct = paperAccount?.dayPnl.pct ?? (dailyReturn !== null && prevSnap && prevSnap.nav > 0
     ? (dailyReturn / prevSnap.nav) * 100
-    : null;
+    : null);
 
   // P&L for selected timeframe (computed from snapshots)
   const plData = useMemo(() => {
+    if (isAlpaca) return plTimeframe === '24H' && paperAccount ? paperAccount.dayPnl : null;
     if (performanceStatus !== 'available' || initialSnapshots.length < 2 || !lastSnap) return null;
     const daysMap: Record<string, number> = { '24H': 1, '7D': 7, '30D': 30, '90D': 90 };
     const days = daysMap[plTimeframe];
@@ -109,7 +133,7 @@ export default function DashboardClient({
     const pl = lastSnap.nav - baseSnap.nav;
     const plPct = baseSnap.nav > 0 ? (pl / baseSnap.nav) * 100 : 0;
     return { value: pl, pct: plPct };
-  }, [plTimeframe, initialSnapshots, lastSnap, performanceStatus]);
+  }, [isAlpaca, paperAccount, plTimeframe, initialSnapshots, lastSnap, performanceStatus]);
 
   // Win rate: profitable positions / total positions
   const winRate = useMemo(() => {
@@ -117,7 +141,9 @@ export default function DashboardClient({
       (position): position is Position & { costBasis: number } => position.costBasis !== null,
     );
     if (knownBasis.length === 0) return null;
-    const winners = knownBasis.filter(position => position.price > position.costBasis).length;
+    const winners = knownBasis.filter(position => position.side === 'short'
+      ? position.price < position.costBasis
+      : position.price > position.costBasis).length;
     return (winners / knownBasis.length) * 100;
   }, [initialPositions]);
 
@@ -253,17 +279,44 @@ export default function DashboardClient({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">
-            {isAr ? 'مركز المحفظة بالذكاء الاصطناعي' : 'AI Portfolio Hub'}
+            {isAlpaca ? t('alpacaTitle') : (isAr ? 'مركز المحفظة بالذكاء الاصطناعي' : 'AI Portfolio Hub')}
           </h1>
           <p className="text-foreground/50 mt-1 text-sm">
-            {isAr ? 'إدارة الثروات المؤتمتة والتدقيق الشرعي' : 'Automated wealth management & Sharia-compliant auditing'}
+            {isAlpaca ? t('alpacaSubtitle') : (isAr ? 'إدارة الثروات المؤتمتة والتدقيق الشرعي' : 'Automated wealth management & Sharia-compliant auditing')}
           </p>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-accent bg-accent/10 px-3 py-1.5 rounded-full border border-accent/20">
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          {isAr ? 'الذكاء الاصطناعي يعمل 24/7' : 'AI AUTOPILOT ACTIVE'}
+          {isAlpaca
+            ? `${t('alpacaPaperBadge')} · ${paperAccount?.status ?? ''}${paperAccount?.tradingBlocked ? ` · ${t('alpacaTradingBlocked')}` : ''}`
+            : (isAr ? 'الذكاء الاصطناعي يعمل 24/7' : 'AI AUTOPILOT ACTIVE')}
         </div>
       </div>
+
+      {isAlpaca && paperAccount ? (
+        <div className="space-y-3" role="note">
+          {initialCash < 0 ? (
+            <div className="flex items-start gap-3 rounded-2xl bg-down/10 p-4 text-sm text-down">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <p className="leading-relaxed">{t('alpacaNegativeCashWarning')}</p>
+            </div>
+          ) : null}
+          <div className="flex items-start justify-between gap-4 rounded-2xl bg-noncompliant/10 p-4 text-xs text-noncompliant">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <p className="leading-relaxed">{t('alpacaShariaDisclosure')}</p>
+            </div>
+            <time className="shrink-0 font-mono tabular-nums text-foreground/45" dateTime={paperAccount.retrievedAt} dir="ltr">
+              {new Intl.DateTimeFormat(isAr ? 'ar-SA-u-nu-latn' : 'en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                calendar: 'gregory',
+                timeZone: 'Asia/Riyadh',
+              }).format(new Date(paperAccount.retrievedAt))}
+            </time>
+          </div>
+        </div>
+      ) : null}
 
       {initialNAV === null && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
@@ -281,7 +334,7 @@ export default function DashboardClient({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Portfolio Value */}
         <div className="glass-panel rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'قيمة المحفظة' : 'Portfolio Value'}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAlpaca ? t('alpacaEquity') : (isAr ? 'قيمة المحفظة' : 'Portfolio Value')}</p>
           <p className="text-2xl font-bold font-mono tabular-nums text-foreground">
             {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
           </p>
@@ -298,7 +351,7 @@ export default function DashboardClient({
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">P&L</p>
             <div className="flex gap-0.5">
-              {(['24H','7D','30D','90D'] as const).map(tf => (
+              {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
                 <button
                   key={tf}
                   onClick={() => setPlTimeframe(tf)}
@@ -332,10 +385,10 @@ export default function DashboardClient({
 
         {/* Active Trades */}
         <div className="glass-panel rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAr ? 'الصفقات النشطة' : 'Active Trades'}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{isAlpaca ? t('alpacaPositions') : (isAr ? 'الصفقات النشطة' : 'Active Trades')}</p>
           <p className="text-2xl font-bold font-mono tabular-nums text-foreground">{activeTrades}</p>
           <p className="text-[11px] text-foreground/50">
-            {isAr ? 'أصل مُدار بالذكاء الاصطناعي' : `${activeTrades} AI-managed position${activeTrades !== 1 ? 's' : ''}`}
+            {isAlpaca ? t('alpacaPaperBadge') : (isAr ? 'أصل مُدار بالذكاء الاصطناعي' : `${activeTrades} AI-managed position${activeTrades !== 1 ? 's' : ''}`)}
           </p>
         </div>
       </div>
@@ -346,8 +399,8 @@ export default function DashboardClient({
         <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 blur-3xl rounded-full" />
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs font-bold">{isAr ? 'صافي قيمة الأصول (NAV)' : 'Net Asset Value (NAV)'}</span>
-            <Wallet className="w-4 h-4 text-cyan-400" />
+            <span className="text-gray-400 text-xs font-bold">{isAlpaca ? t('alpacaEquity') : (isAr ? 'صافي قيمة الأصول (NAV)' : 'Net Asset Value (NAV)')}</span>
+            {isAlpaca ? <Landmark className="w-4 h-4 text-cyan-400" /> : <Wallet className="w-4 h-4 text-cyan-400" />}
           </div>
           <h2 className="text-2xl font-mono font-bold text-white">
             {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
@@ -364,7 +417,7 @@ export default function DashboardClient({
         <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs font-bold">{isAr ? 'العائد اليومي' : 'Daily Return'}</span>
+            <span className="text-gray-400 text-xs font-bold">{isAlpaca ? t('alpacaDayPnl') : (isAr ? 'العائد اليومي' : 'Daily Return')}</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <h2 className={`text-2xl font-mono font-bold ${dailyReturn === null ? 'text-gray-400' : dailyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -378,29 +431,42 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* Zakat */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 blur-3xl rounded-full" />
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs font-bold">{isAr ? 'الزكاة المستحقة (2.5%)' : 'Due Zakat (2.5%)'}</span>
-            <Coins className="w-4 h-4 text-yellow-400" />
+        {isAlpaca ? (
+          <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
+            <div className="absolute top-0 end-0 w-24 h-24 bg-yellow-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-xs font-bold">{t('alpacaBuyingPower')}</span>
+              <Coins className="w-4 h-4 text-yellow-400" />
+            </div>
+            <h2 className="text-2xl font-mono font-bold text-white">
+              {paperAccount && cashCurrency ? formatMoney(paperAccount.buyingPower, cashCurrency) : t('valueUnavailable')}
+            </h2>
+            <p className="pt-2 text-[10px] leading-relaxed text-gray-500">{t('alpacaBuyingPowerNote')}</p>
           </div>
-          <h2 className="text-2xl font-mono font-bold text-white">
-            {zakatDue === null ? t('valueUnavailable') : formatMoney(zakatDue, 'SAR')}
-          </h2>
-          <div className="pt-1 flex items-center justify-between gap-2">
-            <span className="text-[10px] text-gray-500 leading-tight">
-              {t('zakatVerifiedAssetsOnly')}
-            </span>
-            <button
-              onClick={handlePayZakat}
-              disabled={isZakatSubmitting || zakatDue === null || zakatDue <= 0.01}
-              className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold rounded-xl transition-all disabled:opacity-50"
-            >
-              {isZakatSubmitting ? '...' : t('payZakat')}
-            </button>
+        ) : (
+          <div className="glass-panel p-5 rounded-3xl border border-white/5 bg-gradient-to-b from-[#0d1420] to-black/40 space-y-2 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-xs font-bold">{isAr ? 'الزكاة المستحقة (2.5%)' : 'Due Zakat (2.5%)'}</span>
+              <Coins className="w-4 h-4 text-yellow-400" />
+            </div>
+            <h2 className="text-2xl font-mono font-bold text-white">
+              {zakatDue === null ? t('valueUnavailable') : formatMoney(zakatDue, 'SAR')}
+            </h2>
+            <div className="pt-1 flex items-center justify-between gap-2">
+              <span className="text-[10px] text-gray-500 leading-tight">
+                {t('zakatVerifiedAssetsOnly')}
+              </span>
+              <button
+                onClick={handlePayZakat}
+                disabled={isZakatSubmitting || zakatDue === null || zakatDue <= 0.01}
+                className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {isZakatSubmitting ? '...' : t('payZakat')}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Row 1: AI Portfolio Overview */}
@@ -410,12 +476,14 @@ export default function DashboardClient({
           <div className="glass-panel rounded-3xl p-6 border border-emerald-500/20 bg-emerald-500/5">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-lg font-bold text-white mb-1">{isAr ? 'أداء المحفظة المدارة بالذكاء الاصطناعي' : 'AI-Managed Portfolio Performance'}</h2>
-                <div className="flex items-center gap-4 text-xs font-mono">
-                  <span className="flex items-center gap-1.5 text-emerald-400"><div className="w-2 h-2 rounded-full bg-emerald-400"/> AI Portfolio</span>
-                  <span className="flex items-center gap-1.5 text-indigo-400"><div className="w-2 h-2 rounded-full bg-indigo-400"/> SPUS (Halal)</span>
-                  <span className="flex items-center gap-1.5 text-gray-400"><div className="w-2 h-2 rounded-full bg-gray-400"/> SPY</span>
-                </div>
+                <h2 className="text-lg font-bold text-white mb-1">{isAlpaca ? t('alpacaPerformanceTitle') : (isAr ? 'أداء المحفظة المدارة بالذكاء الاصطناعي' : 'AI-Managed Portfolio Performance')}</h2>
+                {!isAlpaca ? (
+                  <div className="flex items-center gap-4 text-xs font-mono">
+                    <span className="flex items-center gap-1.5 text-emerald-400"><div className="w-2 h-2 rounded-full bg-emerald-400"/> AI Portfolio</span>
+                    <span className="flex items-center gap-1.5 text-indigo-400"><div className="w-2 h-2 rounded-full bg-indigo-400"/> SPUS (Halal)</span>
+                    <span className="flex items-center gap-1.5 text-gray-400"><div className="w-2 h-2 rounded-full bg-gray-400"/> SPY</span>
+                  </div>
+                ) : null}
               </div>
               <div className="text-right">
                 <p className="text-2xl font-mono font-bold text-emerald-400">
@@ -423,7 +491,7 @@ export default function DashboardClient({
                     ? `${((lastSnap.nav / initialSnapshots[0].nav) - 1) >= 0 ? '+' : ''}${(((lastSnap.nav / initialSnapshots[0].nav) - 1) * 100).toFixed(2)}%`
                     : t('valueUnavailable')}
                 </p>
-                <p className="text-xs text-emerald-500/60 font-bold tracking-wider">{isAr ? 'العائد التراكمي' : 'CUMULATIVE RETURN'}</p>
+                <p className="text-xs text-emerald-500/60 font-bold tracking-wider">{isAlpaca ? t('alpacaCurrentSnapshotOnly') : (isAr ? 'العائد التراكمي' : 'CUMULATIVE RETURN')}</p>
               </div>
             </div>
             <div className="h-64 w-full relative">
@@ -435,12 +503,12 @@ export default function DashboardClient({
           <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20">
             <h3 className="font-bold text-white mb-6 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-emerald-400" />
-              {isAr ? 'تخصيص أصول الذكاء الاصطناعي النشطة' : 'Active AI Asset Allocation'}
+              {isAlpaca ? t('alpacaPositions') : (isAr ? 'تخصيص أصول الذكاء الاصطناعي النشطة' : 'Active AI Asset Allocation')}
             </h3>
             
             {initialPositions.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">
-                {isAr ? 'لا توجد مراكز استثمارية مفتوحة في المحفظة حالياً.' : 'No active stock positions. The AI committee is currently holding cash.'}
+                {isAlpaca ? t('alpacaNoPositionsBody') : (isAr ? 'لا توجد مراكز استثمارية مفتوحة في المحفظة حالياً.' : 'No active stock positions. The AI committee is currently holding cash.')}
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -460,6 +528,9 @@ export default function DashboardClient({
                         <td className="py-3 text-white font-bold">
                           <span dir="ltr">{pos.symbol}</span>
                           <span className="ms-2 text-[9px] text-gray-500">{pos.market}</span>
+                          {isAlpaca && pos.side ? (
+                            <span className="ms-2 text-[9px] text-gray-400">{t(pos.side === 'short' ? 'alpacaShort' : 'alpacaLong')}</span>
+                          ) : null}
                           <span
                             className={`ms-2 text-[9px] ${
                               pos.complianceStatus === 'VERIFIED_COMPLIANT'
@@ -494,7 +565,7 @@ export default function DashboardClient({
         <div className="space-y-6">
           {/* Allocation Donut */}
           <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20 text-center relative overflow-hidden">
-            <h3 className="font-bold text-white mb-6 text-left rtl:text-right">{isAr ? 'التوزيع القطاعي' : 'Sector Distribution'}</h3>
+            <h3 className="font-bold text-white mb-6 text-start">{isAlpaca ? t('alpacaExposureDistribution') : (isAr ? 'التوزيع القطاعي' : 'Sector Distribution')}</h3>
             <div className="relative">
               {renderAllocationDonut()}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -505,7 +576,7 @@ export default function DashboardClient({
 
           {/* Key Metrics */}
           <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-black/20">
-            <h3 className="font-bold text-white mb-4">{isAr ? 'المقاييس الرئيسية (AI)' : 'Key Metrics (AI)'}</h3>
+            <h3 className="font-bold text-white mb-4">{isAlpaca ? t('alpacaMetricsTitle') : (isAr ? 'المقاييس الرئيسية (AI)' : 'Key Metrics (AI)')}</h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
                 <span className="text-gray-400">Sharpe Ratio</span>
@@ -527,13 +598,25 @@ export default function DashboardClient({
           </div>
           {/* Transaction Ledger */}
           <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
-             <h3 className="font-bold text-sm text-gray-300 flex items-center space-x-2 rtl:space-x-reverse">
+             <h3 className="font-bold text-sm text-gray-300 flex items-center gap-2">
                <History className="w-4 h-4 text-neonBlue" />
-               <span>{isAr ? 'سجل المعاملات والتدقيق المالي' : 'Transaction Audit Ledger'}</span>
+               <span>{isAlpaca ? t('alpacaOpenOrders') : (isAr ? 'سجل المعاملات والتدقيق المالي' : 'Transaction Audit Ledger')}</span>
              </h3>
 
-             <div className="space-y-3 max-h-64 overflow-y-auto text-xs pr-2">
-               {txs.length === 0 ? (
+             <div className="space-y-3 max-h-64 overflow-y-auto text-xs pe-2">
+               {isAlpaca ? (
+                 paperAccount && paperAccount.openOrders.length > 0 ? paperAccount.openOrders.map((order) => (
+                   <div key={order.id} className="flex items-center justify-between rounded-2xl bg-black/20 p-3.5">
+                     <div className="space-y-1 text-start">
+                       <span className={`font-bold ${order.side === 'buy' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                         {t(order.side === 'buy' ? 'alpacaBuy' : 'alpacaSell')} · <span dir="ltr">{order.symbol}</span>
+                       </span>
+                       <p className="text-[10px] text-gray-500" dir="ltr">{order.type.toUpperCase()} · {order.filledQty}/{order.qty}</p>
+                     </div>
+                     <span className="font-mono text-[10px] font-bold uppercase text-gray-400">{order.status}</span>
+                   </div>
+                 )) : <p className="text-gray-500 text-center py-4">{t('alpacaNoOpenOrders')}</p>
+               ) : txs.length === 0 ? (
                  <p className="text-gray-500 text-center py-4">{isAr ? 'لا توجد معاملات مسجلة بعد.' : 'No transactions recorded yet.'}</p>
                ) : (
                  txs.map((tx: any, idx: number) => {

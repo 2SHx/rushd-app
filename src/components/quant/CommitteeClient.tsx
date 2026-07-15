@@ -1357,7 +1357,7 @@ export default function CommitteeClient({
       )}
 
       {activeTab === 'alpaca' && initialAlpacaPaper.status !== 'hidden' ? (
-        <AlpacaPaperPortfolioView data={initialAlpacaPaper} />
+        <AlpacaPaperPortfolioView data={initialAlpacaPaper} locale={locale} />
       ) : null}
     </div>
   );
