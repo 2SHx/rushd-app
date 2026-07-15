@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — L2 short deterministic learner replay ✅
+Shipped: a DB-free Bollinger learning adapter plus a committed 7,290-row REAL Yahoo fixture covering the exact 25-name team universe, SPUS, and SPY over a three-month measured interval.
+Decisions: preserved production next-open fills/costs and risk envelope; retained warm-up/PIT state before the frozen OOS boundary; exposed unscreened AAOIFI state honestly as execution-blocked while keeping the educational replay visible.
+Verify: focused exit 4/4, curriculum+replay 9/9, lint/TypeScript clean; full suite 730/733 with only the same three pre-existing stale-AMD portfolio fixture failures.
+Open: L3 adds authenticated immutable sealing/API; no persistence, promotion verdict, broker action, or prohibited terminal-period command was introduced or run.
+
 ## 2026-07-15 — L1 bounded strategy-learning curriculum ✅
 Shipped: a versioned seven-question en/ar curriculum for `bollinger-mr-long-v2@v2` plus a DB-free compiler that emits complete validated params and a deterministic SHA-256 policy hash.
 Decisions: lazy-dev rung 2 maps five closed choices onto existing reviewed setup ranges; two knowledge answers never enter policy; the lesson is `EDUCATIONAL_ONLY` and cannot weaken Sharia or envelope caps.
