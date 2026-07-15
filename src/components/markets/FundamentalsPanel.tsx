@@ -140,7 +140,7 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
               <div className="flex justify-between text-foreground/60">
                 <span>{t('dayRange')}</span>
                 <span className="font-mono tabular-nums">
-                  {currency === 'USD' ? '$' : ''}{stats.dayRange[0]} - {stats.dayRange[1]}{currency === 'SAR' ? ` ${currency}` : ''}
+                  {currency === 'USD' ? '$' : ''}{stats.dayRange[0]?.toFixed(2)} - {stats.dayRange[1]?.toFixed(2)}{currency === 'SAR' ? ` ${currency}` : ''}
                 </span>
               </div>
               <div className="h-1 bg-foreground/10 rounded-full relative">
@@ -152,7 +152,7 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
               <div className="flex justify-between text-foreground/60">
                 <span>{t('yearRange')}</span>
                 <span className="font-mono tabular-nums">
-                  {currency === 'USD' ? '$' : ''}{stats.yearRange[0]} - {stats.yearRange[1]}{currency === 'SAR' ? ` ${currency}` : ''}
+                  {currency === 'USD' ? '$' : ''}{stats.yearRange[0]?.toFixed(2)} - {stats.yearRange[1]?.toFixed(2)}{currency === 'SAR' ? ` ${currency}` : ''}
                 </span>
               </div>
               <div className="h-1 bg-foreground/10 rounded-full relative">
@@ -168,14 +168,14 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
             <div className="flex justify-between border-b border-[var(--border-color)] pb-1.5">
               <span className="text-foreground/60">{t('openPrice')}</span>
               <span className="font-bold font-mono tabular-nums text-foreground">
-                {currency === 'USD' ? '$' : ''}{stats.open}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
+                {currency === 'USD' ? '$' : ''}{stats.open?.toFixed(2)}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
               </span>
             </div>
 
             <div className="flex justify-between border-b border-[var(--border-color)] pb-1.5">
               <span className="text-foreground/60">{t('prevCloseLabel')}</span>
               <span className="font-bold font-mono tabular-nums text-foreground">
-                {currency === 'USD' ? '$' : ''}{stats.prevClose}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
+                {currency === 'USD' ? '$' : ''}{stats.prevClose?.toFixed(2)}{currency === 'SAR' || currency === 'ر.س' ? ` ${currency}` : ''}
               </span>
             </div>
 

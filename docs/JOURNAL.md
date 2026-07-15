@@ -12,11 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
-## 2026-07-15 — Theme-responsive controls + Gross exposure distribution list ✅
-Shipped: light/dark theme compatibility for the AI Board controls, and a detailed stock list legend below the Gross exposure distribution donut chart.
-Decisions: replaced hardcoded theme hex codes with tailwind-responsive standard classes; listed positions with colored indicators matching the donut segments.
+## 2026-07-15 — Theme-responsive controls + Gross exposure list + Range formatting ✅
+Shipped: light/dark theme AI Board controls, Gross exposure list legend under donut chart, and formatted day/year ranges & open/prevClose prices to 2 decimal places.
+Decisions: replaced hardcoded theme hex codes with tailwind-responsive standard classes; listed positions with colored indicators; called toFixed(2) on range/price variables.
 Verify: lint/TypeScript/i18n clean; ran `npm run dev` and verified test suite passing 770/773 (with the same three pre-existing AMD failures).
-Open: monitor exposure changes across portfolio rebalances and dynamic user mode shifts.
+Open: monitor exposure changes and range values across other stocks pages.
 
 ## 2026-07-15 — Market breadth + focused strategy comparison UI ✅
 Shipped: semantic session gradients, honest 15/82 quote coverage with six-symbol theme previews, top-ranked persisted strategy curves, and a single canonical Alpaca paper view in Portfolio.
