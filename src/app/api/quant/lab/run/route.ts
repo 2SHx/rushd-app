@@ -230,6 +230,16 @@ export async function GET(req: Request) {
     let status: string = marker?.status ?? 'UNKNOWN';
     if ((status === 'PENDING' || status === 'RUNNING') && Date.now() - run.createdAt.getTime() > STALE_MS) {
       status = 'FAILED_STALE';
+      // The detached promise died with the server (module doc, line 11): free the user's claim so
+      // they can start a new run — but only if no newer run exists, so polling an old stale row
+      // can never release the claim held by a currently-active run.
+      const newer = await prisma.backtestRun.findFirst({
+        where: { strategyId: run.strategyId, createdAt: { gt: run.createdAt } },
+        select: { id: true },
+      });
+      if (!newer) {
+        await prisma.autoRunClaim.delete({ where: { key: claimKeyFor(user.id) } }).catch(() => {});
+      }
     }
 
     const evidenceView = marker?.evidenceView ?? null;

@@ -1,8 +1,9 @@
 // src/auth.test.ts
-// Pins the no-session contract for the `auth()` wrapper: no cookies + no
-// SKIP_AUTH must yield null (never a fabricated session), and the SKIP_AUTH
-// bypass — even when set — must never activate in production. Mocks
-// next-auth's core at the module boundary (never the wrapper under test).
+// Pins the session contract for the `auth()` wrapper while auth is hidden
+// (user decision, 2026-07-14): development ALWAYS fabricates the mock
+// session (no login wall locally); any other non-prod env needs SKIP_AUTH=1;
+// production NEVER fabricates, regardless of SKIP_AUTH. Mocks next-auth's
+// core at the module boundary (never the wrapper under test).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mutableEnv = process.env as Record<string, string | undefined>;
@@ -64,9 +65,9 @@ afterEach(() => {
 });
 
 describe('auth() wrapper — no-session means no-session', () => {
-  it('returns null when there is no real session and SKIP_AUTH is unset', async () => {
+  it('returns null when there is no real session outside development and SKIP_AUTH is unset', async () => {
     delete mutableEnv.SKIP_AUTH;
-    mutableEnv.NODE_ENV = 'development';
+    mutableEnv.NODE_ENV = 'test';
     nextAuthInnerAuth.mockResolvedValue(null);
 
     const { auth } = await import('./auth');
@@ -75,6 +76,22 @@ describe('auth() wrapper — no-session means no-session', () => {
     expect(session).toBeNull();
     expect(findUnique).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('fabricates the mock session in development even without SKIP_AUTH (auth hidden for now)', async () => {
+    delete mutableEnv.SKIP_AUTH;
+    mutableEnv.NODE_ENV = 'development';
+    nextAuthInnerAuth.mockResolvedValue(null);
+    findUnique.mockResolvedValue({ id: 'mock-child-id', role: 'PARENT', tier: 'ULTRA' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { auth } = await import('./auth');
+    const session = await auth();
+
+    expect(session?.user?.id).toBe('mock-child-id');
+    expect(session?.user?.tier).toBe('ULTRA');
+
+    warnSpy.mockRestore();
   });
 
   it('returns null when SKIP_AUTH=1 but NODE_ENV=production (both gates required)', async () => {

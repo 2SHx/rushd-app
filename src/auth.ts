@@ -140,10 +140,11 @@ export const auth = async (...args: any[]) => {
     return session;
   }
 
-  // Skip Auth Mode: strictly opt-in, dev-only. Both gates are required —
-  // there is no scenario in which a missing session silently becomes an
-  // authenticated one unless a developer has explicitly set SKIP_AUTH=1
-  // outside of production.
+  // Skip Auth Mode: auth is hidden for now (user decision, 2026-07-14) —
+  // in development the mock session is ALWAYS fabricated so the app never
+  // shows a login wall locally; SKIP_AUTH=1 opts in from other non-prod
+  // environments. NODE_ENV=production is a hard gate: a missing session
+  // there is always null, never fabricated.
   const skipAuthEnabled = (process.env.SKIP_AUTH === '1' || process.env.NODE_ENV === 'development') && process.env.NODE_ENV !== 'production';
   if (!skipAuthEnabled) {
     return null;

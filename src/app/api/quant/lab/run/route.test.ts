@@ -43,6 +43,11 @@ vi.mock('@/lib/prisma', () => ({
         return row;
       },
       findUnique: async ({ where }: { where: { id: string } }) => h.backtestRuns.get(where.id) ?? null,
+      findFirst: async ({ where }: { where: { strategyId: string; createdAt: { gt: Date } } }) => {
+        const rows = Array.from(h.backtestRuns.values());
+        const hit = rows.find((row) => row.strategyId === where.strategyId && row.createdAt > where.createdAt.gt);
+        return hit ? { id: hit.id } : null;
+      },
     },
   },
 }));
@@ -181,6 +186,54 @@ describe('POST /api/quant/lab/run', () => {
     });
     const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
     expect(again.status).toBe(202);
+  });
+
+  it('a stale run (server died mid-run) reports FAILED_STALE AND frees the claim', async () => {
+    // Simulate the restart scenario directly: a RUNNING row older than STALE_MS whose claim
+    // was never freed because the detached promise died with the process.
+    const staleId = crypto.randomUUID();
+    h.backtestRuns.set(staleId, {
+      id: staleId,
+      strategyId: 'lab:user-1',
+      createdAt: new Date(Date.now() - 20 * 60 * 1000),
+      metrics: { lab: { status: 'RUNNING', ownerUserId: 'user-1', evidenceView: false, request: { setup: 'bollinger-mr-long-v2', period: 'FULL' } } },
+    });
+    h.claims.add('lab-active:user-1');
+
+    const polled = await GET(getReq(staleId));
+    expect(polled.status).toBe(200);
+    expect((await polled.json()).status).toBe('FAILED_STALE');
+
+    // The claim is freed on read — the user is not permanently 409-locked.
+    h.runLab.mockResolvedValue({
+      card: { ...baseCard, status: 'REJECTED' },
+      outFile: null, backtestRunId: null, diagnostic: false,
+      symbols: ['AAPL'], universeTag: 'halal', periodPreset: 'FULL', from: '2018-01-02', to: '2026-07-10',
+    });
+    const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    expect(again.status).toBe(202);
+  });
+
+  it('polling an old stale run does NOT free the claim while a newer run is active', async () => {
+    const staleId = crypto.randomUUID();
+    h.backtestRuns.set(staleId, {
+      id: staleId,
+      strategyId: 'lab:user-1',
+      createdAt: new Date(Date.now() - 20 * 60 * 1000),
+      metrics: { lab: { status: 'RUNNING', ownerUserId: 'user-1', evidenceView: false, request: { setup: 'bollinger-mr-long-v2', period: 'FULL' } } },
+    });
+
+    // A newer run currently holds the claim.
+    h.runLab.mockImplementation(() => new Promise(() => {}));
+    const active = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    expect(active.status).toBe(202);
+
+    const polled = await GET(getReq(staleId));
+    expect((await polled.json()).status).toBe('FAILED_STALE');
+
+    // The active run's claim survived — a concurrent start is still refused.
+    const second = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    expect(second.status).toBe(409);
   });
 
   it('a GET for another user\'s run id returns 404', async () => {

@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const mutableEnv = process.env as Record<string, string | undefined>;
 const ORIGINAL_AUTH_SECRET = mutableEnv.AUTH_SECRET;
 const ORIGINAL_NODE_ENV = mutableEnv.NODE_ENV;
+const ORIGINAL_NEXT_PHASE = mutableEnv.NEXT_PHASE;
 
 beforeEach(() => {
   vi.resetModules();
@@ -18,6 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   mutableEnv.AUTH_SECRET = ORIGINAL_AUTH_SECRET;
   mutableEnv.NODE_ENV = ORIGINAL_NODE_ENV;
+  mutableEnv.NEXT_PHASE = ORIGINAL_NEXT_PHASE;
 });
 
 describe('authConfig secret resolution', () => {
@@ -49,5 +51,36 @@ describe('authConfig secret resolution', () => {
 
     const mod = await import('./auth.config');
     expect(mod.authConfig.secret).toBe('a-real-provisioned-secret');
+  });
+});
+
+// Security gate (MED): NEXT_PHASE=phase-production-build lets a keyless `next build`
+// import this module — but if that env var leaks into a RUNNING server, the session
+// callback must refuse to mint a session under the public fallback secret.
+describe('build-phase fallback must never serve requests', () => {
+  const sessionArgs = {
+    session: { user: { name: 'x', email: 'x@x' } },
+    token: { userId: 'u1', role: 'PARENT', tier: 'ULTRA', parentId: null },
+  } as never;
+
+  it('module loads keyless under NEXT_PHASE, but the session callback throws', async () => {
+    delete process.env.AUTH_SECRET;
+    mutableEnv.NODE_ENV = 'production';
+    mutableEnv.NEXT_PHASE = 'phase-production-build';
+
+    const { authConfig } = await import('./auth.config');
+    expect(authConfig.secret).toBeTruthy();
+
+    await expect(authConfig.callbacks.session(sessionArgs)).rejects.toThrow(/must never serve requests/);
+  });
+
+  it('with AUTH_SECRET provisioned, the session callback serves normally even if NEXT_PHASE leaked', async () => {
+    process.env.AUTH_SECRET = 'a-real-provisioned-secret';
+    mutableEnv.NODE_ENV = 'production';
+    mutableEnv.NEXT_PHASE = 'phase-production-build';
+
+    const { authConfig } = await import('./auth.config');
+    const session = await authConfig.callbacks.session(sessionArgs);
+    expect((session as { user: { id: string } }).user.id).toBe('u1');
   });
 });

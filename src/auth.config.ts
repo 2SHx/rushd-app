@@ -21,6 +21,13 @@ declare module 'next-auth' {
 // a real AUTH_SECRET and throws at module load otherwise.
 const DEV_ONLY_FALLBACK_SECRET = 'dev-only-insecure-secret-do-not-use-outside-local-dev';
 
+// Set only when the NEXT_PHASE build branch below resolves the fallback. The session callback
+// throws if a request is ever served under it — `next build`'s page-data collection imports this
+// module but never runs callbacks, so a keyless build stays green while a runtime process that
+// leaked NEXT_PHASE=phase-production-build (security gate, MED) can never mint a session with the
+// public fallback secret. AUTH_SECRET is mandatory in production deployments.
+let buildPhaseFallbackActive = false;
+
 function resolveAuthSecret(): string {
   if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
   if (process.env.NODE_ENV === 'development') {
@@ -34,6 +41,7 @@ function resolveAuthSecret(): string {
   // it lets a keyless build succeed without weakening the real runtime
   // guard below.
   if (process.env.NEXT_PHASE === 'phase-production-build') {
+    buildPhaseFallbackActive = true;
     return DEV_ONLY_FALLBACK_SECRET;
   }
   throw new Error(
@@ -59,6 +67,9 @@ export const authConfig = {
       return token;
     },
     async session({ session, token }) {
+      if (buildPhaseFallbackActive) {
+        throw new Error('[auth] AUTH_SECRET must be set — the build-phase fallback secret must never serve requests.');
+      }
       session.user = {
         ...session.user,
         id: token.userId as string,
