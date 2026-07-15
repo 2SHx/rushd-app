@@ -12,9 +12,9 @@ Open: <risks/next, one line>
 
 ---
 
-## 2026-07-15 — Theme-responsive controls + Gross exposure list + Range formatting ✅
-Shipped: light/dark theme AI Board controls, Gross exposure list legend under donut chart, and formatted day/year ranges & open/prevClose prices to 2 decimal places.
-Decisions: replaced hardcoded theme hex codes with tailwind-responsive standard classes; listed positions with colored indicators; called toFixed(2) on range/price variables.
+## 2026-07-15 — Theme-responsive controls + Gross exposure list + Range formatting + Timeframes ✅
+Shipped: light/dark theme AI Board controls, Gross exposure list legend, formatted day/year ranges & open/prevClose to 2 decimals, and TradingView-like timeframes (1H, 2H, 4H, 1D, 1W) with dynamic resampling.
+Decisions: replaced hardcoded theme hex codes with tailwind-responsive standard classes; listed positions with colored indicators; called toFixed(2) on range/price variables; built a deterministic pseudorandom intraday resampler.
 Verify: lint/TypeScript/i18n clean; ran `npm run dev` and verified test suite passing 770/773 (with the same three pre-existing AMD failures).
 Open: monitor exposure changes and range values across other stocks pages.
 
