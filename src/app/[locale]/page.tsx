@@ -3,13 +3,13 @@ import { getTranslations } from 'next-intl/server';
 import {
   ArrowRight,
   BookOpenCheck,
+  ChartNoAxesCombined,
   Check,
   Compass,
   GraduationCap,
   LineChart,
   ShieldCheck,
   SlidersHorizontal,
-  Users,
 } from 'lucide-react';
 import HeroVisual from '@/components/landing/HeroVisual';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -25,7 +25,7 @@ const PROCESS = [
 const FEATURES = [
   { key: 'compliance', Icon: ShieldCheck },
   { key: 'simulator', Icon: LineChart },
-  { key: 'family', Icon: Users },
+  { key: 'comparison', Icon: ChartNoAxesCombined },
   { key: 'learning', Icon: GraduationCap },
 ] as const;
 
@@ -88,7 +88,7 @@ export default async function Home({ params }: { params: { locale: string } }) {
 
             <div className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
               <Link
-                href={`/${locale}/register`}
+                href={`/${locale}/login`}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(var(--accent-color-rgb),0.8)] transition-[transform,opacity] duration-150 ease-out hover:opacity-90 motion-safe:hover:-translate-y-0.5"
               >
                 <span>{t('ctaPrimary')}</span>
@@ -175,17 +175,11 @@ export default async function Home({ params }: { params: { locale: string } }) {
             </div>
             <div className="mt-8 flex shrink-0 flex-col gap-3 sm:flex-row lg:mt-0">
               <Link
-                href={`/${locale}/register`}
+                href={`/${locale}/login`}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90"
               >
                 {t('ctaPrimary')}
                 <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
-              </Link>
-              <Link
-                href={`/${locale}/login`}
-                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-surface-paper/10 px-6 text-sm font-semibold transition-colors duration-150 hover:bg-surface-paper/15"
-              >
-                {t('finalSecondary')}
               </Link>
             </div>
           </div>

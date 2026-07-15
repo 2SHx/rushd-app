@@ -13,9 +13,9 @@ Open: <risks/next, one line>
 ---
 
 ## 2026-07-15 — Institutional landing experience revamp ✅
-Shipped: a full-width en/ar landing journey with clearer product positioning, learning-loop narrative, honest practice receipt, guardrail cards, calm CTA hierarchy, and responsive light/dark states.
-Decisions: lazy-dev rung 2 reused the server page, design tokens, Lucide, and static hero; Apple-style hierarchy, Morpho restraint, and WCAG focus/44px targets shaped the slice without a new dependency or 3D payload.
-Verify: lint/TypeScript/i18n parity clean; browser-verified desktop, dark/light, anchor behavior, and 390px Arabic RTL with zero overflow or console errors; full suite 761/764 with the same three stale-AMD failures.
+Shipped: a full-width en/ar investing journey with a learning-loop narrative, honest practice receipt, strategy comparisons, guardrail cards, calm CTA hierarchy, and responsive light/dark states.
+Decisions: investing practice now owns the primary conversion instead of family registration; lazy-dev rung 2 reused the server page, tokens, Lucide, and static hero without a new dependency or 3D payload.
+Verify: lint/TypeScript/i18n parity clean; browser-verified en/ar copy, RTL direction, and zero overflow; full suite 754/764 with 10 database-backed outcomes blocked because PostgreSQL was unavailable.
 Open: this improves the landing slice but does not falsely close the broader M9 token migration; auth and the prohibited terminal evidence path were untouched.
 
 ## 2026-07-15 — R3-5 deterministic tournament allocator core ✅

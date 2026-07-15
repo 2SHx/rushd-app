@@ -29,7 +29,7 @@
     "heroTitleAccent": "money is on the line.",
     "heroSubtitle": "Practice decisions across TASI and Nasdaq, see what your choices would have done, and learn inside clear Sharia-aware guardrails.",
     "heroVisualLabel": "Illustrative investment learning cycle",
-    "ctaPrimary": "Create a family account",
+    "ctaPrimary": "Start investing practice",
     "ctaSecondary": "Log in",
     "ctaExperience": "See how it works",
     "rightsReserved": "All rights reserved.",
@@ -72,18 +72,17 @@
         "title": "Market-linked practice",
         "desc": "Practice with virtual SAR and USD using labeled market data. No real order is placed."
       },
-      "family": {
-        "title": "Family context",
-        "desc": "Parents can create child access and review learning activity without turning outcomes into pressure."
+      "comparison": {
+        "title": "Strategy comparisons",
+        "desc": "Compare your sealed replay with the strategy team, SPUS, and a broad-market price benchmark on one aligned timeline."
       },
       "learning": {
         "title": "Mastery, not guessing",
         "desc": "XP follows completion, retrieval, and reflection—not simulated profit, loss, or benchmark rank."
       }
     },
-    "finalTitle": "Build judgment one decision at a time.",
+    "finalTitle": "Build investing judgment one decision at a time.",
     "finalSubtitle": "Start with virtual funds, honest comparisons, and guardrails that stay on.",
-    "finalSecondary": "Already a member? Log in",
     "visualEyebrow": "Practice session",
     "visualTitle": "A complete learning cycle",
     "visualBadge": "Paper only",
