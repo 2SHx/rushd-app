@@ -21,34 +21,89 @@
   },
   "Landing": {
     "title": "Rushd Financial",
-    "heroKicker": "TASI + NASDAQ · AAOIFI screening · Arabic-first",
-    "heroTitlePrefix": "Grow your financial wisdom with",
-    "heroTitleAccent": "Rushd",
-    "heroSubtitle": "A Sharia-aware investment simulator and family neobanking experience for the Gulf market.",
-    "heroVisualLabel": "Illustrative market composition",
-    "ctaPrimary": "Start now as parent",
+    "navLabel": "Primary navigation",
+    "navExperience": "How it works",
+    "navPrinciples": "Why Rushd",
+    "heroKicker": "Investing practice built for judgment",
+    "heroTitlePrefix": "Learn how to invest before",
+    "heroTitleAccent": "money is on the line.",
+    "heroSubtitle": "Practice decisions across TASI and Nasdaq, see what your choices would have done, and learn inside clear Sharia-aware guardrails.",
+    "heroVisualLabel": "Illustrative investment learning cycle",
+    "ctaPrimary": "Create a family account",
     "ctaSecondary": "Log in",
+    "ctaExperience": "See how it works",
     "rightsReserved": "All rights reserved.",
-    "legendCompliant": "Sharia-compliant",
-    "legendScreenedOut": "Screened out",
+    "proofLabel": "Rushd product principles",
+    "proof": {
+      "paper": "Virtual-money simulation",
+      "screening": "Fail-closed Sharia screening",
+      "bilingual": "English and Arabic"
+    },
+    "experienceEyebrow": "The learning loop",
+    "experienceTitle": "Make a decision. See the consequence. Learn the mechanism.",
+    "experienceSubtitle": "Rushd turns investing concepts into a repeatable practice cycle. Outcomes stay hidden until your choices are sealed, so reflection remains honest.",
+    "process": {
+      "learn": {
+        "title": "Understand the idea",
+        "desc": "Start with one clear concept and retrieve it before making a market decision."
+      },
+      "decide": {
+        "title": "Choose within guardrails",
+        "desc": "Make bounded entry, exit, sizing, and risk choices—never generate executable rules."
+      },
+      "simulate": {
+        "title": "Reveal the replay",
+        "desc": "Seal the attempt first, then compare the simulated path with the strategy team and benchmarks."
+      },
+      "reflect": {
+        "title": "Explain what happened",
+        "desc": "Review return, drawdown, and the mechanism behind each choice—not just whether it won."
+      }
+    },
+    "featureEyebrow": "Built-in guardrails",
+    "featureTitle": "Serious learning without the trading-game pressure.",
+    "featureSubtitle": "The interface rewards understanding and process. Profit, streaks, and simulated rank never determine learning rewards.",
     "feature": {
       "compliance": {
-        "title": "Sharia Screener",
-        "desc": "Automatic stock screening against AAOIFI standards, with trading blocked on non-compliant assets."
+        "title": "Clear Sharia controls",
+        "desc": "Screening sources stay visible, and simulated buys remain blocked when compliance is missing or fails."
       },
       "simulator": {
-        "title": "TASI & NASDAQ Simulator",
-        "desc": "Practice trading with simulated funds in SAR and USD, priced against real market data."
+        "title": "Market-linked practice",
+        "desc": "Practice with virtual SAR and USD using labeled market data. No real order is placed."
       },
       "family": {
-        "title": "Family Supervision",
-        "desc": "Parents create child logins, set tasks and rewards, and review activity in full."
+        "title": "Family context",
+        "desc": "Parents can create child access and review learning activity without turning outcomes into pressure."
       },
       "learning": {
-        "title": "Gamified Learning",
-        "desc": "Complete quizzes on personal finance and investing to earn XP and level up."
+        "title": "Mastery, not guessing",
+        "desc": "XP follows completion, retrieval, and reflection—not simulated profit, loss, or benchmark rank."
       }
-    }
+    },
+    "finalTitle": "Build judgment one decision at a time.",
+    "finalSubtitle": "Start with virtual funds, honest comparisons, and guardrails that stay on.",
+    "finalSecondary": "Already a member? Log in",
+    "visualEyebrow": "Practice session",
+    "visualTitle": "A complete learning cycle",
+    "visualBadge": "Paper only",
+    "visualComplete": "Step complete",
+    "visual": {
+      "lesson": {
+        "title": "Concept retrieved",
+        "desc": "The lesson checks understanding before any outcome appears."
+      },
+      "policy": {
+        "title": "Decisions sealed",
+        "desc": "Bounded choices are locked before the replay is revealed."
+      },
+      "replay": {
+        "title": "Comparison ready",
+        "desc": "Learner, team, Sharia benchmark, and broad-market proxy share one timeline."
+      }
+    },
+    "visualGateTitle": "The guardrails stay on",
+    "visualGateDesc": "Unverified or non-compliant assets cannot reach simulated execution."
   },
   "Dashboard": {
     "title": "Rushd Financial",
