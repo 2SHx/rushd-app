@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — R3-5 deterministic tournament allocator core ✅
+Shipped: a pure QDR-7 allocator with 63-day prior shrinkage, drawdown-penalized scoring, seeded tie ranking, 40% water-filled caps, and residual cash.
+Decisions: only ACCEPTED, complete-evidence, VERIFIED_COMPLIANT modes score; drawdown benches, tracking-error revalidates, implausibility disqualifies, and Decimal zero is tested explicitly.
+Verify: focused 8/8, lint/TypeScript/diff clean; full suite 761/764 with only the same three stale-AMD portfolio fixture failures.
+Open: R3-6 remains gated on at least one ACCEPTED team plus its security review; no persistence/cron/broker/auth work or prohibited terminal-period run occurred.
+
 ## 2026-07-15 — L5 spaced retrieval + process-only XP ✅
 Shipped: exact-once mastery events, +20 completion/+15 reflection/+15 delayed retrieval through `addXP`, latest-attempt resume, and bilingual mastery UI with a 24-hour recall gate.
 Decisions: XP inputs are only milestone kind/response/correctness—never replay P&L or rank; serializable event+XP writes reject racing response changes, with no streak punishment or random reward.
