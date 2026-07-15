@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type RefObject } from 'react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
@@ -14,6 +14,7 @@ type TFunction = ReturnType<typeof useTranslations>;
 type Formatter = (value: number | null) => string;
 type MoneyFormatter = (value: number) => string;
 type DateFormatter = (value: string) => string;
+type PerformanceRow = { label: string; hint: string; full: string; oos: string };
 
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
 
@@ -159,6 +160,7 @@ function TeamPerformanceDetail({
   money,
   dateTime,
   detailRef,
+  comparisonRows,
 }: {
   team: StrategyLeagueTeam;
   t: TFunction;
@@ -167,10 +169,11 @@ function TeamPerformanceDetail({
   money: MoneyFormatter;
   dateTime: DateFormatter;
   detailRef: RefObject<HTMLElement>;
+  comparisonRows: PerformanceRow[];
 }) {
   const evidence = team.tradeEvidence;
-  const statusUp = team.oos.cagr >= 0;
-  const StatusIcon = statusUp ? ArrowUpRight : ArrowDownRight;
+  const shariaStyle = SHARIA_STATE_STYLE[team.shariaState] ?? SHARIA_STATE_STYLE.UNVERIFIED;
+  const ShariaIcon = shariaStyle.Icon;
 
   return (
     <section
@@ -191,26 +194,66 @@ function TeamPerformanceDetail({
         </span>
       </header>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-          <p className="text-[11px] text-foreground/55">{t('teamOosCagr')}</p>
-          <p className={`mt-2 flex items-center gap-1 font-mono text-xl font-semibold tabular-nums ${statusUp ? 'text-up' : 'text-down'}`} dir="ltr">
-            <StatusIcon className="size-4" aria-hidden="true" />
-            {percent(team.oos.cagr)}
-          </p>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)]">
+        <div className="min-w-0 text-start">
+          <h3 className="text-base font-semibold">{t('performanceTableTitle')}</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/60">{t('performanceTableDescription')}</p>
+          <div className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.025]">
+            <table className="w-full min-w-[30rem] text-sm">
+              <thead className="text-foreground/55">
+                <tr>
+                  <th className="px-4 py-3 text-start font-medium">{t('metric')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('fullPeriod')}</th>
+                  <th className="px-4 py-3 text-end font-medium">{t('outOfSample')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map(row => (
+                  <tr key={row.label} className="border-t border-[var(--border-color)]">
+                    <th scope="row" className="px-4 py-3 text-start font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.label}
+                        <span className="group relative inline-flex cursor-help items-center">
+                          <Info className="size-3 text-foreground/40" aria-hidden="true" />
+                          <span className="pointer-events-none absolute bottom-[125%] start-1/2 z-50 w-52 -translate-x-1/2 rounded-xl border border-[var(--border-color)] bg-surface-card p-2.5 text-start text-[10px] font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            {row.hint}
+                          </span>
+                        </span>
+                      </span>
+                    </th>
+                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{row.full}</td>
+                    <td className="px-4 py-3 text-end font-semibold tabular-nums" dir="ltr">{row.oos}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-          <p className="text-[11px] text-foreground/55">{t('metricMaxDrawdown')}</p>
-          <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-down" dir="ltr">−{percent(Math.abs(team.full.maxDrawdown))}</p>
-        </div>
-        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-          <p className="text-[11px] text-foreground/55">{t('metricHitRate')}</p>
-          <p className="mt-2 font-mono text-xl font-semibold tabular-nums" dir="ltr">{percent(team.full.hitRate)}</p>
-        </div>
-        <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-          <p className="text-[11px] text-foreground/55">{t('metricTrades')}</p>
-          <p className="mt-2 font-mono text-xl font-semibold tabular-nums" dir="ltr">{decimal(team.full.trades)}</p>
-        </div>
+
+        <aside className="rounded-xl bg-foreground/[0.04] p-4 text-start sm:p-5" aria-labelledby="run-provenance-title">
+          <h3 id="run-provenance-title" className="text-base font-semibold">{t('runFactsTitle')}</h3>
+          <dl className="mt-4 divide-y divide-[var(--border-color)] text-xs">
+            <div className="py-3 first:pt-0">
+              <dt className="text-foreground/55">{t('period')}</dt>
+              <dd className="mt-1 tabular-nums" dir="ltr">{team.from} — {team.to}</dd>
+            </div>
+            <div className="py-3">
+              <dt className="text-foreground/55">{t('dataFeed')}</dt>
+              <dd className="mt-1 font-mono" dir="ltr">{team.dataFeed}</dd>
+            </div>
+            <div className="py-3">
+              <dt className="text-foreground/55">{t('shariaState')}</dt>
+              <dd className="mt-1 inline-flex items-center gap-1.5">
+                <ShariaIcon className={`size-4 ${shariaStyle.className}`} aria-hidden="true" />
+                {t(`sharia.${team.shariaState}`)}
+              </dd>
+            </div>
+            <div className="pt-3">
+              <dt className="text-foreground/55">{t('sourceCommit')}</dt>
+              <dd className="mt-1 break-all font-mono" dir="ltr">{team.gitSha}</dd>
+            </div>
+          </dl>
+        </aside>
       </div>
 
       {evidence === null ? (
@@ -384,7 +427,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     );
   }
 
-  const plottableTeams = teams.filter(team => team.bootstrap.maxDrawdown.p95 !== null);
+  const plottableTeams = rankedTeams.filter(team => team.bootstrap.maxDrawdown.p95 !== null);
   const xValues = plottableTeams.map(team => team.oos.cagr);
   const yValues = plottableTeams.map(team => team.bootstrap.maxDrawdown.p95 as number);
   const rawMinX = Math.min(0, ...xValues);
@@ -426,9 +469,6 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
     { label: t('gateRuin'), value: percent(riskOfRuin), pass: selected.checklist.mcRiskOfRuinWithinLimit, progress: selected.checklist.mcRiskOfRuinWithinLimit ? 1 : 0 },
     { label: t('gateTrades'), value: decimal(selected.full.trades), pass: selected.checklist.enoughTrades, progress: selected.checklist.enoughTrades ? 1 : 0 },
   ];
-  const shariaStyle = SHARIA_STATE_STYLE[selected.shariaState] ?? SHARIA_STATE_STYLE.UNVERIFIED;
-  const ShariaIcon = shariaStyle.Icon;
-
   return (
     <section className="min-w-0 max-w-full space-y-8" aria-labelledby="strategy-league-title">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -468,6 +508,13 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         money={money}
         dateTime={dateTime}
         detailRef={detailRef}
+        comparisonRows={comparisonRows}
+      />
+
+      <HistoricalComparisonChart
+        comparison={selected.comparison}
+        comparisons={teams.flatMap(team => team.comparison ? [{ setupId: team.setupId, comparison: team.comparison }] : [])}
+        selectedSetupId={selected.setupId}
       />
 
       <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
@@ -505,23 +552,37 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
               {plottableTeams.map((team, index) => {
                 const drawdown = team.bootstrap.maxDrawdown.p95 as number;
                 const selectedPoint = team.runId === selected.runId;
+                const pointX = x(team.oos.cagr);
+                const pointY = y(drawdown);
+                const labelOnStart = pointX < PLOT.width * 0.68;
                 return (
                   <g key={team.runId} aria-label={`${team.setupId}: ${t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}`}>
                     <circle
-                      cx={x(team.oos.cagr)}
-                      cy={y(drawdown)}
-                      r={selectedPoint ? 9 : 7}
+                      cx={pointX}
+                      cy={pointY}
+                      r={selectedPoint ? 11 : 9}
                       fill={team.status === 'ACCEPTED' ? 'var(--up)' : 'var(--down)'}
                       stroke="var(--surface-card)"
                       strokeWidth={selectedPoint ? 4 : 2}
                     />
                     <text
-                      x={x(team.oos.cagr) + 10}
-                      y={y(drawdown) + (index % 2 === 0 ? -9 : 15)}
-                      className="fill-foreground text-[10px] font-semibold"
+                      x={pointX}
+                      y={pointY + 3}
+                      textAnchor="middle"
+                      className="[fill:var(--surface-card)] text-[8px] font-bold"
                     >
-                      {team.status === 'ACCEPTED' ? '✓' : '×'} {team.setupId}
+                      {index + 1}
                     </text>
+                    {selectedPoint ? (
+                      <text
+                        x={pointX + (labelOnStart ? 16 : -16)}
+                        y={pointY - 13}
+                        textAnchor={labelOnStart ? 'start' : 'end'}
+                        className="fill-foreground text-[10px] font-semibold"
+                      >
+                        {team.setupId}
+                      </text>
+                    ) : null}
                   </g>
                 );
               })}
@@ -542,6 +603,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
                 <span className="size-2.5 rounded-full" style={{ backgroundColor: 'var(--down)' }} />
                 {t('rejected')}
               </li>
+              <li>{t('plotRankHint')}</li>
             </ul>
           </>
         )}
@@ -550,92 +612,35 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
             {t('plotOmittedCount', { count: teams.length - plottableTeams.length })}
           </p>
         ) : null}
-      </figure>
-
-      <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
-        <figcaption className="text-start">
-          <h2 className="font-semibold">{t('plotReadingTitle')}</h2>
+        <div className="mt-6 border-t border-[var(--border-color)] pt-5 text-start">
+          <h3 className="text-sm font-semibold">{t('plotReadingTitle')}</h3>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('plotReadingDescription')}</p>
-        </figcaption>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label={t('plotReadingTitle')}>
-          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-            <p className="text-[11px] text-foreground/60">{t('plotSelectedTeam')}</p>
-            <p className="mt-2 truncate font-mono text-sm" dir="ltr">{selected.setupId}</p>
-          </div>
-          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-            <p className="text-[11px] text-foreground/60">{t('plotReturnReadout')}</p>
-            <p className={`mt-2 text-lg font-semibold tabular-nums ${selected.oos.cagr >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(selected.oos.cagr)}</p>
-            <p className="mt-1 text-[10px] text-foreground/55">{t('plotReturnReadoutHint')}</p>
-          </div>
-          <div className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-            <p className="text-[11px] text-foreground/60">{t('plotRiskReadout')}</p>
-            <p className={`mt-2 text-lg font-semibold tabular-nums ${selected.checklist.mcMaxDDWithinBreaker ? 'text-up' : 'text-noncompliant'}`} dir="ltr">{percent(mcDrawdown)}</p>
-            <p className="mt-1 text-[10px] text-foreground/55">{selected.checklist.mcMaxDDWithinBreaker ? t('plotRiskWithin') : t('plotRiskOutside')}</p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-foreground/60">
-          <span>{t('plotLowerRisk')}</span>
-          <span>{t('plotHigherReturn')}</span>
-          <span>{t('plotIdealQuadrant')}</span>
+          <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-3" aria-label={t('plotReadingTitle')}>
+            <div>
+              <dt className="text-[11px] text-foreground/55">{t('plotSelectedTeam')}</dt>
+              <dd className="mt-1 truncate font-mono text-sm" dir="ltr">{selected.setupId}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-foreground/55">{t('plotReturnReadout')}</dt>
+              <dd className={`mt-1 font-semibold tabular-nums ${selected.oos.cagr >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(selected.oos.cagr)}</dd>
+              <p className="mt-1 text-[10px] text-foreground/55">{t('plotReturnReadoutHint')}</p>
+            </div>
+            <div>
+              <dt className="text-[11px] text-foreground/55">{t('plotRiskReadout')}</dt>
+              <dd className={`mt-1 font-semibold tabular-nums ${selected.checklist.mcMaxDDWithinBreaker ? 'text-up' : 'text-noncompliant'}`} dir="ltr">{percent(mcDrawdown)}</dd>
+              <p className="mt-1 text-[10px] text-foreground/55">{selected.checklist.mcMaxDDWithinBreaker ? t('plotRiskWithin') : t('plotRiskOutside')}</p>
+            </div>
+          </dl>
+          <p className="mt-4 text-[11px] leading-relaxed text-foreground/60">
+            {t('plotLowerRisk')} · {t('plotHigherReturn')} · {t('plotIdealQuadrant')}
+          </p>
         </div>
       </figure>
 
-      <HistoricalComparisonChart
-        comparison={selected.comparison}
-        comparisons={teams.flatMap(team => team.comparison ? [{ setupId: team.setupId, comparison: team.comparison }] : [])}
-        selectedSetupId={selected.setupId}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <article className="min-w-0 rounded-2xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4 text-start">
-            <div>
-              <p className="font-mono text-xs text-foreground/60" dir="ltr">{selected.setupId}</p>
-              <h2 className="mt-1 text-xl font-semibold">{t('selectedEvidence')}</h2>
-            </div>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${selected.status === 'ACCEPTED' ? 'bg-up/10 text-up' : 'bg-down/10 text-down'}`}>
-              {selected.status === 'ACCEPTED' ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
-              {t(selected.status === 'ACCEPTED' ? 'accepted' : 'rejected')}
-            </span>
-          </div>
-          <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2">
-            <div><dt className="text-foreground/60">{t('period')}</dt><dd className="mt-1 tabular-nums" dir="ltr">{selected.from} — {selected.to}</dd></div>
-            <div><dt className="text-foreground/60">{t('dataFeed')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.dataFeed}</dd></div>
-            <div><dt className="text-foreground/60">{t('shariaState')}</dt><dd className="mt-1 inline-flex items-center gap-1.5"><ShariaIcon className={`size-4 ${shariaStyle.className}`} aria-hidden="true" />{t(`sharia.${selected.shariaState}`)}</dd></div>
-            <div><dt className="text-foreground/60">{t('sourceCommit')}</dt><dd className="mt-1 font-mono" dir="ltr">{selected.gitSha}</dd></div>
-          </dl>
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-sm">
-              <thead className="text-foreground/60">
-                <tr><th className="py-2 text-start font-medium">{t('metric')}</th><th className="py-2 text-end font-medium">{t('fullPeriod')}</th><th className="py-2 text-end font-medium">{t('outOfSample')}</th></tr>
-              </thead>
-              <tbody>
-                {comparisonRows.map(row => (
-                  <tr key={row.label} className="border-t border-[var(--border-color)]">
-                    <th scope="row" className="py-3 text-start font-medium">
-                      <div className="inline-flex items-center gap-1.5">
-                        {row.label}
-                        <div className="group relative inline-flex items-center cursor-help">
-                          <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                          <div className="absolute bottom-[125%] left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                            {row.hint}
-                          </div>
-                        </div>
-                      </div>
-                    </th>
-                    <td className="py-3 text-end tabular-nums" dir="ltr">{row.full}</td>
-                    <td className="py-3 text-end tabular-nums" dir="ltr">{row.oos}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article className="min-w-0 rounded-2xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
+      <article className="min-w-0 rounded-2xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
           <h2 className="text-xl font-semibold">{t('gatesTitle')}</h2>
           <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('gatesDescription')}</p>
-          <div className="mt-5 space-y-4">
+          <div className="mt-5 grid gap-x-8 gap-y-4 md:grid-cols-2">
             {gates.map(gate => (
               <div key={gate.label}>
                 <div className="flex items-center justify-between gap-4 text-xs">
@@ -671,8 +676,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
               </p>
             )}
           </div>
-        </article>
-      </div>
+      </article>
     </section>
   );
 }

@@ -30,13 +30,13 @@ export default function HistoricalComparisonChart({ comparison, comparisons = []
   }).format(new Date(value));
 
   return (
-    <section className="rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6" aria-labelledby="historical-comparison-title">
+    <section className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6" aria-labelledby="historical-comparison-title">
       <header className="text-start">
         <h2 id="historical-comparison-title" className="text-xl font-semibold inline-flex items-center gap-1.5">
           {t('historyTitle')}
           <div className="group relative inline-flex items-center cursor-help">
             <Info className="size-4 text-foreground/45 hover:text-foreground" />
-            <div className="absolute bottom-[125%] left-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-64 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+            <div className="pointer-events-none absolute bottom-[125%] end-0 z-50 w-64 rounded-xl border border-[var(--border-color)] bg-surface-card p-2.5 text-start text-[10px] font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 sm:end-auto sm:start-0">
               {t('hintHistoryTitle')}
             </div>
           </div>
@@ -176,12 +176,12 @@ function ComparisonPlot({
           const TrendIcon = totalChange > 0 ? ArrowUpRight : totalChange < 0 ? ArrowDownRight : Minus;
           return (
             <li key={item.key} className="rounded-xl bg-foreground/[0.04] p-4 text-start">
-              <div className="flex items-center gap-2 text-xs font-semibold">
+              <div className="flex min-w-0 items-center gap-2 text-xs font-semibold">
                 <span className="h-0.5 w-5" style={{ backgroundColor: item.color }} aria-hidden="true" />
-                {item.label}
+                <span className="min-w-0 break-all">{item.label}</span>
                 <div className="group relative inline-flex items-center cursor-help">
                   <Info className="size-3 text-foreground/45 hover:text-foreground" />
-                  <div className="absolute bottom-[125%] left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
+                  <div className="pointer-events-none absolute bottom-[125%] end-0 z-50 w-52 rounded-xl border border-[var(--border-color)] bg-surface-card p-2.5 text-start text-[10px] font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 sm:end-auto sm:start-1/2 sm:-translate-x-1/2">
                     {item.hint}
                   </div>
                 </div>

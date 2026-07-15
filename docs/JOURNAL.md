@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Organized strategy-league evidence workspace ✅
+Shipped: selected teams now open one Full-vs-OOS performance/provenance/trade workspace; historical comparison precedes a consolidated risk analysis, and promotion gates are one full-width section.
+Decisions: removed duplicate KPI/evidence widgets, keyed risk points to standings ranks with only the selected label visible, and contained tables/tooltips for mobile while preserving en/ar RTL.
+Verify: lint, TypeScript, focused 16/16, desktop/mobile browser checks in en/ar, and 721/724 full-suite tests; only the same three pre-existing stale-AMD portfolio fixture failures remain.
+Open: exact per-stock/trade rows remain honestly unavailable for the eight legacy cards until a future authorized bounded run; the prohibited full evidence run was not executed.
+
 ## 2026-07-15 — Strategy-team performance and trade drill-down ✅
 Shipped: clicking a strategy team now scrolls to bilingual performance details; future terminal runs persist exact closed-trade records plus reconciled realized P&L by stock, with a bounded full ledger.
 Decisions: lazy-dev rung 2 extends the existing BacktestRun report-card JSON (no schema migration); shared-book vs independent-sleeve P&L is labeled, open/mark-to-market gains are excluded, and legacy runs never reconstruct missing trades.
