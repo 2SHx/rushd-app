@@ -79,7 +79,10 @@ interface CompactSeries {
 interface WideFactorState {
   readonly seriesBySymbol: ReadonlyMap<string, CompactSeries>;
   readonly monthEndTimes: ReadonlySet<number>;
-  readonly decisionCache: Map<number, WideDecision>;
+  // Keyed by asOf AND params: the plateau sweep re-simulates neighbor params
+  // against the SAME prepared state/replayScope, so a date-only key would leak
+  // the center run's decisions into every neighbor (identical fake expectancy).
+  readonly decisionCache: Map<string, WideDecision>;
 }
 
 interface WideDecision {
@@ -178,7 +181,8 @@ function wideDecision(asOf: Date, params: G6bLinearFactorWideParams, replayScope
   if (!state.monthEndTimes.has(asOfMs)) {
     return { reason: 'not_month_end', rankable: 0, selected: new Map(), targetWeight: 0 };
   }
-  const cached = state.decisionCache.get(asOfMs);
+  const cacheKey = `${asOfMs}|${params.momentumLookback}|${params.skipRecentBars}|${params.turnoverProxyLookback}|${params.momentumWeight}`;
+  const cached = state.decisionCache.get(cacheKey);
   if (cached) return cached;
 
   const rows: WideRow[] = [];
@@ -215,7 +219,7 @@ function wideDecision(asOf: Date, params: G6bLinearFactorWideParams, replayScope
     const selected = new Map(rows.slice(0, count).map((row, index) => [row.symbol, index + 1]));
     result = { reason: 'ranked', rankable: rows.length, selected, targetWeight: 1 / count };
   }
-  state.decisionCache.set(asOfMs, result);
+  state.decisionCache.set(cacheKey, result);
   return result;
 }
 

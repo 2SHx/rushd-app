@@ -105,6 +105,31 @@ describe('g6b-linear-factor-wide v2', () => {
     ).toBeNull();
   });
 
+  it('plateau-neighbor params get their own decisions (cache is params-keyed)', () => {
+    // Regression: a date-only cache leaked the center run's selections into every
+    // plateau neighbor (identical fake expectancies). JUMP's momentum depends on
+    // the lookback base: huge under 252 (base = pre-jump), ~zero under a base
+    // after the jump — so the two param sets MUST select differently in one scope.
+    const scope = {};
+    const input = makeBook(120);
+    // Dominant volume pins JUMP's turnover rank at 1.0 so only momentum moves.
+    const jumpRows: Row[] = HISTORY_DATES.map((ts, i) => ({
+      ts,
+      close: i < 10 ? 10 : 100,
+      volume: 100_000_000,
+    }));
+    (input.dailyBarsBySymbol as Map<string, Row[]>).set('JUMP', jumpRows);
+    prepare(input, scope);
+
+    const center = g6bLinearFactorWideSetup.targetWeight!(ctx('JUMP', MONTH_END, scope), G6B_LINEAR_FACTOR_WIDE_V2);
+    expect(center).toBeGreaterThan(0); // base at index 0 (pre-jump) → ~9x momentum → top bucket
+    const neighbor = g6bLinearFactorWideSetup.targetWeight!(
+      ctx('JUMP', MONTH_END, scope),
+      { ...G6B_LINEAR_FACTOR_WIDE_V2, momentumLookback: 231 },
+    );
+    expect(neighbor).toBe(0); // base after the jump → ~0 momentum → out of the bucket
+  });
+
   it('is registered: shared route, 50-position policy, 9 validation trials', () => {
     expect(selectDailyBacktestRoute('g6b-linear-factor-wide', undefined)).toBe('shared');
     expect(strategyBookPolicyForSetup('g6b-linear-factor-wide', undefined)).toEqual(g6bLinearFactorWideBookPolicy());

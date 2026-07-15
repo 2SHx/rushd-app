@@ -312,6 +312,14 @@ export function validationTradeRecordsForSetup(
  * Independent inference unit for monthly target-weight books: one active month-end-to-month-end
  * NAV return. Partial name trims are execution details and must never inflate the sample gate.
  */
+// Monthly cross-sectional factors count ACTIVE BOOK-MONTHS as the validation
+// observation unit (v1 precedent): name-level exits inside one rebalance month
+// are correlated and would pseudo-replicate the sample.
+export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
+  'g6b-linear-factor',
+  'g6b-linear-factor-wide',
+]);
+
 export function activeMonthlyBookReturnRecords(
   points: readonly StrategyBookDailyPoint[],
 ): TradeRecord[] {
@@ -1113,12 +1121,12 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   if (cadence === 'daily') console.log(`\nexcluded ${excludedMock} MOCK bar(s) across the universe (no-mock directive)`);
 
   // ── Single trade-sequenced equity curve for headline metrics (chronological by exit).
-  const validationTradeRecords = setupId === 'g6b-linear-factor'
+  const validationTradeRecords = MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
     ? activeMonthlyBookReturnRecords(sharedBookResult?.daily ?? [])
     : validationTradeRecordsForSetup(setupId, pooledTradeRecords);
   const validationTradeReturns = setupId === 'dual-momentum-rotation'
     || setupId === 'tom-overlay'
-    || setupId === 'g6b-linear-factor'
+    || MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
     ? validationTradeRecords.map((record) => record.ret)
     : pooledTradeReturns;
   const sortedTrades = [...validationTradeRecords].sort((a, b) => a.exitTs.getTime() - b.exitTs.getTime());
@@ -1258,7 +1266,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           policy: strategyBookPolicyForSetup(setupId, variant.params),
         });
         variantRecords.push(...(
-          setupId === 'g6b-linear-factor'
+          MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
             ? activeMonthlyBookReturnRecords(sim.daily)
             : sim.tradeRecords
         ));
@@ -1270,7 +1278,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         }
       }
       const oosExpectancy = oosMeanTradeReturn([
-        ...(setupId === 'g6b-linear-factor'
+        ...(MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
           ? variantRecords
           : validationTradeRecordsForSetup(setupId, variantRecords)),
       ]);
