@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — L1 bounded strategy-learning curriculum ✅
+Shipped: a versioned seven-question en/ar curriculum for `bollinger-mr-long-v2@v2` plus a DB-free compiler that emits complete validated params and a deterministic SHA-256 policy hash.
+Decisions: lazy-dev rung 2 maps five closed choices onto existing reviewed setup ranges; two knowledge answers never enter policy; the lesson is `EDUCATIONAL_ONLY` and cannot weaken Sharia or envelope caps.
+Verify: red-first missing-module proof, focused 15/15, lint and TypeScript clean; full suite 726/729 with only the same three pre-existing stale-AMD portfolio fixture failures.
+Open: L2 must replay this sealed policy on one committed ≤6-month real fixture with exact team/PIT/cost/fill/OOS/Sharia/risk parity; no terminal-period command was run.
+
 ## 2026-07-15 — Organized strategy-league evidence workspace ✅
 Shipped: selected teams now open one Full-vs-OOS performance/provenance/trade workspace; historical comparison precedes a consolidated risk analysis, and promotion gates are one full-width section.
 Decisions: removed duplicate KPI/evidence widgets, keyed risk points to standings ranks with only the selected label visible, and contained tables/tooltips for mobile while preserving en/ar RTL.
