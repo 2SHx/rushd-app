@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — L3 sealed strategy-learning attempts + API ✅
+Shipped: generated/applied `strategy_learning_attempts` migration, immutable sealed attempt + separate result models, and authenticated POST/GET/PATCH APIs with family-scoped access.
+Decisions: lazy-dev rung 2 reuses authz, Prisma transactions, L1 compiler, and L2 replay; attempt is inserted before outcome computation, result completion is one-to-one/idempotent, and retries append numbered rows.
+Verify: focused L2+L3 13/13, Prisma validate/status and lint/TypeScript clean; full suite 739/742 with only the same three pre-existing stale-AMD portfolio fixture failures; security review PASS.
+Open: L4 builds the en/ar mastery-loop UI over this API; no broker, XP, promotion verdict, or prohibited terminal-period backtest was introduced or run.
+
 ## 2026-07-15 — L2 short deterministic learner replay ✅
 Shipped: a DB-free Bollinger learning adapter plus a committed 7,290-row REAL Yahoo fixture covering the exact 25-name team universe, SPUS, and SPY over a three-month measured interval.
 Decisions: preserved production next-open fills/costs and risk envelope; retained warm-up/PIT state before the frozen OOS boundary; exposed unscreened AAOIFI state honestly as execution-blocked while keeping the educational replay visible.
