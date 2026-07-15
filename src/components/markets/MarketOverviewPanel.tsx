@@ -19,6 +19,8 @@ interface Props {
   onSelectStock: (symbol: string) => void;
   quotes: Record<string, { price: number; change: number; pct: number }>;
   loadingQuotes: boolean;
+  quoteCoverage: { priced: number; total: number } | null;
+  quoteError: boolean;
 }
 
 type ScreenerFilter = 'most-active' | 'trending' | 'gainers' | 'losers' | 'gainers-52w' | 'losers-52w' | 'unusual-volume';
@@ -34,7 +36,15 @@ const FILTER_TABS = [
   { id: 'unusual-volume', en: 'Unusual Volume', ar: 'حجم تداول غير اعتيادي' },
 ] as const;
 
-export default function MarketOverviewPanel({ market, locale, onSelectStock, quotes, loadingQuotes }: Props) {
+export default function MarketOverviewPanel({
+  market,
+  locale,
+  onSelectStock,
+  quotes,
+  loadingQuotes,
+  quoteCoverage,
+  quoteError,
+}: Props) {
   const t = useTranslations('Markets');
   const isAr = locale === 'ar';
   const tickers = TICKERS[market];
@@ -194,11 +204,15 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
     });
     
     return Array.from(map.entries()).map(([name, stocks]) => {
-      const avgPct = stocks.reduce((sum, s) => sum + s.pct, 0) / stocks.length;
+      const pricedStocks = stocks.filter((stock) => quotes[stock.symbol]);
+      const avgPct = pricedStocks.length > 0
+        ? pricedStocks.reduce((sum, stock) => sum + stock.pct, 0) / pricedStocks.length
+        : 0;
       return {
         name,
         nameAr: stocks[0].sectorAr || name,
         avgPct,
+        pricedCount: pricedStocks.length,
         stocks: stocks.map(s => ({
           symbol: s.symbol,
           name: s.name,
@@ -211,16 +225,19 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         })),
       };
     }).sort((a, b) => b.stocks.length - a.stocks.length);
-  }, [screenerStocks]);
+  }, [quotes, screenerStocks]);
 
   const stats = useMemo(() => {
-    const up = screenerStocks.filter((t) => t.pct > 0);
-    const dn = screenerStocks.filter((t) => t.pct < 0);
-    const avg = screenerStocks.reduce((sum, t) => sum + t.pct, 0) / screenerStocks.length;
-    return { up, dn, avg };
-  }, [screenerStocks]);
+    const pricedStocks = screenerStocks.filter((stock) => quotes[stock.symbol]);
+    const up = pricedStocks.filter((t) => t.pct > 0);
+    const dn = pricedStocks.filter((t) => t.pct < 0);
+    const avg = pricedStocks.length > 0
+      ? pricedStocks.reduce((sum, t) => sum + t.pct, 0) / pricedStocks.length
+      : 0;
+    return { up, dn, avg, total: pricedStocks.length };
+  }, [quotes, screenerStocks]);
 
-  const upPct = Math.round((stats.up.length / screenerStocks.length) * 100);
+  const upPct = stats.total > 0 ? Math.round((stats.up.length / stats.total) * 100) : 0;
 
   // Helper formatting utilities
   const formatCap = (num: number) => {
@@ -278,6 +295,8 @@ export default function MarketOverviewPanel({ market, locale, onSelectStock, quo
         market={market}
         isAr={isAr}
         loading={loadingQuotes}
+        coverage={quoteCoverage ?? { priced: Object.keys(quotes).length, total: screenerStocks.length }}
+        error={quoteError}
         onSelectSector={setSelectedSector}
       />
 

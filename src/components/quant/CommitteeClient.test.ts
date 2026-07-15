@@ -40,4 +40,10 @@ describe('CommitteeClient safety boundary', () => {
     expect(source).not.toContain('mock-dec-');
     expect(source).not.toContain('simulated compound growth');
   });
+
+  it('keeps Alpaca paper results in the canonical Portfolio view', () => {
+    expect(source).not.toContain('AlpacaPaperPortfolioView');
+    expect(source).not.toContain('initialAlpacaPaper');
+    expect(source).not.toContain("'alpaca'");
+  });
 });

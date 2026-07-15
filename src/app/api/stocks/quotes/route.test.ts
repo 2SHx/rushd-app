@@ -20,6 +20,19 @@ describe('GET /api/stocks/quotes free-first mode', () => {
 
     expect(response.status).toBe(200);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect((await response.json()).quotes.MSFT).toBeDefined();
+    const body = await response.json();
+    expect(body.quotes.MSFT).toBeDefined();
+    expect(body).toMatchObject({ requested: 1, priced: 1 });
+  });
+
+  it('omits unavailable symbols instead of fabricating flat prices', async () => {
+    const response = await GET(new Request(
+      'http://localhost/api/stocks/quotes?symbols=MSFT,NOT_A_REAL_SYMBOL&market=NASDAQ',
+    ));
+    const body = await response.json();
+
+    expect(body.quotes.MSFT).toBeDefined();
+    expect(body.quotes.NOT_A_REAL_SYMBOL).toBeUndefined();
+    expect(body).toMatchObject({ requested: 2, priced: 1 });
   });
 });

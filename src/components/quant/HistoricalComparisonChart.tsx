@@ -1,12 +1,13 @@
 'use client';
 
-import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert, Info } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, ChevronDown, Info, Minus, ShieldAlert } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { HistoricalComparisonEvidence } from '@/quant/backtest/historicalComparison';
 
 interface HistoricalComparisonChartProps {
   comparison: HistoricalComparisonEvidence | null;
-  comparisons?: ReadonlyArray<{ setupId: string; comparison: HistoricalComparisonEvidence }>;
+  comparisons?: ReadonlyArray<{ rank?: number; setupId: string; comparison: HistoricalComparisonEvidence }>;
   selectedSetupId?: string;
 }
 
@@ -30,7 +31,11 @@ export default function HistoricalComparisonChart({ comparison, comparisons = []
   }).format(new Date(value));
 
   return (
-    <section className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6" aria-labelledby="historical-comparison-title">
+    <section
+      className="relative min-w-0 overflow-hidden rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6"
+      style={{ backgroundImage: 'radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 34%)' }}
+      aria-labelledby="historical-comparison-title"
+    >
       <header className="text-start">
         <h2 id="historical-comparison-title" className="text-xl font-semibold inline-flex items-center gap-1.5">
           {t('historyTitle')}
@@ -70,14 +75,28 @@ function ComparisonPlot({
   date,
 }: {
   comparison: HistoricalComparisonEvidence;
-  comparisons: ReadonlyArray<{ setupId: string; comparison: HistoricalComparisonEvidence }>;
+  comparisons: ReadonlyArray<{ rank?: number; setupId: string; comparison: HistoricalComparisonEvidence }>;
   selectedSetupId?: string;
   number: (value: number) => string;
   change: (value: number) => string;
   date: (value: string) => string;
 }) {
   const t = useTranslations('QuantResults');
-  const modelEntries = comparisons.length ? comparisons : [{ setupId: selectedSetupId ?? 'selected', comparison }];
+  const [showAll, setShowAll] = useState(false);
+  const rankedEntries = (comparisons.length ? comparisons : [{ setupId: selectedSetupId ?? 'selected', comparison }])
+    .map((entry, index) => ({ ...entry, rank: entry.rank ?? index + 1 }))
+    .filter(entry => (
+      entry.comparison.start === comparison.start
+      && entry.comparison.end === comparison.end
+    ))
+    .filter((entry, index, entries) => entries.findIndex(candidate => candidate.setupId === entry.setupId) === index);
+  const topThree = rankedEntries.filter(entry => entry.rank <= 3);
+  const selectedEntry = rankedEntries.find(entry => entry.setupId === selectedSetupId);
+  const defaultEntries = selectedEntry && !topThree.some(entry => entry.setupId === selectedEntry.setupId)
+    ? [...topThree, selectedEntry]
+    : topThree;
+  const modelEntries = showAll ? rankedEntries : defaultEntries;
+  const hiddenCount = rankedEntries.length - defaultEntries.length;
   const allValues = [
     ...modelEntries.flatMap(entry => entry.comparison.series.model.map(point => point.value)),
     ...comparison.series.spy.map(point => point.value),
@@ -103,12 +122,14 @@ function ComparisonPlot({
   const oosX = x(comparison.oosStart);
   const modelSeries = modelEntries.map(entry => ({
     key: entry.setupId,
-    label: entry.setupId === selectedSetupId ? `${entry.setupId} · ${t('historySelected')}` : entry.setupId,
+    label: `#${entry.rank} · ${entry.setupId}${entry.setupId === selectedSetupId ? ` · ${t('historySelected')}` : ''}`,
     hint: entry.setupId === selectedSetupId ? t('hintHistoryModel') : t('hintHistoryPeer'),
     points: entry.comparison.series.model,
     color: entry.setupId === selectedSetupId ? 'var(--accent)' : 'var(--foreground)',
-    opacity: entry.setupId === selectedSetupId ? 1 : 0.3,
-    dash: undefined as string | undefined,
+    opacity: entry.setupId === selectedSetupId ? 1 : entry.rank === 1 ? 0.78 : entry.rank === 2 ? 0.58 : entry.rank === 3 ? 0.42 : 0.24,
+    dash: entry.setupId === selectedSetupId || entry.rank === 1
+      ? undefined
+      : entry.rank === 2 ? '10 4' : entry.rank === 3 ? '3 4' : '2 6',
   }));
   const series = [
     ...modelSeries,
@@ -118,7 +139,28 @@ function ComparisonPlot({
 
   return (
     <div className="mt-5">
-      <div className="overflow-x-auto" dir="ltr">
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-accent/15 bg-accent/[0.055] p-4 text-start sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold text-foreground">{t('historyTopThreeTitle')}</p>
+          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-foreground/60">
+            {t('historyTopThreeNote', { count: topThree.length })}
+          </p>
+        </div>
+        {hiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll(value => !value)}
+            aria-expanded={showAll}
+            aria-controls="historical-strategy-series"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--border-color)] bg-surface-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {showAll ? t('historyShowFocused') : t('historyShowAll', { count: hiddenCount })}
+            <ChevronDown className={`size-4 transition-transform duration-200 motion-reduce:transition-none ${showAll ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+
+      <div id="historical-strategy-series" className="overflow-x-auto" dir="ltr">
         <svg
           viewBox={`0 0 ${CHART.width} ${CHART.height}`}
           className="h-auto min-w-[42rem] w-full"
@@ -169,7 +211,7 @@ function ComparisonPlot({
         </svg>
       </div>
 
-      <ul className="mt-5 grid gap-3 sm:grid-cols-3">
+      <ul className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {series.map(item => {
           const endingValue = item.points.at(-1)!.value;
           const totalChange = endingValue / 100 - 1;

@@ -370,7 +370,14 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
 
   const rankedTeams = [...teams].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'ACCEPTED' ? -1 : 1;
-    return b.oos.cagr - a.oos.cagr;
+    if (a.oos.cagr !== b.oos.cagr) return b.oos.cagr - a.oos.cagr;
+    if (a.oos.deflatedSharpe !== b.oos.deflatedSharpe) {
+      return b.oos.deflatedSharpe - a.oos.deflatedSharpe;
+    }
+    const drawdownDifference = (a.bootstrap.maxDrawdown.p95 ?? Number.POSITIVE_INFINITY)
+      - (b.bootstrap.maxDrawdown.p95 ?? Number.POSITIVE_INFINITY);
+    if (drawdownDifference !== 0) return drawdownDifference;
+    return a.setupId.localeCompare(b.setupId) || a.runId.localeCompare(b.runId);
   });
   const [selectedRunId, setSelectedRunId] = useState(rankedTeams[0]?.runId ?? '');
   const detailRef = useRef<HTMLElement>(null);
@@ -513,7 +520,9 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
 
       <HistoricalComparisonChart
         comparison={selected.comparison}
-        comparisons={teams.flatMap(team => team.comparison ? [{ setupId: team.setupId, comparison: team.comparison }] : [])}
+        comparisons={rankedTeams.flatMap((team, index) => team.comparison
+          ? [{ rank: index + 1, setupId: team.setupId, comparison: team.comparison }]
+          : [])}
         selectedSetupId={selected.setupId}
       />
 

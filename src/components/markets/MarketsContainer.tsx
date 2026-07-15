@@ -42,6 +42,8 @@ export default function MarketsContainer({
   // Batch quotes states and fetching hook
   const [quotes, setQuotes] = useState<Record<string, { price: number; change: number; pct: number }>>({});
   const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [quoteCoverage, setQuoteCoverage] = useState<{ priced: number; total: number } | null>(null);
+  const [quoteError, setQuoteError] = useState(false);
 
   const allMarketSymbols = useMemo(() => {
     if (marketTab === 'NASDAQ') {
@@ -57,18 +59,26 @@ export default function MarketsContainer({
     let active = true;
     const fetchBatch = async () => {
       setLoadingQuotes(true);
+      setQuoteError(false);
+      setQuotes({});
+      setQuoteCoverage(null);
       try {
         const symbolsQuery = allMarketSymbols.join(',');
         const res = await fetch(`/api/stocks/quotes?symbols=${symbolsQuery}&market=${marketTab}`);
         if (res.ok && active) {
           const data = await res.json();
-          setQuotes(prev => ({
-            ...prev,
-            ...data.quotes
-          }));
+          const nextQuotes = data.quotes ?? {};
+          setQuotes(nextQuotes);
+          setQuoteCoverage({
+            priced: data.priced ?? Object.keys(nextQuotes).length,
+            total: data.requested ?? allMarketSymbols.length,
+          });
+        } else if (active) {
+          setQuoteError(true);
         }
       } catch (err) {
         console.error('Failed to batch fetch stock quotes:', err);
+        if (active) setQuoteError(true);
       } finally {
         if (active) setLoadingQuotes(false);
       }
@@ -149,6 +159,8 @@ export default function MarketsContainer({
                 onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
                 quotes={quotes}
                 loadingQuotes={loadingQuotes}
+                quoteCoverage={quoteCoverage}
+                quoteError={quoteError}
               />
             </motion.div>
           ) : (
@@ -193,6 +205,8 @@ export default function MarketsContainer({
                 onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
                 quotes={quotes}
                 loadingQuotes={loadingQuotes}
+                quoteCoverage={quoteCoverage}
+                quoteError={quoteError}
               />
             </motion.div>
           ) : (

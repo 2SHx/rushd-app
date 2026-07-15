@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Market breadth + focused strategy comparison UI ✅
+Shipped: semantic session gradients, honest 15/82 quote coverage with six-symbol theme previews, top-ranked persisted strategy curves, and a single canonical Alpaca paper view in Portfolio.
+Decisions: unavailable quotes are omitted instead of fabricated at 100/0%; unpriced themes remain neutral, missing historical curves are named rather than inferred, and lower-ranked selections pin only when evidence exists.
+Verify: focused 12/12, lint/TypeScript/i18n clean; browser-verified en/ar, RTL, market gradients/coverage, top comparison curves, Quant without Alpaca, and Portfolio with Alpaca; full suite 770/773 with the same three stale-AMD fixture failures.
+Open: only two of the current top three league teams persist same-period historical curves; the third remains absent until a bounded reproducible run records it, and the prohibited terminal-period run was not executed.
+
 ## 2026-07-15 — M9 shared investing dashboard hierarchy ✅
 Shipped: one investing-first Rushd/Alpaca dashboard with a non-duplicated account strip, evidence-first performance, detailed holdings, restrained allocation/risk/order support, and an empty-state-safe light/dark token pass.
 Decisions: lazy-dev rung 2 retained the shared data component; removed the false autopilot-active claim and legacy neon/dark-only chrome, preserved the explicit 2D committee choice, and fixed a deterministic SVG-title hydration mismatch.

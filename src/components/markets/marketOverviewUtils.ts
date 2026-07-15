@@ -4,6 +4,7 @@ export interface SectorGroup {
   name: string;
   nameAr: string;
   avgPct: number;
+  pricedCount?: number;
   stocks: TickerEntry[];
 }
 
@@ -22,15 +23,25 @@ export interface FGInfo {
 
 // Continuous theme-aware heat scale. A non-zero move starts visibly at 8%;
 // magnitude then grows to 24% at |4%|, while zero remains a neutral card.
-export function heatStyle(pct: number): { backgroundColor: string; borderColor: string } {
+export function heatStyle(pct: number): {
+  backgroundColor: string;
+  backgroundImage: string;
+  borderColor: string;
+} {
   if (pct === 0) {
-    return { backgroundColor: 'var(--surface-card)', borderColor: 'var(--border-color)' };
+    return {
+      backgroundColor: 'var(--surface-card)',
+      backgroundImage: 'none',
+      borderColor: 'var(--border-color)',
+    };
   }
   const signal = pct > 0 ? 'var(--up)' : 'var(--down)';
   const strength = Math.round(8 + Math.min(Math.abs(pct), 4) / 4 * 16);
+  const fadeStrength = Math.max(4, strength - 5);
   const borderStrength = Math.min(36, strength + 14);
   return {
-    backgroundColor: `color-mix(in srgb, ${signal} ${strength}%, var(--surface-card))`,
+    backgroundColor: 'var(--surface-card)',
+    backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${signal} ${strength}%, var(--surface-card)) 0%, color-mix(in srgb, ${signal} ${fadeStrength}%, var(--surface-card)) 58%, var(--surface-card) 100%)`,
     borderColor: `color-mix(in srgb, ${signal} ${borderStrength}%, var(--border-color))`,
   };
 }

@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const symbolList = symbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
     if (symbolList.length === 0) {
-      return NextResponse.json({ quotes: {} });
+      return NextResponse.json({ quotes: {}, requested: 0, priced: 0 });
     }
 
     const quotes: Record<string, { symbol: string; price: number; change: number; pct: number }> = {};
@@ -76,13 +76,15 @@ export async function GET(request: Request) {
               const match = TICKERS.NASDAQ.find(t => t.symbol === sym);
               if (match) {
                 quotes[sym] = { symbol: sym, price: match.price, change: match.change, pct: match.pct };
-              } else {
-                quotes[sym] = { symbol: sym, price: 100, change: 0, pct: 0 };
               }
             }
           });
           
-          return NextResponse.json({ quotes }, {
+          return NextResponse.json({
+            quotes,
+            requested: symbolList.length,
+            priced: Object.keys(quotes).length,
+          }, {
             headers: {
               'Cache-Control': 'public, s-maxage=45, stale-while-revalidate=30'
             }
@@ -100,12 +102,14 @@ export async function GET(request: Request) {
       const match = activeList.find(t => t.symbol.toUpperCase().replace('.SR', '') === cleanSym);
       if (match) {
         quotes[sym] = { symbol: sym, price: match.price, change: match.change, pct: match.pct };
-      } else {
-        quotes[sym] = { symbol: sym, price: 100, change: 0, pct: 0 };
       }
     });
 
-    return NextResponse.json({ quotes }, {
+    return NextResponse.json({
+      quotes,
+      requested: symbolList.length,
+      priced: Object.keys(quotes).length,
+    }, {
       headers: {
         'Cache-Control': 'public, s-maxage=45, stale-while-revalidate=30'
       }

@@ -7,7 +7,6 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
-import { loadAlpacaPaperView } from '@/quant/portfolio/alpacaPaperView';
 
 export default async function QuantPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -19,10 +18,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
 
   const userId = session.user.id;
 
-  const [portfolio, alpacaPaper] = await Promise.all([
-    loadPortfolioViewModel(userId),
-    loadAlpacaPaperView(session.user),
-  ]);
+  const portfolio = await loadPortfolioViewModel(userId);
 
   if (!portfolio) {
     redirect(`/${locale}/login`);
@@ -170,26 +166,25 @@ export default async function QuantPage({ params }: { params: { locale: string }
         </div>
       )}
 
-      {canRenderCommittee || alpacaPaper.status !== 'hidden' ? (
-        <CommitteeClient
-          locale={locale}
-          initialNAV={portfolio.initialNAV ?? 0}
-          initialCash={portfolio.initialCash}
-          initialPositions={committeePositions ?? []}
-          initialSnapshots={portfolio.initialSnapshots}
-          initialPurification={initialPurification}
-          initialMetrics={portfolio.initialMetrics}
-          initialTrades={initialTrades}
-          initialDecisions={initialDecisions}
-          initialAutonomyTier={initialAutonomyTier}
-          initialAlpacaPaper={alpacaPaper}
-          initialInternalPortfolioAvailable={canRenderCommittee}
-        />
-      ) : (
+      {!canRenderCommittee ? (
         <div className="rounded-2xl border border-noncompliant/30 bg-noncompliant/10 p-4 text-sm text-noncompliant">
           {t('portfolioInteractiveUnavailable')}
         </div>
-      )}
+      ) : null}
+
+      <CommitteeClient
+        locale={locale}
+        initialNAV={portfolio.initialNAV ?? 0}
+        initialCash={portfolio.initialCash}
+        initialPositions={committeePositions ?? []}
+        initialSnapshots={portfolio.initialSnapshots}
+        initialPurification={initialPurification}
+        initialMetrics={portfolio.initialMetrics}
+        initialTrades={initialTrades}
+        initialDecisions={initialDecisions}
+        initialAutonomyTier={initialAutonomyTier}
+        initialInternalPortfolioAvailable={canRenderCommittee}
+      />
     </div>
   );
 }
