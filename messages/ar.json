@@ -379,7 +379,7 @@
     "sectorAverageReturn": "متوسط العائد",
     "sectorConstituents": "عدد الأسهم",
     "sectorAdvancing": "الأسهم الصاعدة",
-    "close": "إغلاق",
+    "close": "حسناً",
     "backToMarkets": "العودة إلى الأسواق",
     "stockDetailTabs": "أقسام تفاصيل السهم",
     "liveMarketData": "بيانات السوق المباشرة",
@@ -444,7 +444,6 @@
     "sell": "بيع",
     "learnPurification": "معرفة المزيد عن رسوم التطهير",
     "whatAreFractional": "ما هي الأسهم المجزأة؟",
-    "close": "حسناً",
     "fractionalTitle": "الأسهم القابلة للتجزئة",
     "fractionalExplanation": "تتيح لك الأسهم المجزأة شراء جزء من السهم باستخدام مبالغ صغيرة من المال، وهي مثالية لتعلم إدارة المخاطر بأمان.",
     "understand": "فهمت",
@@ -839,5 +838,14 @@
       "DATA_QUALITY_PIT_FAILURE": "لم يُتحقق من جودة البيانات المتاحة في وقت القرار.",
       "REPRODUCIBILITY_FAILURE": "لم يستوفِ التشغيل بوابة قابلية إعادة الإنتاج."
     }
+  },
+  "Chart": {
+    "timeframeToolbar": "الإطار الزمني للرسم البياني",
+    "loading": "جارٍ التحميل…",
+    "noIntradayData": "لا تتوفر بيانات لحظية حقيقية لهذا السهم بعد",
+    "noData": "لا توجد بيانات لهذا الإطار الزمني",
+    "loadError": "تعذّر تحميل بيانات الرسم البياني",
+    "retry": "إعادة المحاولة",
+    "sampleData": "بيانات تجريبية"
   }
 }

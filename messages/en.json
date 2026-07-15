@@ -444,7 +444,6 @@
     "sell": "SELL",
     "learnPurification": "Learn about purification fee",
     "whatAreFractional": "What are fractional shares?",
-    "close": "Close",
     "fractionalTitle": "Fractional Shares",
     "fractionalExplanation": "Fractional shares allow you to buy a portion of a share using small amounts of capital, perfect for learning risk management safely.",
     "understand": "I Understand",
@@ -839,5 +838,14 @@
       "DATA_QUALITY_PIT_FAILURE": "Point-in-time data quality was not verified.",
       "REPRODUCIBILITY_FAILURE": "The run did not satisfy the reproducibility gate."
     }
+  },
+  "Chart": {
+    "timeframeToolbar": "Chart timeframe",
+    "loading": "Loading…",
+    "noIntradayData": "No real intraday data is stored for this symbol yet",
+    "noData": "No data for this timeframe",
+    "loadError": "Couldn't load chart data",
+    "retry": "Retry",
+    "sampleData": "Sample data"
   }
 }

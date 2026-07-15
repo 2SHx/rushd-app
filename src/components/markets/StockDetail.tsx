@@ -186,7 +186,12 @@ export default function StockDetail({
         >
           {activeTab === 'overview' && (
             <>
-              <PriceChartPanel history={history} />
+              <PriceChartPanel
+                history={history}
+                symbol={data.symbol}
+                market={data.market === 'TASI' ? 'TASI' : 'NASDAQ'}
+                dataSource={data.marketDataSource}
+              />
               <RScorePanel symbol={data.symbol} locale={locale} />
               {/* AI Committee CTA */}
               <Link
