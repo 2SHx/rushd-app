@@ -49,7 +49,7 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | **PAUSE — report card to user** | — | ⏳ | present measured distribution incl. P(day≥5%), MC drawdown percentiles. STOP HERE. |
 | G4 automation wiring (paper) | backend-expert + security-auditor | 🔒 POST-PAUSE | premarket+intraday signed-cron passes, −3% daily circuit breaker, envelope caps; NOTE: Alpaca paper acct shows negative cash (−$82.8k, margin used by old paper trades) — envelope must limit by CASH not buying power |
 | G4b TradingView webhooks + deep links | backend-expert + security-auditor | 🔒 POST-PAUSE | HMAC-signed `/api/quant/webhooks/tradingview` → same Sharia gate/envelope pipeline; dark until secret set |
-| G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | 🔄 TWO SLICES SHIPPED | DB-backed `/quant/league`: accepted + rejected terminal teams, OOS CAGR vs MC p95 DD, plus common-period normalized model/SPY/SPUS history with OOS boundary, sources and honest legacy fallback; en+ar/RTL/mobile verified. Next: persist a true shared-cash daily portfolio/drawdown curve before MC fan or paper P&L; never synthesize a curve. |
+| G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | ✅ REPORT-CARD UI DONE; PAPER P&L GATED | DB-backed `/quant/league`: accepted + rejected terminal teams, normalized model/SPY/SPUS history, OOS risk, promotion gates, exact persisted trade/P&L drill-down when available, and honest legacy states. Isolated paper-book P&L remains gated until an ACCEPTED team exists. |
 | G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔒 POST-PAUSE | identical gates; Python sidecar only via QDR-3 architect decision |
 
 ## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
@@ -98,16 +98,17 @@ The binding reason-code definitions and ordering live in QDR-7.
 | R2-2 stocks-in-play gapper v2 | quant-strategist | ✅ REJECTED | 468 trades; CAGR −45.70%, OOS −44.84%, MC p95 DD 81.41%, ruin 96.10%; terminal evidence in STRATEGY_LAB |
 | R2-3 B v2 + C v2 (per-name sizing, regime gates) | quant-strategist | ✅ REJECTED | both structural fixes improved OOS/risk materially but neither cleared every gate; exact cards in STRATEGY_LAB; no post-hoc retuning |
 | R2-4 Tier-1 setups ×4 | quant-strategist | 🔄 1/4 | vwap-reclaim v1 REJECTED (347 trades, CAGR −40.62%, ruin 100%); next: stop-hunt-reversal-long, then bagholder-bounce and time-of-day |
-| R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | 🔄 G5 TWO SLICES | Visual league reads persisted terminal cards and renders zero accepted/four rejected teams with normalized model/SPY/SPUS comparisons from reproducible reruns. G4/allocator/webhooks remain dark because zero teams are ACCEPTED. |
+| R2-5 G4 automation + QDR-7 allocator + G4b TradingView + G5 league UI | backend-expert / frontend-expert + security & design gates | 🔄 G5 + ALLOCATOR CORE DONE | Visual league and deterministic allocator core are complete. G4 persistence/cron, isolated paper books, and webhooks remain correctly dark because zero teams are ACCEPTED. |
 
 ## Current delivery sequence — app completion, then model enhancement
 
 1. **R3-1 momentum-v3 — DONE / REJECTED:** the true shared-book run passed its frozen 3×3 plateau but
    failed OOS DSR and book-day MC drawdown gates; unscreened Sharia state independently blocks execution.
    R3-2 dual-momentum rotation is DONE / REJECTED; next execute R3-3 turn-of-month without retuning R3-2.
-2. **Frontend completion:** finish G5 report-card views and M9 responsive/accessibility consistency,
-   then add isolated paper-book P&L only after an ACCEPTED team exists. Every terminal state remains
-   visible; rejection is never filtered out.
+2. **Frontend completion:** G5 report-card views and the shared Rushd/Alpaca portfolio dashboard are
+   complete. Continue M9 responsive/accessibility consistency on the remaining non-auth surfaces,
+   preserving the explicit 2D committee decision; add isolated paper-book P&L only after an ACCEPTED
+   team exists. Every terminal state remains visible; rejection is never filtered out.
 3. **Finish the frozen hypotheses:** validate R2-4 stop-hunt-reversal-long, bagholder-bounce and
    time-of-day in that pre-registered order. No tuning against already-viewed OOS results.
 4. **Best next model class:** implement G6b monthly long-only cross-sectional linear factors before RL.

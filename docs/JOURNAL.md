@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — M9 shared investing dashboard hierarchy ✅
+Shipped: one investing-first Rushd/Alpaca dashboard with a non-duplicated account strip, evidence-first performance, detailed holdings, restrained allocation/risk/order support, and an empty-state-safe light/dark token pass.
+Decisions: lazy-dev rung 2 retained the shared data component; removed the false autopilot-active claim and legacy neon/dark-only chrome, preserved the explicit 2D committee choice, and fixed a deterministic SVG-title hydration mismatch.
+Verify: focused 10/10, lint/TypeScript/i18n clean; browser-verified live Alpaca + empty Rushd views in en/ar, RTL, zero overflow, selected-range semantics, and no runtime overlay; full suite 758/768 with 10 PostgreSQL-backed outcomes blocked at localhost:5432.
+Open: continue M9 on the remaining non-auth surfaces; automation/paper books remain gated on an ACCEPTED strategy, and neither auth nor the prohibited terminal evidence run was touched.
+
 ## 2026-07-15 — Institutional landing experience revamp ✅
 Shipped: a full-width en/ar investing journey with a learning-loop narrative, honest practice receipt, strategy comparisons, guardrail cards, calm CTA hierarchy, and responsive light/dark states.
 Decisions: investing practice now owns the primary conversion instead of family registration; lazy-dev rung 2 reused the server page, tokens, Lucide, and static hero without a new dependency or 3D payload.
