@@ -491,6 +491,98 @@
       }
     }
   },
+  "StrategyLearning": {
+    "eyebrow": "Strategy learning studio",
+    "title": "Turn a strategy into decisions you can explain",
+    "subtitle": "Learn one team’s decision process, make the same bounded choices, then compare your sealed policy with the team and market references.",
+    "disclosure": "Educational simulation only—not investment advice. Results are a frozen historical replay, not a live track record. Sharia execution remains blocked while screening is unverified.",
+    "processLabel": "Learning process",
+    "process": {
+      "0": "Concept",
+      "1": "Retrieve",
+      "2": "Decide",
+      "3": "Compare"
+    },
+    "loading": "Loading the reviewed lesson",
+    "loadErrorTitle": "The lesson could not be loaded",
+    "loadErrorBody": "Your progress has not started. Try loading the reviewed curriculum again.",
+    "tryAgain": "Try again",
+    "emptyTitle": "No lesson is available",
+    "emptyBody": "A reviewed strategy lesson will appear here when it is ready.",
+    "chooseTeam": "Selected strategy team",
+    "conceptBody": "This team buys temporary weakness only after price stretches below a volatility band. It exits on reversion, limits holding time, and sizes exposure against a fixed risk budget.",
+    "concepts": {
+      "entry": {
+        "title": "Wait for a stretch",
+        "body": "A low price alone is not a signal; the entry must be unusual relative to recent volatility."
+      },
+      "risk": {
+        "title": "Bound the downside",
+        "body": "Position size and stop distance work together so one idea cannot dominate the portfolio."
+      },
+      "discipline": {
+        "title": "Define the exit first",
+        "body": "The team seals profit, stop, and time exits before seeing what happened next."
+      }
+    },
+    "beforeStart": "Before you begin",
+    "guardrails": {
+      "sealed": "Outcomes stay hidden until every decision is sealed.",
+      "bounded": "Choices are reviewed strategy bounds, not unrestricted trading controls.",
+      "mastery": "Learning rewards process and recall—not simulated profit."
+    },
+    "startRetry": "Start a new labeled attempt",
+    "startLesson": "Learn this strategy",
+    "questionCount": "Question {current} of {total}",
+    "areas": {
+      "ENTRY": "Entry",
+      "EXIT": "Exit",
+      "SIZING": "Position size",
+      "HOLDING": "Holding period",
+      "RISK": "Risk"
+    },
+    "progressLabel": "Lesson progress",
+    "knowledgeCheck": "Recall the mechanism",
+    "policyDecision": "Choose your policy",
+    "answerChoices": "Answer choices",
+    "mechanismFeedback": "Why this matters",
+    "back": "Back",
+    "reviewChoices": "Review choices",
+    "continue": "Continue",
+    "sealTitle": "Seal your policy before seeing outcomes",
+    "sealBody": "Review your decisions carefully. After sealing, this attempt is immutable and the same frozen replay is used for every comparison.",
+    "editChoices": "Edit choices",
+    "sealAndCompare": "Seal and compare",
+    "runningReplay": "Running the frozen learning replay",
+    "submitErrorTitle": "The attempt was not sealed",
+    "submitErrorBody": "Your choices are still here. Retry the same submission safely; a duplicate attempt will not be created.",
+    "retrySubmission": "Retry submission",
+    "attemptLabel": "Sealed attempt {number}",
+    "comparisonTitle": "Normalized historical comparison",
+    "comparisonDescription": "Your policy, the strategy team, SPUS, and price-only SPY rebased to 100 over the same frozen out-of-sample period.",
+    "normalizedAxis": "Normalized value · start = 100",
+    "resultBody": "All four lines use the same frozen out-of-sample interval. Use the comparison to inspect decision mechanics; one favorable outcome can still be luck rather than skill.",
+    "sealed": "Sealed",
+    "series": {
+      "learner": "Your policy",
+      "team": "Strategy team",
+      "spus": "SPUS · Sharia-screened proxy",
+      "spy": "SPY · price-only market proxy"
+    },
+    "metricsTitle": "Outcome and risk details",
+    "metricsBody": "Return is shown beside maximum drawdown, annualized volatility, and trade count so performance is never presented without its risk context.",
+    "metricSeries": "Comparison",
+    "metricReturn": "Return",
+    "metricDrawdown": "Maximum drawdown",
+    "metricVolatility": "Annualized volatility",
+    "metricTrades": "Trades",
+    "choicesTitle": "How your choices changed the mechanism",
+    "choicesBody": "These explanations connect each policy choice to exposure and behavior without claiming that one historical result proves skill.",
+    "reflectionTitle": "Reflect on the process",
+    "reflectionBody": "Which choice changed risk most, and would you keep it if the return line had finished below the team?",
+    "shariaBlocked": "This educational universe has not completed AAOIFI screening. Learning is available, but execution remains blocked.",
+    "newAttempt": "Try a new labeled attempt"
+  },
   "QuantResults": {
     "backToCommittee": "Back to Quant Committee",
     "eyebrow": "Terminal validation evidence",

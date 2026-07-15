@@ -47,7 +47,7 @@ vi.mock('@/quant/learning/strategyLearningReplay', () => ({
   replayBollingerMrLongV2LearningPolicy: (...args: unknown[]) => replay(...args),
 }));
 
-import { POST } from './route';
+import { GET as GET_CURRICULUM, POST } from './route';
 import { GET, PATCH } from './[attemptId]/route';
 
 const teamAnswers = BOLLINGER_MR_LONG_V2_CURRICULUM.questions.map(question => ({
@@ -137,6 +137,19 @@ beforeEach(() => {
 });
 
 describe('strategy learning attempt API', () => {
+  it('serves the reviewed curriculum localized without exposing executable parameters', async () => {
+    const response = await GET_CURRICULUM(
+      new Request('http://localhost/api/learning/strategy-attempts?locale=ar'),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.questions).toHaveLength(7);
+    expect(data.questions[0].prompt).toContain('السهم');
+    expect(data.questions.some((question: Record<string, unknown>) => question.role === 'POLICY_DECISION')).toBe(true);
+    expect(JSON.stringify(data)).not.toContain('targetVolBudget');
+  });
+
   it('requires authentication before reading or writing attempts', async () => {
     requireSession.mockRejectedValue({
       response: Response.json({ error: 'unauthorized' }, { status: 401 }),

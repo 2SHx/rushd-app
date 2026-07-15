@@ -166,6 +166,35 @@ async function persistReplayResult(
   }
 }
 
+/** Public, non-executable lesson content. The policy compiler and replay remain server-only. */
+export async function GET(request: Request): Promise<Response> {
+  const locale = new URL(request.url).searchParams.get('locale') === 'ar' ? 'ar' : 'en';
+  return NextResponse.json({
+    setupId: BOLLINGER_MR_LONG_V2_CURRICULUM.setupId,
+    setupVersion: BOLLINGER_MR_LONG_V2_CURRICULUM.setupVersion,
+    questionSetVersion: BOLLINGER_MR_LONG_V2_CURRICULUM.questionSetVersion,
+    complianceTag: BOLLINGER_MR_LONG_V2_CURRICULUM.complianceTag,
+    title: BOLLINGER_MR_LONG_V2_CURRICULUM.title[locale],
+    questions: BOLLINGER_MR_LONG_V2_CURRICULUM.questions.map(question => ({
+      id: question.id,
+      role: question.role,
+      area: question.area,
+      prompt: question.prompt[locale],
+      options: question.options.map(option => ({
+        id: option.id,
+        label: option.label[locale],
+        feedback: option.feedback[locale],
+      })),
+      ...(question.role === 'KNOWLEDGE_CHECK'
+        ? {
+          correctOptionId: question.correctOptionId,
+          explanation: question.explanation[locale],
+        }
+        : { teamOptionId: question.teamOptionId }),
+    })),
+  });
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     const sessionUser = await requireSession();

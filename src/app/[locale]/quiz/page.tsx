@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Compass, Crown, Target, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import QuizModal from '@/components/QuizModal';
+import StrategyLearningLab from '@/components/learning/StrategyLearningLab';
 
 const QUIZ_TOPICS = [
   { id: 'stockBasics', topic: 'Stock Market Basics', level: 1 },
@@ -60,6 +61,8 @@ export default function QuizListPage({ params }: { params: { locale: string } })
         <h1 className="mt-4 text-4xl font-semibold tracking-[-0.035em] rtl:tracking-normal sm:text-5xl">{t('title')}</h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-foreground/60 sm:text-base">{t('subtitle')}</p>
       </header>
+
+      <StrategyLearningLab locale={locale} />
 
       {lastResult ? (
         <section

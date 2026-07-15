@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — L4 strategy mastery loop + honest comparison ✅
+Shipped: the Learning page now guides concept → retrieval → bounded policy → immutable seal → four-line learner/team/SPUS/price-only-SPY comparison with risk details and mechanism explanations.
+Decisions: curriculum copy is public but executable bounds stay server-only; outcomes remain hidden until seal, retries are labeled, and Sharia-unverified execution stays blocked while educational replay remains visible.
+Verify: focused API 10/10, lint/TypeScript clean, English sealed-result and 390px Arabic RTL browser checks with zero warnings/errors; full suite 740/743 with only the same three stale-AMD portfolio fixture failures.
+Open: L5 adds delayed knowledge retrieval, reflection, and XP based only on process completion; the prohibited terminal evidence period was not run.
+
 ## 2026-07-15 — L3 sealed strategy-learning attempts + API ✅
 Shipped: generated/applied `strategy_learning_attempts` migration, immutable sealed attempt + separate result models, and authenticated POST/GET/PATCH APIs with family-scoped access.
 Decisions: lazy-dev rung 2 reuses authz, Prisma transactions, L1 compiler, and L2 replay; attempt is inserted before outcome computation, result completion is one-to-one/idempotent, and retries append numbered rows.
