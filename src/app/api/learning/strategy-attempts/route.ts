@@ -13,6 +13,10 @@ import {
   replayBollingerMrLongV2LearningPolicy,
   type BollingerLearningReplayFixture,
 } from '@/quant/learning/strategyLearningReplay';
+import {
+  awardStrategyLearningMastery,
+  strategyLearningMasteryState,
+} from '@/services/strategyLearningMastery';
 
 const answerSchema = z.object({
   questionId: z.string().min(1).max(100),
@@ -27,7 +31,9 @@ const completionSchema = z.object({
   retryOfAttemptId: z.string().min(1).max(128).optional(),
 }).strict();
 
-type StoredAttempt = Prisma.StrategyLearningAttemptGetPayload<{ include: { result: true } }>;
+type StoredAttempt = Prisma.StrategyLearningAttemptGetPayload<{
+  include: { result: true; masteryEvents: true };
+}>;
 
 function canonicalAnswers(answers: readonly StrategyLearningAnswer[]): StrategyLearningAnswer[] {
   const byQuestion = new Map(answers.map(answer => [answer.questionId, answer.optionId]));
@@ -45,7 +51,12 @@ function sameAnswers(stored: Prisma.JsonValue, expected: readonly StrategyLearni
     && expected.every(answer => byQuestion.get(answer.questionId) === answer.optionId);
 }
 
-function attemptResponse(attempt: StoredAttempt, payload: Prisma.JsonValue, status: number): NextResponse {
+function attemptResponse(
+  attempt: StoredAttempt,
+  payload: Prisma.JsonValue,
+  status: number,
+  masteryEvents = attempt.masteryEvents,
+): NextResponse {
   return NextResponse.json({
     attempt: {
       id: attempt.id,
@@ -63,6 +74,7 @@ function attemptResponse(attempt: StoredAttempt, payload: Prisma.JsonValue, stat
       createdAt: attempt.createdAt,
     },
     result: payload,
+    mastery: strategyLearningMasteryState(masteryEvents, attempt.sealedAt),
   }, { status });
 }
 
@@ -127,7 +139,7 @@ async function createSealedAttempt(input: {
             retryOfId: input.retryOfId,
             sealedAt: new Date(),
           },
-          include: { result: true },
+          include: { result: true, masteryEvents: true },
         });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       return { attempt, created: true };
@@ -135,12 +147,23 @@ async function createSealedAttempt(input: {
       if (!isRetryableCreateConflict(error)) throw error;
       const existing = await prisma.strategyLearningAttempt.findUnique({
         where: { userId_idempotencyKey: { userId: input.userId, idempotencyKey: input.idempotencyKey } },
-        include: { result: true },
+        include: { result: true, masteryEvents: true },
       });
       if (existing) return { attempt: existing, created: false };
     }
   }
   throw new Error('learning_attempt_create_conflict');
+}
+
+async function ensureCompletionMastery(attempt: StoredAttempt) {
+  const award = await awardStrategyLearningMastery({
+    attempt: { id: attempt.id, userId: attempt.userId },
+    kind: 'COMPLETION',
+  });
+  const events = attempt.masteryEvents ?? [];
+  return events.some(event => event.kind === 'COMPLETION')
+    ? events
+    : [...events, award.event];
 }
 
 async function persistReplayResult(
@@ -159,7 +182,7 @@ async function persistReplayResult(
     if (!isRetryableCreateConflict(error)) throw error;
     const completed = await prisma.strategyLearningAttempt.findUnique({
       where: { id: attempt.id },
-      include: { result: true },
+      include: { result: true, masteryEvents: true },
     });
     if (completed?.result) return completed.result.payload;
     throw error;
@@ -220,7 +243,7 @@ export async function POST(request: Request): Promise<Response> {
     const answers = canonicalAnswers(parsed.data.answers);
     const existing = await prisma.strategyLearningAttempt.findUnique({
       where: { userId_idempotencyKey: { userId, idempotencyKey: parsed.data.idempotencyKey } },
-      include: { result: true },
+      include: { result: true, masteryEvents: true },
     });
     if (existing) {
       if (existing.policyHash !== policy.policyHash || !sameAnswers(existing.answers, answers)) {
@@ -229,14 +252,17 @@ export async function POST(request: Request): Promise<Response> {
       if (existing.retryOfId !== (parsed.data.retryOfAttemptId ?? null)) {
         return NextResponse.json({ error: 'idempotency_conflict' }, { status: 409 });
       }
-      if (existing.result) return attemptResponse(existing, existing.result.payload, 200);
+      if (existing.result) {
+        const masteryEvents = await ensureCompletionMastery(existing);
+        return attemptResponse(existing, existing.result.payload, 200, masteryEvents);
+      }
     }
 
     let retryOfId: string | null = null;
     if (parsed.data.retryOfAttemptId) {
       const retryOf = await prisma.strategyLearningAttempt.findUnique({
         where: { id: parsed.data.retryOfAttemptId },
-        include: { result: true },
+        include: { result: true, masteryEvents: true },
       });
       if (!retryOf) return NextResponse.json({ error: 'retry_attempt_not_found' }, { status: 404 });
       if (retryOf.userId !== userId) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -264,7 +290,8 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ error: 'idempotency_conflict' }, { status: 409 });
     }
     const payload = await persistReplayResult(sealed.attempt, answers, fixture);
-    return attemptResponse(sealed.attempt, payload, sealed.created ? 201 : 200);
+    const masteryEvents = await ensureCompletionMastery(sealed.attempt);
+    return attemptResponse(sealed.attempt, payload, sealed.created ? 201 : 200, masteryEvents);
   } catch (error) {
     const authResponse = authzResponse(error);
     if (authResponse) return authResponse;

@@ -139,9 +139,9 @@ model QuizAttempt {
 // Immutable sealed learner policy. Replay output is stored separately so this row is never updated
 // after `sealedAt`; a retry always inserts a new numbered attempt (SYSTEM_DESIGN DR-14 / M10 L3).
 model StrategyLearningAttempt {
-  id                 String                    @id @default(uuid())
+  id                 String                         @id @default(uuid())
   userId             String
-  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
   setupId            String
   setupVersion       String
   questionSetVersion String
@@ -155,11 +155,12 @@ model StrategyLearningAttempt {
   replayConfig       Json
   dataProvenance     Json
   retryOfId          String?
-  retryOf            StrategyLearningAttempt?  @relation("StrategyLearningRetries", fields: [retryOfId], references: [id], onDelete: SetNull)
-  retries            StrategyLearningAttempt[] @relation("StrategyLearningRetries")
+  retryOf            StrategyLearningAttempt?       @relation("StrategyLearningRetries", fields: [retryOfId], references: [id], onDelete: SetNull)
+  retries            StrategyLearningAttempt[]      @relation("StrategyLearningRetries")
   sealedAt           DateTime
-  createdAt          DateTime                  @default(now())
+  createdAt          DateTime                       @default(now())
   result             StrategyLearningResult?
+  masteryEvents      StrategyLearningMasteryEvent[]
 
   @@unique([userId, idempotencyKey])
   @@unique([userId, setupId, attemptNumber])
@@ -174,6 +175,22 @@ model StrategyLearningResult {
   attempt   StrategyLearningAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   payload   Json
   createdAt DateTime                @default(now())
+}
+
+// Process-only learning rewards. One row per milestone makes XP idempotent and auditable;
+// `xp` is fixed by server policy and never derived from replay returns (DR-14 / M10 L5).
+model StrategyLearningMasteryEvent {
+  id        String                  @id @default(uuid())
+  attemptId String
+  attempt   StrategyLearningAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  kind      String
+  response  String?
+  correct   Boolean?
+  xp        Int
+  createdAt DateTime                @default(now())
+
+  @@unique([attemptId, kind])
+  @@index([attemptId, createdAt])
 }
 
 // ── Rushd Quant: data spine (Q0). All quantity/price fields Decimal.

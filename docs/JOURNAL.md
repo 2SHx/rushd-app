@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — L5 spaced retrieval + process-only XP ✅
+Shipped: exact-once mastery events, +20 completion/+15 reflection/+15 delayed retrieval through `addXP`, latest-attempt resume, and bilingual mastery UI with a 24-hour recall gate.
+Decisions: XP inputs are only milestone kind/response/correctness—never replay P&L or rank; serializable event+XP writes reject racing response changes, with no streak punishment or random reward.
+Verify: focused 31/31, migration/lint/TypeScript clean, browser proved 20→35/50 persistence and en/ar mobile RTL; full suite 753/756 with only the same three stale-AMD portfolio fixture failures.
+Open: Strategy Learning L0–L5 is complete; the prohibited terminal evidence period and authentication work were not touched.
+
 ## 2026-07-15 — L4 strategy mastery loop + honest comparison ✅
 Shipped: the Learning page now guides concept → retrieval → bounded policy → immutable seal → four-line learner/team/SPUS/price-only-SPY comparison with risk details and mechanism explanations.
 Decisions: curriculum copy is public but executable bounds stay server-only; outcomes remain hidden until seal, retries are labeled, and Sharia-unverified execution stays blocked while educational replay remains visible.

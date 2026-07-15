@@ -581,7 +581,38 @@
     "reflectionTitle": "Reflect on the process",
     "reflectionBody": "Which choice changed risk most, and would you keep it if the return line had finished below the team?",
     "shariaBlocked": "This educational universe has not completed AAOIFI screening. Learning is available, but execution remains blocked.",
-    "newAttempt": "Try a new labeled attempt"
+    "newAttempt": "Try a new labeled attempt",
+    "latestAttemptTitle": "Continue sealed attempt {number}",
+    "latestAttemptBody": "Return to your reflection now and the spaced retrieval check when it becomes available.",
+    "continueMastery": "Continue mastery",
+    "masteryTitle": "Build mastery beyond the result",
+    "masteryBody": "XP follows completion, reflection, and spaced recall. It never changes with profit, loss, or benchmark rank.",
+    "masteryProgress": "Mastery XP progress",
+    "mastery": {
+      "completion": "Complete",
+      "reflection": "Reflect",
+      "retrieval": "Recall later"
+    },
+    "reflectionPrompt": "If the return line were reversed, which principle would still guide your next attempt?",
+    "reflectionComplete": "Reflection recorded",
+    "reflectionChoicesLabel": "Reflection choices",
+    "reflectionChoices": {
+      "PROCESS_OVER_OUTCOME": "Judge the quality of the process before the outcome.",
+      "RISK_OVER_RETURN": "Check drawdown and exposure before celebrating return.",
+      "DISCIPLINE_BEFORE_ENTRY": "Keep entry and exit rules sealed before acting."
+    },
+    "savingReflection": "Saving…",
+    "saveReflection": "Save reflection · +15 XP",
+    "retrievalTitle": "Spaced retrieval check",
+    "retrievalComplete": "Retrieval recorded",
+    "retrievalAvailable": "Come back after {date}. Spacing the recall makes it a stronger learning signal.",
+    "retrievalChoices": "Retrieval choices",
+    "checkingRetrieval": "Checking…",
+    "checkRetrieval": "Check recall · +15 XP",
+    "retrievalCorrect": "Mechanism recalled",
+    "retrievalTryAgain": "Review the mechanism",
+    "masterySaveError": "This milestone was not saved. Your recorded attempt is unchanged; try again.",
+    "xpDisclosure": "Fixed process reward: +20 completion, +15 reflection, +15 retrieval. No streak penalty, random prize, or P&L multiplier."
   },
   "QuantResults": {
     "backToCommittee": "Back to Quant Committee",

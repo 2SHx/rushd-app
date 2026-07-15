@@ -14,6 +14,7 @@ const loadFixture = vi.fn();
 const savingsJarUpdate = vi.fn();
 const transactionCreate = vi.fn();
 const portfolioItemUpdate = vi.fn();
+const awardStrategyLearningMastery = vi.fn();
 
 vi.mock('@/lib/authz', () => ({
   requireSession: () => requireSession(),
@@ -46,6 +47,14 @@ vi.mock('@/quant/learning/strategyLearningReplay', () => ({
   loadBollingerMrLongV2LearningFixture: () => loadFixture(),
   replayBollingerMrLongV2LearningPolicy: (...args: unknown[]) => replay(...args),
 }));
+
+vi.mock('@/services/strategyLearningMastery', async importOriginal => {
+  const original = await importOriginal<typeof import('@/services/strategyLearningMastery')>();
+  return {
+    ...original,
+    awardStrategyLearningMastery: (...args: unknown[]) => awardStrategyLearningMastery(...args),
+  };
+});
 
 import { GET as GET_CURRICULUM, POST } from './route';
 import { GET, PATCH } from './[attemptId]/route';
@@ -110,6 +119,7 @@ const storedAttempt = (overrides: Record<string, unknown> = {}) => ({
   sealedAt: new Date('2026-07-15T08:00:00.000Z'),
   createdAt: new Date('2026-07-15T08:00:00.000Z'),
   result: null,
+  masteryEvents: [],
   ...overrides,
 });
 
@@ -133,6 +143,14 @@ beforeEach(() => {
   resultCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) => {
     events.push('result.create');
     return { id: 'result-1', attemptId: data.attemptId, payload: data.payload, createdAt: new Date() };
+  });
+  awardStrategyLearningMastery.mockResolvedValue({
+    event: {
+      id: 'mastery-1', attemptId: 'attempt-1', kind: 'COMPLETION', response: null,
+      correct: null, xp: 20, createdAt: new Date('2026-07-15T08:00:00.000Z'),
+    },
+    profile: { xp: 20, level: 1, leveledUp: false },
+    created: true,
   });
 });
 
@@ -167,6 +185,10 @@ describe('strategy learning attempt API', () => {
 
     expect(response.status).toBe(201);
     expect(events).toEqual(['attempt.create', 'replay', 'result.create']);
+    expect(awardStrategyLearningMastery).toHaveBeenCalledWith({
+      attempt: { id: 'attempt-1', userId: 'child-1' },
+      kind: 'COMPLETION',
+    });
     expect(attemptCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         userId: 'child-1',

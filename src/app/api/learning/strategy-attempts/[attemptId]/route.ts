@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeAccess, requireSession } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { strategyLearningMasteryState } from '@/services/strategyLearningMastery';
 
 interface RouteContext {
   params: { attemptId: string };
@@ -17,7 +18,7 @@ async function authorizedAttempt(context: RouteContext) {
   const sessionUser = await requireSession();
   const attempt = await prisma.strategyLearningAttempt.findUnique({
     where: { id: context.params.attemptId },
-    include: { result: true },
+    include: { result: true, masteryEvents: true },
   });
   if (!attempt) return null;
   await authorizeAccess(sessionUser, attempt.userId);
@@ -45,6 +46,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
         createdAt: attempt.createdAt,
       },
       result: attempt.result?.payload ?? null,
+      mastery: strategyLearningMasteryState(attempt.masteryEvents, attempt.sealedAt),
     });
   } catch (error) {
     const response = authzResponse(error);

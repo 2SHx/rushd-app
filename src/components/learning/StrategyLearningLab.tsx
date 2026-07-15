@@ -19,6 +19,7 @@ import {
 import { useTranslations } from 'next-intl';
 import type { BollingerLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
 import StrategyLearningComparisonChart from './StrategyLearningComparisonChart';
+import StrategyMasteryRevisit, { type StrategyMasteryState } from './StrategyMasteryRevisit';
 
 type Area = 'ENTRY' | 'EXIT' | 'SIZING' | 'HOLDING' | 'RISK';
 interface CurriculumOption { id: string; label: string; feedback: string }
@@ -48,6 +49,7 @@ interface Completion {
     sealedAt: string;
   };
   result: BollingerLearningReplayResult;
+  mastery: StrategyMasteryState;
 }
 type Phase = 'overview' | 'questions' | 'review' | 'submitting' | 'submitError' | 'result';
 
@@ -64,6 +66,7 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [retryOfAttemptId, setRetryOfAttemptId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<Completion | null>(null);
+  const [latestCompletion, setLatestCompletion] = useState<Completion | null>(null);
 
   const loadCurriculum = useCallback(async (signal?: AbortSignal) => {
     setLoadState('loading');
@@ -72,6 +75,12 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
       if (!response.ok) throw new Error('curriculum_load_failed');
       const data = await response.json() as Curriculum;
       setCurriculum(data);
+      const latestResponse = await fetch('/api/learning/strategy-attempts/latest', { signal });
+      if (latestResponse.ok && latestResponse.status !== 204) {
+        setLatestCompletion(await latestResponse.json() as Completion);
+      } else if (latestResponse.status === 204) {
+        setLatestCompletion(null);
+      }
       setLoadState('ready');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -124,7 +133,9 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
         }),
       });
       if (!response.ok) throw new Error('attempt_submit_failed');
-      setCompletion(await response.json() as Completion);
+      const completed = await response.json() as Completion;
+      setCompletion(completed);
+      setLatestCompletion(completed);
       setPhase('result');
     } catch {
       setPhase('submitError');
@@ -225,6 +236,23 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
                 {retryOfAttemptId ? t('startRetry') : t('startLesson')}
                 <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
               </button>
+              {latestCompletion ? (
+                <div className="mt-3 rounded-xl bg-foreground/[0.04] p-3 text-start">
+                  <p className="text-xs font-semibold">{t('latestAttemptTitle', { number: latestCompletion.attempt.attemptNumber })}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-foreground/55">{t('latestAttemptBody')}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompletion(latestCompletion);
+                      setAnswers(Object.fromEntries(latestCompletion.attempt.answers.map(answer => [answer.questionId, answer.optionId])));
+                      setPhase('result');
+                    }}
+                    className="mt-2 rounded-full px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {t('continueMastery')}
+                  </button>
+                </div>
+              ) : null}
             </aside>
           </div>
         ) : null}
@@ -392,18 +420,25 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
                   })}
                 </ul>
               </div>
-              <aside className="rounded-2xl bg-background/70 p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05)] sm:p-6">
-                <h3 className="font-semibold">{t('reflectionTitle')}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-foreground/60">{t('reflectionBody')}</p>
-                <div className="mt-4 flex items-start gap-2 rounded-xl bg-noncompliant/10 p-3 text-xs leading-relaxed text-foreground/65">
+              <div className="space-y-3">
+                <StrategyMasteryRevisit
+                  attemptId={completion.attempt.id}
+                  mastery={completion.mastery}
+                  knowledgeQuestion={curriculum?.questions.find(question => question.role === 'KNOWLEDGE_CHECK') ?? null}
+                  locale={locale}
+                  onUpdate={mastery => setCompletion(current => current ? { ...current, mastery } : current)}
+                />
+                <aside className="rounded-2xl bg-background/70 p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05)] sm:p-6">
+                  <div className="flex items-start gap-2 rounded-xl bg-noncompliant/10 p-3 text-xs leading-relaxed text-foreground/65">
                   <ShieldAlert className="mt-0.5 size-4 shrink-0 text-noncompliant" aria-hidden="true" />
                   <p>{t('shariaBlocked')}</p>
-                </div>
-                <button type="button" onClick={beginRetry} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 py-3 text-xs font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                  {t('newAttempt')}
-                </button>
-              </aside>
+                  </div>
+                  <button type="button" onClick={beginRetry} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 py-3 text-xs font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                    {t('newAttempt')}
+                  </button>
+                </aside>
+              </div>
             </div>
           </div>
         ) : null}

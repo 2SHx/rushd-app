@@ -6,13 +6,17 @@ import { Prisma } from '@prisma/client';
 /**
  * Gamification Engine: Add XP and calculate level ups
  */
-export async function addXP(userId: string, amount: number) {
-  let profile = await prisma.gamificationProfile.findUnique({
+export async function addXP(
+  userId: string,
+  amount: number,
+  client: Pick<Prisma.TransactionClient, 'gamificationProfile'> = prisma,
+) {
+  let profile = await client.gamificationProfile.findUnique({
     where: { userId }
   });
 
   if (!profile) {
-    profile = await prisma.gamificationProfile.create({
+    profile = await client.gamificationProfile.create({
       data: { userId, xp: 0, level: 1 }
     });
   }
@@ -21,7 +25,7 @@ export async function addXP(userId: string, amount: number) {
   // Level = floor(sqrt(totalXp / 100)) + 1
   const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
 
-  await prisma.gamificationProfile.update({
+  await client.gamificationProfile.update({
     where: { userId },
     data: {
       xp: newXp,
