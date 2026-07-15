@@ -13,7 +13,66 @@ export interface YahooStockMetric {
   fiftyTwoWeekHigh: number;
 }
 
+function metric(
+  symbol: string,
+  name: string,
+  arName: string,
+  sector: string,
+  sectorAr: string,
+  marketCap: number,
+  avgVolume: number,
+  fiftyTwoWeekLow: number,
+  fiftyTwoWeekHigh: number,
+): YahooStockMetric {
+  return {
+    symbol,
+    name,
+    arName,
+    sector,
+    sectorAr,
+    marketCap,
+    peRatio: null,
+    avgVolume,
+    fiftyTwoWeekLow,
+    fiftyTwoWeekHigh,
+  };
+}
+
 export const YAHOO_STOCK_METRICS: Record<string, YahooStockMetric> = {
+  // Additional Nasdaq-100 representatives. Membership follows Nasdaq's 2026
+  // constituent publications; screener fundamentals remain disclosed estimates.
+  ...Object.fromEntries([
+    metric('AMAT', 'Applied Materials Inc.', 'أبلايد ماتيريالز', 'Semiconductors', 'أشباه الموصلات', 130e9, 6.5e6, 145, 255),
+    metric('ASML', 'ASML Holding N.V.', 'إيه إس إم إل', 'Semiconductors', 'أشباه الموصلات', 300e9, 1.4e6, 570, 1_100),
+    metric('ARM', 'Arm Holdings plc', 'آرم هولدينغز', 'Semiconductors', 'أشباه الموصلات', 140e9, 8e6, 80, 180),
+    metric('MRVL', 'Marvell Technology Inc.', 'مارفيل تكنولوجي', 'Semiconductors', 'أشباه الموصلات', 70e9, 12e6, 45, 127),
+    metric('MCHP', 'Microchip Technology Inc.', 'مايكروتشيب تكنولوجي', 'Semiconductors', 'أشباه الموصلات', 50e9, 7e6, 50, 100),
+    metric('MPWR', 'Monolithic Power Systems Inc.', 'مونوليثيك باور سيستمز', 'Semiconductors', 'أشباه الموصلات', 35e9, 800_000, 500, 950),
+    metric('PLTR', 'Palantir Technologies Inc.', 'بالانتير', 'Technology', 'التقنية', 250e9, 55e6, 20, 135),
+    metric('APP', 'AppLovin Corporation', 'أب لوفين', 'Technology', 'التقنية', 200e9, 5e6, 60, 525),
+    metric('DDOG', 'Datadog Inc.', 'داتا دوغ', 'Technology', 'التقنية', 45e9, 4e6, 80, 170),
+    metric('ADSK', 'Autodesk Inc.', 'أوتوديسك', 'Technology', 'التقنية', 50e9, 1.8e6, 195, 330),
+    metric('WDAY', 'Workday Inc.', 'وورك داي', 'Technology', 'التقنية', 60e9, 2.3e6, 200, 310),
+    metric('AEP', 'American Electric Power Co.', 'أمريكان إلكتريك باور', 'Utilities', 'المرافق', 65e9, 3e6, 70, 105),
+    metric('CEG', 'Constellation Energy Corp.', 'كونستليشن إنرجي', 'Utilities', 'المرافق', 110e9, 3.5e6, 160, 375),
+    metric('EXC', 'Exelon Corporation', 'إكسيلون', 'Utilities', 'المرافق', 50e9, 7e6, 34, 49),
+    metric('XEL', 'Xcel Energy Inc.', 'إكسل إنرجي', 'Utilities', 'المرافق', 45e9, 4e6, 46, 74),
+    metric('BKR', 'Baker Hughes Company', 'بيكر هيوز', 'Energy', 'الطاقة', 50e9, 7e6, 30, 50),
+    metric('FANG', 'Diamondback Energy Inc.', 'دايموندباك إنرجي', 'Energy', 'الطاقة', 45e9, 2e6, 135, 215),
+    metric('WMT', 'Walmart Inc.', 'وولمارت', 'Consumer Defensive', 'الاستهلاك الدفاعي', 900e9, 17e6, 65, 110),
+    metric('KHC', 'The Kraft Heinz Company', 'كرافت هاينز', 'Consumer Defensive', 'الاستهلاك الدفاعي', 30e9, 8e6, 27, 38),
+    metric('MNST', 'Monster Beverage Corp.', 'مونستر بيفريدج', 'Consumer Defensive', 'الاستهلاك الدفاعي', 75e9, 6e6, 43, 68),
+    metric('CCEP', 'Coca-Cola Europacific Partners', 'كوكاكولا يوروباسيفيك', 'Consumer Defensive', 'الاستهلاك الدفاعي', 45e9, 1.6e6, 68, 95),
+    metric('HON', 'Honeywell International Inc.', 'هانيويل', 'Industrials', 'الصناعات', 140e9, 3e6, 180, 245),
+    metric('FAST', 'Fastenal Company', 'فاستنال', 'Industrials', 'الصناعات', 45e9, 4e6, 56, 85),
+    metric('ODFL', 'Old Dominion Freight Line', 'أولد دومينيون فريت لاين', 'Industrials', 'الصناعات', 45e9, 1.7e6, 165, 235),
+    metric('AXON', 'Axon Enterprise Inc.', 'أكسون إنتربرايز', 'Industrials', 'الصناعات', 60e9, 900_000, 270, 800),
+    metric('ALNY', 'Alnylam Pharmaceuticals Inc.', 'ألنيلام فارماسوتيكالز', 'Healthcare', 'الرعاية الصحية', 70e9, 1.1e6, 140, 330),
+    metric('IDXX', 'IDEXX Laboratories Inc.', 'آيديكس لابوراتوريز', 'Healthcare', 'الرعاية الصحية', 45e9, 500_000, 390, 600),
+    metric('GEHC', 'GE HealthCare Technologies', 'جي إي هيلث كير', 'Healthcare', 'الرعاية الصحية', 35e9, 3e6, 62, 95),
+    metric('MELI', 'MercadoLibre Inc.', 'ميركادو ليبري', 'Consumer Cyclical', 'الاستهلاك الدوري', 120e9, 500_000, 1_450, 2_600),
+    metric('DASH', 'DoorDash Inc.', 'دور داش', 'Consumer Cyclical', 'الاستهلاك الدوري', 90e9, 4e6, 95, 235),
+  ].map((stock) => [stock.symbol, stock])),
   AAPL: {
     symbol: 'AAPL',
     name: 'Apple Inc.',

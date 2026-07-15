@@ -292,6 +292,7 @@
     "themeRankingsTitle": "Market themes · session performance",
     "themeRankingsDescription": "Sector groups in the displayed {market} universe, ranked by their constituents’ average session move.",
     "themeRankingsHint": "Select a theme to inspect its companies",
+    "themeCoverage": "{stocks} stocks · {themes} themes",
     "themeRankingsLoading": "Loading market theme rankings",
     "themeRankingsEmptyTitle": "Theme rankings are not available yet",
     "themeRankingsEmptyBody": "Rankings will appear when constituent quotes are available.",

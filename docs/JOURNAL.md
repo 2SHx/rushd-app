@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Broader Nasdaq market themes and heatmap ✅
+Shipped: expanded the shared market universe from 52 to 82 Nasdaq representatives across 10 themes; both theme rankings and the advanced heatmap now consume the same broader set, with visible coverage in en/ar.
+Decisions: used Nasdaq’s published 2026 constituents, kept one batched quote request, and left screener fundamentals explicitly disclosed as estimates; no new provider or dependency.
+Verify: focused breadth test, lint, TypeScript, en/ar browser rendering, expanded heatmap, and browser logs clean; full suite 717/720 with the same three pre-existing stale-AMD fixture failures.
+Open: TASI sector metadata remains a separate coverage-quality pass; the prohibited 2018-01-02→2026-07-10 evidence run was not executed.
+
 ## 2026-07-15 — Shared Rushd/Alpaca portfolio dashboard ✅
 Shipped: Alpaca Paper now renders through the same `DashboardClient` as Portfolio, with broker equity/cash/day P&L/positions, buying power, gross exposure, and open orders in the matching dashboard slots.
 Decisions: lazy-dev rung 2 reused the existing dashboard; short-side win rate is direction-aware, exposure weights use absolute notional, and missing Alpaca NAV history/risk metrics remain explicitly unavailable rather than synthesized.

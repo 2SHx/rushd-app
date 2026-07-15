@@ -292,6 +292,7 @@
     "themeRankingsTitle": "ثيمات السوق · أداء الجلسة",
     "themeRankingsDescription": "مجموعات القطاعات في نطاق {market} المعروض، مرتبة حسب متوسط حركة أسهم كل مجموعة خلال الجلسة.",
     "themeRankingsHint": "اختر ثيماً لاستعراض شركاته",
+    "themeCoverage": "{stocks} سهماً · {themes} ثيمات",
     "themeRankingsLoading": "جارٍ تحميل ترتيب ثيمات السوق",
     "themeRankingsEmptyTitle": "ترتيب الثيمات غير متاح بعد",
     "themeRankingsEmptyBody": "سيظهر الترتيب عند توفر أسعار أسهم المجموعات.",

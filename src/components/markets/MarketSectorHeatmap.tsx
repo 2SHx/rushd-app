@@ -16,6 +16,7 @@ interface Props {
 export default function MarketSectorHeatmap({ sectors, market, isAr, loading, onSelectSector }: Props) {
   const t = useTranslations('Markets');
   const rankedSectors = [...sectors].sort((a, b) => b.avgPct - a.avgPct);
+  const stockCount = sectors.reduce((total, sector) => total + sector.stocks.length, 0);
 
   return (
     <section className="relative overflow-hidden rounded-3xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_20px_55px_rgba(0,0,0,0.08)] sm:p-7" aria-labelledby="market-themes-title">
@@ -34,7 +35,14 @@ export default function MarketSectorHeatmap({ sectors, market, isAr, loading, on
             {t('themeRankingsDescription', { market })}
           </p>
         </div>
-        <p className="text-xs text-foreground/45">{t('themeRankingsHint')}</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/45">
+          {!loading && stockCount > 0 ? (
+            <span className="rounded-full bg-foreground/[0.05] px-3 py-1.5 font-medium text-foreground/60">
+              {t('themeCoverage', { stocks: stockCount, themes: rankedSectors.length })}
+            </span>
+          ) : null}
+          <span>{t('themeRankingsHint')}</span>
+        </div>
       </header>
 
       {loading ? (
