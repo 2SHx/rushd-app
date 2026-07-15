@@ -526,10 +526,40 @@ export default function DashboardClient({
                 {isAlpaca ? t('alpacaNoPositionsBody') : t('noActivePositions')}
               </p>
             ) : (
-              <div className="relative">
-                {renderAllocationDonut()}
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{initialPositions.length}</span>
+              <div className="space-y-6">
+                <div className="relative">
+                  {renderAllocationDonut()}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{initialPositions.length}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-foreground/[0.06] pt-5 text-start">
+                  <h4 className="text-[10px] font-black uppercase text-foreground/40 tracking-wider mb-3">
+                    {isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
+                    {initialPositions.map((pos, i) => {
+                      const pctStr = pos.weight === null ? '-' : `${(pos.weight * 100).toFixed(1)}%`;
+                      return (
+                        <div key={pos.symbol} className="flex items-center justify-between text-xs p-2.5 rounded-2xl bg-foreground/[0.02] border border-foreground/[0.04]">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full shrink-0" 
+                              style={{ backgroundColor: `rgba(var(--accent-color-rgb), ${Math.max(0.3, 0.9 - i * 0.1)})` }}
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold text-foreground truncate" dir="ltr">{pos.symbol}</span>
+                              {pos.name && pos.name !== pos.symbol && (
+                                <span className="text-[10px] text-foreground/45 truncate">{pos.name}</span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="font-mono font-semibold text-foreground/80 shrink-0">{pctStr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
