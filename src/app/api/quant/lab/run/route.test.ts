@@ -195,7 +195,7 @@ describe('POST /api/quant/lab/run', () => {
     h.backtestRuns.set(staleId, {
       id: staleId,
       strategyId: 'lab:user-1',
-      createdAt: new Date(Date.now() - 20 * 60 * 1000),
+      createdAt: new Date(Date.now() - 40 * 60 * 1000),
       metrics: { lab: { status: 'RUNNING', ownerUserId: 'user-1', evidenceView: false, request: { setup: 'bollinger-mr-long-v2', period: 'FULL' } } },
     });
     h.claims.add('lab-active:user-1');
@@ -219,7 +219,7 @@ describe('POST /api/quant/lab/run', () => {
     h.backtestRuns.set(staleId, {
       id: staleId,
       strategyId: 'lab:user-1',
-      createdAt: new Date(Date.now() - 20 * 60 * 1000),
+      createdAt: new Date(Date.now() - 40 * 60 * 1000),
       metrics: { lab: { status: 'RUNNING', ownerUserId: 'user-1', evidenceView: false, request: { setup: 'bollinger-mr-long-v2', period: 'FULL' } } },
     });
 

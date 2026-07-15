@@ -4,6 +4,8 @@ import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import StrategyLeagueClient from '@/components/quant/StrategyLeagueClient';
+import RunLabPanel, { type RunnableSetup } from '@/components/quant/RunLabPanel';
+import { STRATEGY_SETUP_CATALOG } from '@/quant/strategies/catalog';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
 
 export default async function QuantResultsPage({ params }: { params: { locale: string } }) {
@@ -32,6 +34,17 @@ export default async function QuantResultsPage({ params }: { params: { locale: s
           <span className="text-xs font-semibold uppercase ltr:tracking-[0.16em]">{t('eyebrow')}</span>
         </div>
       </header>
+
+      <RunLabPanel
+        setups={Object.values(STRATEGY_SETUP_CATALOG).map(
+          (s): RunnableSetup => ({
+            id: s.id,
+            version: s.version,
+            cadence: s.cadence,
+            universeCompatibility: s.universeCompatibility ?? 'halal-only',
+          })
+        )}
+      />
 
       <StrategyLeagueClient teams={league.teams} />
     </main>

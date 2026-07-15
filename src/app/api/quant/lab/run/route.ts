@@ -25,7 +25,7 @@ import { STRATEGY_SETUP_CATALOG } from '@/quant/strategies/catalog';
 import { runLab, type RunLabOptions } from '@/quant/backtest/runLab';
 
 const MAX_CUSTOM_SYMBOLS = 20;
-const STALE_MS = 15 * 60 * 1000; // 15 minutes — generous vs. the plateau/candidate sweep cost above
+const STALE_MS = 30 * 60 * 1000; // 30 minutes — a wide-universe 1Y stream can legitimately run >15m
 
 function claimKeyFor(userId: string): string {
   return `lab-active:${userId}`;
