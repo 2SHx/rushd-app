@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-15 — Theme-responsive Quant dashboard controls ✅
+Shipped: light/dark theme compatibility for the AI Committee Board tab switcher, Autopilot control card, and Sandbox controls with standard CSS variables.
+Decisions: replaced hardcoded hex/border codes with standard tailwind-compatible classes (`text-foreground`, `bg-slate-50`, `bg-slate-100`, `dark:bg-white/[0.03]`, `border-black/5`, `dark:border-white/5`, etc.) to resolve theme clashes.
+Verify: lint/TypeScript/i18n clean; ran `npm run dev` and verified test suite passing 770/773 (with the same three pre-existing AMD fixture failures).
+Open: monitor dashboard interaction states across dynamic user-mode shifts; additional custom dashboard visual elements are gated.
+
 ## 2026-07-15 — Market breadth + focused strategy comparison UI ✅
 Shipped: semantic session gradients, honest 15/82 quote coverage with six-symbol theme previews, top-ranked persisted strategy curves, and a single canonical Alpaca paper view in Portfolio.
 Decisions: unavailable quotes are omitted instead of fabricated at 100/0%; unpriced themes remain neutral, missing historical curves are named rather than inferred, and lower-ranked selections pin only when evidence exists.

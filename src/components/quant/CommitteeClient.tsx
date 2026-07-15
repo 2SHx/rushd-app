@@ -721,14 +721,14 @@ export default function CommitteeClient({
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
       {initialInternalPortfolioAvailable ? (
-        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-white/5 bg-[#080c14] p-1 sm:w-fit">
+        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-black/5 dark:border-white/5 bg-slate-100 dark:bg-white/[0.03] p-1 sm:w-fit">
           <>
             <button
               onClick={() => setActiveTab('board')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                 activeTab === 'board'
                   ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-foreground/50 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
               }`}
             >
               <Cpu className="w-3.5 h-3.5" />
@@ -739,7 +739,7 @@ export default function CommitteeClient({
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                 activeTab === 'portfolio'
                   ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-foreground/50 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
               }`}
             >
               <Coins className="w-3.5 h-3.5" />
@@ -752,7 +752,7 @@ export default function CommitteeClient({
       {activeTab === 'board' && (
         <>
           {/* ── AI Autopilot Control Card ── */}
-          <div className="relative overflow-hidden rounded-3xl border border-indigo-500/15 bg-gradient-to-r from-indigo-500/5 via-[#080c14] to-emerald-500/5 p-5 shadow-lg">
+          <div className="relative overflow-hidden rounded-3xl border border-indigo-500/15 dark:border-indigo-500/30 bg-gradient-to-r from-indigo-500/5 via-surface-card to-emerald-500/5 p-6 shadow-xl">
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/3 to-transparent pointer-events-none" />
             <div className="flex flex-wrap items-center justify-between gap-4 relative">
               <div className="flex items-center gap-4">
@@ -764,8 +764,8 @@ export default function CommitteeClient({
                   </div>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h3 className="font-extrabold text-sm text-white">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className="font-extrabold text-sm text-foreground">
                       {isAr ? 'منظومة التداول الآلي للذكاء الاصطناعي' : 'Automated AI Autopilot Trading'}
                     </h3>
                     <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider border ${
@@ -779,7 +779,7 @@ export default function CommitteeClient({
                       }
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-[11px] text-foreground/60 leading-relaxed max-w-2xl">
                     {autonomyTier === 'AUTO_PAPER'
                       ? (isAr ? 'يقوم المساعد الذكي باتخاذ وتنفيذ صفقات المحفظة بالكامل تلقائياً على مدار الساعة بناءً على الفرص المتاحة.' : 'The AI agent automatically identifies, proposes, and executes virtual portfolio trades 24/7 in real-time.')
                       : (isAr ? 'اللجنة تعمل كمرشد وتصدر توصيات مقترحة تتطلب تفعيلك اليدوي للتنفيذ.' : 'The committee runs and proposes investment decisions, waiting for user trigger/execution.')
@@ -792,7 +792,7 @@ export default function CommitteeClient({
                 className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 ${
                   autonomyTier === 'AUTO_PAPER'
                     ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-600'
-                    : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
+                    : 'bg-white/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-foreground/75 dark:text-gray-300 hover:text-foreground dark:hover:text-white hover:border-black/20 dark:hover:border-white/20'
                 }`}
               >
                 {autonomyTier === 'AUTO_PAPER' ? <Check className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
@@ -802,19 +802,19 @@ export default function CommitteeClient({
           </div>
 
           {/* ── Interactive Sandbox Controls ── */}
-          <div className="p-5 rounded-3xl border border-white/5 bg-[#05080f] shadow-xl flex flex-wrap items-center justify-between gap-4">
+          <div className="p-5 rounded-3xl border border-black/5 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] shadow-md dark:shadow-xl flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
                   {isAr ? 'السوق' : 'Market'}
                 </span>
-                <div className="flex space-x-1 p-0.5 bg-black/40 border border-white/5 rounded-xl">
+                <div className="flex space-x-1 p-0.5 bg-slate-200/50 dark:bg-black/40 border border-black/5 dark:border-white/5 rounded-xl">
                   {(['NASDAQ', 'TASI'] as const).map((m) => (
                     <button
                       key={m}
                       onClick={() => handleMarketChange(m)}
                       className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                        market === m ? 'bg-emerald-500 text-black shadow' : 'text-gray-400 hover:text-white'
+                        market === m ? 'bg-emerald-500 text-black shadow' : 'text-foreground/60 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
                       }`}
                     >
                       {m}
@@ -824,7 +824,7 @@ export default function CommitteeClient({
               </div>
               
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
                   {isAr ? 'رمز الأداة المقترحة' : 'Suggested Symbols'}
                 </span>
                 <div className="flex space-x-1">
@@ -846,7 +846,7 @@ export default function CommitteeClient({
                       className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold transition-all ${
                         symbol === item.sym
                           ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                          : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
+                          : 'border-black/5 dark:border-white/5 bg-white dark:bg-white/[0.02] text-foreground/60 dark:text-gray-400 hover:text-foreground dark:hover:text-white hover:border-black/10 dark:hover:border-white/10'
                       }`}
                     >
                       {item.label} ({item.sym})
@@ -856,7 +856,7 @@ export default function CommitteeClient({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
                   {isAr ? 'رمز مخصص' : 'Custom Symbol'}
                 </span>
                 <input
@@ -864,7 +864,7 @@ export default function CommitteeClient({
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                   placeholder={isAr ? 'مثال: AAPL' : 'e.g. AAPL'}
-                  className="px-3 py-1.5 bg-black/40 border border-white/5 rounded-xl text-xs font-mono font-bold text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 w-28 uppercase"
+                  className="px-3 py-1.5 bg-white dark:bg-black/40 border border-black/10 dark:border-white/5 rounded-xl text-xs font-mono font-bold text-foreground dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 w-28 uppercase"
                 />
               </div>
             </div>
