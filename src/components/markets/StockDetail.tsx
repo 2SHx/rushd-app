@@ -14,6 +14,11 @@ import RScorePanel from './RScorePanel';
 import FundamentalsPanel from './FundamentalsPanel';
 import AssistantPanel from './AssistantPanel';
 
+import ValuationSuitePanel from './ValuationSuitePanel';
+import OpportunityMatrix from './OpportunityMatrix';
+import StockComparePanel from './StockComparePanel';
+import FinancialStatementsPanel from './FinancialStatementsPanel';
+
 interface StockDetailProps {
   data: any;
   locale: string;
@@ -24,7 +29,7 @@ interface StockDetailProps {
   onBack: () => void;
 }
 
-type Tab = 'overview' | 'assistant' | 'fundamentals' | 'sharia';
+type Tab = 'overview' | 'valuation' | 'financials' | 'compare' | 'assistant' | 'fundamentals' | 'sharia';
 
 export default function StockDetail({
   data,
@@ -49,9 +54,11 @@ export default function StockDetail({
   const isDown = change < 0;
 
   const tabs: { id: Tab; label: string; labelAr: string }[] = [
-    { id: 'overview', label: 'Chart', labelAr: 'الرسم البياني' },
-    { id: 'assistant', label: 'AI Analysis', labelAr: 'تحليل الذكاء الاصطناعي' },
-    { id: 'fundamentals', label: 'Fundamentals', labelAr: 'البيانات المالية' },
+    { id: 'overview', label: 'Overview', labelAr: 'الرئيسية' },
+    { id: 'valuation', label: 'Valuation', labelAr: 'التقييم العادل' },
+    { id: 'financials', label: 'Financials', labelAr: 'القوائم المالية' },
+    { id: 'compare', label: 'Compare', labelAr: 'المقارنة' },
+    { id: 'assistant', label: 'AI Analysis', labelAr: 'التحليل الذكي' },
     { id: 'sharia', label: 'Sharia', labelAr: 'التوافق الشرعي' },
   ];
 
@@ -68,7 +75,7 @@ export default function StockDetail({
   };
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0 text-start">
       {/* Mobile Back Button */}
       <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-[var(--border-color)] bg-surface-paper sticky top-0 z-40">
         <button
@@ -82,7 +89,7 @@ export default function StockDetail({
         <span className="text-foreground/50 text-xs truncate">• {displayName}</span>
       </div>
 
-      {/* ── Hero Quote Header — the price is the hero; no ambient glow (ui-craft §0) ── */}
+      {/* ── Hero Quote Header ── */}
       <div className="relative overflow-hidden rounded-3xl glass-panel p-6">
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           {/* Left: Name + Price */}
@@ -148,8 +155,8 @@ export default function StockDetail({
         </div>
       </div>
 
-      {/* ── Tab Navigation ── */}
-      <div role="tablist" aria-label={t('stockDetailTabs')} className="flex gap-1 bg-foreground/[0.02] border border-[var(--border-color)] p-1 rounded-2xl mt-4">
+      {/* ── Tab Navigation (Horizontally Scrollable on Mobile) ── */}
+      <div role="tablist" aria-label={t('stockDetailTabs')} className="flex overflow-x-auto gap-1.5 bg-foreground/[0.02] border border-[var(--border-color)] p-1.5 rounded-2xl mt-4 scrollbar-none">
         {tabs.map((tab, index) => (
           <button
             key={tab.id}
@@ -160,10 +167,10 @@ export default function StockDetail({
             tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
-            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            className={`whitespace-nowrap py-2 px-4 rounded-xl text-xs font-extrabold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               activeTab === tab.id
-                ? 'bg-accent text-white'
-                : 'text-foreground/50 hover:text-foreground hover:bg-foreground/5'
+                ? 'bg-accent text-white shadow-md'
+                : 'text-foreground/60 hover:text-foreground hover:bg-foreground/5'
             }`}
           >
             {isAr ? tab.labelAr : tab.label}
@@ -192,7 +199,9 @@ export default function StockDetail({
                 market={data.market === 'TASI' ? 'TASI' : 'NASDAQ'}
                 dataSource={data.marketDataSource}
               />
+              <OpportunityMatrix symbol={data.symbol} locale={locale} />
               <RScorePanel symbol={data.symbol} locale={locale} />
+              <FundamentalsPanel data={data} locale={locale} />
               {/* AI Committee CTA */}
               <Link
                 href={`/${locale}/quant`}
@@ -216,12 +225,20 @@ export default function StockDetail({
             </>
           )}
 
-          {activeTab === 'assistant' && (
-            <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
+          {activeTab === 'valuation' && (
+            <ValuationSuitePanel data={data} locale={locale} />
           )}
 
-          {activeTab === 'fundamentals' && (
-            <FundamentalsPanel data={data} locale={locale} />
+          {activeTab === 'financials' && (
+            <FinancialStatementsPanel data={data} locale={locale} />
+          )}
+
+          {activeTab === 'compare' && (
+            <StockComparePanel primaryData={data} locale={locale} />
+          )}
+
+          {activeTab === 'assistant' && (
+            <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
           )}
 
           {activeTab === 'sharia' && (

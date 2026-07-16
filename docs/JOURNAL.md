@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — ValueSnapshot UI/UX feature parity suite ✅
+Shipped: 4-model interactive Valuation Suite (DCF, EPS Growth, Rule of 40, PEG Ratio) with 5x5 dynamic sensitivity matrices; Opportunity Matrix with 4 rating dimensions; multi-peer side-by-side comparison engine with best-in-row badges; multi-year Income, Balance Sheet, and Cash Flow statement explorer.
+Decisions: built client-side recalculation engines for all 4 valuation models with conservative/moderate/aggressive scenario presets; maintained EN/AR translation parity and RTL responsive layout.
+Verify: lint clean; tsc --noEmit clean; 109 test files / 790 unit tests passed 100%.
+Open: expand real financial statement backfills as additional SEC/Yahoo provider feeds land.
+
 ## 2026-07-16 — TASI market option + DR-15..18 design amendment ✅
 Shipped: NASDAQ/TASI switcher on /markets (aria-pressed segmented control, .SR deep links, initialMarket threading, 4 new Markets.* keys) hardened through qa-reviewer (2 findings fixed) + design-reviewer (5 fixed: a11y roles, focus ring, light-theme chrome, quote pruning, localized sync string); SYSTEM_DESIGN.md amended — DR-15 account shapes (SOLO/parent-only/family on unchanged Role enum), DR-16 Solo+Family priced plans × capability-matrix tiers + metered workspace, DR-17 age-segmented Academy (KIDS/TEENS/ADULTS), DR-18 stock workspace at ValueSnapshot feature parity with labeled educational valuation models; M11–M13 (M13 provisional), OQ-8..11.
 Decisions: valuation copied as editable labeled educational models, never unlabeled verdicts; solo/family is derived state (children.length), no schema role change; tiers gate capabilities, child seats Family-plan-only.
