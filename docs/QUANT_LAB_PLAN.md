@@ -50,7 +50,7 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | G4 automation wiring (paper) | backend-expert + security-auditor | 🔒 POST-PAUSE | premarket+intraday signed-cron passes, −3% daily circuit breaker, envelope caps; NOTE: Alpaca paper acct shows negative cash (−$82.8k, margin used by old paper trades) — envelope must limit by CASH not buying power |
 | G4b TradingView webhooks + deep links | backend-expert + security-auditor | 🔒 POST-PAUSE | HMAC-signed `/api/quant/webhooks/tradingview` → same Sharia gate/envelope pipeline; dark until secret set |
 | G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | ✅ REPORT-CARD UI DONE; PAPER P&L GATED | DB-backed `/quant/league`: accepted + rejected terminal teams, normalized model/SPY/SPUS history, OOS risk, promotion gates, exact persisted trade/P&L drill-down when available, and honest legacy states. Isolated paper-book P&L remains gated until an ACCEPTED team exists. |
-| G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔒 POST-PAUSE | identical gates; Python sidecar only via QDR-3 architect decision |
+| G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔄 G6b DONE / REJECTED; G6a PARKED | G6b wide v2 FULL: 90 active months, OOS DSR 0.000, MC p95 DD 54.86%, plateau FAIL, UNSCREENED; exact card in STRATEGY_LAB. RL remains experimental and requires a separate QDR-3 decision. |
 
 ## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
 
@@ -102,18 +102,19 @@ The binding reason-code definitions and ordering live in QDR-7.
 
 ## Current delivery sequence — app completion, then model enhancement
 
-1. **R3-1 momentum-v3 — DONE / REJECTED:** the true shared-book run passed its frozen 3×3 plateau but
-   failed OOS DSR and book-day MC drawdown gates; unscreened Sharia state independently blocks execution.
-   R3-2 dual-momentum rotation is DONE / REJECTED; next execute R3-3 turn-of-month without retuning R3-2.
+1. **R3 terminal sequence — DONE / REJECTED through R3-4b:** momentum-v3, dual-momentum rotation,
+   turn-of-month, and the wide linear factor all have terminal cards. G6b-wide's FULL verdict is
+   REJECTED on sample, OOS, DSR, drawdown, plateau, and Sharia-verification gates; never rescue it
+   with the stronger 2Y evidence view or retune v2 against viewed OOS results.
 2. **Frontend completion:** G5 report-card views and the shared Rushd/Alpaca portfolio dashboard are
    complete. Continue M9 responsive/accessibility consistency on the remaining non-auth surfaces,
    preserving the explicit 2D committee decision; add isolated paper-book P&L only after an ACCEPTED
    team exists. Every terminal state remains visible; rejection is never filtered out.
-3. **Finish the frozen hypotheses:** validate R2-4 stop-hunt-reversal-long, bagholder-bounce and
-   time-of-day in that pre-registered order. No tuning against already-viewed OOS results.
-4. **Best next model class:** implement G6b monthly long-only cross-sectional linear factors before RL.
-   It has greater diversification value than another intraday variant, is deterministic/explainable,
-   and can use the same walk-forward, DSR, Monte Carlo, Sharia and risk gates.
+3. **Finish the remaining frozen hypotheses:** stop-hunt-reversal-long is terminal REJECTED; validate
+   bagholder-bounce and then time-of-day in that pre-registered order. No tuning against viewed OOS.
+4. **G6b model class — DONE / REJECTED:** the monthly long-only wide factor was deterministic and
+   explainable but failed its single FULL verdict. RL/G6a stays experimental and cannot be used as a
+   post-hoc rescue without its separate architecture decision and the identical promotion gates.
 5. **Committee enhancement:** calibrate strategy-team allocation weights only from isolated paper
    evidence after at least one ACCEPTED team exists. RL/G6a remains experimental and cannot weaken a
    deterministic Sharia veto, risk envelope, or AUTO_REAL gate.
@@ -136,7 +137,7 @@ unless the user explicitly authorizes it. Short `--diagnostic` runs are non-term
 | R3-2 | **dual-momentum-rotation — ✅ DONE / REJECTED** | Final episode-correct shared-book run (`0aef451`, BacktestRun `13a95084-5890-4d17-92f5-c01d913e2d5c`, seed 42): exact seven / 14,108 real bars / 0 MOCK / 2,141 NAV days; **11 independent closed episodes** (3 OOS) from 12 buys, versus 147 raw sells (136 trims + 11 full exits). Full/OOS CAGR 5.49%/13.85%, DSR(9) 0.737/0.701; MC book-day p95 DD 23.15%; post-fill gross≤25%, max one. Frozen 3×3 plateau FAIL on episode returns. Ordered reasons: `INSUFFICIENT_SAMPLE`, `DSR_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`; no AUTO_PAPER. `abe70156…`, `7fc795e8…`, and pseudo-replicated `d3628d85…` are superseded, not evidence; next R3-3. |
 | R3-3 | **tom-overlay — 🧪 CODIFIED / DIAGNOSTIC ONLY** | Source `c1420f5` + boundary/risk fix `8346472`: exact SPUS observed-session calendar, last-4+first-3, close decision/next-open fill, 25% continuous cap, max one, episode inference, frozen `{last 3,4,5}×{first 2,3,4}` plateau, standard book-day risk plus separate seeded monthly-block TOM evidence, and `--diagnostic` no-write mode. Short 2024-01-02..2026-07-10 diagnostic used 632 real bars / 0 MOCK and 30 episodes (9 OOS); CAGR −0.74% / −0.47%, DSR(9) 0.023 / 0.044, MC p95 DD 9.61%, plateau FAIL. These are non-terminal development observations, not a verdict. AAOIFI unscreened/execution blocked. Full terminal evidence awaits explicit user authorization. |
 | R3-4 | **g6b-linear-factor — 🧪 CODIFIED / DIAGNOSTIC ONLY** | Source `f550c8e`: exact 25-name research universe; 50/50 percentile ranks on `close[t−21]/close[t−252]−1` and an honestly labeled trailing-21-session dollar-volume proxy (true turnover rate unavailable); top `ceil(25×25%)=7`, 1/7 target weights, monthly next-open reductions-before-additions, unchanged 15 bps/side costs and risk/ADV/cash envelope, per-run replay isolation, active-month inference, frozen `{231,252,273}×{0.4,0.5,0.6}` plateau. Short 2024-01-02..2026-07-10 diagnostic: 15,800 real bars / 0 MOCK, 18 independent active months (10 OOS; 133 fills / 63 raw closed-name executions), CAGR 11.39% / 15.24%, DSR(9) 0.303 / 0.195, MC p95 DD 42.17%, plateau FAIL. Non-terminal, no JSON/BacktestRun; clean-replay flag was false because unrelated pre-existing WIP remained in the worktree. AAOIFI-unscreened/execution-blocked; full 2018-01-02..2026-07-10 evidence remains unexecuted pending explicit user authorization. |
-| R3-4b | **g6b-linear-factor-wide — 🧪 CODIFIED / AWAITING DEEP WIDE DATA** | A-priori v2 (`7d391ac`): v1 inputs unchanged, taken to any-equities breadth — rankable = ≥253 bars + close ≥$5 + 21d dollar-volume proxy ≥$21M; breadth floor 100 else cash; top decile capped at 50, 1/N; compact Float64Array state. 1Y wide evidence run (`9cce5a0`, run `e546f976`): 283,385 real bars / 4 MOCK excluded, 0 fills — correct by construction (253-bar warmup > 251-bar window; only 30 of 2,777 wide symbols had ≥253 bars). Deep wide backfill queued via `scripts/backfill-wide-daily.ts` (real Yahoo keyless, resumable, ~2,411 bars/symbol). Next after backfill: 2Y wide evidence run, then ONE FULL verdict run. |
+| R3-4b | **g6b-linear-factor-wide — ✅ DONE / REJECTED** | Final FULL `ff73b4f` / `fff3d286`, seed 42: 2,767 symbols; 4,481,246 resolved real bars / 2 MOCK excluded; 90 active book-months (31 OOS), 1,666 fills / 827 name exits; CAGR 5.71% / OOS 0.00%; DSR 0.374 / 0.000; MC p95 DD 54.86%; terminal plateau FAIL; `P(day≥+5%)=0.32%`, `P(day≤−5%)=0.32%`. Ordered reasons: `INSUFFICIENT_SAMPLE`, `OOS_FAILURE`, `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`, `SHARIA_UNVERIFIABLE`. Exact card in STRATEGY_LAB; no AUTO_PAPER and no rerun/retune. |
 | R3-5 | **allocator core — ✅ DONE** (QDR-7) | Pure DB-free allocator applies the 63-live-day validation-prior shrinkage blend, deflated-Sharpe-minus-drawdown score, deterministic seed-only tie ranking, proportional water-filling under the 40%/mode cap, and residual cash. ACCEPTED + complete-evidence + VERIFIED_COMPLIANT is fail-closed; drawdown breach benches immediately, TE breach requires revalidation, implausible evidence disqualifies, zero-score modes receive 0%, and an empty league holds 100% cash. Focused 8/8, lint/TypeScript clean; no schema, persistence, cron, broker, or auth wiring. |
 | R3-6 | **G4 automation wiring + G4b TradingView + league expansion** | Only after ≥1 ACCEPTED team. Security-auditor gate MANDATORY (money path). Envelope limits by CASH not buying power (paper acct has margin debt −$82.8k). AllocationDecision model via generated migration |
 

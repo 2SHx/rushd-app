@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — R3-4b wide-factor FULL verdict ✅
+Shipped: bounded shared-book plateau heap without calendar drift, then completed the single FULL wide run: 2,767 symbols / 4,481,246 resolved real bars / 2 MOCK excluded; result JSON + BacktestRun `fff3d286` persisted.
+Decisions: lazy-dev rung 2 reused the compact universe and engine; v2 is REJECTED on sample, OOS, DSR, 54.86% MC p95 drawdown, FULL plateau, and Sharia-verification gates; the stronger 2Y view cannot rescue or retune it.
+Verify: corrected 2Y diagnostic reproduced all prior metrics exactly; FULL clean SHA `ff73b4f`; lint/TypeScript/diff clean; 109 test files / 792 tests passed with no file parallelism.
+Open: no AUTO_PAPER admission; G6a/RL remains parked; next frozen hypotheses are bagholder-bounce then time-of-day unless reprioritized.
+
 ## 2026-07-16 — Realized Stock PnL Clean Layout Reorganization ✅
 Shipped: Segmented control view switcher separating Stock Breakdown Cards from the Searchable Trade Ledger on /quant/league to prevent page clutter and long scrolling; Stock Cards grid with hero PnL badges, win-rate progress bars, and average return tags.
 Decisions: modularized layout using responsive 3-column grid cards and sticky header searchable trade table.
