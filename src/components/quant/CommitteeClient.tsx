@@ -27,7 +27,10 @@ import {
   Check,
   X,
   GraduationCap,
+  Trophy,
 } from 'lucide-react';
+
+import MavericksSquadPanel from './MavericksSquadPanel';
 
 type MarketKind = 'TASI' | 'NASDAQ';
 export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -210,7 +213,7 @@ export default function CommitteeClient({
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
 
-  const [activeTab, setActiveTab] = useState<'board' | 'portfolio'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'mavericks' | 'portfolio'>('board');
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
   const [decisions, setDecisions] = useState<DecisionRecord[]>(initialDecisions ?? []);
 
@@ -740,6 +743,20 @@ export default function CommitteeClient({
             <button
               type="button"
               role="tab"
+              aria-selected={activeTab === 'mavericks'}
+              onClick={() => setActiveTab('mavericks')}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                activeTab === 'mavericks'
+                  ? 'bg-surface-card text-foreground shadow-sm'
+                  : 'text-foreground/55 hover:text-foreground'
+              }`}
+            >
+              <Trophy className="size-3.5 text-amber-400" aria-hidden="true" />
+              <span>{t('mavericksTitle')}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={activeTab === 'portfolio'}
               onClick={() => setActiveTab('portfolio')}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
@@ -754,6 +771,10 @@ export default function CommitteeClient({
           </>
         </div>
       ) : null}
+
+      {activeTab === 'mavericks' && (
+        <MavericksSquadPanel locale={locale} />
+      )}
 
       {activeTab === 'board' && (
         <>

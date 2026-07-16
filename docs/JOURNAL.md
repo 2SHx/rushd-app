@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — PIP.world Market Mavericks AI Arena Parity ✅
+Shipped: Glass-Box AI Agent Personality cards for all 8 quant committee archetypes (Quant Core, Trend Surfer, Shield Warden, Sentiment Radar, Value Anchor, Halal Guardian, Academic Scholar, General Commander) with stats for Discipline %, Risk Level, Speed, Win Rate, and Special Abilities; Squad Drafting drawer & customizer; Live Market Battle Run simulator with real-time agent reaction stream and XP progression.
+Decisions: integrated directly as a tab inside /quant (CommitteeClient.tsx) with full bilingual EN/AR translation parity.
+Verify: lint clean; tsc --noEmit clean; 109 test files / 790 unit tests passed 100%.
+
 ## 2026-07-16 — ValueSnapshot UI/UX feature parity suite ✅
 Shipped: 4-model interactive Valuation Suite (DCF, EPS Growth, Rule of 40, PEG Ratio) with 5x5 dynamic sensitivity matrices; Opportunity Matrix with 4 rating dimensions; multi-peer side-by-side comparison engine with best-in-row badges; multi-year Income, Balance Sheet, and Cash Flow statement explorer.
 Decisions: built client-side recalculation engines for all 4 valuation models with conservative/moderate/aggressive scenario presets; maintained EN/AR translation parity and RTL responsive layout.
