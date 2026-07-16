@@ -20,6 +20,8 @@ import {
   MessageSquareText,
 } from 'lucide-react';
 
+import Image from 'next/image';
+
 interface AgentPersonality {
   id: string;
   name: string;
@@ -28,6 +30,7 @@ interface AgentPersonality {
   archetypeEn: string;
   archetypeAr: string;
   icon: any;
+  avatarSrc: string;
   color: string;
   discipline: number; // 0-100
   riskLevel: 'Low' | 'Medium' | 'High' | 'Zero';
@@ -57,6 +60,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'Statistical Arbitrage',
       archetypeAr: 'التحكيم الإحصائي',
       icon: Cpu,
+      avatarSrc: '/avatars/quant_core.png',
       color: 'from-blue-500 to-cyan-400',
       discipline: 98,
       riskLevel: 'Low',
@@ -75,6 +79,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'Momentum Breakout',
       archetypeAr: 'اختراق الزخم',
       icon: TrendingUp,
+      avatarSrc: '/avatars/technical.png',
       color: 'from-purple-500 to-pink-500',
       discipline: 78,
       riskLevel: 'High',
@@ -93,6 +98,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'AAOIFI Audit Veto',
       archetypeAr: 'الفيتو والرقابة الشرعية',
       icon: ShieldCheck,
+      avatarSrc: '/avatars/sharia.png',
       color: 'from-emerald-500 to-teal-400',
       discipline: 100,
       riskLevel: 'Zero',
@@ -111,6 +117,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'Catalyst & NLP Detector',
       archetypeAr: 'كاشف المحفزات وتحليل النصوص',
       icon: Flame,
+      avatarSrc: '/avatars/news.png',
       color: 'from-amber-500 to-orange-500',
       discipline: 72,
       riskLevel: 'High',
@@ -129,6 +136,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'DCF & Balance Sheet Anchor',
       archetypeAr: 'تقييم القوائم والتدفقات النقدية',
       icon: Sparkles,
+      avatarSrc: '/avatars/fundamental.png',
       color: 'from-indigo-500 to-purple-400',
       discipline: 92,
       riskLevel: 'Medium',
@@ -147,6 +155,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       archetypeEn: 'Position Sizing & Circuit-Breaker',
       archetypeAr: 'توزيع الأحجام وقاطع الصدمات',
       icon: UserCheck,
+      avatarSrc: '/avatars/pm.png',
       color: 'from-rose-500 to-red-500',
       discipline: 96,
       riskLevel: 'Medium',
@@ -156,6 +165,44 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
       abilityAr: 'قاطع الهبوط الحاد وتخصيص رأس المال',
       quoteEn: 'Capital preservation precedes return maximization.',
       quoteAr: 'حماية رأس المال أولاً قبل تعظيم العوائد.',
+    },
+    {
+      id: 'RESEARCH',
+      name: 'Academic Scholar',
+      titleEn: 'The Literature Researcher',
+      titleAr: 'باحث الدراسات والمنشورات',
+      archetypeEn: 'Peer-Reviewed Factor RAG',
+      archetypeAr: 'بحث الأدبيات الأكاديمية والإنتروبيا',
+      icon: Award,
+      avatarSrc: '/avatars/research.png',
+      color: 'from-teal-500 to-cyan-500',
+      discipline: 95,
+      riskLevel: 'Low',
+      speed: 'Strategic',
+      winRate: 86,
+      abilityEn: 'OpenAlex Paper Evidence Synthesizer',
+      abilityAr: 'تركيب أدلة الأبحاث الأكاديمية المفتوحة',
+      quoteEn: 'Markets change, but empirical financial anomalies endure.',
+      quoteAr: 'تتغير الأسواق، لكن الشذوذات المالية الموثقة أكاديمياً تدوم.',
+    },
+    {
+      id: 'PATTERN_ANALOG',
+      name: 'Shield Warden',
+      titleEn: 'The Pattern Analogist',
+      titleAr: 'محلل الأنماط التاريخية',
+      archetypeEn: 'Historical Dynamic Warping',
+      archetypeAr: 'مطابقة المتتاليات والأنماط',
+      icon: Zap,
+      avatarSrc: '/avatars/pattern.png',
+      color: 'from-violet-500 to-indigo-500',
+      discipline: 88,
+      riskLevel: 'Medium',
+      speed: 'Ultra-Fast',
+      winRate: 79,
+      abilityEn: 'Multi-Asset Fractal Pattern Matcher',
+      abilityAr: 'مطابق المتتاليات الكسرية عبر الأصول',
+      quoteEn: 'History doesn’t repeat itself, but it often rhymes.',
+      quoteAr: 'التاريخ لا يكرر نفسه بدقة، لكنه يعزف النغمة نفسها.',
     },
   ];
 
@@ -327,26 +374,40 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
               <div
                 key={agent.id}
                 onClick={() => toggleAgentInSquad(agent.id)}
-                className={`cursor-pointer rounded-3xl p-5 space-y-4 transition-all duration-300 border relative overflow-hidden ${
+                className={`group cursor-pointer rounded-3xl p-5 space-y-4 transition-all duration-300 border relative overflow-hidden ${
                   isDrafted
-                    ? 'glass-panel border-accent/40 shadow-lg ring-1 ring-accent/30'
-                    : 'bg-foreground/[0.02] border-foreground/[0.06] opacity-60 hover:opacity-100'
+                    ? 'glass-panel border-accent/40 shadow-xl ring-1 ring-accent/30 bg-surface-card'
+                    : 'bg-foreground/[0.02] border-foreground/[0.06] opacity-60 hover:opacity-100 hover:border-foreground/20'
                 }`}
               >
-                {/* Agent Header */}
+                {/* Agent Card Header with 3D Character Portrait */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${agent.color} flex items-center justify-center text-white shadow-md`}>
-                      <Icon className="w-6 h-6" />
+                  <div className="flex items-center space-x-3.5 rtl:space-x-reverse">
+                    <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-2 border-accent/40 shadow-md shrink-0 group-hover:scale-105 transition-transform duration-300">
+                      <Image
+                        src={agent.avatarSrc}
+                        alt={agent.name}
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                      />
+                      <div className={`absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r ${agent.color}`} />
                     </div>
-                    <div>
-                      <h4 className="font-extrabold text-sm text-foreground">{agent.name}</h4>
+
+                    <div className="space-y-0.5">
+                      <h4 className="font-extrabold text-sm text-foreground flex items-center gap-1.5">
+                        <span>{agent.name}</span>
+                        <Icon className="w-3.5 h-3.5 text-accent" />
+                      </h4>
                       <p className="text-[11px] text-accent font-semibold">{isAr ? agent.titleAr : agent.titleEn}</p>
+                      <span className="inline-block text-[9px] font-bold text-foreground/50 bg-foreground/5 px-2 py-0.5 rounded-md border border-foreground/10 uppercase tracking-wider">
+                        {isAr ? agent.archetypeAr : agent.archetypeEn}
+                      </span>
                     </div>
                   </div>
 
-                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors ${
-                    isDrafted ? 'bg-accent text-white border-accent' : 'border-foreground/20'
+                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
+                    isDrafted ? 'bg-accent text-white border-accent shadow-sm' : 'border-foreground/20'
                   }`}>
                     {isDrafted && <CheckCircle2 className="w-4 h-4" />}
                   </div>

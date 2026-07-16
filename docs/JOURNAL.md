@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — PIP.world Market Mavericks 3D Character Avatars ✅
+Shipped: Generated 8 ultra-high quality 3D Maverick character portraits (Quant Core, Trend Surfer, Halal Guardian, Sentiment Radar, Value Anchor, General Commander, Academic Scholar, Shield Warden) for the PIP.world Market Mavericks AI Arena; integrated into `MavericksSquadPanel.tsx`, `CommitteePipeline2D.tsx`, and `public/avatars/`.
+Decisions: full 8-archetype agent roster with custom abilities, quotes, and stats; zero external asset dependencies.
+Verify: 112 test files / 823 unit tests passed 100%; lint and tsc --noEmit clean.
+
 ## 2026-07-17 — M13-2 stock-workspace shell ✅
 Shipped: replaced the stock tabs with one sticky bilingual evidence header, verdict/provenance chips, and the ordered S1–S13 anchor/scroll-spy workspace; unavailable sections now say so instead of rendering fabricated analysis.
 Decisions: lazy-dev rung 2/7 reused native anchors, IntersectionObserver, and existing panels; the pre-spend “1 of 5” view is driven only by a server access state, while the no-key/no-database path remains usable and the workspace mounts once across breakpoints.
