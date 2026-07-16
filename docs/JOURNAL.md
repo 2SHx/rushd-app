@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — Strategy League Team Performance Details UI/UX Enhancement ✅
+Shipped: Redesigned Team Performance Details drawer on /quant/league with ambient HSL gradient ring, 4 quick KPI stat cards (OOS CAGR, Sharpe Ratio, 95% MC Drawdown, Realized Net PnL), interactive progress win-rate bars on asset sleeve breakdown, trade search/filter bar for the exact trade ledger, and copyable Git SHA facts card.
+Decisions: maintained zero-regression performance and EN/AR RTL translation alignment.
+Verify: lint clean; tsc --noEmit clean; 109 test files / 790 unit tests passed 100%.
+
 ## 2026-07-16 — PIP.world Market Mavericks AI Arena Parity ✅
 Shipped: Glass-Box AI Agent Personality cards for all 8 quant committee archetypes (Quant Core, Trend Surfer, Shield Warden, Sentiment Radar, Value Anchor, Halal Guardian, Academic Scholar, General Commander) with stats for Discipline %, Risk Level, Speed, Win Rate, and Special Abilities; Squad Drafting drawer & customizer; Live Market Battle Run simulator with real-time agent reaction stream and XP progression.
 Decisions: integrated directly as a tab inside /quant (CommitteeClient.tsx) with full bilingual EN/AR translation parity.

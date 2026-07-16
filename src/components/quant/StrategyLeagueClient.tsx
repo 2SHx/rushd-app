@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type RefObject } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info, TrendingUp, TrendingDown, Check, Activity } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
@@ -175,54 +175,156 @@ function TeamPerformanceDetail({
   const shariaStyle = SHARIA_STATE_STYLE[team.shariaState] ?? SHARIA_STATE_STYLE.UNVERIFIED;
   const ShariaIcon = shariaStyle.Icon;
 
+  const [copiedSha, setCopiedSha] = useState(false);
+  const [tradeFilter, setTradeFilter] = useState('');
+
+  const handleCopySha = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(team.gitSha);
+      setCopiedSha(true);
+      setTimeout(() => setCopiedSha(false), 2000);
+    }
+  };
+
+  // Filter trade evidence rows if present
+  const filteredTrades = evidence?.trades?.filter((tr) => {
+    if (!tradeFilter.trim()) return true;
+    const q = tradeFilter.toLowerCase();
+    return (
+      tr.symbol.toLowerCase().includes(q) ||
+      tr.reason.toLowerCase().includes(q)
+    );
+  }) || [];
+
   return (
     <section
       ref={detailRef}
       id="selected-team-performance"
-      className="scroll-mt-6 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6"
+      className="scroll-mt-6 rounded-3xl bg-surface-card p-6 shadow-xl border border-[var(--border-color)] space-y-6 relative overflow-hidden text-start"
       aria-labelledby="selected-team-performance-title"
     >
-      <header className="flex flex-col gap-4 text-start sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="font-mono text-xs text-foreground/55" dir="ltr">{team.setupId}</p>
-          <h2 id="selected-team-performance-title" className="mt-1 text-xl font-semibold">{t('teamPerformanceTitle')}</h2>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('teamPerformanceDescription')}</p>
+      {/* Background Accent Glow */}
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-accent/[0.06] via-transparent to-emerald-500/[0.04]" />
+
+      {/* ── Top Hero Header ── */}
+      <header className="flex flex-col gap-4 border-b border-[var(--border-color)] pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex items-center space-x-2 rtl:space-x-reverse flex-wrap">
+            <span className="font-mono text-xs font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20" dir="ltr">
+              {team.setupId}
+            </span>
+            <span className="text-[10px] text-foreground/50 uppercase tracking-widest font-mono">
+              Run #{team.runId.slice(0, 8)}
+            </span>
+          </div>
+          <h2 id="selected-team-performance-title" className="text-2xl font-black text-foreground">
+            {t('teamPerformanceTitle')}
+          </h2>
+          <p className="max-w-3xl text-xs leading-relaxed text-foreground/70">
+            {t('teamPerformanceDescription')}
+          </p>
         </div>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${team.status === 'ACCEPTED' ? 'bg-up/10 text-up' : 'bg-down/10 text-down'}`}>
-          {team.status === 'ACCEPTED' ? <CheckCircle2 className="size-4" aria-hidden="true" /> : <XCircle className="size-4" aria-hidden="true" />}
-          {t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}
-        </span>
+
+        <div className="flex items-center space-x-3 rtl:space-x-reverse self-start">
+          <span
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-black tracking-wide border shadow-sm ${
+              team.status === 'ACCEPTED'
+                ? 'bg-up/10 text-up border-up/20 ring-1 ring-up/30'
+                : 'bg-down/10 text-down border-down/20 ring-1 ring-down/30'
+            }`}
+          >
+            {team.status === 'ACCEPTED' ? (
+              <CheckCircle2 className="size-4 animate-pulse" aria-hidden="true" />
+            ) : (
+              <XCircle className="size-4" aria-hidden="true" />
+            )}
+            <span>{t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}</span>
+          </span>
+        </div>
       </header>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)]">
-        <div className="min-w-0 text-start">
-          <h3 className="text-base font-semibold">{t('performanceTableTitle')}</h3>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/60">{t('performanceTableDescription')}</p>
-          <div className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.025]">
-            <table className="w-full min-w-[30rem] text-sm">
-              <thead className="text-foreground/55">
+      {/* ── 4 Quick KPI Stat Cards Grid ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Out of Sample CAGR */}
+        <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
+          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('oosShort')} CAGR</span>
+          <div className="flex items-baseline justify-between">
+            <p className={`text-2xl font-black font-mono tabular-nums ${team.oos.cagr >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+              {percent(team.oos.cagr)}
+            </p>
+            {team.oos.cagr >= 0 ? <TrendingUp className="w-5 h-5 text-up" /> : <TrendingDown className="w-5 h-5 text-down" />}
+          </div>
+          <p className="text-[10px] text-foreground/50">Full: {percent(team.full.cagr)}</p>
+        </div>
+
+        {/* Sharpe Ratio */}
+        <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
+          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('metricSharpe')}</span>
+          <p className="text-2xl font-black font-mono tabular-nums text-foreground" dir="ltr">
+            {decimal(team.oos.sharpe)}
+          </p>
+          <p className="text-[10px] text-foreground/50">DSR: {decimal(team.oos.deflatedSharpe)}</p>
+        </div>
+
+        {/* Max Drawdown */}
+        <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
+          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">95% MC Drawdown</span>
+          <p className="text-2xl font-black font-mono tabular-nums text-down" dir="ltr">
+            {percent(team.bootstrap.maxDrawdown.p95)}
+          </p>
+          <p className="text-[10px] text-foreground/50">OOS DD: {percent(team.oos.maxDrawdown)}</p>
+        </div>
+
+        {/* Realized Net PnL */}
+        <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
+          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('realizedNetPnl')}</span>
+          <p className={`text-2xl font-black font-mono tabular-nums ${evidence && evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+            {evidence ? money(evidence.totalNetPnl) : '$0.00'}
+          </p>
+          <p className="text-[10px] text-foreground/50">Trades: {decimal(team.full.trades)}</p>
+        </div>
+      </div>
+
+      {/* ── Main Detail Content: Performance Table & Run Facts Sidebar ── */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)]">
+        {/* Performance Metrics Table */}
+        <div className="min-w-0 space-y-3">
+          <div>
+            <h3 className="text-base font-extrabold text-foreground">{t('performanceTableTitle')}</h3>
+            <p className="mt-0.5 text-xs text-foreground/60">{t('performanceTableDescription')}</p>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl bg-foreground/[0.02] border border-[var(--border-color)] shadow-sm">
+            <table className="w-full min-w-[30rem] text-xs">
+              <thead className="bg-foreground/[0.03] text-foreground/60 border-b border-[var(--border-color)]">
                 <tr>
-                  <th className="px-4 py-3 text-start font-medium">{t('metric')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('fullPeriod')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('outOfSample')}</th>
+                  <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('metric')}</th>
+                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('fullPeriod')}</th>
+                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider text-accent">{t('outOfSample')}</th>
                 </tr>
               </thead>
-              <tbody>
-                {comparisonRows.map(row => (
-                  <tr key={row.label} className="border-t border-[var(--border-color)]">
-                    <th scope="row" className="px-4 py-3 text-start font-medium">
+              <tbody className="divide-y divide-[var(--border-color)]">
+                {comparisonRows.map((row) => (
+                  <tr key={row.label} className="hover:bg-foreground/[0.02] transition-colors">
+                    <th scope="row" className="px-4 py-3 text-start font-semibold text-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         {row.label}
                         <span className="group relative inline-flex cursor-help items-center">
-                          <Info className="size-3 text-foreground/40" aria-hidden="true" />
-                          <span className="pointer-events-none absolute bottom-[125%] start-1/2 z-50 w-52 -translate-x-1/2 rounded-xl border border-[var(--border-color)] bg-surface-card p-2.5 text-start text-[10px] font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                          <Info className="size-3.5 text-foreground/40 hover:text-foreground" aria-hidden="true" />
+                          <span className="pointer-events-none absolute bottom-[125%] start-1/2 z-50 w-56 -translate-x-1/2 rounded-2xl border border-[var(--border-color)] bg-surface-card p-3 text-start text-[11px] font-normal leading-relaxed text-foreground opacity-0 shadow-2xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                             {row.hint}
                           </span>
                         </span>
                       </span>
                     </th>
-                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{row.full}</td>
-                    <td className="px-4 py-3 text-end font-semibold tabular-nums" dir="ltr">{row.oos}</td>
+                    <td className="px-4 py-3 text-end font-mono font-medium tabular-nums text-foreground/80" dir="ltr">
+                      {row.full}
+                    </td>
+                    <td className="px-4 py-3 text-end font-mono font-black tabular-nums text-foreground" dir="ltr">
+                      <span className="bg-accent/10 text-accent px-2 py-0.5 rounded-md border border-accent/20">
+                        {row.oos}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -230,127 +332,210 @@ function TeamPerformanceDetail({
           </div>
         </div>
 
-        <aside className="rounded-xl bg-foreground/[0.04] p-4 text-start sm:p-5" aria-labelledby="run-provenance-title">
-          <h3 id="run-provenance-title" className="text-base font-semibold">{t('runFactsTitle')}</h3>
-          <dl className="mt-4 divide-y divide-[var(--border-color)] text-xs">
-            <div className="py-3 first:pt-0">
-              <dt className="text-foreground/55">{t('period')}</dt>
-              <dd className="mt-1 tabular-nums" dir="ltr">{team.from} — {team.to}</dd>
-            </div>
-            <div className="py-3">
-              <dt className="text-foreground/55">{t('dataFeed')}</dt>
-              <dd className="mt-1 font-mono" dir="ltr">{team.dataFeed}</dd>
-            </div>
-            <div className="py-3">
-              <dt className="text-foreground/55">{t('shariaState')}</dt>
-              <dd className="mt-1 inline-flex items-center gap-1.5">
-                <ShariaIcon className={`size-4 ${shariaStyle.className}`} aria-hidden="true" />
-                {t(`sharia.${team.shariaState}`)}
+        {/* Technical Run Facts Card */}
+        <aside className="rounded-2xl bg-foreground/[0.03] dark:bg-white/[0.03] p-5 space-y-4 border border-[var(--border-color)] h-fit" aria-labelledby="run-provenance-title">
+          <div className="flex items-center space-x-2 rtl:space-x-reverse border-b border-[var(--border-color)] pb-3">
+            <Info className="w-4 h-4 text-accent" />
+            <h3 id="run-provenance-title" className="text-sm font-extrabold text-foreground">{t('runFactsTitle')}</h3>
+          </div>
+
+          <dl className="divide-y divide-[var(--border-color)] text-xs space-y-3">
+            <div className="pt-2 first:pt-0">
+              <dt className="text-foreground/50 font-medium">{t('period')}</dt>
+              <dd className="mt-1 font-mono font-bold text-foreground" dir="ltr">
+                {team.from} — {team.to}
               </dd>
             </div>
+
             <div className="pt-3">
-              <dt className="text-foreground/55">{t('sourceCommit')}</dt>
-              <dd className="mt-1 break-all font-mono" dir="ltr">{team.gitSha}</dd>
+              <dt className="text-foreground/50 font-medium">{t('dataFeed')}</dt>
+              <dd className="mt-1 font-mono font-bold text-foreground bg-foreground/5 px-2 py-1 rounded-md border border-foreground/10 inline-block" dir="ltr">
+                {team.dataFeed}
+              </dd>
+            </div>
+
+            <div className="pt-3">
+              <dt className="text-foreground/50 font-medium">{t('shariaState')}</dt>
+              <dd className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-foreground/5 border border-foreground/10">
+                <ShariaIcon className={`size-4 ${shariaStyle.className}`} aria-hidden="true" />
+                <span>{t(`sharia.${team.shariaState}`)}</span>
+              </dd>
+            </div>
+
+            <div className="pt-3">
+              <dt className="text-foreground/50 font-medium">{t('sourceCommit')}</dt>
+              <dd className="mt-1 flex items-center justify-between gap-2 font-mono text-[11px] bg-foreground/5 p-2 rounded-xl border border-foreground/10" dir="ltr">
+                <span className="truncate max-w-[140px] text-foreground/80">{team.gitSha}</span>
+                <button
+                  onClick={handleCopySha}
+                  className="p-1 rounded-lg hover:bg-foreground/10 text-accent transition-colors shrink-0"
+                  title="Copy Commit SHA"
+                >
+                  {copiedSha ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Info className="w-3.5 h-3.5" />}
+                </button>
+              </dd>
             </div>
           </dl>
         </aside>
       </div>
 
+      {/* ── Symbol PnL Breakdown & Trade Ledger ── */}
       {evidence === null ? (
-        <div className="mt-6 rounded-xl bg-foreground/[0.04] p-5 text-start" role="status">
-          <h3 className="text-sm font-semibold">{t('tradeLedgerUnavailableTitle')}</h3>
-          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('tradeLedgerUnavailableBody')}</p>
+        <div className="rounded-2xl bg-foreground/[0.03] p-5 text-start border border-[var(--border-color)]" role="status">
+          <h3 className="text-sm font-bold text-foreground">{t('tradeLedgerUnavailableTitle')}</h3>
+          <p className="mt-1.5 text-xs text-foreground/60">{t('tradeLedgerUnavailableBody')}</p>
         </div>
       ) : evidence.totalClosedTrades === 0 ? (
-        <div className="mt-6 rounded-xl bg-foreground/[0.04] p-5 text-start" role="status">
-          <h3 className="text-sm font-semibold">{t('tradeLedgerEmptyTitle')}</h3>
-          <p className="mt-2 text-xs leading-relaxed text-foreground/60">{t('tradeLedgerEmptyBody')}</p>
+        <div className="rounded-2xl bg-foreground/[0.03] p-5 text-start border border-[var(--border-color)]" role="status">
+          <h3 className="text-sm font-bold text-foreground">{t('tradeLedgerEmptyTitle')}</h3>
+          <p className="mt-1.5 text-xs text-foreground/60">{t('tradeLedgerEmptyBody')}</p>
         </div>
       ) : (
-        <div className="mt-6 space-y-6">
-          <div className="flex flex-col gap-3 text-start sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-6 pt-2 border-t border-[var(--border-color)]">
+          {/* Section Header */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-base font-semibold">{t('symbolPnlTitle')}</h3>
-              <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">
+              <h3 className="text-base font-extrabold text-foreground">{t('symbolPnlTitle')}</h3>
+              <p className="mt-0.5 text-xs text-foreground/60">
                 {t(evidence.basis === 'SHARED_BOOK' ? 'tradeBasisShared' : 'tradeBasisSleeves')}
               </p>
             </div>
-            <div className="shrink-0 text-start sm:text-end">
-              <p className="text-[11px] text-foreground/55">{t('realizedNetPnl')}</p>
-              <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+            <div className="shrink-0 bg-foreground/[0.03] px-4 py-2 rounded-2xl border border-[var(--border-color)] text-start sm:text-end">
+              <p className="text-[10px] text-foreground/50 font-bold uppercase tracking-wider">{t('realizedNetPnl')}</p>
+              <p className={`font-mono text-xl font-black tabular-nums ${evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
                 {money(evidence.totalNetPnl)}
               </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl bg-foreground/[0.025]">
+          {/* Symbol PnL Breakdown Table with Win Rate Bars */}
+          <div className="overflow-x-auto rounded-2xl bg-foreground/[0.02] border border-[var(--border-color)] shadow-sm">
             <table className="w-full min-w-[42rem] text-xs">
-              <thead className="text-foreground/55">
+              <thead className="bg-foreground/[0.03] text-foreground/60 border-b border-[var(--border-color)]">
                 <tr>
-                  <th className="px-4 py-3 text-start font-medium">{t('tradeSymbol')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('closedRecords')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('winRate')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('averageReturn')}</th>
-                  <th className="px-4 py-3 text-end font-medium">{t('realizedNetPnl')}</th>
+                  <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('tradeSymbol')}</th>
+                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('closedRecords')}</th>
+                  <th className="px-4 py-3 text-center font-bold uppercase tracking-wider">{t('winRate')}</th>
+                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('averageReturn')}</th>
+                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('realizedNetPnl')}</th>
                 </tr>
               </thead>
-              <tbody>
-                {evidence.bySymbol.map((row) => (
-                  <tr key={row.symbol} className="border-t border-[var(--border-color)]">
-                    <th scope="row" className="px-4 py-3 text-start font-mono font-semibold" dir="ltr">{row.symbol}</th>
-                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{decimal(row.closedTrades)}</td>
-                    <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{percent(row.wins / row.closedTrades)}</td>
-                    <td className={`px-4 py-3 text-end tabular-nums ${row.averageReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(row.averageReturn)}</td>
-                    <td className={`px-4 py-3 text-end font-mono font-semibold tabular-nums ${row.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{money(row.netPnl)}</td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-[var(--border-color)]">
+                {evidence.bySymbol.map((row) => {
+                  const winRatePct = row.closedTrades > 0 ? (row.wins / row.closedTrades) * 100 : 0;
+                  return (
+                    <tr key={row.symbol} className="hover:bg-foreground/[0.02] transition-colors">
+                      <th scope="row" className="px-4 py-3 text-start font-mono font-extrabold text-foreground" dir="ltr">
+                        <span className="bg-foreground/5 px-2.5 py-1 rounded-lg border border-foreground/10">
+                          {row.symbol}
+                        </span>
+                      </th>
+                      <td className="px-4 py-3 text-end font-mono tabular-nums text-foreground/80" dir="ltr">
+                        {decimal(row.closedTrades)}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono tabular-nums">
+                        <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse max-w-[120px] mx-auto">
+                          <div className="w-full bg-foreground/10 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${winRatePct}%` }} />
+                          </div>
+                          <span className="font-bold text-[11px] text-foreground">{winRatePct.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td className={`px-4 py-3 text-end font-mono font-bold tabular-nums ${row.averageReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+                        {percent(row.averageReturn)}
+                      </td>
+                      <td className={`px-4 py-3 text-end font-mono font-black tabular-nums ${row.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+                        {money(row.netPnl)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <details open className="group overflow-hidden rounded-xl bg-foreground/[0.025]">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-start text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
-              <span>{t('exactTradeLedger', { count: evidence.totalClosedTrades })}</span>
-              <ChevronDown className="size-4 text-foreground/50 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+          {/* Exact Trade Ledger Accordion Drawer with Filter Input */}
+          <details open className="group overflow-hidden rounded-2xl bg-foreground/[0.025] border border-[var(--border-color)]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-start text-sm font-extrabold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                <Activity className="w-4 h-4 text-accent" />
+                <span>{t('exactTradeLedger', { count: evidence.totalClosedTrades })}</span>
+              </div>
+              <ChevronDown className="size-4 text-foreground/50 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
             </summary>
-            {evidence.truncated ? (
-              <p className="mx-4 mb-3 rounded-lg bg-noncompliant/10 px-3 py-2 text-xs leading-relaxed text-noncompliant" role="note">
-                {t('tradeLedgerTruncated', { shown: evidence.trades.length, total: evidence.totalClosedTrades })}
-              </p>
-            ) : null}
-            <div className="max-h-[32rem] overflow-auto border-t border-[var(--border-color)]">
-              <table className="w-full min-w-[78rem] text-xs">
-                <thead className="sticky top-0 bg-surface-card text-foreground/55">
-                  <tr>
-                    <th className="px-4 py-3 text-start font-medium">{t('tradeSymbol')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('entryTime')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('exitTime')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{t('quantity')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{t('entryPrice')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{t('exitPrice')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{t('netReturn')}</th>
-                    <th className="px-4 py-3 text-end font-medium">{t('realizedNetPnl')}</th>
-                    <th className="px-4 py-3 text-start font-medium">{t('exitReason')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {evidence.trades.map((trade, index) => (
-                    <tr key={`${trade.symbol}-${trade.exitTs}-${index}`} className="border-t border-[var(--border-color)]">
-                      <th scope="row" className="px-4 py-3 text-start font-mono font-semibold" dir="ltr">{trade.symbol}</th>
-                      <td className="px-4 py-3 text-start tabular-nums" dir="ltr">{dateTime(trade.entryTs)}</td>
-                      <td className="px-4 py-3 text-start tabular-nums" dir="ltr">{dateTime(trade.exitTs)}</td>
-                      <td className="px-4 py-3 text-end tabular-nums" dir="ltr">{decimal(trade.qty)}</td>
-                      <td className="px-4 py-3 text-end font-mono tabular-nums" dir="ltr">{money(trade.entryPrice)}</td>
-                      <td className="px-4 py-3 text-end font-mono tabular-nums" dir="ltr">{money(trade.exitPrice)}</td>
-                      <td className={`px-4 py-3 text-end tabular-nums ${trade.netReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{percent(trade.netReturn)}</td>
-                      <td className={`px-4 py-3 text-end font-mono font-semibold tabular-nums ${trade.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">{money(trade.netPnl)}</td>
-                      <td className="px-4 py-3 text-start font-mono text-[11px] text-foreground/65" dir="ltr">
-                        {trade.reason}{trade.partial ? ` · ${t('partialExit')}` : ''}
-                      </td>
+
+            <div className="p-4 border-t border-[var(--border-color)] space-y-3">
+              {evidence.truncated && (
+                <p className="rounded-xl bg-noncompliant/10 px-3 py-2 text-xs text-noncompliant font-medium" role="note">
+                  {t('tradeLedgerTruncated', { shown: evidence.trades.length, total: evidence.totalClosedTrades })}
+                </p>
+              )}
+
+              {/* Trade Filter Bar */}
+              <div className="flex items-center space-x-2 rtl:space-x-reverse bg-surface-card px-3 py-2 rounded-xl border border-[var(--border-color)] max-w-sm">
+                <Info className="w-4 h-4 text-foreground/40" />
+                <input
+                  type="text"
+                  value={tradeFilter}
+                  onChange={(e) => setTradeFilter(e.target.value)}
+                  placeholder="Filter trades by symbol or reason..."
+                  className="bg-transparent text-xs text-foreground placeholder:text-foreground/40 focus:outline-none w-full"
+                />
+              </div>
+
+              {/* Trades Table */}
+              <div className="max-h-[32rem] overflow-auto rounded-xl border border-[var(--border-color)]">
+                <table className="w-full min-w-[78rem] text-xs">
+                  <thead className="sticky top-0 bg-surface-card text-foreground/60 border-b border-[var(--border-color)]">
+                    <tr>
+                      <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('tradeSymbol')}</th>
+                      <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('entryTime')}</th>
+                      <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('exitTime')}</th>
+                      <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('quantity')}</th>
+                      <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('entryPrice')}</th>
+                      <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('exitPrice')}</th>
+                      <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('netReturn')}</th>
+                      <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('realizedNetPnl')}</th>
+                      <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('exitReason')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-color)]">
+                    {filteredTrades.map((trade, index) => (
+                      <tr key={`${trade.symbol}-${trade.exitTs}-${index}`} className="hover:bg-foreground/[0.02] transition-colors">
+                        <th scope="row" className="px-4 py-3 text-start font-mono font-extrabold text-foreground" dir="ltr">
+                          {trade.symbol}
+                        </th>
+                        <td className="px-4 py-3 text-start font-mono tabular-nums text-foreground/70" dir="ltr">
+                          {dateTime(trade.entryTs)}
+                        </td>
+                        <td className="px-4 py-3 text-start font-mono tabular-nums text-foreground/70" dir="ltr">
+                          {dateTime(trade.exitTs)}
+                        </td>
+                        <td className="px-4 py-3 text-end font-mono tabular-nums text-foreground/80" dir="ltr">
+                          {decimal(trade.qty)}
+                        </td>
+                        <td className="px-4 py-3 text-end font-mono tabular-nums text-foreground/80" dir="ltr">
+                          {money(trade.entryPrice)}
+                        </td>
+                        <td className="px-4 py-3 text-end font-mono tabular-nums text-foreground/80" dir="ltr">
+                          {money(trade.exitPrice)}
+                        </td>
+                        <td className={`px-4 py-3 text-end font-mono font-bold tabular-nums ${trade.netReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+                          {percent(trade.netReturn)}
+                        </td>
+                        <td className={`px-4 py-3 text-end font-mono font-black tabular-nums ${trade.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
+                          {money(trade.netPnl)}
+                        </td>
+                        <td className="px-4 py-3 text-start font-mono text-[11px]" dir="ltr">
+                          <span className="bg-foreground/5 text-foreground/80 px-2 py-0.5 rounded-md border border-foreground/10">
+                            {trade.reason}{trade.partial ? ` · ${t('partialExit')}` : ''}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </details>
         </div>
