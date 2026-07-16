@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — Realized Stock PnL Clean Layout Reorganization ✅
+Shipped: Segmented control view switcher separating Stock Breakdown Cards from the Searchable Trade Ledger on /quant/league to prevent page clutter and long scrolling; Stock Cards grid with hero PnL badges, win-rate progress bars, and average return tags.
+Decisions: modularized layout using responsive 3-column grid cards and sticky header searchable trade table.
+Verify: lint clean; tsc --noEmit clean; 109 test files / 790 unit tests passed 100%.
+
 ## 2026-07-16 — Strategy League Team Performance Details UI/UX Enhancement ✅
 Shipped: Redesigned Team Performance Details drawer on /quant/league with ambient HSL gradient ring, 4 quick KPI stat cards (OOS CAGR, Sharpe Ratio, 95% MC Drawdown, Realized Net PnL), interactive progress win-rate bars on asset sleeve breakdown, trade search/filter bar for the exact trade ledger, and copyable Git SHA facts card.
 Decisions: maintained zero-regression performance and EN/AR RTL translation alignment.

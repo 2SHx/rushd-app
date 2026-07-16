@@ -175,6 +175,7 @@ function TeamPerformanceDetail({
   const shariaStyle = SHARIA_STATE_STYLE[team.shariaState] ?? SHARIA_STATE_STYLE.UNVERIFIED;
   const ShariaIcon = shariaStyle.Icon;
 
+  const [pnlViewMode, setPnlViewMode] = useState<'stocks' | 'ledger'>('stocks');
   const [copiedSha, setCopiedSha] = useState(false);
   const [tradeFilter, setTradeFilter] = useState('');
 
@@ -186,7 +187,6 @@ function TeamPerformanceDetail({
     }
   };
 
-  // Filter trade evidence rows if present
   const filteredTrades = evidence?.trades?.filter((tr) => {
     if (!tradeFilter.trim()) return true;
     const q = tradeFilter.toLowerCase();
@@ -379,7 +379,7 @@ function TeamPerformanceDetail({
         </aside>
       </div>
 
-      {/* ── Symbol PnL Breakdown & Trade Ledger ── */}
+      {/* ── Ultra-Clean Realized PnL & Trade Ledger Section ── */}
       {evidence === null ? (
         <div className="rounded-2xl bg-foreground/[0.03] p-5 text-start border border-[var(--border-color)]" role="status">
           <h3 className="text-sm font-bold text-foreground">{t('tradeLedgerUnavailableTitle')}</h3>
@@ -391,80 +391,100 @@ function TeamPerformanceDetail({
           <p className="mt-1.5 text-xs text-foreground/60">{t('tradeLedgerEmptyBody')}</p>
         </div>
       ) : (
-        <div className="space-y-6 pt-2 border-t border-[var(--border-color)]">
-          {/* Section Header */}
+        <div className="space-y-4 pt-4 border-t border-[var(--border-color)]">
+          {/* Section Header with Segmented View Switcher */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <div className="space-y-1">
               <h3 className="text-base font-extrabold text-foreground">{t('symbolPnlTitle')}</h3>
-              <p className="mt-0.5 text-xs text-foreground/60">
+              <p className="text-xs text-foreground/60">
                 {t(evidence.basis === 'SHARED_BOOK' ? 'tradeBasisShared' : 'tradeBasisSleeves')}
               </p>
             </div>
-            <div className="shrink-0 bg-foreground/[0.03] px-4 py-2 rounded-2xl border border-[var(--border-color)] text-start sm:text-end">
-              <p className="text-[10px] text-foreground/50 font-bold uppercase tracking-wider">{t('realizedNetPnl')}</p>
-              <p className={`font-mono text-xl font-black tabular-nums ${evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
-                {money(evidence.totalNetPnl)}
-              </p>
+
+            {/* Segmented Control Bar */}
+            <div className="flex items-center p-1 bg-foreground/[0.04] dark:bg-white/[0.04] rounded-2xl border border-[var(--border-color)] self-start">
+              <button
+                onClick={() => setPnlViewMode('stocks')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  pnlViewMode === 'stocks'
+                    ? 'bg-accent text-white shadow-md'
+                    : 'text-foreground/60 hover:text-foreground'
+                }`}
+              >
+                Stock Breakdown ({evidence.bySymbol.length})
+              </button>
+              <button
+                onClick={() => setPnlViewMode('ledger')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  pnlViewMode === 'ledger'
+                    ? 'bg-accent text-white shadow-md'
+                    : 'text-foreground/60 hover:text-foreground'
+                }`}
+              >
+                Trade Ledger ({evidence.totalClosedTrades})
+              </button>
             </div>
           </div>
 
-          {/* Symbol PnL Breakdown Table with Win Rate Bars */}
-          <div className="overflow-x-auto rounded-2xl bg-foreground/[0.02] border border-[var(--border-color)] shadow-sm">
-            <table className="w-full min-w-[42rem] text-xs">
-              <thead className="bg-foreground/[0.03] text-foreground/60 border-b border-[var(--border-color)]">
-                <tr>
-                  <th className="px-4 py-3 text-start font-bold uppercase tracking-wider">{t('tradeSymbol')}</th>
-                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('closedRecords')}</th>
-                  <th className="px-4 py-3 text-center font-bold uppercase tracking-wider">{t('winRate')}</th>
-                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('averageReturn')}</th>
-                  <th className="px-4 py-3 text-end font-bold uppercase tracking-wider">{t('realizedNetPnl')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-color)]">
-                {evidence.bySymbol.map((row) => {
-                  const winRatePct = row.closedTrades > 0 ? (row.wins / row.closedTrades) * 100 : 0;
-                  return (
-                    <tr key={row.symbol} className="hover:bg-foreground/[0.02] transition-colors">
-                      <th scope="row" className="px-4 py-3 text-start font-mono font-extrabold text-foreground" dir="ltr">
-                        <span className="bg-foreground/5 px-2.5 py-1 rounded-lg border border-foreground/10">
-                          {row.symbol}
-                        </span>
-                      </th>
-                      <td className="px-4 py-3 text-end font-mono tabular-nums text-foreground/80" dir="ltr">
-                        {decimal(row.closedTrades)}
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono tabular-nums">
-                        <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse max-w-[120px] mx-auto">
-                          <div className="w-full bg-foreground/10 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${winRatePct}%` }} />
-                          </div>
-                          <span className="font-bold text-[11px] text-foreground">{winRatePct.toFixed(0)}%</span>
-                        </div>
-                      </td>
-                      <td className={`px-4 py-3 text-end font-mono font-bold tabular-nums ${row.averageReturn >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
-                        {percent(row.averageReturn)}
-                      </td>
-                      <td className={`px-4 py-3 text-end font-mono font-black tabular-nums ${row.netPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
-                        {money(row.netPnl)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Mode 1: Stock Cards Grid View */}
+          {pnlViewMode === 'stocks' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {evidence.bySymbol.map((stock) => {
+                const winRatePct = stock.closedTrades > 0 ? (stock.wins / stock.closedTrades) * 100 : 0;
+                const isProfitable = stock.netPnl >= 0;
 
-          {/* Exact Trade Ledger Accordion Drawer with Filter Input */}
-          <details open className="group overflow-hidden rounded-2xl bg-foreground/[0.025] border border-[var(--border-color)]">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-start text-sm font-extrabold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                <Activity className="w-4 h-4 text-accent" />
-                <span>{t('exactTradeLedger', { count: evidence.totalClosedTrades })}</span>
-              </div>
-              <ChevronDown className="size-4 text-foreground/50 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
-            </summary>
+                return (
+                  <div
+                    key={stock.symbol}
+                    className="p-5 rounded-3xl glass-panel border border-[var(--border-color)] space-y-4 hover:border-accent/40 transition-all shadow-sm"
+                  >
+                    {/* Header: Symbol + Trades count */}
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-base font-black text-foreground bg-foreground/5 px-3 py-1 rounded-xl border border-foreground/10" dir="ltr">
+                        {stock.symbol}
+                      </span>
+                      <span className="text-[11px] font-bold text-foreground/50">
+                        {stock.closedTrades} Trades
+                      </span>
+                    </div>
 
-            <div className="p-4 border-t border-[var(--border-color)] space-y-3">
+                    {/* Realized PnL Hero Amount */}
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-foreground/50 font-bold uppercase tracking-wider">Realized PnL</span>
+                      <p className={`text-2xl font-black font-mono tabular-nums ${isProfitable ? 'text-up' : 'text-down'}`} dir="ltr">
+                        {money(stock.netPnl)}
+                      </p>
+                    </div>
+
+                    {/* Win Rate Meter Bar */}
+                    <div className="space-y-1.5 pt-2 border-t border-[var(--border-color)] text-xs">
+                      <div className="flex justify-between font-medium">
+                        <span className="text-foreground/60">Win Rate</span>
+                        <span className="font-mono font-bold text-foreground">{winRatePct.toFixed(0)}% ({stock.wins}/{stock.closedTrades})</span>
+                      </div>
+                      <div className="w-full bg-foreground/10 h-2 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${winRatePct}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Avg Return Tag */}
+                    <div className="flex justify-between items-center text-xs pt-1">
+                      <span className="text-foreground/50">Avg Return:</span>
+                      <span className={`font-mono font-extrabold px-2 py-0.5 rounded-lg ${
+                        stock.averageReturn >= 0 ? 'bg-up/10 text-up' : 'bg-down/10 text-down'
+                      }`} dir="ltr">
+                        {percent(stock.averageReturn)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Mode 2: Searchable Trade Ledger */}
+          {pnlViewMode === 'ledger' && (
+            <div className="space-y-3 pt-2">
               {evidence.truncated && (
                 <p className="rounded-xl bg-noncompliant/10 px-3 py-2 text-xs text-noncompliant font-medium" role="note">
                   {t('tradeLedgerTruncated', { shown: evidence.trades.length, total: evidence.totalClosedTrades })}
@@ -472,19 +492,19 @@ function TeamPerformanceDetail({
               )}
 
               {/* Trade Filter Bar */}
-              <div className="flex items-center space-x-2 rtl:space-x-reverse bg-surface-card px-3 py-2 rounded-xl border border-[var(--border-color)] max-w-sm">
-                <Info className="w-4 h-4 text-foreground/40" />
+              <div className="flex items-center space-x-2 rtl:space-x-reverse bg-surface-card px-3.5 py-2.5 rounded-2xl border border-[var(--border-color)] max-w-md shadow-sm">
+                <Activity className="w-4 h-4 text-accent" />
                 <input
                   type="text"
                   value={tradeFilter}
                   onChange={(e) => setTradeFilter(e.target.value)}
-                  placeholder="Filter trades by symbol or reason..."
+                  placeholder="Filter trades by symbol or exit reason..."
                   className="bg-transparent text-xs text-foreground placeholder:text-foreground/40 focus:outline-none w-full"
                 />
               </div>
 
               {/* Trades Table */}
-              <div className="max-h-[32rem] overflow-auto rounded-xl border border-[var(--border-color)]">
+              <div className="max-h-[32rem] overflow-auto rounded-2xl border border-[var(--border-color)] bg-foreground/[0.02] shadow-sm">
                 <table className="w-full min-w-[78rem] text-xs">
                   <thead className="sticky top-0 bg-surface-card text-foreground/60 border-b border-[var(--border-color)]">
                     <tr>
@@ -537,7 +557,7 @@ function TeamPerformanceDetail({
                 </table>
               </div>
             </div>
-          </details>
+          )}
         </div>
       )}
     </section>
