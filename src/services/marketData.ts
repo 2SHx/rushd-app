@@ -18,6 +18,48 @@ export interface Quote {
   source: 'live' | 'delayed' | 'mock';
 }
 
+export interface FundamentalsPeriod {
+  period: string;
+  freq: 'annual' | 'quarterly';
+  income: {
+    revenue: number;
+    costOfRevenue: number;
+    grossProfit: number;
+    opex: number;
+    rdExpense: number;
+    operatingIncome: number;
+    interestExpense: number;
+    taxExpense: number;
+    netIncome: number;
+    epsDiluted: number;
+    sharesDiluted: number;
+  };
+  balance: {
+    totalCash: number;
+    totalDebt: number;
+    totalEquity: number;
+    totalAssets: number;
+  };
+  cashflow: {
+    operatingCF: number;
+    capex: number;
+    freeCashFlow: number;
+  };
+  source: string;
+}
+
+export interface EarningsCalendar {
+  history: { quarter: string; actual: number; expected: number }[];
+  nextEarningsDate?: string;
+}
+
+export interface FilingLink {
+  label: string;
+  labelAr: string;
+  url: string;
+  source: string;
+}
+
 export interface MarketData {
   symbol: string;
   market: 'TASI' | 'NASDAQ';
@@ -27,7 +69,6 @@ export interface MarketData {
   shariaSource: 'mock' | 'zoya' | 'none';
   marketDataSource: 'live' | 'delayed' | 'mock';
   purificationRatioBps?: number;
-  analystRatings?: { buy: number; sell: number; hold: number };
   earningsHistory?: { quarter: string; actual: number; expected: number }[];
   aboutTextEnglish?: string;
   aboutTextArabic?: string;
@@ -79,6 +120,13 @@ export interface ShariaVerdict {
 export interface MarketDataProvider {
   getQuote(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<Quote>;
   getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days?: number): Promise<Candle[]>;
+  getFundamentalsHistory(
+    symbol: string,
+    market: 'TASI' | 'NASDAQ',
+    freq: 'annual' | 'quarterly',
+    periods: number,
+  ): Promise<FundamentalsPeriod[]>;
+  getEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<EarningsCalendar>;
 }
 
 export interface ShariaScreener {
@@ -116,6 +164,189 @@ export function generateMockHistory(basePrice: number): Candle[] {
   return history;
 }
 
+interface FundamentalsSeed {
+  annualRevenue: number;
+  annualGrowth: number;
+  grossMargin: number;
+  opexRatio: number;
+  rdRatio: number;
+  interestRatio: number;
+  taxRate: number;
+  sharesDiluted: number;
+  cashRatio: number;
+  debtRatio: number;
+  equityRatio: number;
+  operatingCashflowMultiple: number;
+  capexRatio: number;
+}
+
+const FUNDAMENTALS_FIXTURES: Record<string, FundamentalsSeed> = {
+  NVDA: {
+    annualRevenue: 130_000_000_000,
+    annualGrowth: 0.34,
+    grossMargin: 0.74,
+    opexRatio: 0.13,
+    rdRatio: 0.09,
+    interestRatio: 0.002,
+    taxRate: 0.13,
+    sharesDiluted: 24_500_000_000,
+    cashRatio: 0.25,
+    debtRatio: 0.08,
+    equityRatio: 0.52,
+    operatingCashflowMultiple: 1.12,
+    capexRatio: 0.03,
+  },
+  '2222': {
+    annualRevenue: 1_630_000_000_000,
+    annualGrowth: 0.055,
+    grossMargin: 0.43,
+    opexRatio: 0.12,
+    rdRatio: 0.004,
+    interestRatio: 0.008,
+    taxRate: 0.20,
+    sharesDiluted: 242_000_000_000,
+    cashRatio: 0.11,
+    debtRatio: 0.09,
+    equityRatio: 0.46,
+    operatingCashflowMultiple: 1.19,
+    capexRatio: 0.07,
+  },
+};
+
+function cleanWorkspaceSymbol(symbol: string): string {
+  return symbol.replace(/\.SR$/i, '').toUpperCase();
+}
+
+function stableSymbolSeed(symbol: string): number {
+  return cleanWorkspaceSymbol(symbol).split('').reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) >>> 0, 17);
+}
+
+function fundamentalsSeed(symbol: string, market: 'TASI' | 'NASDAQ'): FundamentalsSeed {
+  const cleanSymbol = cleanWorkspaceSymbol(symbol);
+  const fixture = FUNDAMENTALS_FIXTURES[cleanSymbol];
+  if (fixture) return fixture;
+
+  const unit = (stableSymbolSeed(cleanSymbol) % 1_000) / 1_000;
+  return {
+    annualRevenue: (market === 'TASI' ? 18_000_000_000 : 32_000_000_000) * (0.75 + unit),
+    annualGrowth: 0.04 + unit * 0.12,
+    grossMargin: 0.34 + unit * 0.24,
+    opexRatio: 0.14 + unit * 0.08,
+    rdRatio: market === 'TASI' ? 0.012 + unit * 0.018 : 0.04 + unit * 0.07,
+    interestRatio: 0.004 + unit * 0.006,
+    taxRate: market === 'TASI' ? 0.20 : 0.16 + unit * 0.05,
+    sharesDiluted: (market === 'TASI' ? 2_000_000_000 : 1_000_000_000) * (0.8 + unit),
+    cashRatio: 0.10 + unit * 0.12,
+    debtRatio: 0.06 + unit * 0.10,
+    equityRatio: 0.38 + unit * 0.20,
+    operatingCashflowMultiple: 1.05 + unit * 0.16,
+    capexRatio: 0.025 + unit * 0.045,
+  };
+}
+
+function rounded(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function fundamentalsPeriodLabel(freq: 'annual' | 'quarterly', index: number, count: number): string {
+  if (freq === 'annual') return `FY${2026 - count + index + 1}`;
+  const finalQuarterIndex = 2026 * 4 + 1; // Q2 2026, zero-based.
+  const quarterIndex = finalQuarterIndex - count + index + 1;
+  return `${Math.floor(quarterIndex / 4)} Q${quarterIndex % 4 + 1}`;
+}
+
+function generateFundamentalsHistory(
+  symbol: string,
+  market: 'TASI' | 'NASDAQ',
+  freq: 'annual' | 'quarterly',
+  periods: number,
+): FundamentalsPeriod[] {
+  const count = Math.max(1, Math.floor(periods));
+  const seed = fundamentalsSeed(symbol, market);
+  const periodGrowth = freq === 'annual' ? seed.annualGrowth : Math.pow(1 + seed.annualGrowth, 0.25) - 1;
+  const latestRevenue = freq === 'annual' ? seed.annualRevenue : seed.annualRevenue / 4;
+
+  return Array.from({ length: count }, (_, index) => {
+    const revenue = latestRevenue / Math.pow(1 + periodGrowth, count - index - 1);
+    const grossProfit = revenue * seed.grossMargin;
+    const costOfRevenue = revenue - grossProfit;
+    const opex = revenue * seed.opexRatio;
+    const operatingIncome = grossProfit - opex;
+    const interestExpense = revenue * seed.interestRatio;
+    const taxExpense = Math.max(0, operatingIncome - interestExpense) * seed.taxRate;
+    const netIncome = operatingIncome - interestExpense - taxExpense;
+    const operatingCF = netIncome * seed.operatingCashflowMultiple;
+    const capex = revenue * seed.capexRatio;
+    const totalDebt = revenue * seed.debtRatio;
+    const totalEquity = revenue * seed.equityRatio;
+
+    return {
+      period: fundamentalsPeriodLabel(freq, index, count),
+      freq,
+      income: {
+        revenue: rounded(revenue),
+        costOfRevenue: rounded(costOfRevenue),
+        grossProfit: rounded(grossProfit),
+        opex: rounded(opex),
+        rdExpense: rounded(revenue * seed.rdRatio),
+        operatingIncome: rounded(operatingIncome),
+        interestExpense: rounded(interestExpense),
+        taxExpense: rounded(taxExpense),
+        netIncome: rounded(netIncome),
+        epsDiluted: rounded(netIncome / seed.sharesDiluted),
+        sharesDiluted: rounded(seed.sharesDiluted),
+      },
+      balance: {
+        totalCash: rounded(revenue * seed.cashRatio),
+        totalDebt: rounded(totalDebt),
+        totalEquity: rounded(totalEquity),
+        totalAssets: rounded(totalEquity + totalDebt),
+      },
+      cashflow: {
+        operatingCF: rounded(operatingCF),
+        capex: rounded(capex),
+        freeCashFlow: rounded(operatingCF - capex),
+      },
+      source: 'bundled-demo',
+    };
+  });
+}
+
+function generateEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): EarningsCalendar {
+  const history = generateFundamentalsHistory(symbol, market, 'quarterly', 4).map((period, index) => ({
+    quarter: period.period,
+    actual: period.income.epsDiluted,
+    expected: rounded(period.income.epsDiluted * (0.96 + index * 0.005)),
+  }));
+  const fixtureDates: Record<string, string> = { NVDA: '2026-08-26', '2222': '2026-08-11' };
+  const cleanSymbol = cleanWorkspaceSymbol(symbol);
+  const fallbackDay = String(1 + stableSymbolSeed(cleanSymbol) % 27).padStart(2, '0');
+
+  return {
+    history,
+    nextEarningsDate: fixtureDates[cleanSymbol] ?? `2026-08-${fallbackDay}`,
+  };
+}
+
+export function filingsLinks(symbol: string, market: 'TASI' | 'NASDAQ'): FilingLink[] {
+  const cleanSymbol = cleanWorkspaceSymbol(symbol);
+  if (market === 'NASDAQ') {
+    return [{
+      label: 'SEC EDGAR company filings',
+      labelAr: 'إفصاحات الشركة في هيئة الأوراق المالية الأمريكية',
+      url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(cleanSymbol)}&owner=exclude&count=40`,
+      source: 'SEC EDGAR',
+    }];
+  }
+
+  return [{
+    label: 'Saudi Exchange issuer disclosures',
+    labelAr: 'إفصاحات المُصدر في تداول السعودية',
+    url: `https://www.saudiexchange.sa/wps/portal/saudiexchange/hidden/company-profile-main?symbol=${encodeURIComponent(cleanSymbol)}`,
+    source: 'Saudi Exchange',
+  }];
+}
+
 // -------------------------------------------------------------
 // Default Mock Providers
 // -------------------------------------------------------------
@@ -135,6 +366,14 @@ export class MockProvider implements MarketDataProvider {
   async getCandles(symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
     const price = market === 'TASI' ? 120.5 : 350.25;
     return generateMockHistory(price).slice(-days);
+  }
+
+  async getFundamentalsHistory(symbol: string, market: 'TASI' | 'NASDAQ', freq: 'annual' | 'quarterly', periods: number): Promise<FundamentalsPeriod[]> {
+    return generateFundamentalsHistory(symbol, market, freq, periods);
+  }
+
+  async getEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<EarningsCalendar> {
+    return generateEarningsCalendar(symbol, market);
   }
 }
 
@@ -174,6 +413,14 @@ export class SahmkAdapter implements MarketDataProvider {
       throw new Error('Sahmk service failure');
     }
     return generateMockHistory(135.5).slice(-days);
+  }
+
+  async getFundamentalsHistory(symbol: string, market: 'TASI' | 'NASDAQ', freq: 'annual' | 'quarterly', periods: number): Promise<FundamentalsPeriod[]> {
+    return generateFundamentalsHistory(symbol, market, freq, periods);
+  }
+
+  async getEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<EarningsCalendar> {
+    return generateEarningsCalendar(symbol, market);
   }
 }
 
@@ -256,6 +503,14 @@ export class AlpacaAdapter implements MarketDataProvider {
     }));
 
     return candles.slice(-days);
+  }
+
+  async getFundamentalsHistory(symbol: string, market: 'TASI' | 'NASDAQ', freq: 'annual' | 'quarterly', periods: number): Promise<FundamentalsPeriod[]> {
+    return generateFundamentalsHistory(symbol, market, freq, periods);
+  }
+
+  async getEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<EarningsCalendar> {
+    return generateEarningsCalendar(symbol, market);
   }
 
   /** Live universe of tradable US equities. Used by /api/stocks/search; NOT a per-symbol quote. */
@@ -369,6 +624,14 @@ export class YahooFinanceProvider implements MarketDataProvider {
       return generateMockHistory(market === 'TASI' ? 120.5 : 350.25).slice(-days);
     }
   }
+
+  async getFundamentalsHistory(symbol: string, market: 'TASI' | 'NASDAQ', freq: 'annual' | 'quarterly', periods: number): Promise<FundamentalsPeriod[]> {
+    return generateFundamentalsHistory(symbol, market, freq, periods);
+  }
+
+  async getEarningsCalendar(symbol: string, market: 'TASI' | 'NASDAQ'): Promise<EarningsCalendar> {
+    return generateEarningsCalendar(symbol, market);
+  }
 }
 
 export class ZoyaAdapter implements ShariaScreener {
@@ -448,6 +711,22 @@ export class ProviderRegistry {
 
 export const registry = new ProviderRegistry();
 
+export async function getFundamentalsHistory(
+  symbol: string,
+  market: 'TASI' | 'NASDAQ',
+  freq: 'annual' | 'quarterly',
+  periods: number,
+): Promise<FundamentalsPeriod[]> {
+  return registry.getProvider(market).getFundamentalsHistory(symbol, market, freq, periods);
+}
+
+export async function getEarningsCalendar(
+  symbol: string,
+  market: 'TASI' | 'NASDAQ',
+): Promise<EarningsCalendar> {
+  return registry.getProvider(market).getEarningsCalendar(symbol, market);
+}
+
 // -------------------------------------------------------------
 // Rate Limiter: In-Memory Token Bucket
 // -------------------------------------------------------------
@@ -494,7 +773,7 @@ function getEndOfDayTime(): number {
   return d.getTime();
 }
 
-export async function getCachedQuote(provider: MarketDataProvider, symbol: string, market: 'TASI' | 'NASDAQ'): Promise<Quote> {
+export async function getCachedQuote(provider: Pick<MarketDataProvider, 'getQuote'>, symbol: string, market: 'TASI' | 'NASDAQ'): Promise<Quote> {
   const key = `${market}:${symbol}`;
   const now = Date.now();
   const cached = quoteCache.get(key);
@@ -520,7 +799,7 @@ export async function getCachedQuote(provider: MarketDataProvider, symbol: strin
   }
 }
 
-export async function getCachedCandles(provider: MarketDataProvider, symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
+export async function getCachedCandles(provider: Pick<MarketDataProvider, 'getCandles'>, symbol: string, market: 'TASI' | 'NASDAQ', days = 30): Promise<Candle[]> {
   const key = `${market}:${symbol}:${days}`;
   const now = Date.now();
   const cached = candlesCache.get(key);
@@ -632,7 +911,6 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
   if (symbol === 'NVDA') {
     return {
       purificationRatioBps: 498, // 4.98%
-      analystRatings: { buy: 91.69, sell: 1.88, hold: 6.42 },
       earningsHistory: [
         { quarter: "Q2 '25", actual: 0.8, expected: 0.75 },
         { quarter: "Q3 '25", actual: 1.1, expected: 1.05 },
@@ -679,7 +957,6 @@ function getMockStats(symbol: string, market: 'TASI' | 'NASDAQ', price: number) 
   const basePrice = price || 150;
   return {
     purificationRatioBps: isTasi ? 150 : 0, // 1.5% for TASI fallback
-    analystRatings: { buy: 75, sell: 10, hold: 15 },
     earningsHistory: [
       { quarter: "Q2 '25", actual: basePrice * 0.005, expected: basePrice * 0.0048 },
       { quarter: "Q3 '25", actual: basePrice * 0.006, expected: basePrice * 0.0058 },

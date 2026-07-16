@@ -202,39 +202,6 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
         </div>
       )}
 
-      {/* Analyst Ratings (Visual Dummy Data) */}
-      <div className="glass-panel rounded-3xl p-5 space-y-4 text-start">
-        <h3 className="font-bold text-sm text-foreground">{t('analystRatings')}</h3>
-        <div className="flex items-center space-x-4 rtl:space-x-reverse">
-          <div className="w-16 h-16 rounded-full border-4 border-up flex items-center justify-center">
-            <span className="text-xl font-bold tabular-nums text-up">76%</span>
-          </div>
-          <div className="flex-1 space-y-2 text-xs">
-            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <span className="w-8 text-foreground/60">{t('buyRating')}</span>
-              <div className="flex-1 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                <div className="h-full bg-up rounded-full" style={{ width: '76%' }} />
-              </div>
-              <span className="w-6 text-end tabular-nums text-up">76%</span>
-            </div>
-            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <span className="w-8 text-foreground/60">{t('holdRating')}</span>
-              <div className="flex-1 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                <div className="h-full bg-foreground/40 rounded-full" style={{ width: '20%' }} />
-              </div>
-              <span className="w-6 text-end tabular-nums text-foreground/60">20%</span>
-            </div>
-            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <span className="w-8 text-foreground/60">{t('sellRating')}</span>
-              <div className="flex-1 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                <div className="h-full bg-down rounded-full" style={{ width: '4%' }} />
-              </div>
-              <span className="w-6 text-end tabular-nums text-down">4%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Earnings (Visual Dummy Data) */}
       <div className="glass-panel rounded-3xl p-5 space-y-4 text-start">
         <h3 className="font-bold text-sm text-foreground">{t('earningsSummary')}</h3>

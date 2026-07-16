@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — M13-1 stock-workspace data contract ✅
+Shipped: provider-wide 5y/8q fundamentals history, earnings calendar + next date, and market-specific filings links with deterministic bundled NVDA/Aramco fixtures; removed the fabricated analyst-rating field and UI card.
+Decisions: lazy-dev rung 2/7 extended the existing registry and façade with zero dependencies, schemas, auth, or external-key requirements; live adapters expose honestly labeled bundled-demo fundamentals until a vendor is selected.
+Verify: focused market suites 19/19, lint, TypeScript, i18n parity, and diff checks pass; full run reached 107/109 files (785 passed, 2 skipped) with only 10 PostgreSQL-backed outcomes blocked by the unavailable Docker daemon/localhost:5432.
+Open: M13-2 workspace shell/anchor rail is next; the legacy tab shell and later M13 UI/data wiring remain intentionally untouched.
+
 ## 2026-07-16 — R3-4b wide-factor FULL verdict ✅
 Shipped: bounded shared-book plateau heap without calendar drift, then completed the single FULL wide run: 2,767 symbols / 4,481,246 resolved real bars / 2 MOCK excluded; result JSON + BacktestRun `fff3d286` persisted.
 Decisions: lazy-dev rung 2 reused the compact universe and engine; v2 is REJECTED on sample, OOS, DSR, 54.86% MC p95 drawdown, FULL plateau, and Sharia-verification gates; the stronger 2Y view cannot rescue or retune it.

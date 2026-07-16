@@ -6,6 +6,7 @@ import {
   SahmkAdapter,
   YahooFinanceProvider,
   ZoyaAdapter,
+  filingsLinks,
   getCachedShariaVerdict,
 } from './marketData';
 
@@ -103,5 +104,46 @@ describe('YahooFinanceProvider candle failure policy', () => {
     const candles = await new YahooFinanceProvider().getCandles('AAPL', 'NASDAQ', 5);
 
     expect(candles).toHaveLength(5);
+  });
+});
+
+describe('M13 stock-workspace data contract', () => {
+  it('returns deterministic 5-year and 8-quarter bundled fundamentals for NVDA and Aramco', async () => {
+    const provider = new MockProvider();
+
+    const nvdaAnnual = await provider.getFundamentalsHistory('NVDA', 'NASDAQ', 'annual', 5);
+    const nvdaAnnualAgain = await provider.getFundamentalsHistory('NVDA', 'NASDAQ', 'annual', 5);
+    const aramcoQuarterly = await provider.getFundamentalsHistory('2222.SR', 'TASI', 'quarterly', 8);
+
+    expect(nvdaAnnual).toHaveLength(5);
+    expect(aramcoQuarterly).toHaveLength(8);
+    expect(nvdaAnnualAgain).toEqual(nvdaAnnual);
+    expect(nvdaAnnual.every((period) => period.freq === 'annual' && period.source === 'bundled-demo')).toBe(true);
+    expect(aramcoQuarterly.every((period) => period.freq === 'quarterly' && period.source === 'bundled-demo')).toBe(true);
+    expect(nvdaAnnual.at(-1)?.income.revenue).not.toBe(aramcoQuarterly.at(-1)?.income.revenue);
+  });
+
+  it('returns fixture earnings history and a next date without external keys', async () => {
+    const provider = new MockProvider();
+
+    const nvda = await provider.getEarningsCalendar('NVDA', 'NASDAQ');
+    const aramco = await provider.getEarningsCalendar('2222', 'TASI');
+
+    expect(nvda.history.length).toBeGreaterThan(0);
+    expect(aramco.history.length).toBeGreaterThan(0);
+    expect(nvda.nextEarningsDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(aramco.nextEarningsDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('builds market-specific first-party filing destinations', () => {
+    const nasdaq = filingsLinks('NVDA', 'NASDAQ');
+    const tasi = filingsLinks('2222.SR', 'TASI');
+
+    expect(new URL(nasdaq[0].url).hostname).toBe('www.sec.gov');
+    expect(nasdaq[0].url).toContain('NVDA');
+    expect(new URL(tasi[0].url).hostname).toBe('www.saudiexchange.sa');
+    expect(tasi[0].url).toContain('2222');
+    expect(nasdaq[0]).toMatchObject({ source: 'SEC EDGAR' });
+    expect(tasi[0]).toMatchObject({ source: 'Saudi Exchange' });
   });
 });
