@@ -8,11 +8,12 @@ Binding implementation contract. Agents receive 2–5 line quotes as their DESIG
 
 ## 1. Context & goals
 
-**Product.** Gamified, bilingual (Arabic-first) investment-training and family neobanking simulator for the Gulf. Parents supervise children who learn markets and practice investing with virtual play-money across TASI (featured) and NASDAQ (secondary).
+**Product.** Gamified, bilingual (Arabic-first) investment-training and neobanking simulator for the Gulf — for self-directed adults learning to invest and for parents supervising children. All practice uses virtual play-money across TASI (featured) and NASDAQ (secondary).
 
 **Personas.**
-- **PARENT** — Gulf guardian, real email + password. Creates and supervises child accounts, sets allowances, sees each child's activity. Sole account holder for a family.
-- **CHILD** — minor (~8–17), no email. Logs in with a parent-issued family code + username + PIN. Learns, takes quizzes, runs simulated trades, earns XP. Sees only their own data.
+- **SOLO** — self-directed Gulf adult (18+), own email + password, role `PARENT` with zero children (DR-15). Learns via the Academy (DR-17) and strategy lessons (DR-14), runs simulated trades. Becomes a family by adding a first child.
+- **PARENT** — Gulf guardian, real email + password. Creates and supervises child accounts, sets allowances, sees each child's activity. The family's single account holder; may have zero children (parent-only) — family features activate with the first child (DR-15).
+- **CHILD** — minor (~8–17), no email. Logs in with a parent-issued family code + username + PIN. Learns age-appropriate content (DR-17), takes quizzes, runs simulated trades, earns XP. Sees only their own data.
 
 **Markets.** TASI is the quality bar: numeric symbols (`2222`=Aramco, `1120`=Al Rajhi), SAR pegged 3.75/USD, trades **Sunday–Thursday** ~10:00–15:00 AST (never hardcode Mon–Fri). NASDAQ secondary: alphabetic symbols, USD.
 
@@ -30,9 +31,9 @@ Binding implementation contract. Agents receive 2–5 line quotes as their DESIG
 7. Money is `Decimal` with a full audit trail.
 8. `npm run lint` + `npx tsc --noEmit` + `npx vitest run` green, including a no-keys mock CI run.
 
-**Non-goals v1:** real money / PSP / KYC, real brokerage execution, multi-parent families, native mobile app.
+**Non-goals v1:** real money / PSP / KYC, real brokerage execution, multi-parent families, native mobile app, à-la-carte per-feature billing. Solo-adult accounts are IN scope as of DR-15 (M11) — the product is no longer family-only.
 
-**Tier gating (product default, tunable in code, not schema):** BASIC = 1 child, TASI only, quizzes. PREMIUM = ≤4 children, NASDAQ, AI signals. ULTRA = unlimited children, advanced analytics, priority AI. Gating is enforced in the authz helper (§8), never by branching UI alone.
+**Plans & tier gating (product default, tunable in code, not schema — DR-15/DR-16):** two priced plans — **Solo** (user-based) and **Family** — at different price points, annual-first and SAR-denominated; within each plan, BASIC/PREMIUM/ULTRA is a capability matrix, not a child count. BASIC (free) = both market overviews, TASI simulated trading, quizzes, Academy Foundations track, first strategy-team lesson, and 5 full stock-workspace unlocks per rolling 30 days (the Sharia verdict chip stays visible even when metered). PREMIUM = NASDAQ trading, AI signals, unmetered workspace, Economics track + all strategy-team lessons. ULTRA = Advanced Financial Analysis track (CFA-candidate level, OQ-9) + capstones, advanced/quant analytics, priority AI. Child seats exist only on the Family plan: BASIC = 1, PREMIUM = 4, ULTRA = unlimited. Price numbers are OQ-8. Gating and metering are enforced in the authz helper (§8), never by branching UI alone.
 
 ---
 
@@ -93,6 +94,13 @@ Rationale: the committee scene is pedagogy, not decoration — the learner watch
 Consequences — the perf budget is a contract, tested in M9: the render loop (RAF) is **paused when the tab is hidden or the canvas is off-screen**; `prefers-reduced-motion` renders a **static frame** (no loop); **mobile / no-WebGL gets a 2D card fallback** (all four ui-craft states, no blank canvas); and `npm run build` must show **zero first-load JS growth on non-3D routes** — the 3D bundle exists only in the two routes' dynamic chunks. The 2D fallback doubles as the no-key/mock-mode-safe path: the scene renders from the same view-model whether committee data is mock or live.
 Revisit when: a third surface genuinely needs 3D (re-justify the fence, not the dependency) or the 3D chunk exceeds ~300 kB gzipped on either route — then trim drei/three imports before touching the design.
 
+### DR-18: The stock page is one workspace at ValueSnapshot feature parity — honest computed data, labeled educational valuation models, no unlabeled verdicts
+Decision: rebuild `StockDetail` as a single scrollable workspace with anchor/scroll-spy navigation — parity is with ValueSnapshot's *feature set*, never its tab chrome or visual style (DR-12 tokens govern) — comprising: a sticky header (symbol/price/day change) + a verdict-chip row, then chart-first sections covering the full parity set: price charts; financial history (revenue/net-income/margin bars); a **valuation lab** — real educational DCF, EPS-growth, PEG, and Rule-of-40 calculators with visible, editable assumptions and a persistent "مخرجات نموذج تعليمي — ليست نصيحة" / "model output — not advice" label, age-gated TEENS+ per DR-17; an analyst view (the quant committee's stances + R-Score — RUSHD's honest analog of analyst ratings, never a buy/sell consensus); compare (2–4 symbols side-by-side incl. Sharia verdicts); AI analysis; a snapshot card; earnings history; filings links (SEC EDGAR for NASDAQ, Saudi Exchange disclosures for TASI); plus a persistent watchlist. Chips surface only computed data: AAOIFI verdict (`ShariaVerdict`), purification ratio (screener ratios / `PurificationEntry.ratio`), R-Score, and data provenance ("demo data"/live source per DR-4). Honesty rule, test-enforced: **banned** = unlabeled or unexplained fair value, target prices, upside/downside %, and buy/sell/hold ratings; **allowed** = the same numbers inside a labeled educational calculator whose assumptions are visible and editable. The audience includes minors — a number without its assumptions is a claim, and claims are banned.
+Options: keep the four-tab layout (`type Tab` at `StockDetail.tsx:27` — hides the Sharia verdict, the product's differentiator, behind a click) / clone ValueSnapshot's visuals and fair-value verdicts (violates DR-12 and ships fabricated claims to minors) / one-page workspace at feature parity with labeled educational models (chosen).
+Rationale: ValueSnapshot's validated retention pattern is verdict-first, charts-over-tables, everything on one page; RUSHD's honest equivalents — AAOIFI verdict, purification ratio, R-Score, committee stances — are computed today (`MockScreener`/`ZoyaAdapter`, `RScorePanel`, `PurificationEntry.ratio`). Valuation taught as an editable model is pedagogy; valuation asserted as a verdict is advice.
+Consequences: anchor navigation replaces tab a11y (keyboard order preserved); the DR-16 metered state is a first-class workspace state (chip row + upgrade card visible, deep sections withheld); KIDS-segment child sessions get an age-gated placeholder instead of the valuation lab (DR-17 gate, server-enforced); watchlist and earnings need one new model + provider methods (§4, M13); every section keeps the four ui-craft states, mock mode, and RTL logical props. Detailed section-by-section scope is finalized in `docs/STOCK_WORKSPACE_SPEC.md` (recon in flight) — M13's work-item table is provisional until it lands; the honesty rule and parity target are settled now.
+Revisit when: `docs/STOCK_WORKSPACE_SPEC.md` lands with contradicting recon (re-cut M13's items, never the honesty rule), or user testing shows time-to-verdict above ~2 s — then reorder sections, never reintroduce tab chrome.
+
 ---
 
 ## 3. Auth
@@ -106,9 +114,16 @@ Rationale: children have no email, so we must own the credential store; Auth.js 
 Consequences: passwords/PINs are hashed with `bcryptjs` (pure-JS, no native build on Render) at cost 12; JWT sessions cannot be server-revoked instantly (acceptable for play-money; see OQ-5). Child PINs are low-entropy → mandatory lockout: `failedLoginCount` + `lockedUntil`, lock for 15 min after 5 fails, scoped per `(parentId, username)`. Middleware composes next-intl (locale) then Auth.js (session); unauthenticated hits on protected prefixes redirect to `/[locale]/login`.
 Revisit when: real money moves (switch to DB sessions for instant revocation) or a second guardian per family is required (OQ-2).
 
-**Credential resolution.** Parent: `User.email` unique + `passwordHash`. Child: resolved by `familyCode` (a short code on the parent) → parent, then `@@unique([parentId, username])` → child, then verify PIN against `passwordHash`. A child cannot log in without a valid family code, so children are never globally enumerable.
+**Credential resolution.** Parent: `User.email` unique + `passwordHash`. Child: resolved by `familyCode` (a short code on the parent) → parent, then `@@unique([parentId, username])` → child, then verify PIN against `passwordHash`. A child cannot log in without a valid family code, so children are never globally enumerable. A SOLO adult uses the parent shape (email + password) — there is no third credential path (DR-15).
 
 **Session contents & use.** The JWT carries `userId`, `role`, `tier`, `parentId`. `src/lib/authz.ts` (§8) reads it to scope every data access. UI reads `role`/`tier` for navigation and gating; the server never trusts client-sent role/tier.
+
+### DR-15: Three account shapes — SOLO adult, parent-only, parent+children — on the unchanged Role enum; solo/family is derived state, never stored
+Decision: serve all three account shapes on the existing `Role {PARENT, CHILD}`: every self-registered adult is a PARENT-role account holder; "solo" vs "family" is derived (does the account have children), onboarding asks intent ("for myself" / "for my family") but writes identical rows; `familyCode` is issued lazily at first child-create; the CHILD persona and credential shape are unchanged.
+Options: add an ADULT/SOLO enum value (schema migration plus a third branch in every role check, for zero behavioral difference) / a separate solo product (forks the codebase and the pricing page) / PARENT-role holder with derived shape (chosen — the §8 authz formula `own ∪ children` already degrades to `own` when the children set is empty).
+Rationale: the authorization rule generalizes without modification, and product copy — not the data model — is what must stop saying "parent". The Solo/Family plan split (DR-16) is derived at billing time from the same fact, so no second source of truth appears.
+Consequences: family panels render only when children exist — no dead family UI on solo accounts; copy says "account holder" (صاحب الحساب), never "parent", until a first child exists (both locales); solo→family upgrade is simply creating a child, which also moves the account to the Family plan (DR-16); solo adults use the same `addXP` engine — whether their gamification *presentation* is toned down is OQ-11.
+Revisit when: a persona the PARENT role cannot express appears (e.g. a CHILD turning 18 and graduating to an independent account) — add a migration path, not a new role.
 
 ---
 
@@ -137,6 +152,10 @@ Revisit when: never for correctness; only the precision (`18,4`) is revisited if
 | Add `@@index([userId, createdAt])` | `Transaction`, `QuizAttempt` | M2 |
 | Add `PROFIT_SHARE` to `TransactionType` enum | enum | M3 |
 | Add `profitShareRatioBps Int @default(7000)` (disclosed Mudarabah split) | `SavingsJar` | M3 |
+| Add `WorkspaceUnlock` model — `userId`, `symbol`, `market`, `unlockedAt`, `@@index([userId, unlockedAt])` (DR-16 metering credits: distinct symbols in a rolling 30 days) | new model | M11 |
+| Add `AcademyProgress` model — `userId`, `trackId`, `unitId`, `lessonId`, `status`, `score?`, `answers Json?`, `contentVersion`, `completedAt?`, `@@unique([userId, trackId, unitId, lessonId])` | new model | M12 |
+| Add `ageSegment String?` (CHILD only, parent-set: `KIDS` \| `TEENS` — DR-17 age gate) | `User` | M12 |
+| Add `WatchlistItem` model — `userId`, `symbol`, `market`, `@@unique([userId, symbol, market])` (DR-18 watchlist) | new model | M13 |
 
 No new auth tables (JWT sessions, no adapter). `onDelete: Cascade` already present on each user's owned rows satisfies PDPL right-to-erasure per user; family erasure is app-orchestrated — delete each child `User` (their owned rows cascade), then the parent — because the parent→children self-relation defaults to `SetNull`, not `Cascade`.
 
@@ -205,6 +224,13 @@ Rationale: the learner should experience how entry, exit, sizing, holding period
 Consequences: knowledge checks may have a correct answer and immediate explanation but never alter the replay; policy decisions show their mechanism/trade-off without revealing P&L, map through a pure policy compiler, and cannot weaken Sharia or risk caps. `StrategyLearningAttempt` is immutable after sealing and records user/setup/question-set/policy versions, answers, policy hash, replay configuration/data provenance, and result references; every retry creates a labeled new attempt. The result surface normalizes all four lines to 100 on one common interval and shows return, max drawdown, volatility, trade count, and choice-to-outcome explanations; SPY is labeled a price-only S&P 500 ETF proxy, not the index or total return. XP rewards completion, retrieval, and reflection through `addXP`—never portfolio profit, rank, or risk-taking. No variable-ratio rewards, loss-chasing streak pressure, loot-box mechanics, or winner/loser language. Development uses a fixed ≤6-month fixture first; the prohibited 2018-01-02→2026-07-10 evidence run is never triggered by this learning flow and still requires explicit user authorization.
 Revisit when: evidence shows the bounded choices cannot express a strategy's defining decisions; add another reviewed policy branch, never arbitrary executable code.
 
+### DR-17: Rushd Academy — versioned code-resident academic curriculum, age-segmented, compliance-tagged, additive to practical strategy learning
+Decision: build the Academy as zod-validated TypeScript content modules in `src/academy/content/**` (Track → Unit → Lesson → CheckPoint) whose schema REQUIRES three things per lesson: bilingual fields (en + ar — structural parity, Arabic-primary per DR-6), a `complianceTag` per concept (DR-5: interest math, bonds, derivatives are taught openly, persistently labeled, never executable), and an `ageSegment` — `KIDS` (~8–12), `TEENS` (13–17), `ADULTS` (18+) — with per-segment lesson variants of the same concept where the material must differ. v1 ships three tracks — **Finance Foundations** (bachelor-intro level, incl. Islamic-finance units; KIDS/TEENS/ADULTS variants), **Economics** (TEENS/ADULTS), **Advanced Financial Analysis** (CFA-candidate level, ADULTS only; public naming gated on OQ-9) — behind a registry designed for O(1) track addition; valuation-model content is TEENS+. Progress lives in DB (`AcademyProgress`, §4); content never does. Every unit declares ≥1 `practiceLink` into a DR-14 strategy lesson or quiz topic — theory→practice is a tested invariant, and the Academy is additive to the strategy-team track, never a replacement. XP flows only through `addXP` at fixed server policy amounts (same anti-loot-box stance as DR-14).
+Options: CMS/DB-stored content (authoring infra + versioning ambiguity RUSHD's scale cannot justify) / MDX pipeline (a new rendering dependency that loses type-safe bilingual + segment enforcement) / zod-validated TS modules (chosen — extends the existing quiz-bank and DR-14 question-set pattern, zero new dependencies, works with zero API keys by construction).
+Rationale: one lesson body cannot serve an 8-year-old and a CFA candidate — encoding the segment in the content schema makes age-appropriate material a compile-time property instead of an editorial hope, and keeps child protection enforceable server-side; code-resident content keeps the curriculum versioned, reviewable in PRs, and mock-mode-safe.
+Consequences: age gating is server-side in the same authz helper (§8) — a CHILD session resolves its parent-set `User.ageSegment` (§4, M12) and can never fetch a higher segment's lesson: KIDS sees KIDS, TEENS sees KIDS+TEENS, any PARENT-role account sees all; UI filtering alone is a defect. Tier gates (DR-16) and segment gates compose in one guard. A lesson missing an ar field, a `complianceTag`, or an `ageSegment` fails the content-lint test, not a human review. Sharia-board review scope for the expanded curriculum is OQ-10.
+Revisit when: content passes ~200 lessons or a non-engineer author joins (then evaluate a CMS), or the Sharia board review (OQ-10) mandates label or segment changes.
+
 ---
 
 ## 7. i18n/RTL & compliance
@@ -263,11 +289,19 @@ Rationale: paper-only needs no license and gives realistic execution; isolating 
 Consequences: `src/quant/execution/` is the sole broker boundary; a test asserts no live path is reachable without the gate (Q6); TASI live needs a separate licensed Saudi broker.
 Revisit when: a CMA license/partner and KYC/AML are in place.
 
+### DR-16: Two priced plans (Solo, Family) with a capability-matrix tier inside each — child seats are a Family-plan capability, not the tier axis; the aha feature is metered, never hard-walled
+Decision: price the product as two plans — **Solo** (user-based) and **Family** — at different price points, annual-first and SAR-denominated (numbers are OQ-8); within each plan, BASIC/PREMIUM/ULTRA is a capability matrix in code (`src/lib/authz.ts`: `can(session, capability)` plus a workspace meter), per the §1 table. Plan is derived, never stored: an account with children (or creating its first child) is on the Family plan; a zero-children account is Solo (DR-15). The full stock workspace is metered on BASIC at 5 distinct symbols per rolling 30 days via `WorkspaceUnlock` rows (§4) — revisiting an unlocked symbol is free, and the Sharia verdict chip stays visible even when metered. ULTRA's identity is education depth (Advanced Financial Analysis track + capstones, DR-17) plus advanced analytics — the top tier monetizes learning, not just feature switches. Schema untouched: plan and matrix are code, per the standing "tunable in code, not schema" contract.
+Options: keep the child-count tier axis (meaningless for solo users — a solo BASIC and a solo ULTRA would be identical) / à-la-carte feature flags (billing complexity, no upgrade ladder) / market-level hard walls (kills the metered-aha funnel — free users must browse the whole catalog to want credits) / two plans × capability-matrix tiers with a metered workspace (chosen).
+Rationale: the freemium lesson RUSHD adopts is meter-the-aha (the Sharia verdict workspace) rather than wall it, and monetize education at the top; a plan axis (who is covered) orthogonal to a tier axis (what is unlocked) prices solo adults and families fairly without inventing schema or a billing service.
+Consequences: the meter is server-side and DB-backed (survives restarts, uncheatable from the UI); child-seat caps (Family plan: 1/4/unlimited) are enforced at child-create; creating a first child moves the account Solo→Family at the pricing layer only — no data migration; the frontend reads capabilities from the session/API, never decides them; until real billing exists (OQ-1 territory), plan and tier remain admin/env-set product defaults. The meter credit count is a code constant; its final value ships with OQ-8's numbers.
+Revisit when: meter-conversion telemetry demands a different credit count (a code-constant change, not a redesign) or a community feature ships (re-run the ULTRA-identity decision).
+
 **Authorization model (parent/child boundary).** The JWT session (`{userId, role, tier, parentId}`) feeds a single guard in `src/lib/authz.ts`. Rules, enforced in every query — not by UI branching:
 - CHILD → own rows only (`where userId = session.userId`).
 - PARENT → own rows + children's (`where userId IN (self ∪ {c : c.parentId = self})`).
+- SOLO and parent-only accounts use the same PARENT rule — the children set is empty, so scope reduces to own rows (DR-15); no third branch exists.
 - Cross-family access is impossible: no query omits the scope; a sibling or another family's row returns 403.
-- Tier gating (BASIC/PREMIUM/ULTRA feature limits) is checked in the same guard, server-side.
+- Plan + tier gating (the DR-16 capability matrix and workspace meter) and Academy age-segment gating (DR-17 — a CHILD session never fetches a lesson above its parent-set `ageSegment`) are checked in this same guard, server-side.
 
 **LLM threat model (prompt injection).** Inputs are constrained before reaching the model: `market` enum, `symbol` regex, `topic` allowlisted + length-capped, `portfolioHoldings` server-derived. Output is structured-only (`generateObject`+zod) and never `eval`'d or used to trigger a mutation — a simulated trade is a separate authenticated user action. The injection probe in the M5 eval is the standing regression test.
 
@@ -378,13 +412,50 @@ Goal: a learner can understand one strategy team, commit bounded decisions, and 
 | L4 — Mastery-loop UI: choose team → learn → decide → seal → compare; immediate mechanism feedback, four-line chart, return/maxDD/volatility/trades, process-first explanation, en/ar + RTL | frontend-expert | browser walk-through in en/ar at desktop/mobile shows loading/empty/error/populated states, keyboard completion, reduced motion, outcome hidden pre-seal, and honest simulated/price-only labels |
 | L5 — Retrieval revisit + XP for mastery effort only | i18n-fintech-expert | a delayed knowledge revisit is offered; XP is written only via `addXP` for completion/retrieval/reflection and remains unchanged when simulated return changes |
 
+*(M11–M13 execute after M10, in order: M11's capability matrix and meter gate both M12 and M13; M13 additionally consumes M9's U4 tokens. Mock mode holds throughout — Academy content is local by construction, and workspace chips run on `MockScreener` with demo provenance.)*
+
+### M11: Account shapes, plans & tier capability matrix (DR-15, DR-16)
+Goal: a solo adult, a parent-only account, and a family are all first-class; plans and tiers gate capabilities, not child counts.
+| Work item | Owner | Exit criterion |
+|---|---|---|
+| Onboarding intent fork ("for myself" / "for my family") writing identical PARENT rows; solo dashboard variant — family panels render only when children exist; add-first-child entry point | frontend-expert | walk-through en/ar: solo registers with zero child prompts; parent-only sees an empty-state family panel with add-child CTA; a family sees the children list; no dead links |
+| Capability matrix `can(session, capability)` in the authz helper; Solo/Family plan derived from children set; child-seat caps at child-create; `familyCode` issued lazily at first child-create | backend-expert | `npx vitest run tiers` green: BASIC denied AI signals + NASDAQ trade; Family-BASIC denied a 2nd child; Family-PREMIUM denied a 5th; solo account acquires `familyCode` only on first child-create |
+| `WorkspaceUnlock` migration + server-side meter (5 distinct symbols per rolling 30 days; revisits free; metered payload still carries the Sharia-verdict chip data) | backend-expert | integration test: 6th distinct symbol in-window returns the metered payload containing verdict-chip data only; revisiting an unlocked symbol consumes no credit |
+| Adult-neutral copy (صاحب الحساب "account holder", solo/family wording) en+ar | i18n-fintech-expert | `messages/*.json` key-identical; walk-through shows no "parent" labeling on solo surfaces in either locale |
+| Account-shape regression: solo / parent-only / family authz + meter + seat caps | test-engineer | `npx vitest run tiers security` green incl. cross-shape access 403s |
+
+### M12: Rushd Academy v1 (DR-17)
+Goal: a learner completes age-appropriate academic lessons across three tracks, every concept compliance-tagged, each unit linking into DR-14 practical learning.
+| Work item | Owner | Exit criterion |
+|---|---|---|
+| Content engine: zod schema (bilingual-required fields, `complianceTag`, `ageSegment` per lesson), track registry, content-lint test | ai-features-expert | `npx vitest run academy` fails a negative fixture missing an ar field, a tag, or a segment; passes the real content set |
+| v1 curriculum: Foundations (incl. Islamic-finance units; KIDS/TEENS/ADULTS variants of at least its first two units), Economics (TEENS/ADULTS), Advanced Financial Analysis (ADULTS; naming placeholder pending OQ-9) — ≥3 tracks × ≥4 units × ≥3 lessons, checkpoint per lesson | ai-features-expert | content-count test asserts the minimums and the segment coverage; every riba/bond/derivative lesson carries `HARAM` or `EDUCATIONAL_ONLY` (test) |
+| Arabic register + Sharia-label review of all v1 lessons; extend the M5 golden set to Academy strings | i18n-fintech-expert | review checklist artifact in the PR; `npx vitest run eval` covers Academy Arabic fields (non-empty, no banned jargon) |
+| `AcademyProgress` + `User.ageSegment` migrations; auth-scoped progress/completion API — XP via `addXP` at fixed amounts, idempotent completion; DR-16 track gating + DR-17 segment gating server-side; segment set/edited by parent at child-create/settings | backend-expert | integration tests: completion writes progress + one XP event; repeat completion is a no-op; cross-user access 403; BASIC blocked from an ULTRA-track lesson; KIDS child requesting a TEENS/ADULTS lesson → 403 |
+| Academy UI: catalog → track → lesson reader → checkpoint → progress; theory→practice link block on every unit; segment picker in the child-create/settings form | frontend-expert | walk-through en/ar, desktop/mobile, four ui-craft states, RTL logical props; a practice link lands on the mapped strategy lesson (M10 L4 surface) or quiz |
+| Practice-link + segment-gate integrity suite (every unit ≥1 link; all link targets resolve; no lesson below its track's minimum segment) | test-engineer | `npx vitest run academy` green incl. link-integrity and segment-gate assertions |
+
+### M13: One-page stock workspace at feature parity (DR-18) — PROVISIONAL
+Goal: the stock page is a single honest workspace — verdict chips first, charts over tables, labeled educational valuation models, zero unlabeled claims, metered state first-class.
+**Provisional:** work items below are finalized when `docs/STOCK_WORKSPACE_SPEC.md` (recon in flight) lands; the honesty rule and the parity target (DR-18) are settled and not revisited by the spec.
+| Work item | Owner | Exit criterion |
+|---|---|---|
+| Workspace refactor: delete the tab layout; sticky chip header; anchor/scroll-spy across the parity sections in DR-18's fixed order | frontend-expert | `grep -n "type Tab" src/components/markets/StockDetail.tsx` empty; keyboard navigation demonstrated; design-reviewer PASS (DR-12) |
+| Verdict-chip row (AAOIFI verdict, purification ratio, R-Score, provenance) driven only by registry/computed data | frontend-expert | with zero keys, the provenance chip shows the demo-data label; a missing datum renders "unverified", never a fabricated value; all four ui-craft states |
+| Valuation lab: DCF / EPS-growth / PEG / Rule-of-40 calculators as pure tested functions + editable visible assumptions; persistent "model output — not advice" label en+ar; TEENS+ gate with KIDS placeholder | frontend-expert | calculator unit tests green; label present in both locales on every model output; a KIDS-segment session receives the age-gated placeholder (server-enforced, test) |
+| Fundamentals/earnings history + filings links through the registry (≥3 periods + earnings dates; SEC EDGAR / Saudi Exchange link builders; mock fixtures included) | backend-expert | unit test: mock mode returns ≥3 fundamentals periods + earnings dates for a fixture symbol; filings links resolve per market (test) |
+| `WatchlistItem` migration + auth-scoped watchlist API + compare data endpoint (2–4 symbols incl. Sharia verdicts) | backend-expert | integration tests: watchlist add/remove scoped per user (cross-user 403); compare endpoint returns 2–4 aligned symbol payloads in mock mode |
+| Compare + watchlist + snapshot-card UI on DR-12 tokens | frontend-expert | walk-through en/ar: compare renders 2–4 symbols with verdicts; watchlist persists across reload; snapshot card shows chips + provenance; design-reviewer PASS |
+| Honesty guard: banned-claims suite — unlabeled/unexplained fair value, target price, upside %, buy/sell/hold ratings banned in markets UI + `messages/*.json`; the same numbers allowed only inside the labeled valuation lab with visible assumptions | test-engineer | `npx vitest run honesty` green: asserts banned strings absent outside the valuation lab, every rendered model output carries the label + assumptions, and a negative fixture (injected banned term) fails |
+| Metered-state UI + Arabic chips/labels (bidi-safe LTR tokens for tickers/ratios) | i18n-fintech-expert | metered workspace in ar shows verdict chip + upgrade card, RTL correct; JSON key-identical |
+
 ---
 
 ## 10. Testing & CI
 
 **Minimum gate every milestone must pass before its JOURNAL entry:** `npm run lint` + `npx tsc --noEmit` + `npx vitest run` all green. CI (GitHub Actions) runs this on every PR. A dedicated CI job runs the full suite with **zero API keys set** — mock mode is a first-class, gated path, not an afterthought.
 
-**Milestone-specific suites** (exit gates above): `auth`, `money`, `sweep`, `market`, `eval`, `e2e`, `security`. Coverage priority — money math (Decimal, no drift), the parent/child authz boundary, provider fallback/caching, and AI schema+injection.
+**Milestone-specific suites** (exit gates above): `auth`, `money`, `sweep`, `market`, `eval`, `e2e`, `security`, `tiers`, `academy`, `honesty`. Coverage priority — money math (Decimal, no drift), the parent/child authz boundary (incl. age-segment and plan/tier gates), provider fallback/caching, AI schema+injection, and the DR-18 honesty rule.
 
 **Review chain (per `docs/AGENTS.md`):** implementation → qa-reviewer (same acceptance block) → security-auditor when the change touches auth, money movement, or the API surface. Sharia/Arabic-touching changes get an i18n-fintech-expert pass before qa-reviewer. Reviewers report only; owners in §9 remain the five implementer agents.
 
@@ -410,6 +481,10 @@ Goal: a learner can understand one strategy team, commit bounded decisions, and 
 | DR-12 | Institutional-minimal tokens, semantic finance colors, and honest data-led surfaces govern the UI. |
 | DR-13 | Exactly two lazy-loaded 3D surfaces may ship within explicit performance and fallback constraints. |
 | DR-14 | Strategy lessons compile bounded choices into immutable deterministic replays; mastery—not simulated profit—drives rewards. |
+| DR-15 | Three account shapes ride the unchanged PARENT/CHILD roles; solo vs family is derived state, never stored. |
+| DR-16 | Two priced plans (Solo, Family) with a capability-matrix tier inside each; the aha workspace is metered, never hard-walled; ULTRA monetizes education. |
+| DR-17 | Rushd Academy is versioned code-resident curriculum — age-segmented (KIDS/TEENS/ADULTS), compliance-tagged, theory linked to DR-14 practice. |
+| DR-18 | The stock page is one workspace at ValueSnapshot feature parity; valuation ships only as labeled editable educational models — unlabeled verdicts stay banned and test-enforced. |
 
 **Open questions (each with its deciding trigger).**
 - **OQ-1 — Real-money rails (PSP/KYC/AML).** Trigger: SAMA sandbox admission or a real-deposit pilot. Until then, v1 is play-money only.
@@ -419,3 +494,7 @@ Goal: a learner can understand one strategy team, commit bounded decisions, and 
 - **OQ-5 — Session revocation model.** Trigger: real money moves — switch JWT→DB sessions for instant revoke (couples with OQ-1).
 - **OQ-6 — Arabic LLM (Qwen vs ALLaM/Jais).** Trigger: the M5 Arabic-quality eval score falls below bar; base-URL swap only.
 - **OQ-7 — Exact PIN/lockout policy numbers.** Trigger: security-auditor review of M1; current defaults are PIN ≥4 digits, lock 15 min after 5 fails.
+- **OQ-8 — Pricing numbers.** Solo vs Family SAR price points per tier, annual/monthly split, and the final workspace-meter credit count. Trigger: first paid-launch decision / pricing research complete. The structure (two plans, capability-matrix tiers, annual-first SAR, metered aha) is decided in DR-16 and is not reopened by the numbers.
+- **OQ-9 — CFA-candidate-level naming.** How to describe the Advanced Financial Analysis track's level without implying CFA Institute affiliation or endorsement ("CFA®" never appears in product copy without counsel). Trigger: before the track's public copy ships — M12 uses a placeholder name until resolved.
+- **OQ-10 — Sharia board review scope for the expanded curriculum.** Labels-only vs full content review including the Academy's interest-math/bonds/derivatives units and their age-segment variants. Trigger: board engagement — this concretizes DR-5's "Revisit when" clause.
+- **OQ-11 — Solo-adult gamification presentation.** Identical XP/badges UI vs a toned adult variant; the engine (`addXP`) is shared either way — only presentation varies. Trigger: first solo-user usability round after M11 ships.

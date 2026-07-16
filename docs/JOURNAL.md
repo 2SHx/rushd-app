@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — TASI market option + DR-15..18 design amendment ✅
+Shipped: NASDAQ/TASI switcher on /markets (aria-pressed segmented control, .SR deep links, initialMarket threading, 4 new Markets.* keys) hardened through qa-reviewer (2 findings fixed) + design-reviewer (5 fixed: a11y roles, focus ring, light-theme chrome, quote pruning, localized sync string); SYSTEM_DESIGN.md amended — DR-15 account shapes (SOLO/parent-only/family on unchanged Role enum), DR-16 Solo+Family priced plans × capability-matrix tiers + metered workspace, DR-17 age-segmented Academy (KIDS/TEENS/ADULTS), DR-18 stock workspace at ValueSnapshot feature parity with labeled educational valuation models; M11–M13 (M13 provisional), OQ-8..11.
+Decisions: valuation copied as editable labeled educational models, never unlabeled verdicts; solo/family is derived state (children.length), no schema role change; tiers gate capabilities, child seats Family-plan-only.
+Verify: lint ✔ · tsc clean · vitest 109 files/789 tests · en/ar key-identical 805 · /en+/ar/markets 200 with both labels · ?symbol=2222.SR&market=TASI renders Aramco.
+Open: M13 work items finalize after docs/STOCK_WORKSPACE_SPEC.md (recon landed 35ab043 — C2 next); TASI quotes static-priced 15/172 until a TASI feed exists.
+
 ## 2026-07-16 — ValueSnapshot stock-page recon ✅
 Shipped: a 556-line public-session inventory of all ten stock tabs, shared shell, controls, data fields, responsive/error/locked states, free-versus-paid boundaries, and 22 referenced screenshots.
 Decisions: captured feature logic and information architecture in original language; inaccessible trial content is explicitly marked unobservable, and no account was created or hidden report structure inferred.
