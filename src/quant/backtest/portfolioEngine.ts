@@ -298,6 +298,8 @@ export interface StrategyBookInput<Params> {
   readonly setup: StrategySetup<Params>;
   readonly params?: Params;
   readonly series: readonly StrategyBookSeries[];
+  /** Optional complete trading calendar when zero-weight symbols are omitted to bound memory. */
+  readonly calendar?: readonly Date[];
   readonly startingCash: Prisma.Decimal;
   readonly limits: RiskLimits;
   readonly policy?: StrategyBookPolicy;
@@ -598,12 +600,21 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     item.symbol,
     item.bars.map((bar) => toContextBar(item.symbol, item.market, bar)),
   ]));
-  const indexBySymbolTs = new Map(series.flatMap((item) => item.bars.map((bar, index) => [
-    `${item.symbol}:${bar.ts.getTime()}`,
-    index,
-  ] as const)));
-  const dates = Array.from(new Set(series.flatMap((item) => item.bars.map((bar) => bar.ts.getTime()))))
-    .sort((a, b) => a - b);
+  // A wide FULL run carries >1M bars. Never materialize them again as a flat array or as
+  // `${symbol}:${timestamp}` strings: the frozen plateau replays this engine nine times and the
+  // transient maps exceed V8's default heap. The union calendar is small (~2k trading dates), and
+  // one monotonic cursor per symbol provides the same exact lookup with O(symbols) retained state.
+  const dateSet = new Set<number>();
+  for (const item of series) {
+    for (const bar of item.bars) dateSet.add(bar.ts.getTime());
+  }
+  for (const date of input.calendar ?? []) {
+    const time = date.getTime();
+    if (!Number.isFinite(time)) throw new Error('Strategy-book calendar contains an invalid date');
+    dateSet.add(time);
+  }
+  const dates = Array.from(dateSet).sort((a, b) => a - b);
+  const cursorBySymbol = new Map(series.map((item) => [item.symbol, -1]));
 
   let cash = input.startingCash;
   let peakNav = input.startingCash;
@@ -635,9 +646,15 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   for (const time of dates) {
     const date = new Date(time);
     const todaysBars = new Map<string, StrategyBookBar>();
+    const todayIndexes = new Map<string, number>();
     for (const item of series) {
-      const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
-      if (index !== undefined) todaysBars.set(item.symbol, item.bars[index]);
+      let index = cursorBySymbol.get(item.symbol)!;
+      while (index + 1 < item.bars.length && item.bars[index + 1].ts.getTime() <= time) index++;
+      cursorBySymbol.set(item.symbol, index);
+      if (index >= 0 && item.bars[index].ts.getTime() === time) {
+        todaysBars.set(item.symbol, item.bars[index]);
+        todayIndexes.set(item.symbol, index);
+      }
     }
 
     // Open marks are the only prices known at the instant pending orders fill.
@@ -793,7 +810,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       const keepFraction = closeNav.mul(grossExposureScalar).div(closePositionsValue);
       for (const position of Array.from(positions.values()).sort((a, b) => a.symbol.localeCompare(b.symbol))) {
         const item = bySymbol.get(position.symbol)!;
-        const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
+        const index = todayIndexes.get(item.symbol);
         if (index === undefined || index >= item.bars.length - 1) continue;
         const slice = item.bars.slice(0, index + 1);
         pending.set(item.symbol, {
@@ -806,7 +823,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     }
 
     for (const item of series) {
-      const index = indexBySymbolTs.get(`${item.symbol}:${time}`);
+      const index = todayIndexes.get(item.symbol);
       if (index === undefined || index >= item.bars.length - 1) continue;
       const sliceStart = input.policy?.decisionHistoryBars
         ? Math.max(0, index + 1 - input.policy.decisionHistoryBars)

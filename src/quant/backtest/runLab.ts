@@ -945,7 +945,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let walkForwardWindows = 0;
   let sharedDailyCurve: EquityPoint[] | null = null;
   let sharedSeriesForPlateau: StrategyBookSeries[] | null = null;
+  let sharedCalendarForPlateau: Date[] | undefined;
   let sharedBookResult: StrategyBookResult | null = null;
+  let resolvedUniverseBars = 0;
   const sharedReplayScope = {};
 
   try {
@@ -967,12 +969,16 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           // Memory-bound wide path: pass 1 feeds the setup COMPACT rows only (no Decimal engine
           // bars retained), the setup names its ever-selected union across center + plateau
           // params, and only that union's full series is loaded for the engine. Names outside
-          // the union always carry weight 0 — identical fills/NAV, bounded heap.
+          // the union always carry weight 0. Their compact date union is retained so cash/NAV and
+          // OOS book-day measurements keep the exact full-universe calendar.
           const dailyBarsBySymbol = new Map<string, { ts: Date; close: number; volume: number }[]>();
+          const calendarTimes = new Set<number>();
           for (const symbol of symbols) {
             const loaded = await loadDailySymbol(symbol, from, to);
             excludedMock += loaded.excludedMock;
+            resolvedUniverseBars += loaded.bars.length;
             if (loaded.bars.length) lastPrice = Number(loaded.bars.at(-1)!.close);
+            for (const bar of loaded.bars) calendarTimes.add(bar.ts.getTime());
             dailyBarsBySymbol.set(symbol, loaded.bars.map((bar) => ({
               ts: bar.ts, close: Number(bar.close), volume: Number(bar.volume),
             })));
@@ -984,6 +990,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             dailyBarsBySymbol,
           });
           dailyBarsBySymbol.clear();
+          sharedCalendarForPlateau = Array.from(calendarTimes)
+            .sort((a, b) => a - b)
+            .map((time) => new Date(time));
           const neighborParams = setup.plateauNeighborhood
             ? setup.plateauNeighborhood(params).neighbors.map((n) => n.params)
             : [];
@@ -997,6 +1006,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         for (const symbol of symbols) {
           const loaded = await loadDailySymbol(symbol, from, to);
           excludedMock += loaded.excludedMock;
+          resolvedUniverseBars += loaded.bars.length;
           if (loaded.bars.length) lastPrice = Number(loaded.bars.at(-1)!.close);
           sharedSeries.push({ symbol, market: 'NASDAQ', bars: loaded.bars });
         }
@@ -1022,6 +1032,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({
           setup, params, series: sharedSeries, startingCash, limits: dailyLimits,
+          calendar: sharedCalendarForPlateau,
           replayScope: sharedReplayScope,
           policy: sharedPolicy,
         });
@@ -1040,7 +1051,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         })));
         sharedDailyCurve = sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
         pooledDailyReturns.push(...toDailyReturns(sharedDailyCurve, nasdaqDateKey));
-        console.log(`${sim.barsProcessed} real bars → ${sim.fills.length} fills / ${sim.tradeRecords.length} closed trades`);
+        console.log(`${resolvedUniverseBars || sim.barsProcessed} resolved real bars / ${sim.barsProcessed} engine bars → ${sim.fills.length} fills / ${sim.tradeRecords.length} closed trades`);
       } else {
       // Cross-name preload (pairs/cross-sectional setups): hand the setup every symbol's REAL daily
       // closes once, before the per-symbol loop, so a setup whose ctx is single-symbol (the engine
@@ -1295,6 +1306,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         const sim = simulateStrategyBook({
           setup, params: variant.params, series: sharedSeriesForPlateau, startingCash,
           limits: dailyLimits,
+          calendar: sharedCalendarForPlateau,
           replayScope: sharedReplayScope,
           policy: strategyBookPolicyForSetup(setupId, variant.params),
         });

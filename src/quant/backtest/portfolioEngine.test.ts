@@ -156,6 +156,41 @@ describe('deterministic shared-cash daily strategy book', () => {
     }
   });
 
+  it('does not materialize a wide book through Array.flatMap', () => {
+    const flatMap = vi.spyOn(Array.prototype, 'flatMap');
+    const wide = Array.from({ length: 64 }, (_, index) => series(`S${String(index).padStart(3, '0')}`));
+    const neverEnter = setup({
+      entry: () => ({ matched: false, reasons: [], evidence: [] }),
+    });
+
+    try {
+      run(wide, neverEnter);
+      expect(flatMap.mock.contexts.some((context) => Array.isArray(context) && context.length >= wide.length)).toBe(false);
+    } finally {
+      flatMap.mockRestore();
+    }
+  });
+
+  it('preserves calendar-only dates when a memory-bounded book omits zero-weight symbols', () => {
+    const sparse: StrategyBookSeries = {
+      symbol: 'A', market: 'NASDAQ', bars: [bars()[0], bars()[2]],
+    };
+    const neverEnter = setup({
+      entry: () => ({ matched: false, reasons: [], evidence: [] }),
+    });
+    const result = simulateStrategyBook({
+      setup: neverEnter,
+      series: [sparse],
+      startingCash: new D(100_000),
+      limits: LIMITS,
+      calendar: [new Date(BASE), new Date(BASE + DAY), new Date(BASE + 2 * DAY)],
+    } as Parameters<typeof simulateStrategyBook>[0] & { calendar: readonly Date[] });
+
+    expect(result.daily.map((point) => point.ts.toISOString().slice(0, 10)))
+      .toEqual(['2024-01-02', '2024-01-03', '2024-01-04']);
+    expect(result.daily.every((point) => point.nav.eq(100_000))).toBe(true);
+  });
+
   it('trims appreciated concentration next-open to the fixed cap without violating cash invariants', () => {
     const prices = [100, 100, 400, 400, 800, 800, 800];
     const appreciated: StrategyBookSeries = {
