@@ -373,6 +373,10 @@
   },
   "Markets": {
     "title": "InvestQuest: Discover Companies",
+    "marketTabNasdaq": "US Market (NASDAQ)",
+    "marketTabTasi": "Saudi Market (TASI)",
+    "marketSelectLabel": "Select market",
+    "syncingLiveQuotes": "Syncing live quotes...",
     "featuredTitle": "Popular Companies on Watch",
     "searchPlaceholder": "Search by symbol or name...",
     "shariaBadgeCompliant": "Sharia Shield Secure",

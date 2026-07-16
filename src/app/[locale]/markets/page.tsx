@@ -15,9 +15,12 @@ interface MarketsPageProps {
 
 export default async function MarketsPage({ searchParams, params }: MarketsPageProps) {
   const session = await auth();
-  const rawMarket = 'NASDAQ';
-  const defaultSymbol = 'NVDA';
-  const symbol = searchParams.symbol && !searchParams.symbol.endsWith('.SR') ? searchParams.symbol : defaultSymbol;
+  const rawMarket: 'TASI' | 'NASDAQ' = searchParams.market === 'TASI' ? 'TASI' : 'NASDAQ';
+  const defaultSymbol = rawMarket === 'TASI' ? '2222.SR' : 'NVDA';
+  const isSaudiSymbol = searchParams.symbol?.endsWith('.SR') ?? false;
+  const symbol = searchParams.symbol && (rawMarket === 'TASI' ? isSaudiSymbol : !isSaudiSymbol)
+    ? searchParams.symbol
+    : defaultSymbol;
 
   const currentData = await fetchMarketData(symbol, rawMarket);
   const isParent = session?.user?.role === 'PARENT';
@@ -56,9 +59,10 @@ export default async function MarketsPage({ searchParams, params }: MarketsPageP
       currentData={currentData}
       locale={params.locale}
       isParent={isParent}
-      initialActiveSymbol={searchParams.symbol || null}
+      initialActiveSymbol={searchParams.symbol ? symbol : null}
       initialJarBalance={jarBalance}
       initialSharesOwned={sharesOwned}
+      initialMarket={rawMarket}
     />
   );
 }

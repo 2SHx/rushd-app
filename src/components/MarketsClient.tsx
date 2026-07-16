@@ -9,6 +9,7 @@ export interface MarketsClientProps {
   initialActiveSymbol?: string | null;
   initialJarBalance?: number;
   initialSharesOwned?: number;
+  initialMarket?: 'TASI' | 'NASDAQ';
 }
 
 export default function MarketsClient(props: MarketsClientProps) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 import StockDetail from './StockDetail';
 import MarketOverviewPanel from './MarketOverviewPanel';
@@ -16,6 +17,7 @@ interface MarketsContainerProps {
   initialActiveSymbol?: string | null;
   initialJarBalance?: number;
   initialSharesOwned?: number;
+  initialMarket?: 'TASI' | 'NASDAQ';
 }
 
 export default function MarketsContainer({
@@ -25,10 +27,12 @@ export default function MarketsContainer({
   initialActiveSymbol,
   initialJarBalance,
   initialSharesOwned,
+  initialMarket,
 }: MarketsContainerProps) {
   const isAr = locale === 'ar';
+  const t = useTranslations('Markets');
 
-  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>('NASDAQ');
+  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(initialMarket ?? 'NASDAQ');
   // Overview-first UX: only show a stock if explicitly in the URL
   const [activeSymbol, setActiveSymbol] = useState<string | null>(
     initialActiveSymbol ?? null
@@ -60,7 +64,17 @@ export default function MarketsContainer({
     const fetchBatch = async () => {
       setLoadingQuotes(true);
       setQuoteError(false);
-      setQuotes({});
+      // Keep cached quotes for symbols still relevant to this market (avoids
+      // blanking already-priced cells on switch); drop quotes that belong to
+      // the market we just left so counts/coverage stay honest.
+      setQuotes((prev) => {
+        const symbolSet = new Set(allMarketSymbols);
+        const next: Record<string, { price: number; change: number; pct: number }> = {};
+        for (const sym of Object.keys(prev)) {
+          if (symbolSet.has(sym)) next[sym] = prev[sym];
+        }
+        return next;
+      });
       setQuoteCoverage(null);
       try {
         const symbolsQuery = allMarketSymbols.join(',');
@@ -145,6 +159,31 @@ export default function MarketsContainer({
     </div>
   );
 
+  // ── NASDAQ / TASI switcher ────────────────────────────────────
+  const renderMarketSwitcher = () => (
+    <div
+      role="group"
+      aria-label={t('marketSelectLabel')}
+      className="inline-flex items-center gap-1 p-1 rounded-xl bg-black/[0.04] dark:bg-white/5 border border-black/10 dark:border-white/10 mb-4"
+    >
+      {(['NASDAQ', 'TASI'] as const).map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          aria-pressed={marketTab === tab}
+          onClick={() => handleMarketTabChange(tab)}
+          className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            marketTab === tab
+              ? 'bg-accent text-background'
+              : 'text-foreground/70 hover:bg-black/[0.06] dark:hover:bg-white/10 hover:text-foreground'
+          }`}
+        >
+          {tab === 'NASDAQ' ? t('marketTabNasdaq') : t('marketTabTasi')}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="w-full text-foreground relative pb-24 md:pb-8">
 
@@ -153,6 +192,7 @@ export default function MarketsContainer({
         <AnimatePresence mode="wait">
           {!activeSymbol ? (
             <motion.div key="mobile-overview" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="p-4 space-y-4">
+              {renderMarketSwitcher()}
               <MarketOverviewPanel
                 market={marketTab}
                 locale={locale}
@@ -199,6 +239,7 @@ export default function MarketsContainer({
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
             >
+              {renderMarketSwitcher()}
               <MarketOverviewPanel
                 market={marketTab}
                 locale={locale}

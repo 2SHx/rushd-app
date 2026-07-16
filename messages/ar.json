@@ -373,6 +373,10 @@
   },
   "Markets": {
     "title": "رحلة الاستكشاف: ابحث عن الشركات",
+    "marketTabNasdaq": "السوق الأمريكي (ناسداك)",
+    "marketTabTasi": "السوق السعودي (تاسي)",
+    "marketSelectLabel": "اختيار السوق",
+    "syncingLiveQuotes": "جارٍ مزامنة الأسعار المباشرة...",
     "featuredTitle": "شركات مميزة للمتابعة",
     "searchPlaceholder": "ابحث برمز السهم أو الاسم...",
     "shariaBadgeCompliant": "درع الشريعة آمن",
