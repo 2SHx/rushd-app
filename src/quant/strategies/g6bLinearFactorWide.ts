@@ -256,6 +256,24 @@ export const g6bLinearFactorWideSetup: StrategySetup<G6bLinearFactorWideParams> 
 
   prepareUniverse(input) { configureUniverse(input); },
 
+  // Memory-bound engine restriction: every month-end decision for every param set is computed
+  // against the compact prepared state (and cached — the sims replay these exact decisions), and
+  // the union of ever-selected symbols is returned. Names outside it never trade.
+  tradableBookSymbols(replayScope, paramSets) {
+    const state = replayScope ? SCOPED_STATES.get(replayScope) ?? null : UNSCOPED_STATE;
+    if (!state) throw new Error('tradableBookSymbols requires prepareUniverse first');
+    const union = new Set<string>();
+    const monthEnds = Array.from(state.monthEndTimes).sort((a, b) => a - b);
+    for (const raw of paramSets) {
+      const p = paramsOrDefault(raw as G6bLinearFactorWideParams);
+      for (const t of monthEnds) {
+        const decision = wideDecision(new Date(t), p, replayScope);
+        decision.selected.forEach((_rank, symbol) => union.add(symbol));
+      }
+    }
+    return Array.from(union).sort();
+  },
+
   plateauNeighborhood(params): PlateauNeighborhood<G6bLinearFactorWideParams> {
     const center = paramsOrDefault(params);
     const neighbors = [231, 252, 273].flatMap((momentumLookback) =>

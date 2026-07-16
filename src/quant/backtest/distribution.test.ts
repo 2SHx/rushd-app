@@ -20,6 +20,15 @@ describe('summarizeDailyReturns', () => {
     const d = summarizeDailyReturns([]);
     expect(d).toEqual({ count: 0, mean: 0, std: 0, min: 0, max: 0, probDayGe5pct: 0, probDayLe5pct: 0 });
   });
+
+  it('handles a wide-universe-sized pooled series without a call-stack overflow', () => {
+    // ~300k pooled daily returns (wide run scale) would blow `Math.min(...arr)`; the fold must not.
+    const big = Array.from({ length: 300_000 }, (_, i) => (i % 7 === 0 ? 0.02 : -0.01));
+    const d = summarizeDailyReturns(big);
+    expect(d.count).toBe(300_000);
+    expect(d.min).toBeCloseTo(-0.01, 10);
+    expect(d.max).toBeCloseTo(0.02, 10);
+  });
 });
 
 describe('toDailyReturns', () => {

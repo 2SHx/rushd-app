@@ -962,6 +962,38 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       }
       if (dailyRoute === 'shared') {
         const sharedSeries: StrategyBookSeries[] = [];
+        let engineSymbols = symbols;
+        if (setup.prepareUniverse && setup.tradableBookSymbols) {
+          // Memory-bound wide path: pass 1 feeds the setup COMPACT rows only (no Decimal engine
+          // bars retained), the setup names its ever-selected union across center + plateau
+          // params, and only that union's full series is loaded for the engine. Names outside
+          // the union always carry weight 0 — identical fills/NAV, bounded heap.
+          const dailyBarsBySymbol = new Map<string, { ts: Date; close: number; volume: number }[]>();
+          for (const symbol of symbols) {
+            const loaded = await loadDailySymbol(symbol, from, to);
+            excludedMock += loaded.excludedMock;
+            if (loaded.bars.length) lastPrice = Number(loaded.bars.at(-1)!.close);
+            dailyBarsBySymbol.set(symbol, loaded.bars.map((bar) => ({
+              ts: bar.ts, close: Number(bar.close), volume: Number(bar.volume),
+            })));
+          }
+          setup.prepareUniverse({
+            symbols,
+            replayScope: sharedReplayScope,
+            closesBySymbol: new Map(),
+            dailyBarsBySymbol,
+          });
+          dailyBarsBySymbol.clear();
+          const neighborParams = setup.plateauNeighborhood
+            ? setup.plateauNeighborhood(params).neighbors.map((n) => n.params)
+            : [];
+          engineSymbols = setup.tradableBookSymbols(sharedReplayScope, [effectiveParams, ...neighborParams]);
+          console.log(`prepared cross-name book for ${symbols.length} symbol(s); engine restricted to ${engineSymbols.length} ever-selected symbol(s)`);
+          for (const symbol of engineSymbols) {
+            const loaded = await loadDailySymbol(symbol, from, to);
+            sharedSeries.push({ symbol, market: 'NASDAQ', bars: loaded.bars });
+          }
+        } else {
         for (const symbol of symbols) {
           const loaded = await loadDailySymbol(symbol, from, to);
           excludedMock += loaded.excludedMock;
@@ -985,6 +1017,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             dailyBarsBySymbol,
           });
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
+        }
         }
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({

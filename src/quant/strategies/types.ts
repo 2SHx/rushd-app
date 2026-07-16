@@ -127,6 +127,14 @@ export interface StrategySetup<Params> {
    */
   prepareUniverse?(input: UniversePrepareInput): void;
   /**
+   * Optional memory-bound hook for wide cross-sectional books: after prepareUniverse, returns the
+   * union of symbols this setup could EVER select across every provided param set (center + plateau
+   * neighbors). Names outside the union always carry target weight 0 and never trade, so the shared
+   * engine can be fed only the union's full bar series — identical fills/NAV at a fraction of the
+   * heap (an 8GB machine cannot hold 2,767 × 8.5y of Decimal bar series).
+   */
+  tradableBookSymbols?(replayScope: object | undefined, paramSets: readonly unknown[]): string[];
+  /**
    * Optional a-priori robustness neighborhood for the QDR-6 profit-plateau gate. A setup that
    * declares its 1–2 most sensitive params here becomes plateau-EVALUABLE; setups that omit it stay
    * plateau-unproven (⇒ the gate defaults to NOT proven, honestly). The returned `center` MUST equal
