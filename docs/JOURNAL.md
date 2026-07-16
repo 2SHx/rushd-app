@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — ValueSnapshot stock-page recon ✅
+Shipped: a 556-line public-session inventory of all ten stock tabs, shared shell, controls, data fields, responsive/error/locked states, free-versus-paid boundaries, and 22 referenced screenshots.
+Decisions: captured feature logic and information architecture in original language; inaccessible trial content is explicitly marked unobservable, and no account was created or hidden report structure inferred.
+Verify: every screenshot reference resolves; desktop and 375px mobile evidence checked; lint/TypeScript clean; 109 test files / 790 tests passed; `git diff --check` clean.
+Open: trial-only Financials rows and AI/Snapshot/Earnings report-generation flows require separately authorized account evidence if deeper parity is later needed.
+
 ## 2026-07-16 — Quant committee narrative workspace ✅
 Shipped: a responsive en/ar Quant hero, consolidated evidence readiness, guided paper-automation/review setup, and a theme-native committee board with accessible recorded history.
 Decisions: lazy-dev rung 2 retained the existing 2D committee visualizer and APIs; restrained gradients express hierarchy, while automation copy now names authenticated server, risk, Sharia, and kill-switch boundaries without a 24/7 claim.
