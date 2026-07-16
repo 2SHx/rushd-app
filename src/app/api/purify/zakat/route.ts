@@ -29,7 +29,10 @@ export async function POST(req: Request) {
     for (const item of holdings) {
       try {
         const marketData = await fetchMarketData(item.symbol, item.market);
-        const isCompliant = marketData?.isShariaCompliant ?? true;
+        // Fail-closed: only an explicit `true` counts as halal. `null`/`undefined` (UNSCREENED /
+        // UNKNOWN) must never be silently treated as pure — an unscreened holding is excluded
+        // from zakatable "halal wealth" the same as a known non-compliant one.
+        const isCompliant = marketData?.isShariaCompliant === true;
         
         // Zakat is calculated on halal stock investments
         if (isCompliant && marketData?.price) {

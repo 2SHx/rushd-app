@@ -42,7 +42,10 @@ export async function POST(req: Request) {
     }
 
     const price = new Prisma.Decimal(marketData.price.toString());
-    const isCompliant = marketData.isShariaCompliant ?? true;
+    // Fail-closed: only an explicit `true` (a real screened verdict) counts as compliant.
+    // `null`/`undefined` (UNSCREENED / UNKNOWN — e.g. composite source with no free-source
+    // coverage) must never be inflated to compliant, or an unscreened asset could execute a BUY.
+    const isCompliant = marketData.isShariaCompliant === true;
 
     // 2. Block BUY orders for non-compliant assets (Sharia screener policy)
     if (action === 'BUY' && !isCompliant) {

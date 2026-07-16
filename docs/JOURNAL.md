@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — Free composite Sharia screening source (Zoya-free) ✅
+Shipped: CompositeShariaScreener behind DR-4 (opt-in SHARIA_SOURCE=composite): real SPUS holdings (216 tickers, asOf 2026-07-16, fetched from the fund's own CSV; META absence re-verified genuine), honest empty HLAL/Saudi-list stubs (403s documented; scripts/refresh-sharia-snapshots.ts only overwrites on verified parse); ShariaVerdict.compliant widened to boolean|null with fund-absence⇒UNKNOWN, never non-compliant.
+Decisions: QA hunt caught pre-existing `?? true` verdict inflation at trade + zakat money boundaries — both now fail-closed (`=== true`); deriveShariaState: any null verdict ⇒ UNSCREENED_EXECUTION_BLOCKED (never claims VERIFIED for an unscreened name); Zoya still wins when both sources configured.
+Verify: lint ✔ · tsc clean · vitest 112 files / 826 tests · SPUS spot-check: JPM/BAC/BUD/STZ/WFC/GS absent, AAPL/MSFT/NVDA present · flag-unset behavior byte-identical.
+Open: security-auditor pass gates production enablement of SHARIA_SOURCE=composite (default off); StockDetail null-verdict rendering deferred to M13-3; HLAL + Saudi TASI list await a working free source via the refresh script.
+
 ## 2026-07-17 — PIP.world Market Mavericks 3D Character Avatars ✅
 Shipped: Generated 8 ultra-high quality 3D Maverick character portraits (Quant Core, Trend Surfer, Halal Guardian, Sentiment Radar, Value Anchor, General Commander, Academic Scholar, Shield Warden) for the PIP.world Market Mavericks AI Arena; integrated into `MavericksSquadPanel.tsx`, `CommitteePipeline2D.tsx`, and `public/avatars/`.
 Decisions: full 8-archetype agent roster with custom abilities, quotes, and stats; zero external asset dependencies.

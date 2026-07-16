@@ -1,4 +1,5 @@
 import { TASI_UNIVERSE, NASDAQ_UNIVERSE_FALLBACK, type StockUniverseEntry } from '@/lib/stockUniverse';
+import { CompositeShariaScreener } from '@/quant/gates/etfHoldingsScreener';
 
 export interface Candle {
   time: string;
@@ -65,8 +66,9 @@ export interface MarketData {
   market: 'TASI' | 'NASDAQ';
   price: number;
   history: Candle[];
-  isShariaCompliant: boolean;
-  shariaSource: 'mock' | 'zoya' | 'none';
+  /** null = UNKNOWN (no free-source coverage) — treat as non-compliant for any promotion/allowlist decision. */
+  isShariaCompliant: boolean | null;
+  shariaSource: 'mock' | 'zoya' | 'none' | 'etf-holdings' | 'saudi-sharia-list';
   marketDataSource: 'live' | 'delayed' | 'mock';
   purificationRatioBps?: number;
   earningsHistory?: { quarter: string; actual: number; expected: number }[];
@@ -106,14 +108,16 @@ export interface MarketData {
 
 export interface ShariaVerdict {
   symbol: string;
-  compliant: boolean;
+  /** true/false for a real screened verdict; null = UNKNOWN (no free-source coverage — never a fabricated false). */
+  compliant: boolean | null;
   standard: 'AAOIFI';
   ratios?: {
     interestDebtToMcap: number;
     interestSecuritiesToMcap: number;
     nonCompliantIncomeToIncome: number;
   };
-  source: 'mock' | 'zoya' | 'none';
+  /** 'etf-holdings' (US, SPUS/HLAL membership) and 'saudi-sharia-list' (TASI, bundled quarterly list) are the free composite screener's sources (src/quant/gates/etfHoldingsScreener.ts). */
+  source: 'mock' | 'zoya' | 'none' | 'etf-holdings' | 'saudi-sharia-list';
   asOf: Date;
 }
 
@@ -704,6 +708,12 @@ export class ProviderRegistry {
   getScreener(): ShariaScreener {
     if (process.env.MARKET_DATA_MODE === 'live' && process.env.ZOYA_API_KEY) {
       return new ZoyaAdapter();
+    }
+    // Opt-in only (default behavior stays byte-identical): free, keyless, offline-first
+    // composite screener (SPUS/HLAL ETF-holdings + bundled Saudi Sharia-list snapshot).
+    // See src/quant/gates/etfHoldingsScreener.ts for the honest, fail-closed derivation.
+    if (process.env.SHARIA_SOURCE === 'composite') {
+      return new CompositeShariaScreener();
     }
     return new MockScreener();
   }

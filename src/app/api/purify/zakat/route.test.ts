@@ -115,4 +115,45 @@ describe('POST /api/purify/zakat', () => {
       data: { balance: { decrement: new Prisma.Decimal('275') } },
     });
   });
+
+  it('excludes a holding with isShariaCompliant=null (UNSCREENED/UNKNOWN) from zakatable wealth — never treated as halal', async () => {
+    requireSession.mockResolvedValue({ id: 'user_1' });
+
+    // Cash: 10,000 SAR
+    jarFindUnique.mockResolvedValue({
+      userId: 'user_1',
+      balance: new Prisma.Decimal('10000.00'),
+      currency: 'SAR',
+    });
+
+    // Portfolio: 10 shares of an UNSCREENED symbol (price 100) — must be excluded, same as a
+    // known non-compliant holding, not silently treated as pure.
+    portfolioFindMany.mockResolvedValue([
+      { symbol: 'UNKNOWNCO', shares: new Prisma.Decimal('10.00'), market: 'NASDAQ' },
+    ]);
+
+    fetchMarketData.mockResolvedValue({ price: 100, isShariaCompliant: null });
+
+    // Zakatable wealth = 10,000 (cash) only; the unscreened stock value is excluded.
+    // Zakat due = 10,000 * 0.025 = 250 SAR
+    jarUpdate.mockResolvedValue({
+      balance: new Prisma.Decimal('9750.00'),
+    });
+    transactionCreate.mockResolvedValue({});
+
+    const req = new Request('http://localhost/api/purify/zakat', {
+      method: 'POST',
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.amountPaid).toBe('250.00');
+
+    expect(jarUpdate).toHaveBeenCalledWith({
+      where: { userId: 'user_1' },
+      data: { balance: { decrement: new Prisma.Decimal('250') } },
+    });
+  });
 });

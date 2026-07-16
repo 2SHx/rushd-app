@@ -62,7 +62,16 @@ describe('deriveShariaState', () => {
     expect(deriveShariaState(false, [])).toBe('UNSCREENED_EXECUTION_BLOCKED');
     expect(deriveShariaState(true, [])).toBe('UNSCREENED_EXECUTION_BLOCKED');
     expect(deriveShariaState(true, [{ compliant: true }, { compliant: true }])).toBe('VERIFIED_COMPLIANT');
-    expect(deriveShariaState(true, [{ compliant: true }, { compliant: null }])).toBe('VERIFIED_NON_COMPLIANT');
     expect(deriveShariaState(true, [{ compliant: false }])).toBe('VERIFIED_NON_COMPLIANT');
+  });
+
+  it('any null (UNKNOWN/not-covered) verdict blocks the run as incomplete coverage — never asserts a fabricated non-compliance', () => {
+    // A real source ran (screened=true) but had no evidence for one symbol: this is a coverage
+    // gap, not a screened-and-failed verdict, so it must NOT be reported as VERIFIED_NON_COMPLIANT.
+    expect(deriveShariaState(true, [{ compliant: true }, { compliant: null }])).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    // Still fail-closed: a null mixed with an actual false is also blocked as incomplete coverage,
+    // never silently promoted or misreported.
+    expect(deriveShariaState(true, [{ compliant: false }, { compliant: null }])).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    expect(deriveShariaState(true, [{ compliant: null }])).toBe('UNSCREENED_EXECUTION_BLOCKED');
   });
 });

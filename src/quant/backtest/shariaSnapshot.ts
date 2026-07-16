@@ -33,13 +33,27 @@ export interface ShariaRunSnapshot {
   asOf: string;
 }
 
-/** Derive the card state from the screened flag and the per-symbol verdicts (fail-closed on any non-compliance). */
+/**
+ * Derive the card state from the screened flag and the per-symbol verdicts (fail-closed
+ * throughout; never promotable from a null verdict).
+ *
+ * `compliant: null` means UNKNOWN/not-covered — a real source ran but had no evidence either
+ * way for that symbol (e.g. the free composite screener's ETF-holdings/Saudi-list snapshot
+ * doesn't mention it). That is a COVERAGE GAP, not a screened-and-failed verdict: asserting
+ * VERIFIED_NON_COMPLIANT for it would fabricate a negative screen that never happened, which
+ * violates this module's own doctrine (see file header). So ANY null in the verdict set means
+ * the run's coverage is incomplete ⇒ UNSCREENED_EXECUTION_BLOCKED (fail-closed: still blocks
+ * promotion exactly like a fully-unscreened run — it is just as un-promotable, only the reason
+ * differs). Only once every symbol has an actual true/false verdict do we distinguish
+ * VERIFIED_COMPLIANT from VERIFIED_NON_COMPLIANT.
+ */
 export function deriveShariaState(
   screened: boolean,
   verdicts: readonly { compliant: boolean | null }[],
 ): ShariaValidationState {
   if (!screened) return 'UNSCREENED_EXECUTION_BLOCKED';
   if (verdicts.length === 0) return 'UNSCREENED_EXECUTION_BLOCKED';
+  if (verdicts.some((v) => v.compliant === null)) return 'UNSCREENED_EXECUTION_BLOCKED';
   if (verdicts.some((v) => v.compliant !== true)) return 'VERIFIED_NON_COMPLIANT';
   return 'VERIFIED_COMPLIANT';
 }

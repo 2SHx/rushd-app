@@ -101,6 +101,26 @@ describe('POST /api/trade', () => {
     expect(data.error).toBe('non_compliant_asset');
   });
 
+  it('blocks a BUY order when isShariaCompliant is null (UNSCREENED/UNKNOWN) — never inflated to compliant', async () => {
+    requireSession.mockResolvedValue({ id: 'user_1' });
+    fetchMarketData.mockResolvedValue({
+      symbol: '1234.SR',
+      market: 'TASI',
+      price: 50,
+      isShariaCompliant: null,
+    });
+
+    const req = new Request('http://localhost/api/trade', {
+      method: 'POST',
+      body: JSON.stringify({ symbol: '1234.SR', market: 'TASI', action: 'BUY', shares: 5 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error).toBe('non_compliant_asset');
+  });
+
   it('executes compliant BUY order successfully', async () => {
     requireSession.mockResolvedValue({ id: 'user_1' });
     fetchMarketData.mockResolvedValue({
