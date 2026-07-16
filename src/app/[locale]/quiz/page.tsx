@@ -24,9 +24,16 @@ const TIERS = [
   { level: 3, Icon: Crown },
 ] as const;
 
-export default function QuizListPage({ params }: { params: { locale: string } }) {
+export default function QuizListPage({
+  params,
+  searchParams,
+}: {
+  params: { locale: string };
+  searchParams?: { setupId?: string | string[] };
+}) {
   const t = useTranslations('Quiz');
   const locale = params.locale || 'en';
+  const requestedSetupId = typeof searchParams?.setupId === 'string' ? searchParams.setupId : undefined;
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastResult, setLastResult] = useState<{ passed: boolean; xp: number; level: number } | null>(null);
@@ -62,7 +69,7 @@ export default function QuizListPage({ params }: { params: { locale: string } })
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-foreground/60 sm:text-base">{t('subtitle')}</p>
       </header>
 
-      <StrategyLearningLab locale={locale} />
+      <StrategyLearningLab locale={locale} setupId={requestedSetupId} />
 
       {lastResult ? (
         <section

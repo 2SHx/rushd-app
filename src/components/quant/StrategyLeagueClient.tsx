@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, type RefObject } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ShieldAlert, XCircle, Info, TrendingUp, TrendingDown, Check, Activity } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, type RefObject } from 'react';
+import { Activity, AlertTriangle, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown, Info, LockKeyhole, RefreshCw, ShieldAlert, TrendingDown, TrendingUp, XCircle } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
+import { isStrategyLearningSetupId } from '@/quant/learning/strategyLearningModules';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
 
 interface StrategyLeagueClientProps {
@@ -17,6 +20,7 @@ type DateFormatter = (value: string) => string;
 type PerformanceRow = { label: string; hint: string; full: string; oos: string };
 
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
+type LearningGateStatus = 'checking' | 'locked' | 'unlocked' | 'error' | 'unavailable';
 
 // Sharia state -> {icon, semantic token}. Only VERIFIED_NON_COMPLIANT gets the
 // noncompliant (amber) token per DR-12; unscreened states are neutral, not amber.
@@ -37,6 +41,102 @@ function Disclosures({ t }: { t: TFunction }) {
         {t('shariaDisclosure')}
       </p>
     </div>
+  );
+}
+
+function TeamLearningGate({
+  team,
+  locale,
+  status,
+  onRetry,
+}: {
+  team: StrategyLeagueTeam;
+  locale: string;
+  status: LearningGateStatus;
+  onRetry: () => void;
+}) {
+  const t = useTranslations('QuantResults');
+
+  return (
+    <section className="rounded-3xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-7" aria-labelledby="team-learning-gate-title">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2 text-accent">
+            <BookOpen className="size-4" aria-hidden="true" />
+            <p className="text-[10px] font-semibold uppercase ltr:tracking-[0.14em]">{t('learningGate.eyebrow')}</p>
+          </div>
+          <h2 id="team-learning-gate-title" className="mt-3 text-xl font-semibold">{t('learningGate.title')}</h2>
+          <p className="mt-1 font-mono text-xs text-foreground/55" dir="ltr">{team.setupId}</p>
+        </div>
+        {status === 'unlocked' ? (
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-up/10 px-3 py-2 text-xs font-semibold text-up">
+            <CheckCircle2 className="size-4" aria-hidden="true" />
+            {t('learningGate.complete')}
+          </span>
+        ) : status === 'locked' ? (
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-foreground/[0.05] px-3 py-2 text-xs font-semibold text-foreground/65">
+            <LockKeyhole className="size-4" aria-hidden="true" />
+            {t('learningGate.locked')}
+          </span>
+        ) : null}
+      </div>
+
+      {status === 'checking' ? (
+        <div className="mt-6 space-y-3" role="status" aria-label={t('learningGate.checking')}>
+          <div className="h-4 w-56 animate-pulse rounded bg-foreground/[0.07] motion-reduce:animate-none" />
+          <div className="h-12 animate-pulse rounded-xl bg-foreground/[0.045] motion-reduce:animate-none" />
+        </div>
+      ) : null}
+
+      {status === 'locked' ? (
+        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div>
+            <p className="text-sm leading-relaxed text-foreground/65">{t('learningGate.lockedBody')}</p>
+            <ol className="mt-4 grid gap-2 sm:grid-cols-3">
+              {(['learn', 'seal', 'compare'] as const).map((step, index) => (
+                <li key={step} className="rounded-xl bg-foreground/[0.035] p-3 text-xs leading-relaxed text-foreground/65">
+                  <span className="me-2 font-mono text-[10px] font-semibold text-accent" dir="ltr">0{index + 1}</span>
+                  {t(`learningGate.steps.${step}`)}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <Link
+            href={`/${locale}/quiz?setupId=${encodeURIComponent(team.setupId)}`}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {t('learningGate.start')}
+            <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+          </Link>
+        </div>
+      ) : null}
+
+      {status === 'unlocked' ? (
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-foreground/60">{t('learningGate.unlockedBody')}</p>
+      ) : null}
+
+      {status === 'error' ? (
+        <div className="mt-5 flex flex-col gap-4 rounded-2xl bg-down/10 p-4 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <div className="flex items-start gap-3">
+            <RefreshCw className="mt-0.5 size-4 shrink-0 text-down" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold">{t('learningGate.errorTitle')}</p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('learningGate.errorBody')}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onRetry} className="self-start rounded-full px-4 py-2 text-xs font-semibold text-foreground ring-1 ring-foreground/15 hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:self-auto">
+            {t('learningGate.retry')}
+          </button>
+        </div>
+      ) : null}
+
+      {status === 'unavailable' ? (
+        <div className="mt-5 rounded-2xl bg-foreground/[0.035] p-4">
+          <p className="text-sm font-semibold">{t('learningGate.pendingTitle')}</p>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('learningGate.pendingBody')}</p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -567,13 +667,14 @@ function TeamPerformanceDetail({
 export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProps) {
   const t = useTranslations('QuantResults');
   const locale = useLocale();
+  const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const rankedTeams = [...teams].sort((a, b) => {
+  const rankedTeams = useMemo(() => [...teams].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'ACCEPTED' ? -1 : 1;
     if (a.oos.cagr !== b.oos.cagr) return b.oos.cagr - a.oos.cagr;
     if (a.oos.deflatedSharpe !== b.oos.deflatedSharpe) {
@@ -583,10 +684,45 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
       - (b.bootstrap.maxDrawdown.p95 ?? Number.POSITIVE_INFINITY);
     if (drawdownDifference !== 0) return drawdownDifference;
     return a.setupId.localeCompare(b.setupId) || a.runId.localeCompare(b.runId);
-  });
+  }), [teams]);
   const [selectedRunId, setSelectedRunId] = useState(rankedTeams[0]?.runId ?? '');
+  const [learningGateStatus, setLearningGateStatus] = useState<LearningGateStatus>('checking');
+  const [learningGateRevision, setLearningGateRevision] = useState(0);
+  const selectedTeamRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
   const selected = teams.find(team => team.runId === selectedRunId) ?? rankedTeams[0];
+  const selectedHasLearningModule = selected ? isStrategyLearningSetupId(selected.setupId) : false;
+
+  useEffect(() => {
+    const requestedSetupId = searchParams.get('setup');
+    if (!requestedSetupId) return;
+    const requestedTeam = rankedTeams.find(team => team.setupId === requestedSetupId);
+    if (requestedTeam) setSelectedRunId(requestedTeam.runId);
+  }, [rankedTeams, searchParams]);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (!isStrategyLearningSetupId(selected.setupId)) {
+      setLearningGateStatus('unavailable');
+      return;
+    }
+
+    const controller = new AbortController();
+    setLearningGateStatus('checking');
+    void fetch(
+      `/api/learning/strategy-attempts/latest?setupId=${encodeURIComponent(selected.setupId)}&summary=1`,
+      { signal: controller.signal },
+    ).then(response => {
+      if (response.status === 204) setLearningGateStatus('locked');
+      else if (response.ok) setLearningGateStatus('unlocked');
+      else setLearningGateStatus('error');
+    }).catch(error => {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setLearningGateStatus('error');
+      }
+    });
+    return () => controller.abort();
+  }, [selected, learningGateRevision]);
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const percent = (value: number | null) => value === null
     ? t('unavailable')
@@ -603,7 +739,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   }).format(new Date(value));
   const handleTeamSelect = (runId: string) => {
     setSelectedRunId(runId);
-    requestAnimationFrame(() => detailRef.current?.scrollIntoView({
+    requestAnimationFrame(() => selectedTeamRef.current?.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
     }));
@@ -711,25 +847,38 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         decimal={decimal}
       />
 
-      <TeamPerformanceDetail
-        key={selected.runId}
-        team={selected}
-        t={t}
-        percent={percent}
-        decimal={decimal}
-        money={money}
-        dateTime={dateTime}
-        detailRef={detailRef}
-        comparisonRows={comparisonRows}
-      />
+      <div ref={selectedTeamRef} className="scroll-mt-6">
+        <TeamLearningGate
+          team={selected}
+          locale={locale}
+          status={learningGateStatus}
+          onRetry={() => setLearningGateRevision(revision => revision + 1)}
+        />
+      </div>
 
-      <HistoricalComparisonChart
-        comparison={selected.comparison}
-        comparisons={rankedTeams.flatMap((team, index) => team.comparison
-          ? [{ rank: index + 1, setupId: team.setupId, comparison: team.comparison }]
-          : [])}
-        selectedSetupId={selected.setupId}
-      />
+      {!selectedHasLearningModule || learningGateStatus === 'unlocked' ? (
+        <>
+          <TeamPerformanceDetail
+            key={selected.runId}
+            team={selected}
+            t={t}
+            percent={percent}
+            decimal={decimal}
+            money={money}
+            dateTime={dateTime}
+            detailRef={detailRef}
+            comparisonRows={comparisonRows}
+          />
+
+          <HistoricalComparisonChart
+            comparison={selected.comparison}
+            comparisons={rankedTeams.flatMap((team, index) => team.comparison
+              ? [{ rank: index + 1, setupId: team.setupId, comparison: team.comparison }]
+              : [])}
+            selectedSetupId={selected.setupId}
+          />
+        </>
+      ) : null}
 
       <figure className="min-w-0 rounded-2xl bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_45px_rgba(0,0,0,0.07)] sm:p-6">
         <figcaption className="text-start">

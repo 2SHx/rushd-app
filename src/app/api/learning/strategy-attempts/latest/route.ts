@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { authorizeAccess, requireSession } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { strategyLearningMasteryState } from '@/services/strategyLearningMastery';
+import {
+  DEFAULT_STRATEGY_LEARNING_SETUP_ID,
+  isStrategyLearningSetupId,
+} from '@/quant/learning/strategyLearningModules';
 
 function authzResponse(error: unknown): Response | null {
   if (error && typeof error === 'object' && 'response' in error) {
@@ -14,8 +18,13 @@ function authzResponse(error: unknown): Response | null {
 export async function GET(request: Request): Promise<Response> {
   try {
     const sessionUser = await requireSession();
+    const url = new URL(request.url);
+    const setupId = url.searchParams.get('setupId') ?? DEFAULT_STRATEGY_LEARNING_SETUP_ID;
+    if (!isStrategyLearningSetupId(setupId)) {
+      return NextResponse.json({ error: 'learning_module_unavailable' }, { status: 404 });
+    }
     const parsedUserId = z.string().min(1).max(128).safeParse(
-      new URL(request.url).searchParams.get('userId') ?? sessionUser.id,
+      url.searchParams.get('userId') ?? sessionUser.id,
     );
     if (!parsedUserId.success) return NextResponse.json({ error: 'invalid_user_id' }, { status: 400 });
     await authorizeAccess(sessionUser, parsedUserId.data);
@@ -23,13 +32,25 @@ export async function GET(request: Request): Promise<Response> {
     const attempt = await prisma.strategyLearningAttempt.findFirst({
       where: {
         userId: parsedUserId.data,
-        setupId: 'bollinger-mr-long-v2',
+        setupId,
         result: { isNot: null },
       },
       orderBy: { createdAt: 'desc' },
       include: { result: true, masteryEvents: true },
     });
     if (!attempt?.result) return new Response(null, { status: 204 });
+
+    if (url.searchParams.get('summary') === '1') {
+      return NextResponse.json({
+        completed: true,
+        attempt: {
+          id: attempt.id,
+          setupId: attempt.setupId,
+          attemptNumber: attempt.attemptNumber,
+          sealedAt: attempt.sealedAt,
+        },
+      });
+    }
 
     return NextResponse.json({
       attempt: {

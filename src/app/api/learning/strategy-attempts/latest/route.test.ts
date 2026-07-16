@@ -37,6 +37,7 @@ describe('latest strategy learning attempt API', () => {
   it('authorizes a requested learner before returning the resumable mastery state', async () => {
     attemptFindFirst.mockResolvedValue({
       id: 'attempt-1',
+      setupId: 'bollinger-mr-long-v2',
       attemptNumber: 2,
       answers: [{ questionId: 'q1', optionId: 'a1' }],
       sealedAt: new Date('2026-07-13T09:00:00.000Z'),
@@ -59,5 +60,44 @@ describe('latest strategy learning attempt API', () => {
       attempt: { id: 'attempt-1', attemptNumber: 2 },
       mastery: { completion: { earned: true }, earnedXp: 20, maxXp: 50 },
     });
+  });
+
+  it('returns a lightweight exact-team completion summary for the league gate', async () => {
+    attemptFindFirst.mockResolvedValue({
+      id: 'attempt-1',
+      setupId: 'bollinger-mr-long-v2',
+      attemptNumber: 1,
+      answers: [],
+      sealedAt: new Date('2026-07-13T09:00:00.000Z'),
+      createdAt: new Date('2026-07-13T09:00:00.000Z'),
+      result: { payload: { large: 'replay-payload' } },
+      masteryEvents: [],
+    });
+
+    const response = await GET(new Request(
+      'http://localhost/api/learning/strategy-attempts/latest?setupId=bollinger-mr-long-v2&summary=1',
+    ));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({
+      completed: true,
+      attempt: {
+        id: 'attempt-1',
+        setupId: 'bollinger-mr-long-v2',
+        attemptNumber: 1,
+        sealedAt: '2026-07-13T09:00:00.000Z',
+      },
+    });
+    expect(data).not.toHaveProperty('result');
+  });
+
+  it('fails closed when a strategy has no reviewed learning module', async () => {
+    const response = await GET(new Request(
+      'http://localhost/api/learning/strategy-attempts/latest?setupId=gapper-orb&summary=1',
+    ));
+
+    expect(response.status).toBe(404);
+    expect(attemptFindFirst).not.toHaveBeenCalled();
   });
 });

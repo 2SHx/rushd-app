@@ -17,7 +17,9 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import type { BollingerLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
+import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningModules';
 import StrategyLearningComparisonChart from './StrategyLearningComparisonChart';
 import StrategyMasteryRevisit, { type StrategyMasteryState } from './StrategyMasteryRevisit';
 
@@ -56,8 +58,15 @@ type Phase = 'overview' | 'questions' | 'review' | 'submitting' | 'submitError' 
 const PROCESS_ICONS = [BookOpen, Sparkles, Scale, BarChart3] as const;
 const SERIES = ['learner', 'team', 'spus', 'spy'] as const;
 
-export default function StrategyLearningLab({ locale }: { locale: string }) {
+export default function StrategyLearningLab({
+  locale,
+  setupId,
+}: {
+  locale: string;
+  setupId?: string;
+}) {
   const t = useTranslations('StrategyLearning');
+  const requestedSetupId = setupId ?? DEFAULT_STRATEGY_LEARNING_SETUP_ID;
   const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [phase, setPhase] = useState<Phase>('overview');
@@ -71,11 +80,15 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
   const loadCurriculum = useCallback(async (signal?: AbortSignal) => {
     setLoadState('loading');
     try {
-      const response = await fetch(`/api/learning/strategy-attempts?locale=${locale}`, { signal });
+      const query = new URLSearchParams({ locale, setupId: requestedSetupId });
+      const response = await fetch(`/api/learning/strategy-attempts?${query}`, { signal });
       if (!response.ok) throw new Error('curriculum_load_failed');
       const data = await response.json() as Curriculum;
       setCurriculum(data);
-      const latestResponse = await fetch('/api/learning/strategy-attempts/latest', { signal });
+      const latestResponse = await fetch(
+        `/api/learning/strategy-attempts/latest?setupId=${encodeURIComponent(requestedSetupId)}`,
+        { signal },
+      );
       if (latestResponse.ok && latestResponse.status !== 204) {
         setLatestCompletion(await latestResponse.json() as Completion);
       } else if (latestResponse.status === 204) {
@@ -86,7 +99,7 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setLoadState('error');
     }
-  }, [locale]);
+  }, [locale, requestedSetupId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -437,6 +450,13 @@ export default function StrategyLearningLab({ locale }: { locale: string }) {
                     <RotateCcw className="size-4" aria-hidden="true" />
                     {t('newAttempt')}
                   </button>
+                  <Link
+                    href={`/${locale}/quant/league?setup=${encodeURIComponent(completion.result.setupId)}`}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-xs font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    {t('viewTeamEvidence')}
+                    <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+                  </Link>
                 </aside>
               </div>
             </div>

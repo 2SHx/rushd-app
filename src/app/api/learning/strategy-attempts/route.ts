@@ -17,6 +17,11 @@ import {
   awardStrategyLearningMastery,
   strategyLearningMasteryState,
 } from '@/services/strategyLearningMastery';
+import {
+  DEFAULT_STRATEGY_LEARNING_SETUP_ID,
+  isStrategyLearningSetupId,
+  STRATEGY_LEARNING_SETUP_IDS,
+} from '@/quant/learning/strategyLearningModules';
 
 const answerSchema = z.object({
   questionId: z.string().min(1).max(100),
@@ -25,7 +30,7 @@ const answerSchema = z.object({
 
 const completionSchema = z.object({
   userId: z.string().min(1).max(128).optional(),
-  setupId: z.literal('bollinger-mr-long-v2'),
+  setupId: z.enum(STRATEGY_LEARNING_SETUP_IDS),
   idempotencyKey: z.string().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/),
   answers: z.array(answerSchema).min(1).max(8),
   retryOfAttemptId: z.string().min(1).max(128).optional(),
@@ -191,7 +196,12 @@ async function persistReplayResult(
 
 /** Public, non-executable lesson content. The policy compiler and replay remain server-only. */
 export async function GET(request: Request): Promise<Response> {
-  const locale = new URL(request.url).searchParams.get('locale') === 'ar' ? 'ar' : 'en';
+  const url = new URL(request.url);
+  const locale = url.searchParams.get('locale') === 'ar' ? 'ar' : 'en';
+  const setupId = url.searchParams.get('setupId') ?? DEFAULT_STRATEGY_LEARNING_SETUP_ID;
+  if (!isStrategyLearningSetupId(setupId)) {
+    return NextResponse.json({ error: 'learning_module_unavailable' }, { status: 404 });
+  }
   return NextResponse.json({
     setupId: BOLLINGER_MR_LONG_V2_CURRICULUM.setupId,
     setupVersion: BOLLINGER_MR_LONG_V2_CURRICULUM.setupVersion,

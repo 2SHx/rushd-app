@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L6 Mavericks learning bridge ✅
+Shipped: exact-team League→Learning deep links, setup-aware completion summaries, and a bilingual evidence gate for reviewed learning modules; Bollinger details stay closed until its sealed four-line comparison.
+Decisions: lazy-dev rung 2/7 reuses DR-14 attempts/API/UI; unsupported teams show “module under validation” and retain labeled simulated evidence until a real setup-specific replay exists—no fabricated learner curve or universal lock yet.
+Verify: focused 18/18, lint, TypeScript, diff clean; browser English locked→exact lesson and Arabic pending RTL with zero overlays/errors; full suite 111/113 files (821 passed, 2 skipped), with only 10 PostgreSQL-backed outcomes blocked by localhost:5432.
+Open: L7 adds one reviewed curriculum/compiler/≤6-month PIT replay per visible team; L8 enables the universal gate only after full coverage. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — Free composite Sharia screening source (Zoya-free) ✅
 Shipped: CompositeShariaScreener behind DR-4 (opt-in SHARIA_SOURCE=composite): real SPUS holdings (216 tickers, asOf 2026-07-16, fetched from the fund's own CSV; META absence re-verified genuine), honest empty HLAL/Saudi-list stubs (403s documented; scripts/refresh-sharia-snapshots.ts only overwrites on verified parse); ShariaVerdict.compliant widened to boolean|null with fund-absence⇒UNKNOWN, never non-compliant.
 Decisions: QA hunt caught pre-existing `?? true` verdict inflation at trade + zakat money boundaries — both now fail-closed (`=== true`); deriveShariaState: any null verdict ⇒ UNSCREENED_EXECUTION_BLOCKED (never claims VERIFIED for an unscreened name); Zoya still wins when both sources configured.

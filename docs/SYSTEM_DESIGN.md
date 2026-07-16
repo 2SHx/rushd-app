@@ -403,7 +403,7 @@ Goal: every surface re-skinned to the DR-12 token system; 3D lands on exactly tw
 | en/ar parity + regression suite for the revamp | test-engineer | `npm run lint` + `npx tsc --noEmit` + `npx vitest run` green incl. en/ar key-parity test |
 
 ### M10: Strategy learning simulations
-Goal: a learner can understand one strategy team, commit bounded decisions, and inspect an honest sealed replay against the team, SPUS, and SPY without outcome leakage.
+Goal: a learner can understand each reviewed Maverick strategy team, commit bounded decisions, and inspect an honest sealed replay against that exact team, SPUS, and SPY before its detailed league evidence opens.
 | Work item | Owner | Exit criterion |
 |---|---|---|
 | L1 — Versioned 5–8-question curriculum + pure policy compiler; knowledge checks cannot affect policy and all decisions stay inside reviewed parameter bounds | ai-features-expert | focused tests prove identical answers → identical policy hash; invalid/out-of-range answers fail closed; changing a knowledge answer leaves the policy byte-identical |
@@ -411,6 +411,9 @@ Goal: a learner can understand one strategy team, commit bounded decisions, and 
 | L3 — Auth-scoped immutable `StrategyLearningAttempt` persistence and completion API through a generated Prisma migration | backend-expert | integration tests prove first attempt seals before results, mutation after sealing returns 409, retries create new labeled rows, cross-family access returns 403, and no money/order path is called |
 | L4 — Mastery-loop UI: choose team → learn → decide → seal → compare; immediate mechanism feedback, four-line chart, return/maxDD/volatility/trades, process-first explanation, en/ar + RTL | frontend-expert | browser walk-through in en/ar at desktop/mobile shows loading/empty/error/populated states, keyboard completion, reduced motion, outcome hidden pre-seal, and honest simulated/price-only labels |
 | L5 — Retrieval revisit + XP for mastery effort only | i18n-fintech-expert | a delayed knowledge revisit is offered; XP is written only via `addXP` for completion/retrieval/reflection and remains unchanged when simulated return changes |
+| L6 — Strategy-learning capability registry + league bridge: exact-setup deep links, lightweight sealed-attempt check, and evidence gate only for teams whose deterministic module is reviewed | frontend-expert | focused tests prove a completion for setup A cannot unlock setup B; browser walk-through shows locked → learn/decide/seal/compare → unlocked for `bollinger-mr-long-v2`; an unsupported team says its module is under validation and never receives a fabricated replay |
+| L7 — Expand reviewed curriculum/compiler/short replay modules one terminal league setup per bounded unit, reusing the exact setup engine and frozen ≤6-month PIT fixture | ai-features-expert | each module independently proves 5–8 bilingual questions, knowledge-policy isolation, deterministic policy hash/replay, future-bar failure, real-data provenance, risk/Sharia/fill parity, and four aligned normalized-100 series; no terminal evidence period is run |
+| L8 — Universal Mavericks evidence gate after module coverage reaches every visible league team | frontend-expert | every visible team routes to its exact lesson; no detailed metrics, historical comparison, or trade ledger render before that setup's sealed result; direct URL selection and a different team's completion remain locked; en/ar desktop/mobile keyboard walk-through passes |
 
 *(M11–M13 execute after M10, in order: M11's capability matrix and meter gate both M12 and M13; M13 additionally consumes M9's U4 tokens. Mock mode holds throughout — Academy content is local by construction, and workspace chips run on `MockScreener` with demo provenance.)*
 
