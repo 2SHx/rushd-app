@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M13-2 stock-workspace shell ✅
+Shipped: replaced the stock tabs with one sticky bilingual evidence header, verdict/provenance chips, and the ordered S1–S13 anchor/scroll-spy workspace; unavailable sections now say so instead of rendering fabricated analysis.
+Decisions: lazy-dev rung 2/7 reused native anchors, IntersectionObserver, and existing panels; the pre-spend “1 of 5” view is driven only by a server access state, while the no-key/no-database path remains usable and the workspace mounts once across breakpoints.
+Verify: focused 4/4, lint, TypeScript, and diff checks pass; clean EN/AR browser runs show 13 unique links/sections, RTL, zero overflow, no overlay/errors; full run reached 109/111 files (794 passed, 2 skipped), with only 10 PostgreSQL-backed outcomes blocked by localhost:5432.
+Open: M13-3 Sharia verdict/purification detail is next; M11 must supply the real meter entitlement/spend transaction before the pre-spend branch can be exercised end-to-end.
+
 ## 2026-07-16 — M13-1 stock-workspace data contract ✅
 Shipped: provider-wide 5y/8q fundamentals history, earnings calendar + next date, and market-specific filings links with deterministic bundled NVDA/Aramco fixtures; removed the fabricated analyst-rating field and UI card.
 Decisions: lazy-dev rung 2/7 extended the existing registry and façade with zero dependencies, schemas, auth, or external-key requirements; live adapters expose honestly labeled bundled-demo fundamentals until a vendor is selected.

@@ -1,23 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { 
-  ShieldCheck, ShieldAlert, ArrowLeft, ArrowUpRight, ArrowDownRight, 
-  Minus, Sparkles, ChevronRight, Building2, User, Users, MapPin, 
-  BarChart3, TrendingUp, Activity, Bot
+import {
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowUpRight,
+  Database,
+  Droplets,
+  Gauge,
+  LockKeyhole,
+  Minus,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import PriceChartPanel from './PriceChartPanel';
-import RScorePanel from './RScorePanel';
 import FundamentalsPanel from './FundamentalsPanel';
-import AssistantPanel from './AssistantPanel';
-
-import ValuationSuitePanel from './ValuationSuitePanel';
-import OpportunityMatrix from './OpportunityMatrix';
-import StockComparePanel from './StockComparePanel';
-import FinancialStatementsPanel from './FinancialStatementsPanel';
 
 interface StockDetailProps {
   data: any;
@@ -29,7 +28,84 @@ interface StockDetailProps {
   onBack: () => void;
 }
 
-type Tab = 'overview' | 'valuation' | 'financials' | 'compare' | 'assistant' | 'fundamentals' | 'sharia';
+const WORKSPACE_SECTIONS = [
+  { id: 'sharia', number: 1 },
+  { id: 'price', number: 2 },
+  { id: 'key-financials', number: 3 },
+  { id: 'charts', number: 4 },
+  { id: 'statements', number: 5 },
+  { id: 'valuation', number: 6 },
+  { id: 'committee', number: 7 },
+  { id: 'compare', number: 8 },
+  { id: 'ai', number: 9 },
+  { id: 'snapshot', number: 10 },
+  { id: 'earnings', number: 11 },
+  { id: 'filings', number: 12 },
+  { id: 'thesis', number: 13 },
+] as const;
+
+type WorkspaceSectionId = (typeof WORKSPACE_SECTIONS)[number]['id'];
+
+function WorkspaceChip({
+  icon,
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  tone?: 'positive' | 'caution' | 'neutral';
+}) {
+  const toneClass = tone === 'positive'
+    ? 'bg-up/10 text-up'
+    : tone === 'caution'
+      ? 'bg-noncompliant/10 text-noncompliant'
+      : 'bg-foreground/[0.05] text-foreground/70';
+
+  return (
+    <div className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 ${toneClass}`}>
+      <span aria-hidden="true">{icon}</span>
+      <span className="text-[10px] text-current/70">{label}</span>
+      <span className="font-mono text-xs font-bold tabular-nums" dir="ltr">{value}</span>
+    </div>
+  );
+}
+
+function WorkspaceSection({
+  id,
+  number,
+  title,
+  children,
+}: {
+  id: WorkspaceSectionId;
+  number: number;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-44 space-y-4 md:scroll-mt-48">
+      <header className="flex items-baseline gap-3">
+        <span className="font-mono text-[10px] font-bold tabular-nums text-accent" aria-hidden="true">
+          {String(number).padStart(2, '0')}
+        </span>
+        <h2 id={`${id}-title`} className="text-lg font-bold text-foreground md:text-xl">
+          {title}
+        </h2>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function PendingSection({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-2xl bg-foreground/[0.025] px-5 py-6 shadow-[0_1px_1px_rgba(0,0,0,0.04),0_14px_40px_rgba(0,0,0,0.04)]">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/55">{body}</p>
+    </div>
+  );
+}
 
 export default function StockDetail({
   data,
@@ -38,7 +114,24 @@ export default function StockDetail({
 }: StockDetailProps) {
   const t = useTranslations('Markets');
   const isAr = locale === 'ar';
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeSection, setActiveSection] = useState<WorkspaceSectionId>('sharia');
+  const isMetered = data?.workspaceAccess?.state === 'metered';
+
+  useEffect(() => {
+    if (!data || isMetered) return;
+    const sections = WORKSPACE_SECTIONS
+      .map(({ id }) => document.getElementById(id))
+      .filter((section): section is HTMLElement => Boolean(section));
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (visible) setActiveSection(visible.target.id as WorkspaceSectionId);
+    }, { rootMargin: '-28% 0px -62% 0px', threshold: [0, 0.1] });
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [data, isMetered]);
 
   if (!data) return null;
 
@@ -52,200 +145,187 @@ export default function StockDetail({
 
   const isUp = change > 0;
   const isDown = change < 0;
+  const complianceKnown = typeof data.isShariaCompliant === 'boolean';
+  const purificationKnown = Number.isFinite(data.purificationRatioBps);
+  const currency = data.market === 'TASI' ? 'SAR' : 'USD';
+  const numberLocale = isAr ? 'ar-SA' : 'en-US';
+  const marketCap = Number.isFinite(data.statistics?.marketCap)
+    ? new Intl.NumberFormat(numberLocale, {
+        style: 'currency',
+        currency,
+        notation: 'compact',
+        maximumFractionDigits: 1,
+      }).format(data.statistics.marketCap)
+    : t('workspace.unverified');
+  const provenance = data.marketDataSource === 'live' && data.shariaSource === 'zoya'
+    ? t('workspace.chips.live')
+    : data.marketDataSource === 'delayed' && data.shariaSource !== 'mock'
+      ? t('workspace.chips.delayed')
+      : data.marketDataSource === 'mock' || data.shariaSource === 'mock'
+        ? t('workspace.chips.demo')
+        : t('workspace.unverified');
 
-  const tabs: { id: Tab; label: string; labelAr: string }[] = [
-    { id: 'overview', label: 'Overview', labelAr: 'الرئيسية' },
-    { id: 'valuation', label: 'Valuation', labelAr: 'التقييم العادل' },
-    { id: 'financials', label: 'Financials', labelAr: 'القوائم المالية' },
-    { id: 'compare', label: 'Compare', labelAr: 'المقارنة' },
-    { id: 'assistant', label: 'AI Analysis', labelAr: 'التحليل الذكي' },
-    { id: 'sharia', label: 'Sharia', labelAr: 'التوافق الشرعي' },
-  ];
-
-  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+  const handleAnchorKeyDown = (event: KeyboardEvent<HTMLAnchorElement>, index: number) => {
     let nextIndex: number | null = null;
     if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = tabs.length - 1;
-    if (event.key === 'ArrowRight') nextIndex = (index + (isAr ? -1 : 1) + tabs.length) % tabs.length;
-    if (event.key === 'ArrowLeft') nextIndex = (index + (isAr ? 1 : -1) + tabs.length) % tabs.length;
+    if (event.key === 'End') nextIndex = WORKSPACE_SECTIONS.length - 1;
+    if (event.key === 'ArrowRight') nextIndex = (index + (isAr ? -1 : 1) + WORKSPACE_SECTIONS.length) % WORKSPACE_SECTIONS.length;
+    if (event.key === 'ArrowLeft') nextIndex = (index + (isAr ? 1 : -1) + WORKSPACE_SECTIONS.length) % WORKSPACE_SECTIONS.length;
     if (nextIndex === null) return;
     event.preventDefault();
-    setActiveTab(tabs[nextIndex].id);
-    requestAnimationFrame(() => document.getElementById(`stock-tab-${tabs[nextIndex!].id}`)?.focus());
+    document.getElementById(`workspace-anchor-${WORKSPACE_SECTIONS[nextIndex].id}`)?.focus();
+  };
+
+  const handleAnchorClick = (event: React.MouseEvent<HTMLAnchorElement>, id: WorkspaceSectionId) => {
+    event.preventDefault();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById(id)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${id}`);
+    setActiveSection(id);
   };
 
   return (
-    <div className="space-y-0 text-start">
-      {/* Mobile Back Button */}
-      <div className="flex items-center space-x-3 rtl:space-x-reverse md:hidden p-4 border-b border-[var(--border-color)] bg-surface-paper sticky top-0 z-40">
-        <button
-          onClick={onBack}
-          aria-label={t('backToMarkets')}
-          className="p-2 hover:bg-foreground/5 rounded-full text-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
-        </button>
-        <span className="font-bold text-foreground text-sm">{cleanSymbol}</span>
-        <span className="text-foreground/50 text-xs truncate">• {displayName}</span>
-      </div>
+    <div className="text-start">
+      <div className="sticky top-0 z-40 -mx-1 rounded-2xl bg-background/95 px-1 pb-2 backdrop-blur-xl supports-[backdrop-filter]:bg-background/85">
+        <div className="rounded-2xl bg-surface-paper/95 px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_14px_36px_rgba(0,0,0,0.05)] md:px-5">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={t('backToMarkets')}
+              className="mt-0.5 rounded-full p-2 text-foreground/55 transition-colors duration-150 hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:hidden"
+            >
+              <ArrowLeft className="size-4 rtl:rotate-180" />
+            </button>
 
-      {/* ── Hero Quote Header ── */}
-      <div className="relative overflow-hidden rounded-3xl glass-panel p-6">
-        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          {/* Left: Name + Price */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black font-mono tracking-widest text-foreground/50 bg-foreground/5 px-2.5 py-1 rounded-full border border-[var(--border-color)] uppercase">
-                {data.market}
-              </span>
-              <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
-                {cleanSymbol}
-              </span>
-            </div>
-
-            <h1 className="text-lg font-extrabold text-foreground leading-tight">{displayName}</h1>
-
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-4xl font-black font-mono tabular-nums text-foreground leading-none tracking-tight">
-                {data.market === 'TASI'
-                  ? t('formatTasi', { amount: data.price.toFixed(2) })
-                  : t('formatNasdaq', { amount: data.price.toFixed(2) })}
-              </span>
-
-              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-bold font-mono tabular-nums ${
-                isUp
-                  ? 'bg-up/10 text-up border border-up/20'
-                  : isDown
-                  ? 'bg-down/10 text-down border border-down/20'
-                  : 'bg-foreground/5 text-foreground/50 border border-[var(--border-color)]'
-              }`}>
-                {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                <span>{isUp ? '+' : ''}{change.toFixed(2)}</span>
-                <span className="text-[10px] opacity-70">({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] font-bold text-foreground/45" dir="ltr">{data.market}</span>
+                <span className="font-mono text-[10px] font-bold text-foreground/65" dir="ltr">{cleanSymbol}</span>
+                <span className="rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[10px] text-foreground/60">
+                  {(isAr ? data.sectorArabic : data.sectorEnglish) || t('workspace.unverified')}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
+                <div>
+                  <h1 className="truncate text-sm font-semibold text-foreground">{displayName}</h1>
+                  <span className="font-mono text-2xl font-bold leading-none tabular-nums text-foreground md:text-3xl" dir="ltr">
+                    {data.market === 'TASI'
+                      ? t('formatTasi', { amount: data.price.toFixed(2) })
+                      : t('formatNasdaq', { amount: data.price.toFixed(2) })}
+                  </span>
+                </div>
+                <div className={`mb-0.5 flex items-center gap-1 font-mono text-xs font-bold tabular-nums ${
+                  isUp ? 'text-up' : isDown ? 'text-down' : 'text-foreground/55'
+                }`} dir="ltr">
+                  {isUp ? <ArrowUpRight className="size-3.5" /> : isDown ? <ArrowDownRight className="size-3.5" /> : <Minus className="size-3.5" />}
+                  <span>{isUp ? '+' : ''}{change.toFixed(2)} ({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>
+                </div>
               </div>
             </div>
 
-            {/* Live badge */}
-            <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${data.marketDataSource === 'live' ? 'bg-up animate-pulse' : 'bg-amber-500'}`} />
-              <span className="text-[10px] text-foreground/50 font-mono font-bold uppercase tracking-wider">
-                {data.marketDataSource === 'live'
-                  ? t('liveMarketData')
-                  : data.marketDataSource === 'delayed'
-                    ? t('delayedMarketData')
-                    : t('simulatedMarketData')}
-              </span>
+            <div className="hidden text-end sm:block">
+              <p className="text-[10px] text-foreground/45">{t('workspace.marketCap')}</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground" dir="ltr">{marketCap}</p>
             </div>
           </div>
 
-          {/* Right: Sharia Shield */}
-          <div className={`self-start flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold ${
-            data.isShariaCompliant
-              ? 'bg-up/10 border-up/20 text-up'
-              : 'bg-noncompliant/10 border-noncompliant/20 text-noncompliant'
-          }`}>
-            {data.isShariaCompliant
-              ? <ShieldCheck className="w-5 h-5" />
-              : <ShieldAlert className="w-5 h-5" />}
-            <span>{data.isShariaCompliant ? t('shariaBadgeCompliant') : t('shariaBadgeNonCompliant')}</span>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none" aria-label={t('workspace.chips.label')}>
+            <WorkspaceChip
+              icon={complianceKnown && data.isShariaCompliant ? <ShieldCheck className="size-3.5" /> : <ShieldAlert className="size-3.5" />}
+              label={t('workspace.chips.aaofi')}
+              value={complianceKnown
+                ? (data.isShariaCompliant ? t('workspace.chips.compliant') : t('workspace.chips.nonCompliant'))
+                : t('workspace.unverified')}
+              tone={!complianceKnown ? 'neutral' : data.isShariaCompliant ? 'positive' : 'caution'}
+            />
+            <WorkspaceChip
+              icon={<Droplets className="size-3.5" />}
+              label={t('workspace.chips.purification')}
+              value={purificationKnown ? `${(data.purificationRatioBps / 100).toFixed(2)}%` : t('workspace.unverified')}
+            />
+            <WorkspaceChip
+              icon={<Gauge className="size-3.5" />}
+              label={t('workspace.chips.rScore')}
+              value={t('workspace.unverified')}
+            />
+            <WorkspaceChip
+              icon={<Database className="size-3.5" />}
+              label={t('workspace.chips.provenance')}
+              value={provenance}
+            />
           </div>
-          {data.shariaSource !== 'zoya' && (
-            <p className="text-[10px] text-foreground/60">{t('shariaDemoNote')}</p>
+
+          {!isMetered && (
+            <nav className="mt-3 overflow-x-auto border-t border-foreground/[0.06] pt-2 scrollbar-none" aria-label={t('workspace.navLabel')}>
+              <div className="flex min-w-max gap-1">
+                {WORKSPACE_SECTIONS.map((section, index) => (
+                  <a
+                    key={section.id}
+                    id={`workspace-anchor-${section.id}`}
+                    href={`#${section.id}`}
+                    aria-current={activeSection === section.id ? 'location' : undefined}
+                    onClick={(event) => handleAnchorClick(event, section.id)}
+                    onKeyDown={(event) => handleAnchorKeyDown(event, index)}
+                    className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      activeSection === section.id
+                        ? 'bg-accent text-white'
+                        : 'text-foreground/55 hover:bg-foreground/5 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="font-mono tabular-nums" aria-hidden="true">{String(section.number).padStart(2, '0')}</span>
+                    <span className="ms-1.5">{t(`workspace.sections.${section.id}`)}</span>
+                  </a>
+                ))}
+              </div>
+            </nav>
           )}
         </div>
       </div>
 
-      {/* ── Tab Navigation (Horizontally Scrollable on Mobile) ── */}
-      <div role="tablist" aria-label={t('stockDetailTabs')} className="flex overflow-x-auto gap-1.5 bg-foreground/[0.02] border border-[var(--border-color)] p-1.5 rounded-2xl mt-4 scrollbar-none">
-        {tabs.map((tab, index) => (
-          <button
-            key={tab.id}
-            id={`stock-tab-${tab.id}`}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-controls={`stock-panel-${tab.id}`}
-            tabIndex={activeTab === tab.id ? 0 : -1}
-            onClick={() => setActiveTab(tab.id)}
-            onKeyDown={(event) => handleTabKeyDown(event, index)}
-            className={`whitespace-nowrap py-2 px-4 rounded-xl text-xs font-extrabold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              activeTab === tab.id
-                ? 'bg-accent text-white shadow-md'
-                : 'text-foreground/60 hover:text-foreground hover:bg-foreground/5'
-            }`}
+      {isMetered ? (
+        <div className="mx-auto mt-8 max-w-2xl rounded-3xl bg-surface-paper px-6 py-8 text-start shadow-[0_2px_4px_rgba(0,0,0,0.05),0_24px_72px_rgba(0,0,0,0.07)] md:px-8 md:py-10">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <LockKeyhole className="size-5" />
+          </div>
+          <p className="mt-5 text-xs font-semibold text-accent">{t('workspace.meterEyebrow')}</p>
+          <h2 className="mt-1 text-xl font-bold text-foreground">{t('workspace.meterTitle')}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-foreground/60">{t('workspace.meterCost', { limit: 5 })}</p>
+          <p className="mt-2 text-xs leading-relaxed text-foreground/45">{t('workspace.meterRevisit')}</p>
+          <Link
+            href={`/${locale}/profile`}
+            className="mt-6 inline-flex rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
-            {isAr ? tab.labelAr : tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab Content ── */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          id={`stock-panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`stock-tab-${activeTab}`}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.18 }}
-          className="mt-4 space-y-4"
-        >
-          {activeTab === 'overview' && (
-            <>
-              <PriceChartPanel
-                history={history}
-                symbol={data.symbol}
-                market={data.market === 'TASI' ? 'TASI' : 'NASDAQ'}
-                dataSource={data.marketDataSource}
-              />
-              <OpportunityMatrix symbol={data.symbol} locale={locale} />
-              <RScorePanel symbol={data.symbol} locale={locale} />
-              <FundamentalsPanel data={data} locale={locale} />
-              {/* AI Committee CTA */}
-              <Link
-                href={`/${locale}/quant`}
-                className="flex items-center justify-between p-4 rounded-2xl border border-accent/15 bg-accent/[0.03] hover:bg-accent/[0.06] transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-accent" />
-                  </div>
-                  <div className="text-start">
-                    <p className="text-sm font-bold text-foreground">
-                      {isAr ? 'قرار لجنة الذكاء الاصطناعي' : 'View AI Committee Decision'}
-                    </p>
-                    <p className="text-[11px] text-foreground/50 mt-0.5">
-                      {isAr ? 'شاهد كيف تقيّم اللجنة هذا السهم الآن' : 'See how the 8-agent committee rates this stock live'}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-accent group-hover:translate-x-1 transition-transform rtl:rotate-180" />
-              </Link>
-            </>
-          )}
-
-          {activeTab === 'valuation' && (
-            <ValuationSuitePanel data={data} locale={locale} />
-          )}
-
-          {activeTab === 'financials' && (
-            <FinancialStatementsPanel data={data} locale={locale} />
-          )}
-
-          {activeTab === 'compare' && (
-            <StockComparePanel primaryData={data} locale={locale} />
-          )}
-
-          {activeTab === 'assistant' && (
-            <AssistantPanel symbol={data.symbol} market={data.market} currentPrice={data.price} locale={locale} />
-          )}
-
-          {activeTab === 'sharia' && (
-            <ShariaTab data={data} locale={locale} t={t} isAr={isAr} />
-          )}
-        </motion.div>
-      </AnimatePresence>
+            {t('workspace.meterAction')}
+          </Link>
+        </div>
+      ) : (
+        <main className="mt-10 space-y-16 pb-16 md:space-y-20">
+          {WORKSPACE_SECTIONS.map((section) => (
+            <WorkspaceSection
+              key={section.id}
+              id={section.id}
+              number={section.number}
+              title={t(`workspace.sections.${section.id}`)}
+            >
+              {section.id === 'sharia' ? (
+                <ShariaTab data={data} locale={locale} t={t} isAr={isAr} />
+              ) : section.id === 'price' ? (
+                <PriceChartPanel
+                  history={history}
+                  symbol={data.symbol}
+                  market={data.market === 'TASI' ? 'TASI' : 'NASDAQ'}
+                  dataSource={data.marketDataSource}
+                />
+              ) : section.id === 'key-financials' ? (
+                <FundamentalsPanel data={data} locale={locale} />
+              ) : (
+                <PendingSection title={t('workspace.pendingTitle')} body={t('workspace.pendingBody')} />
+              )}
+            </WorkspaceSection>
+          ))}
+        </main>
+      )}
     </div>
   );
 }
@@ -288,8 +368,8 @@ function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: an
         <div>
           <p className={`font-extrabold text-sm ${data.isShariaCompliant ? 'text-up' : 'text-noncompliant'}`}>
             {data.isShariaCompliant
-              ? (isAr ? 'متوافق مع الشريعة الإسلامية' : 'Sharia Compliant — Halal to Invest')
-              : (isAr ? 'غير متوافق مع الشريعة الإسلامية' : 'Non-Compliant — Caution Advised')}
+              ? t('workspace.chips.compliant')
+              : t('workspace.chips.nonCompliant')}
           </p>
           <p className="text-xs text-foreground/60 mt-1">
             {data.shariaSource === 'zoya' ? t('shariaVerifiedNote') : t('shariaDemoNote')}

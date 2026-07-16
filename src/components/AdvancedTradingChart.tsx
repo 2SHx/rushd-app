@@ -264,12 +264,12 @@ export default function AdvancedTradingChart({ data, symbol, market, dataSource 
   return (
     <div className="space-y-4">
       {/* ── Timeframe toolbar (numeric sequence stays LTR in both directions) ── */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div
           dir="ltr"
           role="toolbar"
           aria-label={t('timeframeToolbar')}
-          className="flex items-center gap-1.5 p-1 bg-foreground/[0.03] dark:bg-white/[0.02] border border-foreground/[0.06] dark:border-white/[0.05] rounded-2xl w-fit"
+          className="flex w-fit max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl border border-foreground/[0.06] bg-foreground/[0.03] p-1 scrollbar-none dark:border-white/[0.05] dark:bg-white/[0.02]"
         >
           {TIMEFRAME_GROUPS.map((group, gi) => (
             <div key={gi} className="flex items-center gap-1.5">

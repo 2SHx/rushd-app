@@ -202,40 +202,6 @@ export default function FundamentalsPanel({ data, locale }: FundamentalsPanelPro
         </div>
       )}
 
-      {/* Earnings (Visual Dummy Data) */}
-      <div className="glass-panel rounded-3xl p-5 space-y-4 text-start">
-        <h3 className="font-bold text-sm text-foreground">{t('earningsSummary')}</h3>
-        <p className="text-xs text-foreground/50">{t('expectedVsActual')}</p>
-        <div className="h-32 flex items-end justify-between px-2 pt-4 relative">
-          {/* Chart Background Grid Lines */}
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
-            <div className="border-b border-[var(--border-color)] w-full h-0" />
-            <div className="border-b border-[var(--border-color)] w-full h-0" />
-            <div className="border-b border-[var(--border-color)] w-full h-0" />
-          </div>
-
-          {[
-            { quarter: t('q1'), expected: 0.8, actual: 0.9 },
-            { quarter: t('q2'), expected: 0.85, actual: 0.8 },
-            { quarter: t('q3'), expected: 0.9, actual: 0.95 },
-            { quarter: t('q4'), expected: 0.95, actual: 1.1 }
-          ].map((item, idx) => (
-            <div key={idx} className="flex flex-col items-center space-y-2 z-10 w-8">
-              <div className="flex space-x-1 rtl:space-x-reverse items-end h-20">
-                <div
-                  className="w-2 bg-foreground/25 rounded-t-sm"
-                  style={{ height: `${item.expected * 50}%` }}
-                />
-                <div
-                  className={`w-2 rounded-t-sm ${item.actual >= item.expected ? 'bg-up' : 'bg-down'}`}
-                  style={{ height: `${item.actual * 50}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-foreground/60 font-bold">{item.quarter}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

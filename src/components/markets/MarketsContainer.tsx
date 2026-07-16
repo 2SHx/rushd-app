@@ -184,101 +184,86 @@ export default function MarketsContainer({
     </div>
   );
 
+  if (activeSymbol) {
+    return (
+      <div className="w-full pb-24 text-foreground md:pb-8">
+        <div className="mx-auto min-h-screen max-w-[1400px] p-4 md:px-4 md:py-6">
+          <AnimatePresence mode="wait">
+            {loadingStock ? (
+              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                {renderLoading()}
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`detail-${activeSymbol}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+              >
+                <button
+                  type="button"
+                  onClick={handleBackToOverview}
+                  className="mb-4 hidden items-center gap-1.5 text-[11px] text-foreground/50 transition-colors hover:text-foreground md:flex"
+                >
+                  <ArrowLeft className="size-3.5 rtl:rotate-180" />
+                  <span>{t('workspace.backToOverview')}</span>
+                </button>
+                <StockDetail
+                  data={currentStockData}
+                  locale={locale}
+                  jarBalance={jarBalance}
+                  sharesOwned={sharesOwned}
+                  isParent={isParent}
+                  onTradeExecuted={handleTradeExecuted}
+                  onBack={handleBackToOverview}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full text-foreground relative pb-24 md:pb-8">
 
       {/* ── Mobile View ── */}
       <div className="block md:hidden max-w-xl mx-auto min-h-screen">
-        <AnimatePresence mode="wait">
-          {!activeSymbol ? (
-            <motion.div key="mobile-overview" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="p-4 space-y-4">
-              {renderMarketSwitcher()}
-              <MarketOverviewPanel
-                market={marketTab}
-                locale={locale}
-                onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
-                quotes={quotes}
-                loadingQuotes={loadingQuotes}
-                quoteCoverage={quoteCoverage}
-                quoteError={quoteError}
-              />
-            </motion.div>
-          ) : (
-            <motion.div key="mobile-detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 pb-6">
-              {loadingStock ? renderLoading() : (
-                <div className="p-4">
-                  <StockDetail
-                    data={currentStockData}
-                    locale={locale}
-                    jarBalance={jarBalance}
-                    sharesOwned={sharesOwned}
-                    isParent={isParent}
-                    onTradeExecuted={handleTradeExecuted}
-                    onBack={handleBackToOverview}
-                  />
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <motion.div key="mobile-overview" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-4 space-y-4">
+          {renderMarketSwitcher()}
+          <MarketOverviewPanel
+            market={marketTab}
+            locale={locale}
+            onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
+            quotes={quotes}
+            loadingQuotes={loadingQuotes}
+            quoteCoverage={quoteCoverage}
+            quoteError={quoteError}
+          />
+        </motion.div>
       </div>
 
       {/* ── Desktop View (Unified Full-Width Page) ── */}
       <div className="hidden md:block max-w-[1400px] mx-auto min-h-screen px-4 py-6">
-        <AnimatePresence mode="wait">
-          {loadingStock ? (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              {renderLoading()}
-            </motion.div>
-          ) : !activeSymbol ? (
-            /* ── Market Overview Screener (default) ── */
-            <motion.div
-              key="overview"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.25 }}
-            >
-              {renderMarketSwitcher()}
-              <MarketOverviewPanel
-                market={marketTab}
-                locale={locale}
-                onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
-                quotes={quotes}
-                loadingQuotes={loadingQuotes}
-                quoteCoverage={quoteCoverage}
-                quoteError={quoteError}
-              />
-            </motion.div>
-          ) : (
-            /* ── Stock Detail ── */
-            <motion.div
-              key={`detail-${activeSymbol}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* Back to overview breadcrumb */}
-              <button
-                onClick={handleBackToOverview}
-                className="flex items-center gap-1.5 text-[11px] text-foreground/50 hover:text-foreground transition-colors mb-4 group"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform rtl:rotate-180" />
-                <span>{isAr ? '← نظرة عامة على السوق' : '← Market Overview'}</span>
-              </button>
-              <StockDetail
-                data={currentStockData}
-                locale={locale}
-                jarBalance={jarBalance}
-                sharesOwned={sharesOwned}
-                isParent={isParent}
-                onTradeExecuted={handleTradeExecuted}
-                onBack={handleBackToOverview}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <motion.div
+          key="overview"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          {renderMarketSwitcher()}
+          <MarketOverviewPanel
+            market={marketTab}
+            locale={locale}
+            onSelectStock={(sym) => handleSelectSymbol(sym, marketTab)}
+            quotes={quotes}
+            loadingQuotes={loadingQuotes}
+            quoteCoverage={quoteCoverage}
+            quoteError={quoteError}
+          />
+        </motion.div>
       </div>
     </div>
   );
