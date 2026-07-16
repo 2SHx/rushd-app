@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-16 — Quant committee narrative workspace ✅
+Shipped: a responsive en/ar Quant hero, consolidated evidence readiness, guided paper-automation/review setup, and a theme-native committee board with accessible recorded history.
+Decisions: lazy-dev rung 2 retained the existing 2D committee visualizer and APIs; restrained gradients express hierarchy, while automation copy now names authenticated server, risk, Sharia, and kill-switch boundaries without a 24/7 claim.
+Verify: full lint and TypeScript clean; 109 test files / 790 tests passed; browser-verified en/ar, RTL, light/dark, and 390px mobile with no horizontal overflow.
+Open: portfolio analytics retains its older dense visual language for a later contained pass; auth and the prohibited terminal-period evidence run were untouched.
+
 ## 2026-07-15 — Theme-responsive controls + Gross exposure list + Range formatting + Timeframes ✅
 Shipped: light/dark theme AI Board controls, Gross exposure list legend, formatted day/year ranges & open/prevClose to 2 decimals, and TradingView-like timeframes (1H, 2H, 4H, 1D, 1W) with dynamic resampling.
 Decisions: replaced hardcoded theme hex codes with tailwind-responsive standard classes; listed positions with colored indicators; called toFixed(2) on range/price variables; built a deterministic pseudorandom intraday resampler.

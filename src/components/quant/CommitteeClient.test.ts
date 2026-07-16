@@ -46,4 +46,13 @@ describe('CommitteeClient safety boundary', () => {
     expect(source).not.toContain('initialAlpacaPaper');
     expect(source).not.toContain("'alpaca'");
   });
+
+  it('describes paper automation honestly and keeps history keyboard accessible', () => {
+    expect(source).not.toContain('AUTOPILOT ACTIVE (24/7)');
+    expect(source).not.toContain('24/7 Decisions History');
+    expect(source).not.toContain('executes virtual portfolio trades 24/7 in real-time');
+    expect(source).toContain("t('paperAutomationEnabledBody')");
+    expect(source).toContain('onClick={() => loadPastDecision(dec)}');
+    expect(source).toContain('focus-visible:ring-2 focus-visible:ring-accent');
+  });
 });

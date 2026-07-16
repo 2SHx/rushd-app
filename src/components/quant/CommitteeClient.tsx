@@ -721,29 +721,35 @@ export default function CommitteeClient({
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
       {initialInternalPortfolioAvailable ? (
-        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-black/5 dark:border-white/5 bg-slate-100 dark:bg-white/[0.03] p-1 sm:w-fit">
+        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.04] p-1 sm:w-fit" role="tablist" aria-label={t('committeeTab')}>
           <>
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'board'}
               onClick={() => setActiveTab('board')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 activeTab === 'board'
-                  ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-                  : 'text-foreground/50 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
+                  ? 'bg-surface-card text-foreground shadow-sm'
+                  : 'text-foreground/55 hover:text-foreground'
               }`}
             >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>{isAr ? 'لجنة مستشاري الذكاء الاصطناعي' : 'AI Committee Board'}</span>
+              <Cpu className="size-3.5 text-accent" aria-hidden="true" />
+              <span>{t('committeeTab')}</span>
             </button>
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'portfolio'}
               onClick={() => setActiveTab('portfolio')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 activeTab === 'portfolio'
-                  ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-                  : 'text-foreground/50 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
+                  ? 'bg-surface-card text-foreground shadow-sm'
+                  : 'text-foreground/55 hover:text-foreground'
               }`}
             >
-              <Coins className="w-3.5 h-3.5" />
-              <span>{isAr ? 'تحليلات المحفظة' : 'Portfolio Analytics'}</span>
+              <Coins className="size-3.5 text-accent" aria-hidden="true" />
+              <span>{t('portfolioAnalyticsTab')}</span>
             </button>
           </>
         </div>
@@ -751,70 +757,76 @@ export default function CommitteeClient({
 
       {activeTab === 'board' && (
         <>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           {/* ── AI Autopilot Control Card ── */}
-          <div className="relative overflow-hidden rounded-3xl border border-indigo-500/15 dark:border-indigo-500/30 bg-gradient-to-r from-indigo-500/5 via-surface-card to-emerald-500/5 p-6 shadow-xl">
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/3 to-transparent pointer-events-none" />
-            <div className="flex flex-wrap items-center justify-between gap-4 relative">
-              <div className="flex items-center gap-4">
+          <section className="relative isolate overflow-hidden rounded-3xl bg-surface-card p-5 shadow-[0_18px_55px_-38px_rgba(79,70,229,0.55)] ring-1 ring-border-color sm:p-6" aria-labelledby="paper-automation-title">
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-accent/[0.10] via-transparent to-up/[0.08]" />
+            <div className="flex h-full flex-col justify-between gap-5">
+              <div className="flex items-start gap-4">
                 <div className="relative">
-                  <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${
-                    autonomyTier === 'AUTO_PAPER' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  <div className={`flex size-12 items-center justify-center rounded-2xl ring-1 ring-inset ${
+                    autonomyTier === 'AUTO_PAPER' ? 'bg-up/10 text-up ring-up/20' : 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400'
                   }`}>
-                    <Bot className="w-6 h-6 animate-pulse" />
+                    <Bot className="size-6" aria-hidden="true" />
                   </div>
                 </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h3 className="font-extrabold text-sm text-foreground">
-                      {isAr ? 'منظومة التداول الآلي للذكاء الاصطناعي' : 'Automated AI Autopilot Trading'}
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <h3 id="paper-automation-title" className="text-sm font-bold text-foreground">
+                      {t('paperAutomationTitle')}
                     </h3>
-                    <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wider border ${
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${
                       autonomyTier === 'AUTO_PAPER'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
-                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        ? 'bg-up/10 text-up ring-up/20'
+                        : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300'
                     }`}>
                       {autonomyTier === 'AUTO_PAPER'
-                        ? (isAr ? 'الطيار الآلي نشط (٢٤/٧)' : 'AUTOPILOT ACTIVE (24/7)')
-                        : (isAr ? 'موافقة يدوية مطلوبة' : 'MANUAL APPROVAL REQUIRED')
+                        ? t('paperAutomationEnabled')
+                        : t('manualApprovalRequired')
                       }
                     </span>
                   </div>
-                  <p className="text-[11px] text-foreground/60 leading-relaxed max-w-2xl">
+                  <p className="max-w-xl text-xs leading-5 text-foreground/60">
                     {autonomyTier === 'AUTO_PAPER'
-                      ? (isAr ? 'يقوم المساعد الذكي باتخاذ وتنفيذ صفقات المحفظة بالكامل تلقائياً على مدار الساعة بناءً على الفرص المتاحة.' : 'The AI agent automatically identifies, proposes, and executes virtual portfolio trades 24/7 in real-time.')
-                      : (isAr ? 'اللجنة تعمل كمرشد وتصدر توصيات مقترحة تتطلب تفعيلك اليدوي للتنفيذ.' : 'The committee runs and proposes investment decisions, waiting for user trigger/execution.')
+                      ? t('paperAutomationEnabledBody')
+                      : t('paperAutomationManualBody')
                     }
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => toggleAutopilot()}
-                className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all flex items-center gap-2 active:scale-95 ${
+                className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
                   autonomyTier === 'AUTO_PAPER'
-                    ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-600'
-                    : 'bg-white/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-foreground/75 dark:text-gray-300 hover:text-foreground dark:hover:text-white hover:border-black/20 dark:hover:border-white/20'
+                    ? 'bg-up text-white hover:opacity-90'
+                    : 'bg-foreground text-background hover:opacity-90'
                 }`}
               >
-                {autonomyTier === 'AUTO_PAPER' ? <Check className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
-                <span>{autonomyTier === 'AUTO_PAPER' ? (isAr ? 'إيقاف التداول الآلي' : 'Disable Autopilot') : (isAr ? 'تشغيل التداول الآلي' : 'Enable Autopilot')}</span>
+                {autonomyTier === 'AUTO_PAPER' ? <Check className="size-3.5" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
+                <span>{autonomyTier === 'AUTO_PAPER' ? t('disablePaperAutomation') : t('enablePaperAutomation')}</span>
               </button>
             </div>
-          </div>
+          </section>
 
           {/* ── Interactive Sandbox Controls ── */}
-          <div className="p-5 rounded-3xl border border-black/5 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] shadow-md dark:shadow-xl flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
+          <section className="rounded-3xl bg-surface-card p-5 shadow-[0_18px_55px_-42px_rgba(15,23,42,0.65)] ring-1 ring-border-color sm:p-6" aria-labelledby="review-setup-title">
+            <div className="flex h-full flex-col justify-between gap-5">
+            <div>
+              <h3 id="review-setup-title" className="mb-4 text-sm font-bold text-foreground">{t('reviewSetupTitle')}</h3>
+              <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
-                  {isAr ? 'السوق' : 'Market'}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                  {t('marketLabel')}
                 </span>
-                <div className="flex space-x-1 p-0.5 bg-slate-200/50 dark:bg-black/40 border border-black/5 dark:border-white/5 rounded-xl">
+                <div className="flex gap-1 rounded-xl bg-foreground/[0.05] p-1">
                   {(['NASDAQ', 'TASI'] as const).map((m) => (
                     <button
+                      type="button"
                       key={m}
                       onClick={() => handleMarketChange(m)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                        market === m ? 'bg-emerald-500 text-black shadow' : 'text-foreground/60 dark:text-gray-400 hover:text-foreground dark:hover:text-white'
+                      className={`min-h-9 rounded-lg px-3 py-1 text-[10px] font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                        market === m ? 'bg-surface-card text-foreground shadow-sm' : 'text-foreground/55 hover:text-foreground'
                       }`}
                     >
                       {m}
@@ -824,10 +836,10 @@ export default function CommitteeClient({
               </div>
               
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
-                  {isAr ? 'رمز الأداة المقترحة' : 'Suggested Symbols'}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                  {t('suggestedSymbols')}
                 </span>
-                <div className="flex space-x-1">
+                <div className="flex flex-wrap gap-1.5">
                   {(market === 'TASI'
                     ? [
                         { sym: '2222.SR', label: isAr ? 'أرامكو' : 'Aramco' },
@@ -841,12 +853,13 @@ export default function CommitteeClient({
                       ]
                   ).map((item) => (
                     <button
+                      type="button"
                       key={item.sym}
                       onClick={() => setSymbol(item.sym)}
-                      className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold transition-all ${
+                      className={`min-h-9 rounded-xl px-3 py-1.5 text-[10px] font-bold ring-1 ring-inset transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                         symbol === item.sym
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                          : 'border-black/5 dark:border-white/5 bg-white dark:bg-white/[0.02] text-foreground/60 dark:text-gray-400 hover:text-foreground dark:hover:text-white hover:border-black/10 dark:hover:border-white/10'
+                          ? 'bg-accent/10 text-accent ring-accent/25'
+                          : 'bg-foreground/[0.025] text-foreground/60 ring-border-color hover:text-foreground'
                       }`}
                     >
                       {item.label} ({item.sym})
@@ -856,27 +869,32 @@ export default function CommitteeClient({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase text-foreground/45 dark:text-gray-400 tracking-wider">
-                  {isAr ? 'رمز مخصص' : 'Custom Symbol'}
-                </span>
+                <label htmlFor="quant-custom-symbol" className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                  {t('customSymbol')}
+                </label>
                 <input
+                  id="quant-custom-symbol"
                   type="text"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                  placeholder={isAr ? 'مثال: AAPL' : 'e.g. AAPL'}
-                  className="px-3 py-1.5 bg-white dark:bg-black/40 border border-black/10 dark:border-white/5 rounded-xl text-xs font-mono font-bold text-foreground dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 w-28 uppercase"
+                  placeholder={t('symbolPlaceholder')}
+                  className="min-h-9 w-32 rounded-xl bg-foreground/[0.035] px-3 py-1.5 font-mono text-xs font-bold uppercase text-foreground ring-1 ring-inset ring-border-color placeholder:text-foreground/35 focus:outline-none focus:ring-2 focus:ring-accent"
                 />
+              </div>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => runPass()}
               disabled={passLoading || !symbol}
-              className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-6 py-2.5 text-xs font-bold text-white shadow-[0_12px_30px_-18px_rgba(79,70,229,0.8)] transition duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-black" />}
-              <span>{passLoading ? (isAr ? 'جارٍ التحليل...' : 'Deliberating...') : (isAr ? 'تشغيل اللجنة التفاعلية' : 'Run Sandbox Pass')}</span>
+              {passLoading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
+              <span>{passLoading ? t('deliberating') : t('runReview')}</span>
             </button>
+            </div>
+          </section>
           </div>
 
           {passError && (
@@ -886,46 +904,47 @@ export default function CommitteeClient({
           )}
 
           {/* Grid: Committee Board + Execution Log */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
             {/* ── Left: Visual Committee Board ── */}
-            <div className="lg:col-span-8 space-y-4">
-              <div className="rounded-3xl overflow-hidden border border-white/[0.07] shadow-2xl bg-[#05080f]">
+            <div className="space-y-4 lg:col-span-8">
+              <section className="overflow-hidden rounded-[2rem] bg-surface-card p-2 shadow-[0_24px_70px_-42px_rgba(15,23,42,0.7)] ring-1 ring-border-color" aria-labelledby="committee-board-title">
                 {/* Board Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-gradient-to-r from-indigo-500/5 to-transparent">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] bg-gradient-to-r from-accent/[0.08] to-transparent px-4 py-3 sm:px-5">
                   <div>
-                    <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                      {isAr ? `لوحة لجنة الذكاء الاصطناعي — ${symbol}` : `AI Committee Board — ${symbol}`}
+                    <h3 id="committee-board-title" className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
+                      {t('committeeBoardTitle', { symbol })}
                     </h3>
-                    <p className="text-[10px] text-gray-600 font-mono mt-0.5">
-                      {isAr
-                        ? `العرض المرئي: ${simPlay ? 'قيد التشغيل' : 'متوقف'} • التنفيذ: عبر الخادم فقط`
-                        : `Visualization: ${simPlay ? 'Playing' : 'Paused'} • Execution: server only`}
+                    <p className="mt-1 text-[10px] text-foreground/45">
+                      {simPlay ? t('visualizationPlaying') : t('visualizationPaused')} · {t('executionServerOnly')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => setSimPlay(!simPlay)}
                       disabled={!passData}
                       aria-label={simPlay ? (isAr ? 'إيقاف العرض المرئي' : 'Pause visualization') : (isAr ? 'تشغيل العرض المرئي' : 'Play visualization')}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex size-9 items-center justify-center rounded-xl bg-surface-card text-foreground shadow-sm ring-1 ring-border-color transition duration-150 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      {simPlay ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-emerald-400" />}
+                      {simPlay ? <Pause className="size-4" /> : <Play className="size-4" />}
                     </button>
                     <button
+                      type="button"
                       onClick={() => { setSimStep('ingestion'); setSimPlay(true); setDebateTurnIdx(0); }}
                       disabled={!passData}
                       aria-label={isAr ? 'إعادة العرض المرئي' : 'Replay visualization'}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all border border-white/[0.06] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex size-9 items-center justify-center rounded-xl bg-surface-card text-foreground shadow-sm ring-1 ring-border-color transition duration-150 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className="size-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setSimStep('done')}
                       disabled={!passData}
-                      className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/[0.06] text-[10px] font-bold text-gray-400 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                      className="min-h-9 rounded-xl bg-surface-card px-3 py-1.5 text-[10px] font-bold text-foreground/55 shadow-sm ring-1 ring-border-color transition duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      {isAr ? 'تخطي' : 'Skip'}
+                      {t('skipVisualization')}
                     </button>
                   </div>
                 </div>
@@ -1018,42 +1037,40 @@ export default function CommitteeClient({
                     </motion.div>
                   )}
                 </div>
-              </div>
+              </section>
             </div>
 
             {/* ── Right: 24/7 Committee Decisions History Log ── */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="rounded-3xl overflow-hidden border border-white/[0.06] bg-[#05080f] shadow-xl flex flex-col" style={{ height: '685px' }}>
-                <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between bg-gradient-to-r from-indigo-500/5 to-transparent">
+            <div className="space-y-4 lg:col-span-4">
+              <section className="flex min-h-[28rem] flex-col overflow-hidden rounded-[2rem] bg-surface-card shadow-[0_24px_70px_-46px_rgba(15,23,42,0.65)] ring-1 ring-border-color lg:h-[685px]" aria-labelledby="decision-history-title">
+                <div className="flex items-center justify-between bg-gradient-to-r from-accent/[0.08] to-transparent px-5 py-4">
                   <div className="flex items-center gap-2">
-                    <History className="w-4 h-4 text-emerald-400" />
-                    <h3 className="text-sm font-extrabold text-white">
-                      {isAr ? 'سجل قرارات اللجنة (٢٤/٧)' : '24/7 Decisions History'}
+                    <History className="size-4 text-accent" aria-hidden="true" />
+                    <h3 id="decision-history-title" className="text-sm font-bold text-foreground">
+                      {t('decisionHistoryTitle')}
                     </h3>
                   </div>
-                  <span className="text-[9px] font-black text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 font-mono uppercase">
-                    {isAr ? 'الطيار الآلي' : 'AI HISTORY'}
+                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[9px] font-bold text-accent ring-1 ring-inset ring-accent/20">
+                    {t('decisionHistoryBadge')}
                   </span>
                 </div>
 
-                <div className="p-3 text-[10px] text-gray-500 border-b border-white/5 bg-black/20">
-                  {isAr 
-                    ? 'اضغط على أي قرار سابق لاستعراض تفاصيل إشارات التحليل وسيناريو النقاش والمصادقة الشرعية.' 
-                    : 'Click any historical run below to load and replay its signals, debate argument and Sharia screening logic.'
-                  }
+                <div className="bg-foreground/[0.025] px-5 py-3 text-[11px] leading-5 text-foreground/50">
+                  {t('decisionHistoryDescription')}
                 </div>
 
                 {/* Log Entries */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2.5 no-scrollbar">
+                <div className="no-scrollbar flex-1 space-y-2.5 overflow-y-auto p-4">
                   <AnimatePresence>
                     {decisions.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full text-center space-y-3 py-12">
-                        <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.04] flex items-center justify-center">
-                          <History className="w-5 h-5 text-gray-700" />
+                      <div className="flex h-full flex-col items-center justify-center space-y-3 py-12 text-center">
+                        <div className="flex size-12 items-center justify-center rounded-2xl bg-accent/[0.07] text-accent ring-1 ring-inset ring-accent/15">
+                          <History className="size-5" aria-hidden="true" />
                         </div>
-                        <p className="text-xs text-gray-600 font-mono">
-                          {isAr ? 'لا توجد قرارات مسجلة.' : 'No recorded decisions.'}
-                        </p>
+                        <div className="max-w-52">
+                          <p className="text-xs font-bold text-foreground">{t('decisionHistoryEmptyTitle')}</p>
+                          <p className="mt-1 text-[11px] leading-5 text-foreground/45">{t('decisionHistoryEmptyBody')}</p>
+                        </div>
                       </div>
                     ) : (
                       decisions.map((dec) => {
@@ -1061,36 +1078,42 @@ export default function CommitteeClient({
                         return (
                           <motion.div
                             key={dec.id}
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            onClick={() => loadPastDecision(dec)}
-                            className={`p-3 bg-white/[0.01] rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeOut' }}
+                            className={`flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-inset transition duration-150 ${
                               isSelected
-                                ? 'border-emerald-500 bg-emerald-500/[0.04] shadow-md shadow-emerald-500/5'
-                                : 'border-white/[0.04] hover:bg-white/[0.03] hover:border-white/10'
+                                ? 'bg-accent/[0.07] ring-accent/30'
+                                : 'bg-foreground/[0.02] ring-border-color hover:bg-foreground/[0.04]'
                             }`}
                           >
+                            <button
+                              type="button"
+                              onClick={() => loadPastDecision(dec)}
+                              className="rounded-xl text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            >
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-black font-mono text-emerald-400">{dec.symbol}</span>
-                                <span className="text-[8px] font-mono text-gray-600 tracking-wider">{dec.market}</span>
+                                <span className="font-mono text-xs font-black text-accent">{dec.symbol}</span>
+                                <span className="font-mono text-[8px] tracking-wider text-foreground/35">{dec.market}</span>
                               </div>
-                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md border ${
+                              <span className={`rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase ring-1 ring-inset ${
                                 dec.status === 'EXECUTED'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  ? 'bg-up/10 text-up ring-up/20'
                                   : dec.status === 'VETOED'
-                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+                                  ? 'bg-down/10 text-down ring-down/20'
+                                  : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300'
                               }`}>
                                 {dec.status === 'EXECUTED' ? (isAr ? 'تم التنفيذ' : 'EXECUTED') : dec.status === 'VETOED' ? (isAr ? 'فيتو شرعي' : 'VETOED') : (isAr ? 'مقترح' : 'PROPOSED')}
                               </span>
                             </div>
-                            <div className="flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                            <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-foreground/45">
                               <span>
-                                {isAr ? 'الإجراء النهائي:' : 'Action:'} <strong className="text-white">{dec.finalAction}</strong>
+                                {isAr ? 'الإجراء النهائي:' : 'Action:'} <strong className="text-foreground">{dec.finalAction}</strong>
                               </span>
                               <span>{new Date(dec.createdAt).toLocaleDateString(locale)}</span>
                             </div>
+                            </button>
 
                             {dec.status === 'PROPOSED' && (
                               <button
@@ -1099,7 +1122,7 @@ export default function CommitteeClient({
                                   executeProposed(dec.id);
                                 }}
                                 disabled={executeLoading === dec.id}
-                                className="mt-1 w-full py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all disabled:opacity-50"
+                                className="mt-1 flex min-h-9 w-full items-center justify-center gap-1 rounded-xl bg-up py-1.5 text-[9px] font-black uppercase tracking-wider text-white transition duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-up disabled:opacity-50"
                               >
                                 {executeLoading === dec.id ? (
                                   <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -1115,7 +1138,7 @@ export default function CommitteeClient({
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </>
