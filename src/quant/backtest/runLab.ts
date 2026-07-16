@@ -1221,7 +1221,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     });
     comparison = buildHistoricalComparisonEvidence({
       strategyCurve: curve,
-      oosStart: curve[oosStart]?.ts ?? curve.at(-1)!.ts,
+      // Guarded: an empty curve must degrade to a null comparison, never throw a raw
+      // "reading 'ts'" out of the benchmark block.
+      oosStart: curve[oosStart]?.ts ?? curve.at(-1)?.ts ?? new Date(`${to}T00:00:00.000Z`),
       benchmarkBars: benchmarkRows.flatMap((row) => (
         (row.symbol === 'SPY' || row.symbol === 'SPUS') && (row.source === 'YAHOO' || row.source === 'ALPACA')
           ? [{ symbol: row.symbol, ts: row.ts, close: Number(row.close), source: row.source }]

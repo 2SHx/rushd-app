@@ -387,6 +387,8 @@ interface PendingDirectionalOrder {
   grossExposureScalar: number;
   /** Present only for the new continuous fixed-cap path; undefined preserves legacy/v3 fills. */
   targetGrossFraction?: number;
+  /** True when this directional order was derived from a target-weight rebalance (see effectiveLimits). */
+  fromTarget?: boolean;
 }
 
 interface PendingTargetOrder {
@@ -690,6 +692,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
         atr: order.atr,
         adv: order.adv,
         grossExposureScalar: order.grossExposureScalar,
+        fromTarget: true,
       }];
     });
 
@@ -709,11 +712,20 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           adv: order.adv,
           stopPrice: bar.open.minus(order.atr.mul(2)),
         };
-        const effectiveLimits = input.policy ? {
+        const baseLimits = input.policy ? {
           ...input.limits,
           maxOpenPositions: input.policy.maxOpenPositions,
           maxGrossExposure: Math.min(input.limits.maxGrossExposure, order.grossExposureScalar),
         } : input.limits;
+        // A deterministic target-weight rebalance sizes exposure through its own weights (summed
+        // ≤ 100%, per-name capped); the discretionary drawdown breaker — a control for opportunistic
+        // single-name entries — must NOT gate it. If it did, blocked buys alongside still-firing
+        // target-driven sells ratchet the book one-way into cash, and once flat the drawdown never
+        // falls back below the halt (peakNav frozen) so the breaker locks on forever (a deadlock:
+        // FULL 2018+ wide book, 30%+ 2022 drawdown → permanent cash). Every other cap still applies.
+        const effectiveLimits = order.fromTarget
+          ? { ...baseLimits, drawdownHaltPct: Number.POSITIVE_INFINITY }
+          : baseLimits;
         const executionPrice = action === 'SELL'
           ? bar.open.minus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).minus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS))
           : bar.open.plus(bar.open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).plus(bar.open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS));
