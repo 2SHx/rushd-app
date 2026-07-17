@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M14 Dynamic Academy: diagnostic + LearnerProfile + adaptive Next-Up ✅ (deployed to Vercel)
+Shipped: 7-question bilingual zero-LLM diagnostic + deterministic scorer (src/academy/diagnostic), LearnerProfile migration on Neon + self-only profile API with 10s re-take cooldown + in-transaction signals aggregation, pure `nextUp` recommender (6 rules, never widens can() access), and the Academy onboarding stepper + max-5 Next-Up queue UI; three Vercel prod deploys (baseline flag-off slice → foundation → UI), latest `rushd-1pylosde3` lineage via `npx vercel deploy --prod`.
+Decisions: incomplete answer sets fall back to defaultProfile (no partial-answer persona skew); isChild persona ceiling in the scorer; persona framed as adjustable "starting path" (نقطة انطلاق) in both locales; signals read-back zod-guarded; MarketsClient got the four M13 workspace props (optional, unconsumed) to unblock `next build` type errors.
+Verify: qa PASS (7 code-read invariants), security PASS (3 LOW findings fixed), i18n/Sharia PASS zero edits, design findings (2 MEDIUM/4 LOW) fixed; lint/tsc/next build clean; focused vitest 97+10 tests; en/ar key identity intact.
+Open: no live-browser 390px/RTL walkthrough of the final fix pass — recommend one manual look at the held busy-state transition; scorer thresholds are first-pass calibration pending real answer distributions (OQ-12); pre-existing portfolio.test.ts stale-mark failures remain untriaged.
+
 ## 2026-07-17 — DR-19 adaptive Academy contract + Strategy-Teams presentation flag ✅
 Shipped: SYSTEM_DESIGN.md amended — DR-19 (LearnerProfile, zero-LLM 6–8-question diagnostic + deterministic `nextUp` recommender bounded by the DR-16/DR-17 `can()` guard), M14 milestone table, OQ-12, §4 LearnerProfile row; `SHOW_STRATEGY_TEAMS=false` in src/lib/featureFlags.ts hides the nav entry, quant hero card (+conditional grid, gated view-model fetch), StrategyLearningLab deep link, and 404s /quant/league — DR-14 engine/APIs/data untouched.
 Decisions: age never enters LearnerProfile (stays on parent-set User.ageSegment); persona is an adjustable "starting path", never psychometric; League hidden by presentation flag, not deletion — practiceLink invariant preserved; message keys "teams"/"teamsShort" retained for key identity.
