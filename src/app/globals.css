@@ -180,3 +180,21 @@ body {
     transition: opacity 0.15s ease;
   }
 }
+
+/* Institutional button interactive fill & active press transitions (ui-craft) */
+button, [role="button"], .btn {
+  position: relative;
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.15s ease-out;
+}
+
+button:hover:not(:disabled), [role="button"]:hover:not(:disabled), .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled), [role="button"]:active:not(:disabled), .btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+}
