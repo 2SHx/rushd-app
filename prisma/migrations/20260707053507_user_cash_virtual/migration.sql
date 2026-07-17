@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN     "cashVirtual" DECIMAL(18,4) NOT NULL DEFAULT 100000;
