@@ -6,7 +6,9 @@ export const QUIZ_TOPICS = [
   { id: 'shariaCompliance', topic: 'Sharia Compliance', level: 2 },
   { id: 'riskManagement', topic: 'Risk Management', level: 2 },
   { id: 'valueInvesting', topic: 'Value Investing', level: 2 },
+  { id: 'wealthGoals', topic: 'Wealth Goals & 50/30/20', level: 2 },
   { id: 'halalFunds', topic: 'Halal Mutual Funds', level: 3 },
+  { id: 'sukukDiversification', topic: 'Sukuk & Asset Allocation', level: 3 },
   { id: 'tasiMarkets', topic: 'TASI Markets', level: 3 },
   { id: 'nasdaqMarkets', topic: 'NASDAQ Markets', level: 3 },
 ] as const;
