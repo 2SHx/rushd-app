@@ -320,7 +320,7 @@ export const ADVANCED_ANALYSIS_TRACK: Track = {
           },
           body: {
             en: 'Bond prices and interest rates move inversely: when market rates rise, existing bonds with lower fixed coupons become less attractive, so their prices fall to bring their yield in line with the new market rate. Duration approximates a bond\'s price sensitivity to rate changes — a longer-duration bond swings more for the same rate move. This is standard interest-rate-risk mechanics, taught openly and tagged HARAM/EDUCATIONAL_ONLY because the underlying instrument is interest-based.',
-            ar: 'تتحرك أسعار السندات وأسعار الفائدة في اتجاهين متعاكسين: فعندما ترتفع أسعار الفائدة في السوق، تصبح السندات القائمة ذات الكوبونات الثابتة الأقل أقل جاذبية، فتنخفض أسعارها ليتماشى عائدها مع سعر السوق الجديد. تقيس "المدة" (Duration) تقريبياً حساسية سعر السند لتغيرات أسعار الفائدة — فالسند ذو المدة الأطول يتحرك أكثر عند نفس تغيّر السعر. هذه آلية قياسية لمخاطر أسعار الفائدة، تُدرَّس علناً وتحمل علامة "حرام/تعليمي فقط" لأن الأداة الأساسية قائمة على الفائدة.',
+            ar: 'تتحرك أسعار السندات وأسعار الفائدة في اتجاهين متعاكسين: فعندما ترتفع أسعار الفائدة في السوق، تصبح السندات القائمة ذات الكوبونات الثابتة المنخفضة أقل جاذبية، فتنخفض أسعارها ليتماشى عائدها مع سعر السوق الجديد. تقيس "المدة" (Duration) تقريبياً حساسية سعر السند لتغيرات أسعار الفائدة — فالسند ذو المدة الأطول يتحرك أكثر عند نفس تغيّر السعر. هذه آلية قياسية لمخاطر أسعار الفائدة، تُدرَّس علناً وتحمل علامة "حرام/تعليمي فقط" لأن الأداة الأساسية قائمة على الفائدة.',
           },
           complianceTag: 'HARAM',
           ageSegment: 'ADULTS',

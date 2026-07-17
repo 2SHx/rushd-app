@@ -132,7 +132,7 @@ export const ECONOMICS_TRACK: Track = {
           title: { en: 'What Is Inflation?', ar: 'ما هو التضخم؟' },
           summary: {
             en: 'A sustained rise in the general price level, and why 1-2% inflation feels different from 10%.',
-            ar: 'ارتفاع مستمر في المستوى العام للأسعار، ولماذا يختلف شعورنا بتضخم 1-2٪ عن تضخم 10٪.',
+            ar: 'ارتفاع مستمر في المستوى العام للأسعار، ولماذا يختلف شعورنا بتضخم 1-2% عن تضخم 10%.',
           },
           body: {
             en: 'Inflation is a sustained rise in the average price level across an economy, usually measured by a Consumer Price Index (CPI) basket of everyday goods. Mild inflation (a couple of percent a year) is normal in a growing economy; high inflation erodes what your money can buy far faster than most people notice month to month. Inflation is not the same as one product getting pricier — it is a broad, economy-wide drift.',
@@ -203,7 +203,7 @@ export const ECONOMICS_TRACK: Track = {
           },
           body: {
             en: 'If prices rise 3% a year and your savings earn 0%, your money buys 3% less each year — this is the "silent tax" of inflation. This is one reason families set savings goals with jars: a target amount today needs a plan, because the same nominal amount will not stretch as far tomorrow. Later in this track (and in the Foundations Islamic-finance units) you will meet Sharia-compliant ways to grow savings without using interest.',
-            ar: 'إذا ارتفعت الأسعار بنسبة 3٪ سنوياً بينما لم تحقق مدخراتك أي عائد، فإن قوتها الشرائية تنخفض 3٪ كل سنة — وهذا ما يُعرف بـ"الضريبة الصامتة" للتضخم. لهذا السبب تضع الأسر أهدافاً للادخار عبر الحصالات: فالمبلغ المستهدف اليوم يحتاج إلى خطة، لأن المبلغ الاسمي نفسه لن يكفي بالقدر ذاته غداً. لاحقاً في هذا المسار (وفي وحدات التمويل الإسلامي في مسار الأساسيات) ستتعرف على طرق متوافقة مع الشريعة لتنمية المدخرات دون استخدام الفائدة.',
+            ar: 'إذا ارتفعت الأسعار بنسبة 3% سنوياً بينما لم تحقق مدخراتك أي عائد، فإن قوتها الشرائية تنخفض 3% كل سنة — وهذا ما يُعرف بـ"الضريبة الصامتة" للتضخم. لهذا السبب تضع الأسر أهدافاً للادخار عبر الحصالات: فالمبلغ المستهدف اليوم يحتاج إلى خطة، لأن المبلغ الاسمي نفسه لن يكفي بالقدر ذاته غداً. لاحقاً في هذا المسار (وفي وحدات التمويل الإسلامي في مسار الأساسيات) ستتعرف على طرق متوافقة مع الشريعة لتنمية المدخرات دون استخدام الفائدة.',
           },
           complianceTag: 'EDUCATIONAL_ONLY',
           ageSegment: 'TEENS',
@@ -212,7 +212,7 @@ export const ECONOMICS_TRACK: Track = {
             id: 'econ-u2-inflation-saving-cp',
             question: {
               en: 'If prices rise 3% a year and idle savings earn nothing, the real purchasing power of those savings:',
-              ar: 'إذا ارتفعت الأسعار 3٪ سنوياً بينما لا تحقق المدخرات الخاملة أي عائد، فإن القوة الشرائية الحقيقية لتلك المدخرات:',
+              ar: 'إذا ارتفعت الأسعار 3% سنوياً بينما لا تحقق المدخرات الخاملة أي عائد، فإن القوة الشرائية الحقيقية لتلك المدخرات:',
             },
             options: [
               { en: 'Falls over time', ar: 'تنخفض مع الوقت' },
@@ -222,7 +222,7 @@ export const ECONOMICS_TRACK: Track = {
             correctOptionIndex: 0,
             explanation: {
               en: 'Idle cash earning 0% against 3% inflation loses about 3% of its buying power each year.',
-              ar: 'النقد الخامل الذي لا يحقق عائداً في مواجهة تضخم 3٪ يفقد نحو 3٪ من قوته الشرائية كل سنة.',
+              ar: 'النقد الخامل الذي لا يحقق عائداً في مواجهة تضخم 3% يفقد نحو 3% من قوته الشرائية كل سنة.',
             },
             complianceTag: 'EDUCATIONAL_ONLY',
           },
@@ -348,7 +348,7 @@ export const ECONOMICS_TRACK: Track = {
           title: { en: 'What Central Banks Do', ar: 'ماذا تفعل البنوك المركزية؟' },
           summary: {
             en: 'The Saudi Central Bank (SAMA), the US Federal Reserve, and why the peg links their decisions.',
-            ar: 'البنك المركزي السعودي (ساما)، ومجلس الاحتياطي الفيدرالي الأمريكي، ولماذا يربط الربط بينهما.',
+            ar: 'البنك المركزي السعودي (ساما)، ومجلس الاحتياطي الفيدرالي الأمريكي، ولماذا يربط ربط الريال بالدولار قراراتهما.',
           },
           body: {
             en: 'A central bank (SAMA in Saudi Arabia, the Federal Reserve in the US) manages a currency, oversees banks, and sets short-term interest-rate policy to influence borrowing, spending, and inflation. Because the Saudi Riyal is pegged to the US Dollar, SAMA closely tracks the Federal Reserve\'s rate moves to defend the peg — this is a structural, openly documented feature of the Saudi monetary system, not a coincidence.',
