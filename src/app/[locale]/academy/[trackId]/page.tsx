@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ArrowRight,
   BookOpen,
   CheckCircle2,
@@ -8,7 +7,6 @@ import {
   PlayCircle,
   Sparkles,
   Trophy,
-  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -71,7 +69,7 @@ export default async function AcademyTrackPage({
             {t('trackEyebrow')}
           </span>
           <span className="rounded-full bg-foreground/[0.06] px-3 py-1 font-mono text-xs font-bold text-foreground/75">
-            {completedCount}/{totalLessons} {language === 'ar' ? 'دروس ممتلئة' : 'lessons completed'}
+            {completedCount}/{totalLessons} {language === 'ar' ? 'دروس مكتملة' : 'lessons completed'}
           </span>
         </div>
 
@@ -82,7 +80,7 @@ export default async function AcademyTrackPage({
         {/* Progress Bar */}
         <div className="mt-6 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-foreground/70">
-            <span>{language === 'ar' ? 'مسار الإنجاز' : 'Journey Progress'}</span>
+            <span>{language === 'ar' ? 'مسار الإنجاز في الفصل' : 'Chapter Progress'}</span>
             <span className="font-mono text-accent tabular-nums">{progressPercent}%</span>
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
@@ -93,12 +91,12 @@ export default async function AcademyTrackPage({
           </div>
         </div>
 
-        {/* Start / Continue Button */}
+        {/* Start / Continue Hero CTA */}
         {activeLesson && (
           <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-foreground/[0.08] pt-6">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-accent rtl:tracking-normal">
-                {language === 'ar' ? '👉 خطوتك الحالية' : '👉 Your Current Step'}
+                {language === 'ar' ? '👉 ابدأ من هذه الخطوة الان' : '👉 Start Here Now'}
               </p>
               <p className="mt-1 text-base font-extrabold text-foreground">
                 {activeLesson.title[language]}
@@ -108,7 +106,7 @@ export default async function AcademyTrackPage({
               href={`/${params.locale}/academy/${track.id}/${activeLesson.unitId}/${activeLesson.id}`}
               className="group inline-flex items-center gap-2 rounded-2xl border border-accent bg-accent px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-all hover:scale-[1.02] hover:shadow-accent/40 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <span>{completedCount === 0 ? (language === 'ar' ? 'ابدأ رحلة التعلم' : 'Start Journey') : (language === 'ar' ? 'واصل التعلم الان' : 'Continue Learning')}</span>
+              <span>{completedCount === 0 ? (language === 'ar' ? 'ابدأ رحلة الفصل الان' : 'Start Chapter') : (language === 'ar' ? 'متابعة التعلم الان' : 'Continue Learning')}</span>
               <ArrowRight className="size-4 rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" aria-hidden="true" />
             </Link>
           </div>
@@ -135,7 +133,7 @@ export default async function AcademyTrackPage({
                     {unitCompleted && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-up/10 px-2.5 py-0.5 text-[10px] font-extrabold text-up">
                         <CheckCircle2 className="size-3" />
-                        {language === 'ar' ? 'مكتملة' : 'Completed'}
+                        {language === 'ar' ? 'مكتملة بالكامل' : 'Completed'}
                       </span>
                     )}
                   </div>
@@ -150,7 +148,7 @@ export default async function AcademyTrackPage({
               </div>
 
               {/* Duolingo Journey Nodes (Winding / Sequential Step Path) */}
-              <div className="relative mt-8 px-2 sm:px-6">
+              <div className="relative mt-8 px-2 sm:px-4">
                 {/* Connecting Path Line */}
                 <div
                   className="absolute bottom-6 top-6 start-8 sm:start-12 w-1 -translate-x-1/2 rounded-full bg-foreground/10 pointer-events-none"
@@ -187,73 +185,77 @@ export default async function AcademyTrackPage({
                           )}
                         </div>
 
-                        {/* Step Card Content */}
-                        <div
-                          className={`flex-1 rounded-2xl border p-5 transition-all duration-200 ${
+                        {/* Highly Clickable Interactive Step Card */}
+                        <Link
+                          href={`/${params.locale}/academy/${track.id}/${unit.id}/${lesson.id}`}
+                          className={`group/card flex-1 block rounded-2xl border-2 p-5 sm:p-6 transition-all duration-300 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                             isCurrent
-                              ? 'border-accent/40 bg-accent/[0.05] ring-2 ring-accent/20 shadow-md'
+                              ? 'border-accent bg-accent/[0.07] ring-4 ring-accent/15 shadow-lg shadow-accent/10'
                               : isDone
-                              ? 'border-up/30 bg-surface-card hover:border-up/60'
-                              : 'border-foreground/10 bg-surface-card/60 opacity-75 hover:opacity-100 hover:border-foreground/20'
+                              ? 'border-up/40 bg-surface-card hover:border-up hover:shadow-md'
+                              : 'border-accent/25 bg-surface-card hover:border-accent hover:shadow-md'
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-accent" dir="ltr">
-                                #{lessonIndex + 1}
+                              <span className="font-mono text-xs font-extrabold text-accent">
+                                {language === 'ar' ? `الدرس #${lessonIndex + 1}` : `Lesson #${lessonIndex + 1}`}
                               </span>
                               {isCurrent && (
-                                <span className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
-                                  {language === 'ar' ? '⚡ ابدأ من هنا' : '⚡ Start Here'}
+                                <span className="rounded-full bg-accent px-3 py-1 text-[10px] font-extrabold text-white shadow-md animate-pulse">
+                                  {language === 'ar' ? '⚡ الخطوة الحالية - ابدأ من هنا' : '⚡ Current Step - Start Here'}
                                 </span>
                               )}
                               {isDone && (
-                                <span className="rounded-full bg-up/10 px-2.5 py-0.5 text-[10px] font-bold text-up">
-                                  {language === 'ar' ? '✓ أكملت الدرس' : '✓ Finished'}
+                                <span className="rounded-full bg-up/15 border border-up/30 px-3 py-1 text-[10px] font-extrabold text-up">
+                                  {language === 'ar' ? '✓ أكملت الدرس (+20 XP)' : '✓ Completed (+20 XP)'}
                                 </span>
                               )}
                             </div>
-                            <span className="font-mono text-xs font-bold tabular-nums text-accent">
+                            <span className="rounded-full bg-accent/10 px-3 py-1 font-mono text-xs font-extrabold tabular-nums text-accent">
                               ⚡ +20 XP
                             </span>
                           </div>
 
-                          <h3 className="mt-2 text-lg font-bold text-foreground">
+                          <h3 className="mt-3 text-xl font-extrabold text-foreground group-hover/card:text-accent transition-colors">
                             {lesson.title[language]}
                           </h3>
-                          <p className="mt-1 text-xs leading-relaxed text-foreground/60">
+
+                          <p className="mt-2 text-xs sm:text-sm leading-relaxed text-foreground/70">
                             {lesson.summary[language]}
                           </p>
 
-                          <div className="mt-4 flex items-center justify-between pt-2">
-                            <Link
-                              href={`/${params.locale}/academy/${track.id}/${unit.id}/${lesson.id}`}
-                              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all duration-200 ${
+                          <div className="mt-5 border-t border-foreground/[0.08] pt-4">
+                            <div
+                              className={`inline-flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-5 py-3 text-xs sm:text-sm font-extrabold transition-all duration-200 ${
                                 isCurrent
-                                  ? 'bg-accent text-white shadow-md shadow-accent/20 hover:scale-[1.02]'
+                                  ? 'bg-accent text-white shadow-md shadow-accent/30 group-hover/card:bg-accent/90'
                                   : isDone
-                                  ? 'bg-foreground/[0.06] text-foreground hover:bg-foreground/10'
-                                  : 'bg-foreground/[0.04] text-foreground/60 hover:bg-foreground/10'
+                                  ? 'bg-up/10 text-up border border-up/30 group-hover/card:bg-up group-hover/card:text-white'
+                                  : 'bg-accent/10 text-accent border border-accent/30 group-hover/card:bg-accent group-hover/card:text-white'
                               }`}
                             >
-                              <span>
-                                {isCurrent
-                                  ? (language === 'ar' ? 'ابدأ الدرس الآن' : 'Start Lesson Now')
-                                  : isDone
-                                  ? (language === 'ar' ? 'مراجعة الدرس' : 'Review Lesson')
-                                  : (language === 'ar' ? 'فتح الدرس' : 'Open Lesson')}
+                              <span className="flex items-center gap-2">
+                                <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+                                <span>
+                                  {isCurrent
+                                    ? (language === 'ar' ? `اضغط هنا لبدء هذا الدرس الآن ⚡` : `Click here to start this lesson now ⚡`)
+                                    : isDone
+                                    ? (language === 'ar' ? `اضغط هنا لمراجعة الدرس` : `Click here to review lesson`)
+                                    : (language === 'ar' ? `اضغط هنا لبدء الدرس (+20 XP)` : `Click here to start lesson (+20 XP)`)}
+                                </span>
                               </span>
-                              <ArrowRight className="size-3.5 rtl:rotate-180" aria-hidden="true" />
-                            </Link>
+                              <ArrowRight className="size-4 shrink-0 rtl:rotate-180 transition-transform group-hover/card:translate-x-1.5 rtl:group-hover/card:-translate-x-1.5" aria-hidden="true" />
+                            </div>
                           </div>
-                        </div>
+                        </Link>
                       </li>
                     );
                   })}
                 </ol>
               </div>
 
-              {/* Practice / Applied Quiz Section */}
+              {/* Applied Quiz / Practice Links */}
               <PracticeLinks locale={params.locale} links={unit.practiceLinks} />
             </section>
           );
