@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — Academy story journey + quiz folded into Academy ✅ (deployed)
+Shipped: Academy landing restructured as progressive narrative — diagnostic beat → single loud "current step" hero → muted what's-ahead timeline → collapsible per-track Chapters (native details/summary, current track pre-expanded); new /academy/practice?topic= route embeds the existing QuizModal in Academy chrome (breadcrumb, inline pass/fail + retry-save, restart, continue-journey loop); quiz-kind practiceLinks repointed from /quiz; shared quizTopics module extracted.
+Decisions: story = presentation over the deterministic nextUp queue, never a new access rule; accessible content collapsed, never fake-locked; save-failure keeps the earned outcome visible with an actionable retry; /quiz remains functional.
+Verify: design gate (3 MEDIUM/2 LOW fixed), i18n/Sharia gate zero edits; lint/tsc/next build clean; vitest academy+adaptive+diagnostic 97; en/ar key identity.
+Open: no live-browser 390px/RTL walkthrough executed across these passes — one manual visual QA of academy + practice pages recommended; practice.title/eyebrow both read "Practice" (cosmetic).
+
 ## 2026-07-17 — M14 Dynamic Academy: diagnostic + LearnerProfile + adaptive Next-Up ✅ (deployed to Vercel)
 Shipped: 7-question bilingual zero-LLM diagnostic + deterministic scorer (src/academy/diagnostic), LearnerProfile migration on Neon + self-only profile API with 10s re-take cooldown + in-transaction signals aggregation, pure `nextUp` recommender (6 rules, never widens can() access), and the Academy onboarding stepper + max-5 Next-Up queue UI; three Vercel prod deploys (baseline flag-off slice → foundation → UI), latest `rushd-1pylosde3` lineage via `npx vercel deploy --prod`.
 Decisions: incomplete answer sets fall back to defaultProfile (no partial-answer persona skew); isChild persona ceiling in the scorer; persona framed as adjustable "starting path" (نقطة انطلاق) in both locales; signals read-back zod-guarded; MarketsClient got the four M13 workspace props (optional, unconsumed) to unblock `next build` type errors.
