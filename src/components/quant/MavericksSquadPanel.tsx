@@ -45,7 +45,7 @@ interface MavericksSquadPanelProps {
 }
 
 export default function MavericksSquadPanel({ locale, onRunFinished }: MavericksSquadPanelProps) {
-  const t = useTranslations('Markets');
+  const t = useTranslations('Quant');
   const isAr = locale === 'ar';
 
   const agentPool: AgentPersonality[] = [
