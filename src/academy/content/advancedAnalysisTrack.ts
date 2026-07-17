@@ -16,15 +16,15 @@ import type { Track } from '../schema';
 /** OQ-9 no-affiliation disclaimer — kept as one exported constant so the
  * colocated test can assert the exact text lives in the track content. */
 export const CFA_NO_AFFILIATION_DISCLAIMER_EN =
-  'This track is educational only and is not affiliated with, endorsed by, or sponsored by CFA Institute; "CFA-candidate level" describes depth of content, not a credential.';
+  'This track is educational only and is not affiliated with, endorsed by, or sponsored by CFA Institute; it describes depth of content, not a credential.';
 export const CFA_NO_AFFILIATION_DISCLAIMER_AR =
-  'هذا المسار تعليمي فقط وغير تابع لمعهد CFA أو معتمد أو برعاية منه؛ عبارة "بمستوى مرشح CFA" تصف عمق المحتوى فقط وليست شهادة معتمدة.';
+  'هذا المسار تعليمي فقط وغير تابع لمعهد CFA أو معتمد أو برعاية منه؛ يصف عمق المحتوى فقط وليست شهادة معتمدة.';
 
 export const ADVANCED_ANALYSIS_TRACK: Track = {
   id: 'advanced-analysis',
   title: {
-    en: 'Advanced Financial Analysis (CFA-candidate level)',
-    ar: 'التحليل المالي المتقدم (بمستوى مرشح CFA)',
+    en: 'Advanced Financial Analysis',
+    ar: 'التحليل المالي المتقدم',
   },
   minimumAgeSegment: 'ADULTS',
   units: [
@@ -37,8 +37,8 @@ export const ADVANCED_ANALYSIS_TRACK: Track = {
           id: 'adv-u1-intro',
           title: { en: 'About This Track', ar: 'عن هذا المسار' },
           summary: {
-            en: 'What CFA-candidate level means here, and what it does not mean.',
-            ar: 'ماذا يعني مستوى مرشح CFA هنا، وماذا لا يعنيه.',
+            en: 'What advanced financial analysis covers here, and how it works.',
+            ar: 'ماذا يغطي التحليل المالي المتقدم هنا، وكيف يعمل.',
           },
           body: {
             en: `${CFA_NO_AFFILIATION_DISCLAIMER_EN} This track goes deeper than Foundations and Economics: financial statements, valuation models, fixed income, portfolio theory, and derivatives awareness, all still framed by Rushd's own Sharia stance (DR-5) — every non-compliant mechanic is taught openly and labeled, never hidden and never executed by the app.`,
@@ -50,8 +50,8 @@ export const ADVANCED_ANALYSIS_TRACK: Track = {
           checkpoint: {
             id: 'adv-u1-intro-cp',
             question: {
-              en: '"CFA-candidate level" in this track\'s title means:',
-              ar: 'عبارة "بمستوى مرشح CFA" في عنوان هذا المسار تعني:',
+              en: 'The depth of content in this track means:',
+              ar: 'عمق المحتوى في هذا المسار يعني:',
             },
             options: [
               { en: 'A depth-of-content description, with no CFA Institute affiliation or endorsement', ar: 'وصف لعمق المحتوى، دون أي تبعية أو اعتماد من معهد CFA' },
