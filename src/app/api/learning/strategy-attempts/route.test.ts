@@ -50,12 +50,14 @@ vi.mock('@/quant/learning/strategyLearningReplay', () => ({
   loadTomOverlayLearningFixture: () => loadFixture(),
   loadDualMomentumRotationLearningFixture: () => loadFixture(),
   loadStocksInPlayOrbLearningFixture: () => loadFixture(),
+  loadVwapReclaimLearningFixture: () => loadFixture(),
   replayBollingerMrLongV2LearningPolicy: (...args: unknown[]) => replay(...args),
   replayTsMomentumHalalBasketV2LearningPolicy: (...args: unknown[]) => replay(...args),
   replayTsMomentumHalalBasketV3LearningPolicy: (...args: unknown[]) => replay(...args),
   replayTomOverlayLearningPolicy: (...args: unknown[]) => replay(...args),
   replayDualMomentumRotationLearningPolicy: (...args: unknown[]) => replay(...args),
   replayStocksInPlayOrbLearningPolicy: (...args: unknown[]) => replay(...args),
+  replayVwapReclaimLearningPolicy: (...args: unknown[]) => replay(...args),
 }));
 
 vi.mock('@/services/strategyLearningMastery', async importOriginal => {

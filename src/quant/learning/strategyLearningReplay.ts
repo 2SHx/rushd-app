@@ -46,6 +46,11 @@ import {
   type SourcedMinuteRow,
   type StocksInPlayOrbParams,
 } from '../strategies/stocksInPlayOrb';
+import {
+  VWAP_RECLAIM_V1,
+  vwapReclaimSetup,
+  type VwapReclaimParams,
+} from '../strategies/vwapReclaim';
 import type { StrategySetup } from '../strategies/types';
 import {
   compileBollingerMrLongV2Policy,
@@ -56,6 +61,7 @@ import { compileTsMomentumHalalBasketV3Policy } from './tsMomentumHalalBasketV3C
 import { compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import { compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 import { compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
+import { compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -74,6 +80,7 @@ const TS_MOMENTUM_V3_FIXTURE_VERSION = 'ts-momentum-halal-basket-v3.learning-rep
 const TOM_OVERLAY_FIXTURE_VERSION = 'tom-overlay.learning-replay.v1';
 const DUAL_MOMENTUM_FIXTURE_VERSION = 'dual-momentum-rotation.learning-replay.v1';
 const STOCKS_IN_PLAY_FIXTURE_VERSION = 'stocks-in-play-orb.learning-replay.v1';
+const VWAP_RECLAIM_FIXTURE_VERSION = 'vwap-reclaim.learning-replay.v1';
 const intradayReplayCache = new WeakMap<object, Map<string, StrategyLearningReplayResult>>();
 
 const barSchema = z.tuple([
@@ -319,8 +326,24 @@ export function loadDualMomentumRotationLearningFixture(): BollingerLearningRepl
 }
 
 export function loadStocksInPlayOrbLearningFixture(): IntradayLearningReplayFixture {
-  const raw: unknown = JSON.parse(fs.readFileSync(fixturePath(STOCKS_IN_PLAY_FIXTURE_VERSION), 'utf8'));
-  return validateIntradayFixture(raw, STOCKS_IN_PLAY_FIXTURE_VERSION, STOCKS_IN_PLAY_UNIVERSE_V1);
+  return loadIntradayFixture(STOCKS_IN_PLAY_FIXTURE_VERSION);
+}
+
+function loadIntradayFixture(version: string): IntradayLearningReplayFixture {
+  const raw: unknown = JSON.parse(fs.readFileSync(fixturePath(version), 'utf8'));
+  const reference = fixtureReferenceSchema.safeParse(raw);
+  if (!reference.success) return validateIntradayFixture(raw, version, STOCKS_IN_PLAY_UNIVERSE_V1);
+  if (reference.data.fixtureVersion !== version) throw new Error('learning_fixture_reference_version_mismatch');
+  const source: unknown = JSON.parse(fs.readFileSync(fixturePath(reference.data.dataFixtureVersion), 'utf8'));
+  return validateIntradayFixture(
+    { ...intradayFixtureSchema.parse(source), fixtureVersion: version },
+    version,
+    STOCKS_IN_PLAY_UNIVERSE_V1,
+  );
+}
+
+export function loadVwapReclaimLearningFixture(): IntradayLearningReplayFixture {
+  return loadIntradayFixture(VWAP_RECLAIM_FIXTURE_VERSION);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -571,7 +594,11 @@ function intradayDayContext(
   return contexts;
 }
 
-function prepareIntradaySetup(fixture: IntradayLearningReplayFixture): void {
+function prepareIntradaySetup<P>(
+  fixture: IntradayLearningReplayFixture,
+  setup: StrategySetup<P>,
+): void {
+  if (!setup.prepareUniverse) return;
   const minuteRows: SourcedMinuteRow[] = fixture.series.flatMap(item => item.bars.map(
     ([ts, open, high, low, close, volume, session]) => ({
       symbol: item.symbol, ts: new Date(ts), open, high, low, close, volume, session, source: item.source,
@@ -586,16 +613,17 @@ function prepareIntradaySetup(fixture: IntradayLearningReplayFixture): void {
   if (prepared.excludedNonAlpacaMinute !== 0 || prepared.excludedUnsupportedDaily !== 0) {
     throw new Error('learning_fixture_unsupported_intraday_provenance');
   }
-  stocksInPlayOrbSetup.prepareUniverse?.({
+  setup.prepareUniverse({
     symbols: [...fixture.strategyUniverse],
     closesBySymbol: new Map(),
     stocksInPlayBook: prepared.book,
   });
 }
 
-function pooledIntradayTradeCurve(
+function pooledIntradayTradeCurve<P>(
   fixture: IntradayLearningReplayFixture,
-  params: StocksInPlayOrbParams,
+  setup: StrategySetup<P>,
+  params: P,
 ): { curve: EquityPoint[]; trades: number } {
   const start = asTimestamp(fixture.interval.start);
   const end = asTimestamp(fixture.interval.end);
@@ -603,7 +631,7 @@ function pooledIntradayTradeCurve(
   for (const symbol of fixture.strategyUniverse) {
     const bars = intradayBars(fixture, symbol);
     const simulation = simulateIntraday({
-      setup: stocksInPlayOrbSetup,
+      setup,
       params,
       symbol,
       market: 'NASDAQ',
@@ -902,11 +930,11 @@ export function replayStocksInPlayOrbLearningPolicy(
   const policy = compileStocksInPlayOrbPolicy(answers);
   const cached = intradayReplayCache.get(inputFixture)?.get(policy.policyHash);
   if (cached) return cached;
-  prepareIntradaySetup(fixture);
-  const learner = pooledIntradayTradeCurve(fixture, policy.params);
+  prepareIntradaySetup(fixture, stocksInPlayOrbSetup);
+  const learner = pooledIntradayTradeCurve(fixture, stocksInPlayOrbSetup, policy.params);
   const team = JSON.stringify(policy.params) === JSON.stringify(STOCKS_IN_PLAY_ORB_V1)
     ? learner
-    : pooledIntradayTradeCurve(fixture, STOCKS_IN_PLAY_ORB_V1);
+    : pooledIntradayTradeCurve(fixture, stocksInPlayOrbSetup, STOCKS_IN_PLAY_ORB_V1);
   const result = assembleIntradayLearningReplay(
     { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
     fixture,
@@ -915,6 +943,38 @@ export function replayStocksInPlayOrbLearningPolicy(
   );
   const byPolicy = intradayReplayCache.get(inputFixture) ?? new Map<string, StrategyLearningReplayResult>();
   byPolicy.set(policy.policyHash, result);
+  intradayReplayCache.set(inputFixture, byPolicy);
+  return result;
+}
+
+export function replayVwapReclaimLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: IntradayLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateIntradayFixture(
+    inputFixture,
+    VWAP_RECLAIM_FIXTURE_VERSION,
+    STOCKS_IN_PLAY_UNIVERSE_V1,
+  );
+  const policy = compileVwapReclaimPolicy(answers);
+  const cacheKey = `${policy.setupId}:${policy.policyHash}`;
+  const cached = intradayReplayCache.get(inputFixture)?.get(cacheKey);
+  if (cached) return cached;
+  prepareIntradaySetup(fixture, vwapReclaimSetup);
+  const learner = pooledIntradayTradeCurve<VwapReclaimParams>(
+    fixture, vwapReclaimSetup, policy.params,
+  );
+  const team = JSON.stringify(policy.params) === JSON.stringify(VWAP_RECLAIM_V1)
+    ? learner
+    : pooledIntradayTradeCurve(fixture, vwapReclaimSetup, VWAP_RECLAIM_V1);
+  const result = assembleIntradayLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    learner,
+    team,
+  );
+  const byPolicy = intradayReplayCache.get(inputFixture) ?? new Map<string, StrategyLearningReplayResult>();
+  byPolicy.set(cacheKey, result);
   intradayReplayCache.set(inputFixture, byPolicy);
   return result;
 }

@@ -15,6 +15,7 @@ import {
 import { TOM_OVERLAY_CURRICULUM, compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import { DUAL_MOMENTUM_ROTATION_CURRICULUM, compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 import { STOCKS_IN_PLAY_ORB_CURRICULUM, compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
+import { VWAP_RECLAIM_CURRICULUM, compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
@@ -22,12 +23,14 @@ import {
   loadTomOverlayLearningFixture,
   loadDualMomentumRotationLearningFixture,
   loadStocksInPlayOrbLearningFixture,
+  loadVwapReclaimLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
   replayTomOverlayLearningPolicy,
   replayDualMomentumRotationLearningPolicy,
   replayStocksInPlayOrbLearningPolicy,
+  replayVwapReclaimLearningPolicy,
   type StrategyLearningFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
@@ -39,6 +42,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'tom-overlay',
   'dual-momentum-rotation',
   'stocks-in-play-orb',
+  'vwap-reclaim',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -108,6 +112,15 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     replay: (answers, fixture) => replayStocksInPlayOrbLearningPolicy(
       answers,
       fixture as ReturnType<typeof loadStocksInPlayOrbLearningFixture>,
+    ),
+  },
+  'vwap-reclaim': {
+    curriculum: VWAP_RECLAIM_CURRICULUM,
+    compile: compileVwapReclaimPolicy,
+    loadFixture: loadVwapReclaimLearningFixture,
+    replay: (answers, fixture) => replayVwapReclaimLearningPolicy(
+      answers,
+      fixture as ReturnType<typeof loadVwapReclaimLearningFixture>,
     ),
   },
 };

@@ -25,6 +25,7 @@ describe('Mavericks strategy-learning bridge', () => {
     expect(isStrategyLearningSetupId('tom-overlay')).toBe(true);
     expect(isStrategyLearningSetupId('dual-momentum-rotation')).toBe(true);
     expect(isStrategyLearningSetupId('stocks-in-play-orb')).toBe(true);
+    expect(isStrategyLearningSetupId('vwap-reclaim')).toBe(true);
     expect(isStrategyLearningSetupId('gapper-orb')).toBe(false);
   });
 

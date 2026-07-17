@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 VWAP Reclaim learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `vwap-reclaim`, exact v1 intraday-engine replay, registry/API dispatch, and a versioned descriptor over the frozen captured-real PIT snapshot.
+Decisions: reused the exact 11-name liquid universe, regular-session VWAP/absorption rules, inverse-vol hint, shared intraday risk/fills, and immutable real rows; REJECTED remains research-only, Sharia-unscreened, and execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 125 files / 906 tests; future/MOCK injections fail closed and all four normalized series align at 100.
+Open: two visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 Stocks-in-Play ORB learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `stocks-in-play-orb`, exact intraday-engine replay, registry/API dispatch, and a frozen captured-real PIT fixture with two sealed sessions plus the minimum real opening-range warm-up.
 Decisions: reused the setup's exact 11-name book, 14-session relative-volume reference, intraday risk/fill envelope, and immutable ALPACA/YAHOO rows; REJECTED remains research-only, Sharia-unscreened, and execution-blocked.
