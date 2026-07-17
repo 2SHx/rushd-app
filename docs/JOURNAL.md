@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 G6B wide-factor learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `g6b-linear-factor-wide`, exact memory-bounded v2 strategy-book replay, registry/API dispatch, and a gzip frozen real PIT fixture for the exact 2,473-name visible roster.
+Decisions: locked source run `26f5f132-6bdf-48be-9ad9-2d370642ef53` and roster hash over a 2024-11-01→2024-12-31 evidence interval; production tradable-union restriction plus shared daily risk/fills; REJECTED remains research-only, unscreened, and execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 127 files / 912 tests; future/MOCK injections fail closed and all four normalized series align.
+Open: L7 now covers every visible team; L8 universal evidence gate next. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 Stop-Hunt Reversal learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `stop-hunt-reversal-long`, exact v1 intraday-engine replay with prior-day-low preparation, registry/API dispatch, and a frozen PIT descriptor.
 Decisions: reused the exact 11-name book, real consolidated prior-day lows, sweep/reclaim and 2R-or-VWAP rules, inverse-vol hint, and shared intraday risk/fills; REJECTED remains research-only and execution-blocked.

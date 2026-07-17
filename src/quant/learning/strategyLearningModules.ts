@@ -17,6 +17,7 @@ import { DUAL_MOMENTUM_ROTATION_CURRICULUM, compileDualMomentumRotationPolicy } 
 import { STOCKS_IN_PLAY_ORB_CURRICULUM, compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 import { VWAP_RECLAIM_CURRICULUM, compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
 import { STOP_HUNT_REVERSAL_CURRICULUM, compileStopHuntReversalPolicy } from './stopHuntReversalCurriculum';
+import { G6B_LINEAR_FACTOR_WIDE_CURRICULUM, compileG6bLinearFactorWidePolicy } from './g6bLinearFactorWideCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
@@ -26,6 +27,7 @@ import {
   loadStocksInPlayOrbLearningFixture,
   loadVwapReclaimLearningFixture,
   loadStopHuntReversalLearningFixture,
+  loadG6bLinearFactorWideLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
@@ -34,6 +36,7 @@ import {
   replayStocksInPlayOrbLearningPolicy,
   replayVwapReclaimLearningPolicy,
   replayStopHuntReversalLearningPolicy,
+  replayG6bLinearFactorWideLearningPolicy,
   type StrategyLearningFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
@@ -47,6 +50,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'stocks-in-play-orb',
   'vwap-reclaim',
   'stop-hunt-reversal-long',
+  'g6b-linear-factor-wide',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -134,6 +138,15 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     replay: (answers, fixture) => replayStopHuntReversalLearningPolicy(
       answers,
       fixture as ReturnType<typeof loadStopHuntReversalLearningFixture>,
+    ),
+  },
+  'g6b-linear-factor-wide': {
+    curriculum: G6B_LINEAR_FACTOR_WIDE_CURRICULUM,
+    compile: compileG6bLinearFactorWidePolicy,
+    loadFixture: loadG6bLinearFactorWideLearningFixture,
+    replay: (answers, fixture) => replayG6bLinearFactorWideLearningPolicy(
+      answers,
+      fixture as ReturnType<typeof loadG6bLinearFactorWideLearningFixture>,
     ),
   },
 };

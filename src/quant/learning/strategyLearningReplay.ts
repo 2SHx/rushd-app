@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
@@ -51,6 +53,12 @@ import {
   type StopHuntReversalParams,
 } from '../strategies/stopHuntReversalLong';
 import {
+  G6B_LINEAR_FACTOR_WIDE_V2,
+  g6bLinearFactorWideBookPolicy,
+  g6bLinearFactorWideSetup,
+  type G6bLinearFactorWideParams,
+} from '../strategies/g6bLinearFactorWide';
+import {
   VWAP_RECLAIM_V1,
   vwapReclaimSetup,
   type VwapReclaimParams,
@@ -67,6 +75,7 @@ import { compileDualMomentumRotationPolicy } from './dualMomentumRotationCurricu
 import { compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 import { compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
 import { compileStopHuntReversalPolicy } from './stopHuntReversalCurriculum';
+import { compileG6bLinearFactorWidePolicy } from './g6bLinearFactorWideCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -87,7 +96,17 @@ const DUAL_MOMENTUM_FIXTURE_VERSION = 'dual-momentum-rotation.learning-replay.v1
 const STOCKS_IN_PLAY_FIXTURE_VERSION = 'stocks-in-play-orb.learning-replay.v1';
 const VWAP_RECLAIM_FIXTURE_VERSION = 'vwap-reclaim.learning-replay.v1';
 const STOP_HUNT_REVERSAL_FIXTURE_VERSION = 'stop-hunt-reversal-long.learning-replay.v1';
+const G6B_WIDE_FIXTURE_VERSION = 'g6b-linear-factor-wide.learning-replay.v1';
+const G6B_WIDE_SOURCE_RUN_ID = '26f5f132-6bdf-48be-9ad9-2d370642ef53';
+const G6B_WIDE_UNIVERSE_SIZE = 2_473;
+const G6B_WIDE_UNIVERSE_HASH = '9244fd2e5fad02ad80110fd3db49663361d6a6fb60f75ef7241c69e6412e4985';
+let loadedG6bWideFixture: BollingerLearningReplayFixture | null = null;
 const intradayReplayCache = new WeakMap<object, Map<string, StrategyLearningReplayResult>>();
+const dailyFixtureValidationCache = new WeakMap<object, {
+  version: string;
+  universeKey: string;
+  fixture: BollingerLearningReplayFixture;
+}>();
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -205,6 +224,7 @@ export interface StrategyLearningReplayResult {
     fillModel:
       | 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE'
       | 'INTRADAY_NEXT_OPEN_VOLATILITY_SLIPPAGE_10BPS_COMMISSION_PARTICIPATION_CAP';
+    sourceRunId?: string;
     sharia: {
       screened: false;
       source: 'none';
@@ -230,6 +250,11 @@ function validateFixture(
   expectedVersion: string,
   expectedUniverse: readonly string[],
 ): BollingerLearningReplayFixture {
+  const universeKey = expectedUniverse.join('\n');
+  if (input && typeof input === 'object') {
+    const cached = dailyFixtureValidationCache.get(input);
+    if (cached?.version === expectedVersion && cached.universeKey === universeKey) return cached.fixture;
+  }
   const fixture = fixtureSchema.parse(input);
   if (fixture.fixtureVersion !== expectedVersion) throw new Error('learning_fixture_version_mismatch');
   const start = asTimestamp(fixture.interval.start);
@@ -249,6 +274,20 @@ function validateFixture(
     || required.some(symbol => !symbols.includes(symbol))) {
     throw new Error('learning_fixture_series_mismatch');
   }
+  const warmup = asTimestamp(fixture.warmupStart);
+  for (const item of fixture.series) {
+    let previous = Number.NEGATIVE_INFINITY;
+    for (const [timestamp] of item.bars) {
+      const current = asTimestamp(timestamp);
+      if (current <= previous) throw new Error('learning_fixture_bars_not_chronological');
+      if (current < warmup) throw new Error('learning_fixture_bar_before_warmup');
+      if (current > end) throw new Error('learning_fixture_future_bar_outside_bounds');
+      previous = current;
+    }
+  }
+  const cached = { version: expectedVersion, universeKey, fixture };
+  if (input && typeof input === 'object') dailyFixtureValidationCache.set(input, cached);
+  dailyFixtureValidationCache.set(fixture, cached);
   return fixture;
 }
 
@@ -354,6 +393,20 @@ export function loadVwapReclaimLearningFixture(): IntradayLearningReplayFixture 
 
 export function loadStopHuntReversalLearningFixture(): IntradayLearningReplayFixture {
   return loadIntradayFixture(STOP_HUNT_REVERSAL_FIXTURE_VERSION);
+}
+
+export function loadG6bLinearFactorWideLearningFixture(): BollingerLearningReplayFixture {
+  if (loadedG6bWideFixture) return loadedG6bWideFixture;
+  const compressed = fs.readFileSync(path.join(FIXTURE_DIR, 'g6b-linear-factor-wide.learning-replay-v1.json.gz'));
+  const raw: unknown = JSON.parse(gunzipSync(compressed).toString('utf8'));
+  const header = z.object({ strategyUniverse: z.array(z.string().min(1)) }).passthrough().parse(raw);
+  const universeHash = createHash('sha256').update(header.strategyUniverse.join('\n')).digest('hex');
+  if (header.strategyUniverse.length !== G6B_WIDE_UNIVERSE_SIZE
+    || universeHash !== G6B_WIDE_UNIVERSE_HASH) {
+    throw new Error('wide_learning_fixture_universe_mismatch');
+  }
+  loadedG6bWideFixture = validateFixture(raw, G6B_WIDE_FIXTURE_VERSION, header.strategyUniverse);
+  return loadedG6bWideFixture;
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -465,6 +518,70 @@ function strategyBookCurve<P>(
       return exit >= start && exit <= end;
     }).length,
   };
+}
+
+function wideStrategyBookCurves(
+  fixture: BollingerLearningReplayFixture,
+  learnerParams: G6bLinearFactorWideParams,
+): {
+  learner: { curve: EquityPoint[]; trades: number };
+  team: { curve: EquityPoint[]; trades: number };
+} {
+  const replayScope = {};
+  const dailyBarsBySymbol = new Map(fixture.strategyUniverse.map(symbol => {
+    const bars = toBars(fixture, symbol);
+    return [symbol, bars.map(bar => ({
+      ts: bar.ts,
+      close: Number(bar.close),
+      volume: Number(bar.volume),
+    }))] as const;
+  }));
+  g6bLinearFactorWideSetup.prepareUniverse({
+    symbols: [...fixture.strategyUniverse],
+    replayScope,
+    closesBySymbol: new Map(),
+    dailyBarsBySymbol,
+  });
+  dailyBarsBySymbol.clear();
+  const engineSymbols = g6bLinearFactorWideSetup.tradableBookSymbols!(
+    replayScope,
+    [learnerParams, G6B_LINEAR_FACTOR_WIDE_V2],
+  );
+  const series = engineSymbols.map(symbol => ({
+    symbol,
+    market: 'NASDAQ' as const,
+    bars: toBars(fixture, symbol).map(bar => ({
+      ...bar,
+      source: fixture.series.find(item => item.symbol === symbol)!.source,
+    })),
+  }));
+  const calendar = toBars(fixture, 'SPY').map(bar => bar.ts);
+  const start = asTimestamp(fixture.interval.start);
+  const end = asTimestamp(fixture.interval.end);
+  const run = (params: G6bLinearFactorWideParams) => {
+    const result = simulateStrategyBook({
+      setup: g6bLinearFactorWideSetup,
+      params,
+      series,
+      calendar,
+      replayScope,
+      startingCash: STARTING_CASH,
+      limits: DEFAULT_BT_LIMITS,
+      policy: g6bLinearFactorWideBookPolicy(),
+    });
+    return {
+      curve: result.daily.map(point => ({ ts: point.ts, equity: Number(point.nav) })),
+      trades: result.tradeRecords.filter(record => {
+        const exit = record.exitTs.getTime();
+        return exit >= start && exit <= end;
+      }).length,
+    };
+  };
+  const learner = run(learnerParams);
+  const team = JSON.stringify(learnerParams) === JSON.stringify(G6B_LINEAR_FACTOR_WIDE_V2)
+    ? learner
+    : run(G6B_LINEAR_FACTOR_WIDE_V2);
+  return { learner, team };
 }
 
 function closeCurve(fixture: BollingerLearningReplayFixture, symbol: 'SPUS' | 'SPY'): EquityPoint[] {
@@ -1019,4 +1136,39 @@ export function replayStopHuntReversalLearningPolicy(
   byPolicy.set(cacheKey, result);
   intradayReplayCache.set(inputFixture, byPolicy);
   return result;
+}
+
+export function replayG6bLinearFactorWideLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: BollingerLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateFixture(
+    inputFixture,
+    G6B_WIDE_FIXTURE_VERSION,
+    inputFixture.strategyUniverse,
+  );
+  const universeHash = createHash('sha256').update(fixture.strategyUniverse.join('\n')).digest('hex');
+  if (fixture.strategyUniverse.length !== G6B_WIDE_UNIVERSE_SIZE
+    || universeHash !== G6B_WIDE_UNIVERSE_HASH) {
+    throw new Error('wide_learning_fixture_universe_mismatch');
+  }
+  const policy = compileG6bLinearFactorWidePolicy(answers);
+  const cacheKey = `${policy.setupId}:${policy.policyHash}`;
+  const cached = intradayReplayCache.get(inputFixture)?.get(cacheKey);
+  if (cached) return cached;
+  const curves = wideStrategyBookCurves(fixture, policy.params);
+  const result = assembleLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    curves.learner,
+    curves.team,
+  );
+  const replay = {
+    ...result,
+    provenance: { ...result.provenance, sourceRunId: G6B_WIDE_SOURCE_RUN_ID },
+  };
+  const byPolicy = intradayReplayCache.get(inputFixture) ?? new Map<string, StrategyLearningReplayResult>();
+  byPolicy.set(cacheKey, replay);
+  intradayReplayCache.set(inputFixture, byPolicy);
+  return replay;
 }
