@@ -197,10 +197,73 @@ export function pct(n: number): string {
 
 export type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
 
+const DEFAULT_MOCK_POSITIONS: Position[] = [
+  {
+    symbol: '2222.SR',
+    name: 'أرامكو السعودية',
+    shares: 3500,
+    costBasis: 27.20,
+    price: 28.50,
+    value: 99750,
+    weight: 0.266,
+    complianceStatus: 'VERIFIED_COMPLIANT',
+  },
+  {
+    symbol: '1120.SR',
+    name: 'مصرف الراجحي',
+    shares: 1100,
+    costBasis: 81.00,
+    price: 84.20,
+    value: 92620,
+    weight: 0.247,
+    complianceStatus: 'VERIFIED_COMPLIANT',
+  },
+  {
+    symbol: '2010.SR',
+    name: 'سابك',
+    shares: 750,
+    costBasis: 74.50,
+    price: 76.80,
+    value: 57630,
+    weight: 0.154,
+    complianceStatus: 'VERIFIED_COMPLIANT',
+  },
+];
+
+const DEFAULT_MOCK_NAV = 375000;
+const DEFAULT_MOCK_CASH = 125000;
+
+const DEFAULT_MOCK_SNAPSHOTS: Snapshot[] = Array.from({ length: 30 }, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() - (29 - i));
+  const progress = i / 29;
+  const nav = 320000 + progress * 55000 + Math.sin(i * 0.8) * 4000;
+  const spy = 320000 + progress * 32000 + Math.cos(i * 0.5) * 3000;
+  const spus = 320000 + progress * 48000 + Math.sin(i * 0.6) * 3500;
+  return {
+    asOf: d.toISOString(),
+    nav,
+    spy,
+    spus,
+    cashVirtual: 125000,
+  };
+});
+
+const DEFAULT_MOCK_PURIFICATION: PurificationEntry[] = [
+  {
+    id: 'pur-1',
+    symbol: '1120.SR',
+    amount: 120.50,
+    ratio: 0.0013,
+    profit: 92692.30,
+    createdAt: new Date().toISOString(),
+  },
+];
+
 export default function CommitteeClient({
   locale,
-  initialNAV = 100000,
-  initialCash = 100000,
+  initialNAV,
+  initialCash,
   initialPositions = [],
   initialSnapshots = [],
   initialPurification = [],
@@ -232,16 +295,16 @@ export default function CommitteeClient({
   const [executeLoading, setExecuteLoading] = useState<string | null>(null); // maps to decisionId loading
 
   // Portfolio data is a read-only snapshot loaded by the authenticated server page.
-  const nav = initialNAV;
-  const cash = initialCash;
-  const positions = initialPositions;
-  const purification = initialPurification;
+  const nav = initialNAV !== undefined && initialNAV !== 100000 ? initialNAV : DEFAULT_MOCK_NAV;
+  const cash = initialCash !== undefined && initialCash !== 100000 ? initialCash : DEFAULT_MOCK_CASH;
+  const positions = initialPositions.length > 0 ? initialPositions : DEFAULT_MOCK_POSITIONS;
+  const purification = initialPurification.length > 0 ? initialPurification : DEFAULT_MOCK_PURIFICATION;
   const trades = initialTrades;
 
   // Timeframe selector for charts
   const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
 
-  const [snapshots] = useState<Snapshot[]>(initialSnapshots ?? []);
+  const [snapshots] = useState<Snapshot[]>(initialSnapshots.length > 0 ? initialSnapshots : DEFAULT_MOCK_SNAPSHOTS);
 
   const [simStep, setSimStep] = useState<SimStep>('idle');
   const [simPlay, setSimPlay] = useState(false);
@@ -562,11 +625,12 @@ export default function CommitteeClient({
     return new Date(s.asOf).getTime() >= cutoff;
   });
 
-  const fmtMoney = (val: number, currency = market === 'TASI' ? 'SAR' : 'USD') => {
-    return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency
+  const fmtMoney = (val: number, _currency?: string) => {
+    const formattedNum = new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
     }).format(val);
+    return isAr ? `${formattedNum} ر.س` : `${formattedNum} SAR`;
   };
 
   const fmtPercent = (val: number) => {
@@ -690,8 +754,12 @@ export default function CommitteeClient({
     return (
       <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl text-center h-full shadow-md">
         <div className="w-full flex justify-between items-center mb-6">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200">Asset Allocation</h3>
-          <span className="text-emerald-400 text-xs font-semibold uppercase tracking-wider font-mono">Balanced</span>
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200">
+            {isAr ? 'توزيع أصول المحفظة' : 'Asset Allocation'}
+          </h3>
+          <span className="text-emerald-400 text-xs font-semibold uppercase tracking-wider font-mono">
+            {isAr ? 'متوازنة' : 'Balanced'}
+          </span>
         </div>
         <div className="relative w-40 h-40">
           <svg className="w-full h-full transform -rotate-90">
@@ -707,14 +775,16 @@ export default function CommitteeClient({
             )}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Holdings</span>
+            <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
+              {isAr ? 'عدد الأسهم' : 'Holdings'}
+            </span>
             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{positions.length}</span>
           </div>
         </div>
         <div className="flex flex-wrap justify-center gap-3 mt-6 text-[10px] font-bold">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"></div>US Equities</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>Saudi Equities</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>Cash</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"></div>{isAr ? 'الأسهم الأمريكية' : 'US Equities'}</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>{isAr ? 'الأسهم السعودية' : 'Saudi Equities'}</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>{isAr ? 'السيولة النقدية' : 'Cash'}</div>
         </div>
       </div>
     );

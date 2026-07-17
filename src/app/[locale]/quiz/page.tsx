@@ -114,7 +114,7 @@ export default function QuizListPage({
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>{locale === 'ar' ? 'محاكاة ساحة المستشار واللجنة' : 'AI Committee Learning Arena'}</span>
+          <span>{locale === 'ar' ? 'مساحة عمل فريق اللجنة' : 'Committee Advisory Workspace'}</span>
         </button>
       </div>
 

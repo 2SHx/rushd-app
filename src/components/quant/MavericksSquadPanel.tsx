@@ -23,6 +23,7 @@ import {
 interface AgentPersonality {
   id: string;
   name: string;
+  nameAr: string;
   titleEn: string;
   titleAr: string;
   archetypeEn: string;
@@ -52,6 +53,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'QUANT_CORE',
       name: 'Quant Core',
+      nameAr: 'خبير الخوارزميات',
       titleEn: 'The Algo Arbitrageur',
       titleAr: 'خبير الخوارزميات الكمية',
       archetypeEn: 'Statistical Arbitrage',
@@ -70,6 +72,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'TECHNICAL',
       name: 'Trend Surfer',
+      nameAr: 'محلل الاتجاه',
       titleEn: 'The Momentum Maverick',
       titleAr: 'فارس الزخم والاتجاهات',
       archetypeEn: 'Momentum Breakout',
@@ -88,6 +91,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'SHARIA',
       name: 'Halal Guardian',
+      nameAr: 'المستشار الشرعي',
       titleEn: 'The Sharia Gatekeeper',
       titleAr: 'حارس التوافق الشرعي',
       archetypeEn: 'AAOIFI Audit Veto',
@@ -106,6 +110,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'NEWS_CATALYST',
       name: 'Sentiment Radar',
+      nameAr: 'رادار الأخبار',
       titleEn: 'The Hype Architect',
       titleAr: 'رادار الأخبار والمحفزات',
       archetypeEn: 'Catalyst & NLP Detector',
@@ -124,6 +129,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'FUNDAMENTAL',
       name: 'Value Anchor',
+      nameAr: 'محلل القيمة',
       titleEn: 'The Fundamental Guru',
       titleAr: 'مرساة التقييم والبيانات',
       archetypeEn: 'DCF & Balance Sheet Anchor',
@@ -142,6 +148,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'PORTFOLIO_MANAGER',
       name: 'General Commander',
+      nameAr: 'مدير المحفظة',
       titleEn: 'The Risk Commander',
       titleAr: 'قائد المخاطر وإدارة المحفظة',
       archetypeEn: 'Position Sizing & Circuit-Breaker',
@@ -160,6 +167,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'RESEARCH',
       name: 'Academic Scholar',
+      nameAr: 'الباحث الأكاديمي',
       titleEn: 'The Literature Researcher',
       titleAr: 'باحث الدراسات والمنشورات',
       archetypeEn: 'Peer-Reviewed Factor RAG',
@@ -178,6 +186,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
     {
       id: 'PATTERN_ANALOG',
       name: 'Shield Warden',
+      nameAr: 'محلل الأنماط',
       titleEn: 'The Pattern Analogist',
       titleAr: 'محلل الأنماط التاريخية',
       archetypeEn: 'Historical Dynamic Warping',
@@ -379,7 +388,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
 
                     <div className="space-y-0.5">
                       <h4 className="font-extrabold text-sm text-foreground flex items-center gap-1.5">
-                        <span>{agent.name}</span>
+                        <span>{isAr ? agent.nameAr : agent.name}</span>
                         <Icon className="w-3.5 h-3.5 text-accent" />
                       </h4>
                       <p className="text-[11px] text-accent font-semibold">{isAr ? agent.titleAr : agent.titleEn}</p>
@@ -417,11 +426,15 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
                   <div className="space-y-1 p-2 rounded-xl bg-foreground/[0.02] border border-foreground/[0.04]">
                     <div className="flex justify-between text-foreground/60">
                       <span>{t('executionSpeed')}</span>
-                      <span className="font-mono font-bold text-purple-400">{agent.speed}</span>
+                      <span className="font-mono font-bold text-purple-400">
+                        {isAr
+                          ? { Instant: 'فوري', 'Ultra-Fast': 'فائق السرعة', Fast: 'سريع', Strategic: 'استراتيجي' }[agent.speed]
+                          : agent.speed}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-1 rtl:space-x-reverse text-[10px] font-bold text-amber-500">
                       <Zap className="w-3 h-3 fill-current" />
-                      <span>{agent.winRate}% Win</span>
+                      <span>{isAr ? `%${agent.winRate} نجاح` : `${agent.winRate}% Win`}</span>
                     </div>
                   </div>
                 </div>
