@@ -4,7 +4,20 @@ import { prisma } from '@/lib/prisma';
 import { filterAcademyTracks } from './academyAccess';
 
 export type AcademyProgressItem = { trackId: string; unitId: string; lessonId: string; status: string; score: number | null };
-export type AcademyServerState = { state: 'ready'; tracks: Track[]; progress: AcademyProgressItem[] } | { state: 'error' };
+export type AcademyServerState = { state: 'ready'; tracks: Track[]; progress: AcademyProgressItem[]; isChild: boolean } | { state: 'error' };
+
+export type LearnerProfileData = { persona: string; skillLevel: number } | null;
+
+/** DR-19: the caller's own diagnostic profile only (self-only route mirrors this). */
+export async function loadLearnerProfile(): Promise<LearnerProfileData> {
+  const session = await auth();
+  if (!session?.user) return null;
+  const profile = await prisma.learnerProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { persona: true, skillLevel: true },
+  });
+  return profile;
+}
 
 export async function loadAcademy(): Promise<AcademyServerState> {
   const session = await auth();
@@ -20,7 +33,7 @@ export async function loadAcademy(): Promise<AcademyServerState> {
     }
     const tracks = filterAcademyTracks(ACADEMY_TRACKS, { tier, role: session.user.role, ageSegment });
     const progress = await prisma.academyProgress.findMany({ where: { userId: session.user.id }, select: { trackId: true, unitId: true, lessonId: true, status: true, score: true } });
-    return { state: 'ready', tracks, progress };
+    return { state: 'ready', tracks, progress, isChild: session.user.role === 'CHILD' };
   } catch (error) {
     console.error('Academy server load failed:', error);
     return { state: 'error' };

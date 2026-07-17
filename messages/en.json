@@ -51,7 +51,43 @@
     "errorTitle": "Academy could not be loaded",
     "errorBody": "We could not verify this learner's access or progress. Nothing has been exposed; try again shortly.",
     "retry": "Try again",
-    "compliance": { "HALAL": "Sharia-aligned concept", "HARAM": "Non-compliant concept · education only", "MASHBOOH": "Requires Sharia review", "EDUCATIONAL_ONLY": "Education only" }
+    "compliance": { "HALAL": "Sharia-aligned concept", "HARAM": "Non-compliant concept · education only", "MASHBOOH": "Requires Sharia review", "EDUCATIONAL_ONLY": "Education only" },
+    "diagnostic": {
+      "inviteEyebrow": "Starting path",
+      "inviteTitle": "Set your starting path",
+      "inviteBody": "Answer 7 quick questions so your lesson queue starts in the right place. You can skip and start from a default path, and retake this anytime — it's never a label, just an adjustable starting point.",
+      "start": "Start",
+      "skip": "Skip for now",
+      "eyebrow": "Starting-path questions",
+      "stepOf": "Question {step} of {total}",
+      "back": "Back",
+      "close": "Close",
+      "chipEyebrow": "Your starting path",
+      "retake": "Retake",
+      "changePath": "Change path",
+      "cooldownNotice": "Your starting path was just updated. You can retake it again in a few seconds.",
+      "errorNotice": "Your starting path could not be saved. Check your connection and try again.",
+      "retryAction": "Try again",
+      "personas": {
+        "CURIOUS_KID": "Curious Explorer",
+        "TEEN_SAVER": "Teen Saver",
+        "ADULT_BEGINNER": "New Investor",
+        "ADULT_PRACTITIONER": "Practicing Investor",
+        "QUANT_CANDIDATE": "Quant Track"
+      }
+    },
+    "nextUp": {
+      "title": "Next up",
+      "subtitle": "Reordered from the lessons already available to you — never widened beyond your plan.",
+      "emptyTitle": "No lessons queued yet",
+      "emptyBody": "Set your starting path or open a lesson to build your queue.",
+      "reason": {
+        "continue": "Continue",
+        "review": "Review",
+        "advance": "Next lesson",
+        "practice": "Practice"
+      }
+    }
   },
   "Landing": {
     "title": "Rushd Financial",
