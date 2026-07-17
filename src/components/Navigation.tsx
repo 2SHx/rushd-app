@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Wallet, LineChart, BookOpen, GraduationCap, User, Sparkles } from 'lucide-react';
+import { Wallet, LineChart, GraduationCap, User, Trophy } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from './ThemeToggle';
@@ -38,7 +38,7 @@ export default function Navigation({
     { href: `/${locale}/dashboard`, icon: Wallet, label: t('portfolio'), shortLabel: t('portfolio') },
     { href: `/${locale}/markets`, icon: LineChart, label: t('stocks'), shortLabel: t('stocks') },
     { href: `/${locale}/academy`, icon: GraduationCap, label: t('academy'), shortLabel: t('academyShort') },
-    { href: `/${locale}/quiz`, icon: BookOpen, label: t('quizzes'), shortLabel: t('quizzes') },
+    { href: `/${locale}/quant/league`, icon: Trophy, label: t('teams'), shortLabel: t('teamsShort') },
     { href: `/${locale}/profile`, icon: User, label: t('profile'), shortLabel: t('profile') },
   ];
 
