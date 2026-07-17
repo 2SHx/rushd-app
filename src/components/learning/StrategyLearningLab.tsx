@@ -19,7 +19,7 @@ import {
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import type { StrategyLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
-import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningModules';
+import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningSetupIds';
 import StrategyLearningComparisonChart from './StrategyLearningComparisonChart';
 import StrategyMasteryRevisit, { type StrategyMasteryState } from './StrategyMasteryRevisit';
 

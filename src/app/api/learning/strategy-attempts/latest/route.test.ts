@@ -92,6 +92,21 @@ describe('latest strategy learning attempt API', () => {
     expect(data).not.toHaveProperty('result');
   });
 
+  it("does not reuse another team's completion for the selected team", async () => {
+    const response = await GET(new Request(
+      'http://localhost/api/learning/strategy-attempts/latest?setupId=tom-overlay&summary=1',
+    ));
+
+    expect(response.status).toBe(204);
+    expect(attemptFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        userId: 'child-1',
+        setupId: 'tom-overlay',
+        result: { isNot: null },
+      }),
+    }));
+  });
+
   it('fails closed when a strategy has no reviewed learning module', async () => {
     const response = await GET(new Request(
       'http://localhost/api/learning/strategy-attempts/latest?setupId=gapper-orb&summary=1',

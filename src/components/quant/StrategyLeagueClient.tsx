@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
-import { isStrategyLearningSetupId } from '@/quant/learning/strategyLearningModules';
+import { isStrategyLearningSetupId } from '@/quant/learning/strategyLearningSetupIds';
 import HistoricalComparisonChart from './HistoricalComparisonChart';
 
 interface StrategyLeagueClientProps {
@@ -20,7 +20,7 @@ type DateFormatter = (value: string) => string;
 type PerformanceRow = { label: string; hint: string; full: string; oos: string };
 
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
-type LearningGateStatus = 'checking' | 'locked' | 'unlocked' | 'error' | 'unavailable';
+type LearningGateStatus = 'checking' | 'locked' | 'unlocked' | 'error';
 
 // Sharia state -> {icon, semantic token}. Only VERIFIED_NON_COMPLIANT gets the
 // noncompliant (amber) token per DR-12; unscreened states are neutral, not amber.
@@ -130,12 +130,6 @@ function TeamLearningGate({
         </div>
       ) : null}
 
-      {status === 'unavailable' ? (
-        <div className="mt-5 rounded-2xl bg-foreground/[0.035] p-4">
-          <p className="text-sm font-semibold">{t('learningGate.pendingTitle')}</p>
-          <p className="mt-1 text-xs leading-relaxed text-foreground/60">{t('learningGate.pendingBody')}</p>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -691,7 +685,6 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   const selectedTeamRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
   const selected = teams.find(team => team.runId === selectedRunId) ?? rankedTeams[0];
-  const selectedHasLearningModule = selected ? isStrategyLearningSetupId(selected.setupId) : false;
 
   useEffect(() => {
     const requestedSetupId = searchParams.get('setup');
@@ -703,7 +696,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   useEffect(() => {
     if (!selected) return;
     if (!isStrategyLearningSetupId(selected.setupId)) {
-      setLearningGateStatus('unavailable');
+      setLearningGateStatus('error');
       return;
     }
 
@@ -856,7 +849,7 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
         />
       </div>
 
-      {!selectedHasLearningModule || learningGateStatus === 'unlocked' ? (
+      {learningGateStatus === 'unlocked' ? (
         <>
           <TeamPerformanceDetail
             key={selected.runId}

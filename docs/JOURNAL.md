@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L8 universal league learning gate ✅
+Shipped: every one of the nine visible league teams now routes to its exact lesson, while detailed metrics, historical comparison, and trade ledger render only after that setup's sealed result.
+Decisions: removed the unsupported-team evidence bypass, kept unknown future setups fail-closed, and split client-safe setup IDs from the server replay registry so gzip/hash validation never enters the browser bundle.
+Verify: focused 11/11; lint and TypeScript clean; en/ar 898-key identity; full Vitest 127 files / 913 tests; en desktop 1440×900 and ar RTL mobile 390×844 direct-URL/keyboard walkthroughs passed without overflow or console errors.
+Open: M10 L7+L8 complete for the enumerated visible roster. Protected DR-14 terminal-period evidence run was not executed.
+
 ## 2026-07-17 — M10-L7 G6B wide-factor learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `g6b-linear-factor-wide`, exact memory-bounded v2 strategy-book replay, registry/API dispatch, and a gzip frozen real PIT fixture for the exact 2,473-name visible roster.
 Decisions: locked source run `26f5f132-6bdf-48be-9ad9-2d370642ef53` and roster hash over a 2024-11-01→2024-12-31 evidence interval; production tradable-union restriction plus shared daily risk/fills; REJECTED remains research-only, unscreened, and execution-blocked.
