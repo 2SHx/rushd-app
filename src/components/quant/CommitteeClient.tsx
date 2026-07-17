@@ -794,7 +794,7 @@ export default function CommitteeClient({
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
       {initialInternalPortfolioAvailable ? (
-        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.04] p-1 sm:w-fit" role="tablist" aria-label={t('committeeTab')}>
+        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.04] p-1 sm:w-fit" role="tablist" aria-label={isAr ? 'أقسام اللجنة' : 'Committee Sections'}>
           <>
             <button
               type="button"
@@ -808,7 +808,7 @@ export default function CommitteeClient({
               }`}
             >
               <Cpu className="size-3.5 text-accent" aria-hidden="true" />
-              <span>{t('committeeTab')}</span>
+              <span>{isAr ? 'لوحة قرار اللجنة' : 'Committee Pipeline Board'}</span>
             </button>
             <button
               type="button"
@@ -822,7 +822,7 @@ export default function CommitteeClient({
               }`}
             >
               <Trophy className="size-3.5 text-amber-400" aria-hidden="true" />
-              <span>{t('mavericksTitle')}</span>
+              <span>{isAr ? 'مساحة عمل المستشارين' : 'Advisory Team Workspace'}</span>
             </button>
             <button
               type="button"
@@ -836,7 +836,7 @@ export default function CommitteeClient({
               }`}
             >
               <Coins className="size-3.5 text-accent" aria-hidden="true" />
-              <span>{t('portfolioAnalyticsTab')}</span>
+              <span>{isAr ? 'تحليلات الأداء والمحفظة' : 'Portfolio & Performance Analytics'}</span>
             </button>
           </>
         </div>
@@ -1240,25 +1240,25 @@ export default function CommitteeClient({
           {/* Left: Performance Graph + Holdings Table */}
           <div className="lg:col-span-8 space-y-6">
             {/* Performance curve SVG chart */}
-            <div className="glass-panel rounded-3xl p-6 border border-white/5 shadow-xl space-y-4">
+            <div className="glass-panel rounded-3xl p-6 border border-foreground/10 bg-surface-card shadow-md space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
-                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-accent" />
                     {isAr ? 'منحنى أداء استراتيجية الذكاء الاصطناعي' : 'AI Autopilot Strategy Equity Curve'}
                   </h3>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">
+                  <p className="text-[10px] text-foreground/60 font-mono mt-0.5">
                     {isAr ? 'استعراض أداء الاستراتيجية مقارنة بالمؤشرات القياسية' : 'Recorded net asset value vs SPY and SPUS benchmarks'}
                   </p>
                 </div>
 
-                <div className="flex space-x-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                <div className="flex space-x-1 bg-foreground/[0.04] p-1 rounded-xl border border-foreground/10">
                   {['1M', '3M', '1Y', 'ALL'].map((tf) => (
                     <button
                       key={tf}
                       onClick={() => setTimeframe(tf as any)}
                       className={`px-3 py-1 text-[10px] font-extrabold rounded-lg transition-all ${
-                        timeframe === tf ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                        timeframe === tf ? 'bg-accent text-white shadow-md' : 'text-foreground/60 hover:text-foreground'
                       }`}
                     >
                       {tf}
@@ -1272,86 +1272,86 @@ export default function CommitteeClient({
               </div>
 
               {/* Chart Legend */}
-              <div className="flex flex-wrap gap-4 text-[9px] font-black uppercase tracking-wider font-mono justify-end">
+              <div className="flex flex-wrap gap-4 text-[9px] font-black uppercase tracking-wider font-mono justify-end text-foreground/70">
                 <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#10B981]" />AI Strategy</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#00f0ff]" />SPUS (Halal Index)</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-gray-600 stroke-dasharray" />SPY (S&P 500)</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#0284C7]" />SPUS (Halal Index)</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-foreground/40 stroke-dasharray" />SPY (S&P 500)</div>
               </div>
             </div>
 
             {/* Asset Class Breakdown Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
                 <div>
-                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">US Equities</div>
-                  <div className="text-2xl font-black text-white font-mono">
-                    {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0), 'USD')}
+                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">US Equities</div>
+                  <div className="text-2xl font-black text-foreground font-mono">
+                    {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-gray-500">Portfolio Share</span>
-                    <span className="text-white font-mono font-bold">
+                    <span className="text-foreground/60">Portfolio Share</span>
+                    <span className="text-foreground font-mono font-bold">
                       {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
+                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-accent rounded-full" style={{ width: `${positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
                   </div>
                 </div>
               </div>
 
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
                 <div>
-                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">Saudi Equities</div>
-                  <div className="text-2xl font-black text-white font-mono">
-                    {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0), 'SAR')}
+                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">Saudi Equities</div>
+                  <div className="text-2xl font-black text-foreground font-mono">
+                    {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-gray-500">Portfolio Share</span>
-                    <span className="text-white font-mono font-bold">
+                    <span className="text-foreground/60">Portfolio Share</span>
+                    <span className="text-foreground font-mono font-bold">
                       {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
                   </div>
                 </div>
               </div>
 
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-white/5">
+              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
                 <div>
-                  <div className="text-gray-500 font-bold text-[9px] uppercase tracking-wider mb-2">Virtual Cash</div>
-                  <div className="text-2xl font-black text-white font-mono">
-                    {fmtMoney(cash, market === 'TASI' ? 'SAR' : 'USD')}
+                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">Virtual Cash</div>
+                  <div className="text-2xl font-black text-foreground font-mono">
+                    {fmtMoney(cash)}
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-gray-500">Portfolio Share</span>
-                    <span className="text-white font-mono font-bold">
+                    <span className="text-foreground/60">Portfolio Share</span>
+                    <span className="text-foreground font-mono font-bold">
                       {nav > 0 ? fmtPercent(cash / nav) : '0.0%'}
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${nav > 0 ? (cash / nav) * 100 : 0}%` }}></div>
+                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${nav > 0 ? (cash / nav) * 100 : 0}%` }}></div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Holdings Table */}
-            <div className="glass-panel rounded-3xl p-6 border border-white/5 overflow-hidden shadow-xl">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-white">
-                <Coins className="w-4 h-4 text-emerald-400" />
+            <div className="glass-panel rounded-3xl p-6 border border-foreground/10 bg-surface-card overflow-hidden shadow-md">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-foreground">
+                <Coins className="w-4 h-4 text-accent" />
                 <span>{t('holdingsHeading')}</span>
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-start border-collapse text-[11px]">
                   <thead>
-                    <tr className="border-b border-white/10 text-gray-500 font-black uppercase tracking-wider text-[9px]">
+                    <tr className="border-b border-foreground/10 text-foreground/60 font-black uppercase tracking-wider text-[9px]">
                       <th className="py-3 text-start px-2">{t('symbol')}</th>
                       <th className="py-3 text-start px-2">{t('marketLabel')}</th>
                       <th className="py-3 text-start px-2">{isAr ? 'الحكم الشرعي' : 'Sharia Screen'}</th>
@@ -1366,35 +1366,35 @@ export default function CommitteeClient({
                       const isHalal = !pos.complianceStatus || pos.complianceStatus === 'VERIFIED_COMPLIANT';
                       const shariaLabel = isHalal ? (isAr ? 'متوافق' : 'COMPLIANT') : (isAr ? 'غير متوافق' : 'NON-COMPLIANT');
                       return (
-                        <tr key={`${pos.symbol}`} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-2 font-black font-mono text-emerald-400" dir="ltr">{pos.symbol}</td>
-                          <td className="py-3.5 px-2 text-gray-300 font-semibold">{pos.symbol.endsWith('.SR') ? 'TASI' : 'NASDAQ'}</td>
+                        <tr key={`${pos.symbol}`} className="border-b border-foreground/5 hover:bg-foreground/[0.03] transition-colors">
+                          <td className="py-3.5 px-2 font-black font-mono text-accent text-xs" dir="ltr">{pos.symbol}</td>
+                          <td className="py-3.5 px-2 text-foreground/80 font-bold">{pos.symbol.endsWith('.SR') ? 'TASI' : 'NASDAQ'}</td>
                           <td className="py-3.5 px-2">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black border uppercase tracking-wider shadow-sm ${
                               isHalal
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
                             }`}>
-                              {isHalal ? <ShieldCheck className="w-3 h-3 text-emerald-400" /> : <ShieldAlert className="w-3 h-3 text-rose-400" />}
+                              {isHalal ? <ShieldCheck className="w-3 h-3 text-emerald-500" /> : <ShieldAlert className="w-3 h-3 text-rose-500" />}
                               {shariaLabel}
                             </span>
                           </td>
-                          <td className="py-3.5 px-2 text-end font-mono text-gray-300">{pos.shares.toFixed(2)}</td>
-                          <td className="py-3.5 px-2 text-end font-mono text-gray-300">{fmtMoney(pos.costBasis)}</td>
-                          <td className="py-3.5 px-2 text-end font-mono text-white font-bold">{fmtMoney(pos.value)}</td>
+                          <td className="py-3.5 px-2 text-end font-mono font-semibold text-foreground/80">{pos.shares.toFixed(2)}</td>
+                          <td className="py-3.5 px-2 text-end font-mono font-semibold text-foreground/80">{fmtMoney(pos.costBasis)}</td>
+                          <td className="py-3.5 px-2 text-end font-mono text-foreground font-black">{fmtMoney(pos.value)}</td>
                           <td className="py-3.5 px-2 text-end">
                             <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1 bg-black/40 rounded-full overflow-hidden hidden sm:block">
-                                <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+                              <div className="w-16 h-1.5 bg-foreground/10 rounded-full overflow-hidden hidden sm:block">
+                                <div className="h-full bg-accent rounded-full" style={{ width: `${pos.weight * 100}%` }} />
                               </div>
-                              <span className="font-mono font-bold text-white">{fmtPercent(pos.weight)}</span>
+                              <span className="font-mono font-bold text-foreground">{fmtPercent(pos.weight)}</span>
                             </div>
                           </td>
                         </tr>
                       );
                     })}
                     {positions.length === 0 && (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">{t('noActivePositions')}</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-foreground/50">{t('noActivePositions')}</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1404,10 +1404,10 @@ export default function CommitteeClient({
 
           {/* Right: Allocation Donut + Rebalance Panel */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="rounded-3xl border border-white/5 bg-[#05080f] shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-white/5 bg-gradient-to-r from-indigo-500/5 to-transparent">
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-emerald-400" />
+            <div className="glass-panel rounded-3xl border border-foreground/10 bg-surface-card shadow-md overflow-hidden">
+              <div className="p-5 border-b border-foreground/10 bg-gradient-to-r from-indigo-500/5 to-transparent">
+                <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-accent" />
                   {isAr ? 'مكونات المحفظة الحالية' : 'Current Asset Allocation'}
                 </h3>
               </div>
@@ -1417,12 +1417,12 @@ export default function CommitteeClient({
             </div>
 
             {/* Rebalance trigger panel */}
-            <div className="glass-panel rounded-3xl p-5 border border-white/5 shadow-xl space-y-4">
+            <div className="glass-panel rounded-3xl p-5 border border-foreground/10 bg-surface-card shadow-md space-y-4">
               <div>
-                <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider">
+                <h3 className="text-xs font-black uppercase text-foreground/70 tracking-wider">
                   {isAr ? 'إعادة التوازن اليدوية للمحفظة' : 'Rebalance portfolio'}
                 </h3>
-                <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
+                <p className="text-[10px] text-foreground/60 mt-1 leading-relaxed">
                   {isAr 
                     ? 'يقوم هذا الخيار بإعادة موازنة أوزان المحفظة الفعالة وتصفيتها شرعياً بما يوافق معايير AAOIFI ونظام إدارة المخاطر.'
                     : 'Manually trigger rebalancing, aligning positions, executing compliance purifications and enforcing exposure constraints.'
@@ -1431,7 +1431,7 @@ export default function CommitteeClient({
               </div>
 
               {rebalanceError && (
-                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[10px] font-bold text-rose-400">
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[10px] font-bold text-rose-500">
                   {rebalanceError}
                 </div>
               )}
@@ -1439,9 +1439,9 @@ export default function CommitteeClient({
               <button
                 onClick={triggerManualRebalance}
                 disabled={rebalanceLoading}
-                className="w-full py-3 rounded-2xl bg-emerald-500 text-black font-black text-xs uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 rounded-2xl bg-accent text-white font-black text-xs uppercase tracking-wider hover:opacity-90 transition-all shadow-lg shadow-accent/25 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {rebalanceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-black" />}
+                {rebalanceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-white" />}
                 <span>{rebalanceLoading ? t('rebalancing') : t('rebalanceButton')}</span>
               </button>
             </div>
