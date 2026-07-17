@@ -155,20 +155,21 @@ export default function AcademyDiagnostic({
   }
 
   return (
-    <section className="mt-10">
+    <section className="mt-8">
       {!hasProfile ? (
-        <div className="rounded-3xl bg-foreground/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.08)] sm:p-7">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent rtl:tracking-normal">
+        <div className="relative overflow-hidden rounded-3xl border border-accent/20 bg-gradient-to-br from-surface-card via-surface-card to-accent/5 p-6 shadow-[0_18px_55px_rgba(0,0,0,0.06)] sm:p-8">
+          <div className="absolute -end-12 -top-12 size-36 rounded-full bg-accent/10 blur-2xl pointer-events-none" aria-hidden="true" />
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-accent rtl:tracking-normal">
             {t('diagnostic.inviteEyebrow')}
           </p>
-          <h2 className="mt-3 text-xl font-semibold leading-8">{t('diagnostic.inviteTitle')}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-7 text-foreground/65">{t('diagnostic.inviteBody')}</p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <h2 className="mt-2 text-xl font-bold leading-8 text-foreground sm:text-2xl">{t('diagnostic.inviteTitle')}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground/65">{t('diagnostic.inviteBody')}</p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setPhase('stepping')}
               disabled={skipLoading}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-40"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-accent px-6 py-3 text-sm font-bold text-white shadow-md shadow-accent/20 transition-all hover:scale-[1.02] hover:shadow-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-40"
             >
               <Sparkles className="size-4" aria-hidden="true" />
               {t('diagnostic.start')}
@@ -177,7 +178,7 @@ export default function AcademyDiagnostic({
               type="button"
               onClick={() => void submit()}
               disabled={skipLoading}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-foreground/15 px-5 py-3 text-sm font-semibold text-foreground/75 transition-all hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
             >
               {skipLoading && (
                 <span role="status" className="flex items-center gap-2">
@@ -190,21 +191,38 @@ export default function AcademyDiagnostic({
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-foreground/[0.035] px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
-          <span className="text-xs font-semibold uppercase tracking-[0.1em] text-foreground/50 rtl:tracking-normal">
-            {t('diagnostic.chipEyebrow')}
-          </span>
-          <span className="rounded-full bg-accent/10 px-3 py-1 text-sm font-semibold text-accent">
-            {personaLabel}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPhase('stepping')}
-            className="ms-auto inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-foreground/65 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <RotateCcw className="size-3.5" aria-hidden="true" />
-            {t('diagnostic.retake')}
-          </button>
+        <div className="relative overflow-hidden rounded-3xl border border-accent/20 bg-surface-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.05)] sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                <Sparkles className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-foreground/50 rtl:tracking-normal">
+                    {t('diagnostic.chipEyebrow')}
+                  </span>
+                  <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold text-accent">
+                    {locale === 'ar' ? 'مسار محدد' : 'Assessed Level'}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="rounded-full bg-accent px-3.5 py-1 text-xs font-extrabold text-white shadow-sm">
+                    {personaLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPhase('stepping')}
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-foreground/15 bg-background/50 px-4 py-2.5 text-xs font-bold text-foreground/80 shadow-sm transition-all hover:border-accent hover:bg-accent/5 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <RotateCcw className="size-3.5" aria-hidden="true" />
+              {t('diagnostic.retake')}
+            </button>
+          </div>
         </div>
       )}
       {phase === 'cooldown' && (
