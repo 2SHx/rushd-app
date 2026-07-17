@@ -9,7 +9,7 @@ vi.mock('@/auth', () => ({
   auth: (...args: unknown[]) => auth(...args),
 }));
 
-import { requireSession, requireParent, requireUltraTier, AuthzError } from './authz';
+import { requireSession, requireParent, requireUltraTier, AuthzError, can, TIER_CAPABILITIES, type Capability } from './authz';
 
 beforeEach(() => {
   auth.mockReset();
@@ -95,5 +95,55 @@ describe('requireUltraTier', () => {
     const user = { id: 'u3', role: 'PARENT', tier: 'ULTRA', parentId: null };
     auth.mockResolvedValue({ user });
     await expect(requireUltraTier()).resolves.toEqual(user);
+  });
+});
+
+describe('can (DR-16 tier capability matrix)', () => {
+  it('denies BASIC: NASDAQ trading, Economics track, advanced analytics', () => {
+    const session = { tier: 'BASIC' as const };
+    expect(can(session, 'trading:nasdaq')).toBe(false);
+    expect(can(session, 'academy:track:economics')).toBe(false);
+    expect(can(session, 'analytics:advanced')).toBe(false);
+  });
+
+  it('allows BASIC its own capabilities', () => {
+    const session = { tier: 'BASIC' as const };
+    expect(can(session, 'trading:tasi')).toBe(true);
+    expect(can(session, 'market:overview:nasdaq')).toBe(true);
+    expect(can(session, 'academy:track:foundations')).toBe(true);
+    expect(can(session, 'academy:strategy-team:lesson1')).toBe(true);
+    expect(can(session, 'workspace:unlock')).toBe(true);
+  });
+
+  it('denies PREMIUM the Advanced Analysis track but allows Economics + NASDAQ trading', () => {
+    const session = { tier: 'PREMIUM' as const };
+    expect(can(session, 'academy:track:advanced-financial-analysis')).toBe(false);
+    expect(can(session, 'academy:track:economics')).toBe(true);
+    expect(can(session, 'trading:nasdaq')).toBe(true);
+    expect(can(session, 'ai:signals')).toBe(true);
+    expect(can(session, 'workspace:unmetered')).toBe(true);
+  });
+
+  it('allows ULTRA every capability in the matrix', () => {
+    const session = { tier: 'ULTRA' as const };
+    for (const capability of TIER_CAPABILITIES.ULTRA) {
+      expect(can(session, capability)).toBe(true);
+    }
+    expect(can(session, 'academy:track:advanced-financial-analysis')).toBe(true);
+    expect(can(session, 'academy:capstones')).toBe(true);
+    expect(can(session, 'analytics:advanced')).toBe(true);
+    expect(can(session, 'analytics:quant')).toBe(true);
+    expect(can(session, 'ai:priority')).toBe(true);
+  });
+
+  it('fails closed on an unknown capability', () => {
+    const session = { tier: 'ULTRA' as const };
+    expect(can(session, 'not:a:real:capability' as Capability)).toBe(false);
+  });
+
+  it('fails closed on a missing or undefined tier', () => {
+    expect(can(undefined, 'quiz:access')).toBe(false);
+    expect(can(null, 'quiz:access')).toBe(false);
+    expect(can({ tier: undefined } as unknown as { tier: 'BASIC' }, 'quiz:access')).toBe(false);
   });
 });
