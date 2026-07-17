@@ -127,7 +127,7 @@ export default function AcademyDiagnostic({
               key={option.id}
               type="button"
               onClick={() => selectOption(question.id, option.id)}
-              className="flex w-full items-start gap-3 rounded-2xl bg-background/60 px-4 py-3 text-start text-sm leading-7 ring-1 ring-foreground/[0.07] transition-colors duration-150 ease-out hover:bg-accent/[0.08] hover:ring-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex w-full items-start gap-3 rounded-2xl border border-accent/35 bg-surface-card px-4 py-3.5 text-start text-sm font-semibold leading-7 transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {text(option.label)}
             </button>

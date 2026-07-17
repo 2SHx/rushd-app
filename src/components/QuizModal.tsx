@@ -144,19 +144,23 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }
                   </p>
                   <h2 id="quiz-dialog-title" className="mt-4 text-xl font-semibold leading-relaxed sm:text-2xl">{quiz.question}</h2>
 
-                  <div className="mt-7 space-y-3" role="group" aria-label={t('answerChoices')}>
+                  <div className="mt-7 space-y-3.5" role="group" aria-label={t('answerChoices')}>
                     {quiz.options.map((option, index) => {
                       const isSelected = selected === index;
                       const isCorrect = index === quiz.correctOptionIndex;
-                      const resultClass = showResult
-                        ? isCorrect
-                          ? 'bg-up/10 ring-1 ring-up/40 text-foreground'
-                          : isSelected
-                            ? 'bg-down/10 ring-1 ring-down/40 text-foreground'
-                            : 'bg-foreground/[0.025] text-foreground/45'
-                        : isSelected
-                          ? 'bg-accent/10 ring-2 ring-accent text-foreground'
-                          : 'bg-foreground/[0.035] text-foreground hover:bg-foreground/[0.06]';
+                      
+                      let resultClass = 'border border-accent/35 bg-surface-card hover:border-accent hover:bg-accent/10 hover:shadow-md';
+                      if (isSelected && !showResult) {
+                        resultClass = 'border-2 border-accent bg-accent/10 ring-2 ring-accent/30 text-foreground font-bold shadow-md';
+                      } else if (showResult) {
+                        if (isCorrect) {
+                          resultClass = 'border-2 border-up bg-up/15 text-up font-bold ring-2 ring-up/30 shadow-[0_0_15px_rgba(4,120,87,0.25)]';
+                        } else if (isSelected && !isCorrect) {
+                          resultClass = 'border-2 border-down bg-down/15 text-down font-bold ring-2 ring-down/30 shadow-[0_0_15px_rgba(190,18,60,0.25)]';
+                        } else {
+                          resultClass = 'border border-foreground/10 bg-foreground/[0.02] text-foreground/40 opacity-50';
+                        }
+                      }
 
                       return (
                         <button
@@ -165,10 +169,16 @@ export default function QuizModal({ isOpen, onClose, onComplete, topic, locale }
                           disabled={showResult}
                           aria-pressed={isSelected}
                           onClick={() => setSelected(index)}
-                          className={`flex w-full items-start gap-3 rounded-2xl p-4 text-start text-sm leading-relaxed transition-[background-color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.99] disabled:cursor-default motion-reduce:transform-none ${resultClass}`}
+                          className={`flex w-full items-start justify-between gap-3 rounded-2xl p-4 text-start text-sm leading-relaxed transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.99] disabled:cursor-default motion-reduce:transform-none ${resultClass}`}
                         >
-                          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-background/70 font-mono text-[11px] font-semibold" dir="ltr">{OPTION_LABELS[index]}</span>
-                          <span className="pt-1">{option}</span>
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className={`grid size-7 shrink-0 place-items-center rounded-lg font-mono text-[11px] font-bold ${
+                              showResult && isCorrect ? 'bg-up text-white' : showResult && isSelected && !isCorrect ? 'bg-down text-white' : 'bg-background/80 text-foreground border border-foreground/15'
+                            }`} dir="ltr">{OPTION_LABELS[index]}</span>
+                            <span className="pt-0.5">{option}</span>
+                          </div>
+                          {showResult && isCorrect && <CheckCircle2 className="size-5 shrink-0 text-up animate-in zoom-in duration-200" aria-hidden="true" />}
+                          {showResult && isSelected && !isCorrect && <XCircle className="size-5 shrink-0 text-down animate-in zoom-in duration-200" aria-hidden="true" />}
                         </button>
                       );
                     })}
