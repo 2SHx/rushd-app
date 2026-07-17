@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 TS momentum v2 learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `ts-momentum-halal-basket-v2`, registry/API dispatch, generalized result types, and a frozen ≤6-month descriptor over the captured-real daily PIT snapshot.
+Decisions: lazy-dev rung 2 reuses the exact v2 setup, shared daily risk/fill engine, and immutable Bollinger data snapshot; the REJECTED setup stays research-only and Sharia-unscreened/execution-blocked.
+Verify: focused 28/28; lint clean; TypeScript clean; full Vitest 116 files / 850 tests; en/ar key-identity green; future-bar and MOCK-source injections fail closed.
+Open: seven visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L6 Mavericks learning bridge ✅
 Shipped: exact-team League→Learning deep links, setup-aware completion summaries, and a bilingual evidence gate for reviewed learning modules; Bollinger details stay closed until its sealed four-line comparison.
 Decisions: lazy-dev rung 2/7 reuses DR-14 attempts/API/UI; unsupported teams show “module under validation” and retain labeled simulated evidence until a real setup-specific replay exists—no fabricated learner curve or universal lock yet.

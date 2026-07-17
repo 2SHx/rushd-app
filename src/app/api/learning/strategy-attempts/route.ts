@@ -3,24 +3,19 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authorizeAccess, requireSession } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
-import {
-  BOLLINGER_MR_LONG_V2_CURRICULUM,
-  compileBollingerMrLongV2Policy,
-  type StrategyLearningAnswer,
-} from '@/quant/learning/bollingerMrLongV2Curriculum';
-import {
-  loadBollingerMrLongV2LearningFixture,
-  replayBollingerMrLongV2LearningPolicy,
-  type BollingerLearningReplayFixture,
-} from '@/quant/learning/strategyLearningReplay';
+import type { StrategyLearningAnswer } from '@/quant/learning/bollingerMrLongV2Curriculum';
+import type { BollingerLearningReplayFixture } from '@/quant/learning/strategyLearningReplay';
 import {
   awardStrategyLearningMastery,
   strategyLearningMasteryState,
 } from '@/services/strategyLearningMastery';
 import {
   DEFAULT_STRATEGY_LEARNING_SETUP_ID,
+  getStrategyLearningModule,
   isStrategyLearningSetupId,
   STRATEGY_LEARNING_SETUP_IDS,
+  type CompiledStrategyLearningModulePolicy,
+  type StrategyLearningModule,
 } from '@/quant/learning/strategyLearningModules';
 
 const answerSchema = z.object({
@@ -40,9 +35,12 @@ type StoredAttempt = Prisma.StrategyLearningAttemptGetPayload<{
   include: { result: true; masteryEvents: true };
 }>;
 
-function canonicalAnswers(answers: readonly StrategyLearningAnswer[]): StrategyLearningAnswer[] {
+function canonicalAnswers(
+  learningModule: StrategyLearningModule,
+  answers: readonly StrategyLearningAnswer[],
+): StrategyLearningAnswer[] {
   const byQuestion = new Map(answers.map(answer => [answer.questionId, answer.optionId]));
-  return BOLLINGER_MR_LONG_V2_CURRICULUM.questions.map(question => ({
+  return learningModule.curriculum.questions.map(question => ({
     questionId: question.id,
     optionId: byQuestion.get(question.id)!,
   }));
@@ -103,7 +101,8 @@ async function createSealedAttempt(input: {
   idempotencyKey: string;
   answers: StrategyLearningAnswer[];
   retryOfId: string | null;
-  policy: ReturnType<typeof compileBollingerMrLongV2Policy>;
+  policy: CompiledStrategyLearningModulePolicy;
+  complianceTag: 'EDUCATIONAL_ONLY';
   fixture: BollingerLearningReplayFixture;
 }): Promise<{ attempt: StoredAttempt; created: boolean }> {
   for (let tries = 0; tries < 3; tries++) {
@@ -120,7 +119,7 @@ async function createSealedAttempt(input: {
             questionSetVersion: input.policy.questionSetVersion,
             policyVersion: input.policy.policyVersion,
             policyHash: input.policy.policyHash,
-            complianceTag: BOLLINGER_MR_LONG_V2_CURRICULUM.complianceTag,
+            complianceTag: input.complianceTag,
             attemptNumber: priorAttempts + 1,
             idempotencyKey: input.idempotencyKey,
             answers: input.answers as unknown as Prisma.InputJsonValue,
@@ -175,9 +174,10 @@ async function persistReplayResult(
   attempt: StoredAttempt,
   answers: readonly StrategyLearningAnswer[],
   fixture: BollingerLearningReplayFixture,
+  learningModule: StrategyLearningModule,
 ): Promise<Prisma.JsonValue> {
   if (attempt.result) return attempt.result.payload;
-  const replay = replayBollingerMrLongV2LearningPolicy(answers, fixture);
+  const replay = learningModule.replay(answers, fixture);
   try {
     const result = await prisma.strategyLearningResult.create({
       data: { attemptId: attempt.id, payload: replay as unknown as Prisma.InputJsonValue },
@@ -202,13 +202,15 @@ export async function GET(request: Request): Promise<Response> {
   if (!isStrategyLearningSetupId(setupId)) {
     return NextResponse.json({ error: 'learning_module_unavailable' }, { status: 404 });
   }
+  const learningModule = getStrategyLearningModule(setupId);
+  const curriculum = learningModule.curriculum;
   return NextResponse.json({
-    setupId: BOLLINGER_MR_LONG_V2_CURRICULUM.setupId,
-    setupVersion: BOLLINGER_MR_LONG_V2_CURRICULUM.setupVersion,
-    questionSetVersion: BOLLINGER_MR_LONG_V2_CURRICULUM.questionSetVersion,
-    complianceTag: BOLLINGER_MR_LONG_V2_CURRICULUM.complianceTag,
-    title: BOLLINGER_MR_LONG_V2_CURRICULUM.title[locale],
-    questions: BOLLINGER_MR_LONG_V2_CURRICULUM.questions.map(question => ({
+    setupId: curriculum.setupId,
+    setupVersion: curriculum.setupVersion,
+    questionSetVersion: curriculum.questionSetVersion,
+    complianceTag: curriculum.complianceTag,
+    title: curriculum.title[locale],
+    questions: curriculum.questions.map(question => ({
       id: question.id,
       role: question.role,
       area: question.area,
@@ -244,13 +246,14 @@ export async function POST(request: Request): Promise<Response> {
     const userId = parsed.data.userId ?? sessionUser.id;
     await authorizeAccess(sessionUser, userId);
 
-    let policy: ReturnType<typeof compileBollingerMrLongV2Policy>;
+    const learningModule = getStrategyLearningModule(parsed.data.setupId);
+    let policy: CompiledStrategyLearningModulePolicy;
     try {
-      policy = compileBollingerMrLongV2Policy(parsed.data.answers);
+      policy = learningModule.compile(parsed.data.answers);
     } catch {
       return NextResponse.json({ error: 'invalid_learning_answers' }, { status: 400 });
     }
-    const answers = canonicalAnswers(parsed.data.answers);
+    const answers = canonicalAnswers(learningModule, parsed.data.answers);
     const existing = await prisma.strategyLearningAttempt.findUnique({
       where: { userId_idempotencyKey: { userId, idempotencyKey: parsed.data.idempotencyKey } },
       include: { result: true, masteryEvents: true },
@@ -282,7 +285,7 @@ export async function POST(request: Request): Promise<Response> {
       retryOfId = retryOf.id;
     }
 
-    const fixture = loadBollingerMrLongV2LearningFixture();
+    const fixture = learningModule.loadFixture();
     const sealed = existing
       ? { attempt: existing, created: false }
       : await createSealedAttempt({
@@ -291,6 +294,7 @@ export async function POST(request: Request): Promise<Response> {
         answers,
         retryOfId,
         policy,
+        complianceTag: learningModule.curriculum.complianceTag,
         fixture,
       });
     if (sealed.attempt.policyHash !== policy.policyHash || !sameAnswers(sealed.attempt.answers, answers)) {
@@ -299,7 +303,7 @@ export async function POST(request: Request): Promise<Response> {
     if (sealed.attempt.retryOfId !== retryOfId) {
       return NextResponse.json({ error: 'idempotency_conflict' }, { status: 409 });
     }
-    const payload = await persistReplayResult(sealed.attempt, answers, fixture);
+    const payload = await persistReplayResult(sealed.attempt, answers, fixture, learningModule);
     const masteryEvents = await ensureCompletionMastery(sealed.attempt);
     return attemptResponse(sealed.attempt, payload, sealed.created ? 201 : 200, masteryEvents);
   } catch (error) {

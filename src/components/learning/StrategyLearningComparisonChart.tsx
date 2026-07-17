@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { BollingerLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
+import type { StrategyLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
 
 const CHART = { width: 900, height: 330, padX: 58, padY: 38 } as const;
 const KEYS = ['learner', 'team', 'spus', 'spy'] as const;
@@ -12,7 +12,7 @@ export default function StrategyLearningComparisonChart({
   result,
   locale,
 }: {
-  result: BollingerLearningReplayResult;
+  result: StrategyLearningReplayResult;
   locale: string;
 }) {
   const t = useTranslations('StrategyLearning');

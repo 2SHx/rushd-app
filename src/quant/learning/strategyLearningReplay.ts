@@ -13,22 +13,29 @@ import type { EquityPoint } from '../backtest/metrics';
 import type { TradeRecord } from '../backtest/intradayEngine';
 import { bollingerMrLongV2Setup, BOLLINGER_MR_LONG_V2, NASDAQ_HALAL_UNIVERSE } from '../strategies/bollingerMrLongV2';
 import {
+  tsMomentumHalalBasketV2Setup,
+  TS_MOMENTUM_HALAL_BASKET_V2,
+} from '../strategies/tsMomentumHalalBasketV2';
+import type { StrategySetup } from '../strategies/types';
+import {
   compileBollingerMrLongV2Policy,
   type StrategyLearningAnswer,
 } from './bollingerMrLongV2Curriculum';
+import { compileTsMomentumHalalBasketV2Policy } from './tsMomentumHalalBasketV2Curriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
 const MAX_REPLAY_DAYS = 184;
 const STARTING_CASH = new D(100_000);
-const FIXTURE_PATH = path.join(
+const FIXTURE_DIR = path.join(
   process.cwd(),
   'src',
   'quant',
   'learning',
   'fixtures',
-  'bollinger-mr-long-v2.learning-replay-v1.json',
 );
+const BOLLINGER_FIXTURE_VERSION = 'bollinger-mr-long-v2.learning-replay.v1';
+const TS_MOMENTUM_V2_FIXTURE_VERSION = 'ts-momentum-halal-basket-v2.learning-replay.v1';
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -40,7 +47,7 @@ const barSchema = z.tuple([
 ]);
 
 const fixtureSchema = z.object({
-  fixtureVersion: z.literal('bollinger-mr-long-v2.learning-replay.v1'),
+  fixtureVersion: z.string().min(1),
   capturedAt: z.string().datetime(),
   market: z.literal('NASDAQ'),
   warmupStart: z.string().datetime(),
@@ -62,6 +69,11 @@ const fixtureSchema = z.object({
   }).strict()),
 }).strict();
 
+const fixtureReferenceSchema = z.object({
+  fixtureVersion: z.string().min(1),
+  dataFixtureVersion: z.string().min(1),
+}).strict();
+
 export type BollingerLearningReplayFixture = z.infer<typeof fixtureSchema>;
 
 export interface LearningComparisonPoint {
@@ -76,9 +88,9 @@ export interface LearningReplayMetrics {
   trades: number;
 }
 
-export interface BollingerLearningReplayResult {
-  setupId: 'bollinger-mr-long-v2';
-  setupVersion: 'v2';
+export interface StrategyLearningReplayResult {
+  setupId: string;
+  setupVersion: string;
   policyHash: string;
   basis: 'NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS';
   interval: { start: string; end: string; oosStart: string };
@@ -108,25 +120,35 @@ export interface BollingerLearningReplayResult {
   };
 }
 
+export type BollingerLearningReplayResult = StrategyLearningReplayResult & {
+  setupId: 'bollinger-mr-long-v2';
+  setupVersion: 'v2';
+};
+
 function asTimestamp(value: string): number {
   const ts = new Date(value).getTime();
   if (!Number.isFinite(ts)) throw new Error('invalid_learning_fixture_timestamp');
   return ts;
 }
 
-function validateFixture(input: unknown): BollingerLearningReplayFixture {
+function validateFixture(
+  input: unknown,
+  expectedVersion: string,
+  expectedUniverse: readonly string[],
+): BollingerLearningReplayFixture {
   const fixture = fixtureSchema.parse(input);
+  if (fixture.fixtureVersion !== expectedVersion) throw new Error('learning_fixture_version_mismatch');
   const start = asTimestamp(fixture.interval.start);
   const end = asTimestamp(fixture.interval.end);
   if (fixture.interval.oosStart !== fixture.interval.start) throw new Error('learning_fixture_oos_boundary_mismatch');
   if (end <= start || end - start > MAX_REPLAY_DAYS * DAY_MS) throw new Error('learning_fixture_interval_exceeds_six_months');
   if (asTimestamp(fixture.warmupStart) >= start) throw new Error('learning_fixture_warmup_missing');
 
-  if (fixture.strategyUniverse.length !== NASDAQ_HALAL_UNIVERSE.length
-    || NASDAQ_HALAL_UNIVERSE.some(symbol => !fixture.strategyUniverse.includes(symbol))) {
+  if (fixture.strategyUniverse.length !== expectedUniverse.length
+    || expectedUniverse.some(symbol => !fixture.strategyUniverse.includes(symbol))) {
     throw new Error('learning_fixture_team_universe_mismatch');
   }
-  const required = [...NASDAQ_HALAL_UNIVERSE, 'SPUS', 'SPY'];
+  const required = [...expectedUniverse, 'SPUS', 'SPY'];
   const symbols = fixture.series.map(item => item.symbol);
   if (new Set(symbols).size !== symbols.length
     || required.length !== symbols.length
@@ -136,9 +158,30 @@ function validateFixture(input: unknown): BollingerLearningReplayFixture {
   return fixture;
 }
 
+function fixturePath(version: string): string {
+  return path.join(FIXTURE_DIR, `${version.replace('.learning-replay.v1', '')}.learning-replay-v1.json`);
+}
+
+function loadFixture(version: string, expectedUniverse: readonly string[]): BollingerLearningReplayFixture {
+  const raw: unknown = JSON.parse(fs.readFileSync(fixturePath(version), 'utf8'));
+  const reference = fixtureReferenceSchema.safeParse(raw);
+  if (!reference.success) return validateFixture(raw, version, expectedUniverse);
+  if (reference.data.fixtureVersion !== version) throw new Error('learning_fixture_reference_version_mismatch');
+  const source: unknown = JSON.parse(fs.readFileSync(fixturePath(reference.data.dataFixtureVersion), 'utf8'));
+  return validateFixture(
+    { ...(source as Record<string, unknown>), fixtureVersion: version },
+    version,
+    expectedUniverse,
+  );
+}
+
 /** Load and validate the committed captured-real learning fixture. No DB, clock, or network. */
 export function loadBollingerMrLongV2LearningFixture(): BollingerLearningReplayFixture {
-  return validateFixture(JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8')));
+  return loadFixture(BOLLINGER_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
+}
+
+export function loadTsMomentumHalalBasketV2LearningFixture(): BollingerLearningReplayFixture {
+  return loadFixture(TS_MOMENTUM_V2_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -160,9 +203,33 @@ function toBars(fixture: BollingerLearningReplayFixture, symbol: string): Backte
   return filtered.real;
 }
 
-function pooledTradeCurve(
+function prepareDailySetup<P>(
   fixture: BollingerLearningReplayFixture,
-  params: Parameters<typeof bollingerMrLongV2Setup.entry>[1],
+  setup: StrategySetup<P>,
+): void {
+  if (!setup.prepareUniverse) return;
+  const dailyBarsBySymbol = new Map(fixture.strategyUniverse.map(symbol => {
+    const bars = toBars(fixture, symbol);
+    return [symbol, bars.map(bar => ({
+      ts: bar.ts,
+      close: Number(bar.close),
+      volume: Number(bar.volume),
+    }))] as const;
+  }));
+  setup.prepareUniverse({
+    symbols: [...fixture.strategyUniverse],
+    closesBySymbol: new Map(Array.from(dailyBarsBySymbol, ([symbol, bars]) => [
+      symbol,
+      bars.map(bar => ({ ts: bar.ts, close: bar.close })),
+    ])),
+    dailyBarsBySymbol,
+  });
+}
+
+function pooledTradeCurve<P>(
+  fixture: BollingerLearningReplayFixture,
+  setup: StrategySetup<P>,
+  params: P,
 ): { curve: EquityPoint[]; trades: number } {
   const intervalStart = asTimestamp(fixture.interval.start);
   const intervalEnd = asTimestamp(fixture.interval.end);
@@ -170,7 +237,7 @@ function pooledTradeCurve(
 
   for (const symbol of fixture.strategyUniverse) {
     const simulation = simulateSetupDaily({
-      setup: bollingerMrLongV2Setup,
+      setup,
       params,
       symbol,
       market: 'NASDAQ',
@@ -272,10 +339,10 @@ export function replayBollingerMrLongV2LearningPolicy(
   answers: readonly StrategyLearningAnswer[],
   inputFixture: BollingerLearningReplayFixture,
 ): BollingerLearningReplayResult {
-  const fixture = validateFixture(inputFixture);
+  const fixture = validateFixture(inputFixture, BOLLINGER_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
   const policy = compileBollingerMrLongV2Policy(answers);
-  const learner = pooledTradeCurve(fixture, policy.params);
-  const team = pooledTradeCurve(fixture, BOLLINGER_MR_LONG_V2);
+  const learner = pooledTradeCurve(fixture, bollingerMrLongV2Setup, policy.params);
+  const team = pooledTradeCurve(fixture, bollingerMrLongV2Setup, BOLLINGER_MR_LONG_V2);
   const spus = closeCurve(fixture, 'SPUS');
   const spy = closeCurve(fixture, 'SPY');
   const dailyTimestamps = commonDailyTimestamps(fixture, spy, spus);
@@ -325,6 +392,63 @@ export function replayBollingerMrLongV2LearningPolicy(
         source: 'none',
         state: shariaState,
         executionBlocked: true,
+      },
+    },
+  };
+}
+
+export function replayTsMomentumHalalBasketV2LearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: BollingerLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateFixture(inputFixture, TS_MOMENTUM_V2_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
+  const policy = compileTsMomentumHalalBasketV2Policy(answers);
+  prepareDailySetup(fixture, tsMomentumHalalBasketV2Setup);
+  const learner = pooledTradeCurve(fixture, tsMomentumHalalBasketV2Setup, policy.params);
+  const team = pooledTradeCurve(fixture, tsMomentumHalalBasketV2Setup, TS_MOMENTUM_HALAL_BASKET_V2);
+  const spus = closeCurve(fixture, 'SPUS');
+  const spy = closeCurve(fixture, 'SPY');
+  const dailyTimestamps = commonDailyTimestamps(fixture, spy, spus);
+  const sampledTimestamps = weeklyTimestamps(dailyTimestamps);
+  const shariaState = deriveShariaState(fixture.sharia.screened, []);
+  if (shariaState !== 'UNSCREENED_EXECUTION_BLOCKED') throw new Error('learning_fixture_sharia_state_mismatch');
+  return {
+    setupId: policy.setupId,
+    setupVersion: policy.setupVersion,
+    policyHash: policy.policyHash,
+    basis: 'NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS',
+    interval: {
+      start: new Date(dailyTimestamps[0]).toISOString(),
+      end: new Date(dailyTimestamps.at(-1)!).toISOString(),
+      oosStart: fixture.interval.oosStart,
+    },
+    labels: {
+      learner: 'Learner policy', team: 'Strategy team',
+      spus: 'SPUS price-only benchmark', spy: 'S&P 500 ETF price-only proxy',
+    },
+    series: {
+      learner: normalizedSeries(learner.curve, sampledTimestamps),
+      team: normalizedSeries(team.curve, sampledTimestamps),
+      spus: normalizedSeries(spus, sampledTimestamps),
+      spy: normalizedSeries(spy, sampledTimestamps),
+    },
+    metrics: {
+      learner: metrics(learner.curve, dailyTimestamps, learner.trades),
+      team: metrics(team.curve, dailyTimestamps, team.trades),
+      spus: metrics(spus, dailyTimestamps, 0),
+      spy: metrics(spy, dailyTimestamps, 0),
+    },
+    provenance: {
+      fixtureVersion: fixture.fixtureVersion,
+      capturedAt: fixture.capturedAt,
+      warmupStart: fixture.warmupStart,
+      oosBoundary: fixture.interval.oosStart,
+      dataSources: Array.from(new Set(fixture.series.map(item => item.source))).sort(),
+      strategyUniverse: [...fixture.strategyUniverse],
+      riskLimits: { ...DEFAULT_BT_LIMITS },
+      fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
+      sharia: {
+        screened: false, source: 'none', state: shariaState, executionBlocked: true,
       },
     },
   };

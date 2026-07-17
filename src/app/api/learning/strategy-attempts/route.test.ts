@@ -45,7 +45,9 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/quant/learning/strategyLearningReplay', () => ({
   loadBollingerMrLongV2LearningFixture: () => loadFixture(),
+  loadTsMomentumHalalBasketV2LearningFixture: () => loadFixture(),
   replayBollingerMrLongV2LearningPolicy: (...args: unknown[]) => replay(...args),
+  replayTsMomentumHalalBasketV2LearningPolicy: (...args: unknown[]) => replay(...args),
 }));
 
 vi.mock('@/services/strategyLearningMastery', async importOriginal => {

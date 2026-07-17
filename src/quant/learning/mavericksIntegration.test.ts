@@ -20,6 +20,7 @@ describe('Mavericks strategy-learning bridge', () => {
   it('recognizes only strategies with a reviewed deterministic learning module', () => {
     expect(DEFAULT_STRATEGY_LEARNING_SETUP_ID).toBe('bollinger-mr-long-v2');
     expect(isStrategyLearningSetupId('bollinger-mr-long-v2')).toBe(true);
+    expect(isStrategyLearningSetupId('ts-momentum-halal-basket-v2')).toBe(true);
     expect(isStrategyLearningSetupId('gapper-orb')).toBe(false);
   });
 

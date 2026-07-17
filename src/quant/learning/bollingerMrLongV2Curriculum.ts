@@ -38,7 +38,7 @@ type PolicyKey = 'entryStdev' | 'atrStopMult' | 'targetVolBudget' | 'maxHoldingD
 
 export interface PolicyDecisionQuestion extends LearningQuestionBase {
   role: 'POLICY_DECISION';
-  policyKey: PolicyKey;
+  policyKey: string;
   teamOptionId: string;
 }
 
@@ -265,7 +265,7 @@ export function compileBollingerMrLongV2Policy(
   for (const question of questions) {
     const optionId = byQuestion.get(question.id);
     if (!optionId) throw new Error('missing_learning_answer');
-    if (question.role === 'POLICY_DECISION') selected[question.policyKey] = optionId;
+    if (question.role === 'POLICY_DECISION') selected[question.policyKey as PolicyKey] = optionId;
   }
   const policy = PolicySelectionsSchema.parse(selected);
   const params = BollingerMrLongV2ParamsSchema.parse({

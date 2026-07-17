@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import type { BollingerLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
+import type { StrategyLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
 import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningModules';
 import StrategyLearningComparisonChart from './StrategyLearningComparisonChart';
 import StrategyMasteryRevisit, { type StrategyMasteryState } from './StrategyMasteryRevisit';
@@ -36,8 +36,8 @@ interface CurriculumQuestion {
   teamOptionId?: string;
 }
 interface Curriculum {
-  setupId: 'bollinger-mr-long-v2';
-  setupVersion: 'v2';
+  setupId: string;
+  setupVersion: string;
   questionSetVersion: string;
   complianceTag: 'EDUCATIONAL_ONLY';
   title: string;
@@ -50,7 +50,7 @@ interface Completion {
     answers: Array<{ questionId: string; optionId: string }>;
     sealedAt: string;
   };
-  result: BollingerLearningReplayResult;
+  result: StrategyLearningReplayResult;
   mastery: StrategyMasteryState;
 }
 type Phase = 'overview' | 'questions' | 'review' | 'submitting' | 'submitError' | 'result';
@@ -505,7 +505,7 @@ function StateMessage({
   );
 }
 
-function MetricsTable({ result, locale }: { result: BollingerLearningReplayResult; locale: string }) {
+function MetricsTable({ result, locale }: { result: StrategyLearningReplayResult; locale: string }) {
   const t = useTranslations('StrategyLearning');
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const percent = (value: number, signed = false) => new Intl.NumberFormat(numberLocale, {
