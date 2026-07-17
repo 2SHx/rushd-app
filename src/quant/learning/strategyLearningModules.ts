@@ -13,15 +13,18 @@ import {
   compileTsMomentumHalalBasketV3Policy,
 } from './tsMomentumHalalBasketV3Curriculum';
 import { TOM_OVERLAY_CURRICULUM, compileTomOverlayPolicy } from './tomOverlayCurriculum';
+import { DUAL_MOMENTUM_ROTATION_CURRICULUM, compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
   loadTsMomentumHalalBasketV3LearningFixture,
   loadTomOverlayLearningFixture,
+  loadDualMomentumRotationLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
   replayTomOverlayLearningPolicy,
+  replayDualMomentumRotationLearningPolicy,
   type BollingerLearningReplayFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
@@ -31,6 +34,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'ts-momentum-halal-basket-v2',
   'ts-momentum-halal-basket-v3',
   'tom-overlay',
+  'dual-momentum-rotation',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -86,6 +90,12 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     compile: compileTomOverlayPolicy,
     loadFixture: loadTomOverlayLearningFixture,
     replay: replayTomOverlayLearningPolicy,
+  },
+  'dual-momentum-rotation': {
+    curriculum: DUAL_MOMENTUM_ROTATION_CURRICULUM,
+    compile: compileDualMomentumRotationPolicy,
+    loadFixture: loadDualMomentumRotationLearningFixture,
+    replay: replayDualMomentumRotationLearningPolicy,
   },
 };
 

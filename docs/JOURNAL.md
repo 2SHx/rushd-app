@@ -18,6 +18,12 @@ Decisions: M11 slice landed early (matrix only — architect to note in M11; pre
 Verify: `npx vitest run academy` 4 files/39 tests; full suite green at every commit; lint/tsc clean throughout.
 Open: B4 (AcademyProgress + User.ageSegment migrations + API) BLOCKED on Postgres/Docker being down; B5 UI after B4; sukuk-generalization + arbun HALAL tag → OQ-10 human Sharia board before final; quiz TOPIC_ALLOWLIST worth exporting for cleaner content-test imports.
 
+## 2026-07-17 — M10-L7 dual-momentum rotation learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `dual-momentum-rotation`, exact fixed seven-name strategy-book replay, and a frozen ≤6-month captured-real PIT fixture including HLAL.
+Decisions: lazy-dev rung 2 reuses month-end ranking, 25%/one-position book policy, shared fills/risk, plus a capture utility hard-limited to 184 days; REJECTED stays research-only/execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 122 files / 891 tests; key identity green; future/MOCK injections fail closed and four lines align at 100.
+Open: four visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 turn-of-month learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `tom-overlay`, exact fixed-SPUS strategy-book replay, shared closed-map compiler helper, and frozen ≤6-month captured-real PIT descriptor.
 Decisions: lazy-dev rung 2 reuses observed-session eligibility, shared portfolio fills/risk, and the immutable SPUS snapshot; the REJECTED seasonal hypothesis remains research-only and execution-blocked.

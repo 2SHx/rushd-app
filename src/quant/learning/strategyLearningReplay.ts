@@ -23,6 +23,12 @@ import {
   tsMomentumV3BookPolicy,
 } from '../strategies/tsMomentumHalalBasketV3';
 import { tomOverlayBookPolicy, tomOverlaySetup, TOM_OVERLAY_UNIVERSE, TOM_OVERLAY_V1 } from '../strategies/tomOverlay';
+import {
+  dualMomentumRotationBookPolicy,
+  dualMomentumRotationSetup,
+  DUAL_MOMENTUM_ROTATION_V1,
+  DUAL_MOMENTUM_UNIVERSE,
+} from '../strategies/dualMomentumRotation';
 import type { StrategySetup } from '../strategies/types';
 import {
   compileBollingerMrLongV2Policy,
@@ -31,6 +37,7 @@ import {
 import { compileTsMomentumHalalBasketV2Policy } from './tsMomentumHalalBasketV2Curriculum';
 import { compileTsMomentumHalalBasketV3Policy } from './tsMomentumHalalBasketV3Curriculum';
 import { compileTomOverlayPolicy } from './tomOverlayCurriculum';
+import { compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -47,6 +54,7 @@ const BOLLINGER_FIXTURE_VERSION = 'bollinger-mr-long-v2.learning-replay.v1';
 const TS_MOMENTUM_V2_FIXTURE_VERSION = 'ts-momentum-halal-basket-v2.learning-replay.v1';
 const TS_MOMENTUM_V3_FIXTURE_VERSION = 'ts-momentum-halal-basket-v3.learning-replay.v1';
 const TOM_OVERLAY_FIXTURE_VERSION = 'tom-overlay.learning-replay.v1';
+const DUAL_MOMENTUM_FIXTURE_VERSION = 'dual-momentum-rotation.learning-replay.v1';
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -208,6 +216,10 @@ export function loadTsMomentumHalalBasketV3LearningFixture(): BollingerLearningR
 
 export function loadTomOverlayLearningFixture(): BollingerLearningReplayFixture {
   return loadFixture(TOM_OVERLAY_FIXTURE_VERSION, TOM_OVERLAY_UNIVERSE);
+}
+
+export function loadDualMomentumRotationLearningFixture(): BollingerLearningReplayFixture {
+  return loadFixture(DUAL_MOMENTUM_FIXTURE_VERSION, DUAL_MOMENTUM_UNIVERSE);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -601,6 +613,26 @@ export function replayTomOverlayLearningPolicy(
   const policy = compileTomOverlayPolicy(answers);
   const learner = strategyBookCurve(fixture, tomOverlaySetup, policy.params, tomOverlayBookPolicy());
   const team = strategyBookCurve(fixture, tomOverlaySetup, TOM_OVERLAY_V1, tomOverlayBookPolicy());
+  return assembleLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    learner,
+    team,
+  );
+}
+
+export function replayDualMomentumRotationLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: BollingerLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateFixture(inputFixture, DUAL_MOMENTUM_FIXTURE_VERSION, DUAL_MOMENTUM_UNIVERSE);
+  const policy = compileDualMomentumRotationPolicy(answers);
+  const learner = strategyBookCurve(
+    fixture, dualMomentumRotationSetup, policy.params, dualMomentumRotationBookPolicy(),
+  );
+  const team = strategyBookCurve(
+    fixture, dualMomentumRotationSetup, DUAL_MOMENTUM_ROTATION_V1, dualMomentumRotationBookPolicy(),
+  );
   return assembleLearningReplay(
     { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
     fixture,
