@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 Stop-Hunt Reversal learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `stop-hunt-reversal-long`, exact v1 intraday-engine replay with prior-day-low preparation, registry/API dispatch, and a frozen PIT descriptor.
+Decisions: reused the exact 11-name book, real consolidated prior-day lows, sweep/reclaim and 2R-or-VWAP rules, inverse-vol hint, and shared intraday risk/fills; REJECTED remains research-only and execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 126 files / 909 tests; future/MOCK injections fail closed and all four normalized series align at 100.
+Open: only `g6b-linear-factor-wide` lacks a reviewed module; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 VWAP Reclaim learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `vwap-reclaim`, exact v1 intraday-engine replay, registry/API dispatch, and a versioned descriptor over the frozen captured-real PIT snapshot.
 Decisions: reused the exact 11-name liquid universe, regular-session VWAP/absorption rules, inverse-vol hint, shared intraday risk/fills, and immutable real rows; REJECTED remains research-only, Sharia-unscreened, and execution-blocked.

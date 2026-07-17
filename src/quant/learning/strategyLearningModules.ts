@@ -16,6 +16,7 @@ import { TOM_OVERLAY_CURRICULUM, compileTomOverlayPolicy } from './tomOverlayCur
 import { DUAL_MOMENTUM_ROTATION_CURRICULUM, compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 import { STOCKS_IN_PLAY_ORB_CURRICULUM, compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 import { VWAP_RECLAIM_CURRICULUM, compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
+import { STOP_HUNT_REVERSAL_CURRICULUM, compileStopHuntReversalPolicy } from './stopHuntReversalCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
@@ -24,6 +25,7 @@ import {
   loadDualMomentumRotationLearningFixture,
   loadStocksInPlayOrbLearningFixture,
   loadVwapReclaimLearningFixture,
+  loadStopHuntReversalLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
@@ -31,6 +33,7 @@ import {
   replayDualMomentumRotationLearningPolicy,
   replayStocksInPlayOrbLearningPolicy,
   replayVwapReclaimLearningPolicy,
+  replayStopHuntReversalLearningPolicy,
   type StrategyLearningFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
@@ -43,6 +46,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'dual-momentum-rotation',
   'stocks-in-play-orb',
   'vwap-reclaim',
+  'stop-hunt-reversal-long',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -121,6 +125,15 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     replay: (answers, fixture) => replayVwapReclaimLearningPolicy(
       answers,
       fixture as ReturnType<typeof loadVwapReclaimLearningFixture>,
+    ),
+  },
+  'stop-hunt-reversal-long': {
+    curriculum: STOP_HUNT_REVERSAL_CURRICULUM,
+    compile: compileStopHuntReversalPolicy,
+    loadFixture: loadStopHuntReversalLearningFixture,
+    replay: (answers, fixture) => replayStopHuntReversalLearningPolicy(
+      answers,
+      fixture as ReturnType<typeof loadStopHuntReversalLearningFixture>,
     ),
   },
 };

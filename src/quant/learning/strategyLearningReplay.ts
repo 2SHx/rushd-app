@@ -44,8 +44,12 @@ import {
   stocksInPlayOrbSetup,
   type SourcedDailyRow,
   type SourcedMinuteRow,
-  type StocksInPlayOrbParams,
 } from '../strategies/stocksInPlayOrb';
+import {
+  STOP_HUNT_REVERSAL_V1,
+  stopHuntReversalLongSetup,
+  type StopHuntReversalParams,
+} from '../strategies/stopHuntReversalLong';
 import {
   VWAP_RECLAIM_V1,
   vwapReclaimSetup,
@@ -62,6 +66,7 @@ import { compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import { compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
 import { compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 import { compileVwapReclaimPolicy } from './vwapReclaimCurriculum';
+import { compileStopHuntReversalPolicy } from './stopHuntReversalCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -81,6 +86,7 @@ const TOM_OVERLAY_FIXTURE_VERSION = 'tom-overlay.learning-replay.v1';
 const DUAL_MOMENTUM_FIXTURE_VERSION = 'dual-momentum-rotation.learning-replay.v1';
 const STOCKS_IN_PLAY_FIXTURE_VERSION = 'stocks-in-play-orb.learning-replay.v1';
 const VWAP_RECLAIM_FIXTURE_VERSION = 'vwap-reclaim.learning-replay.v1';
+const STOP_HUNT_REVERSAL_FIXTURE_VERSION = 'stop-hunt-reversal-long.learning-replay.v1';
 const intradayReplayCache = new WeakMap<object, Map<string, StrategyLearningReplayResult>>();
 
 const barSchema = z.tuple([
@@ -344,6 +350,10 @@ function loadIntradayFixture(version: string): IntradayLearningReplayFixture {
 
 export function loadVwapReclaimLearningFixture(): IntradayLearningReplayFixture {
   return loadIntradayFixture(VWAP_RECLAIM_FIXTURE_VERSION);
+}
+
+export function loadStopHuntReversalLearningFixture(): IntradayLearningReplayFixture {
+  return loadIntradayFixture(STOP_HUNT_REVERSAL_FIXTURE_VERSION);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -967,6 +977,38 @@ export function replayVwapReclaimLearningPolicy(
   const team = JSON.stringify(policy.params) === JSON.stringify(VWAP_RECLAIM_V1)
     ? learner
     : pooledIntradayTradeCurve(fixture, vwapReclaimSetup, VWAP_RECLAIM_V1);
+  const result = assembleIntradayLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    learner,
+    team,
+  );
+  const byPolicy = intradayReplayCache.get(inputFixture) ?? new Map<string, StrategyLearningReplayResult>();
+  byPolicy.set(cacheKey, result);
+  intradayReplayCache.set(inputFixture, byPolicy);
+  return result;
+}
+
+export function replayStopHuntReversalLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: IntradayLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateIntradayFixture(
+    inputFixture,
+    STOP_HUNT_REVERSAL_FIXTURE_VERSION,
+    STOCKS_IN_PLAY_UNIVERSE_V1,
+  );
+  const policy = compileStopHuntReversalPolicy(answers);
+  const cacheKey = `${policy.setupId}:${policy.policyHash}`;
+  const cached = intradayReplayCache.get(inputFixture)?.get(cacheKey);
+  if (cached) return cached;
+  prepareIntradaySetup(fixture, stopHuntReversalLongSetup);
+  const learner = pooledIntradayTradeCurve<StopHuntReversalParams>(
+    fixture, stopHuntReversalLongSetup, policy.params,
+  );
+  const team = JSON.stringify(policy.params) === JSON.stringify(STOP_HUNT_REVERSAL_V1)
+    ? learner
+    : pooledIntradayTradeCurve(fixture, stopHuntReversalLongSetup, STOP_HUNT_REVERSAL_V1);
   const result = assembleIntradayLearningReplay(
     { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
     fixture,
