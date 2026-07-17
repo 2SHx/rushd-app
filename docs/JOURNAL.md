@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M12 Academy B4 progress, gates, and parent-set age segment ✅
+Shipped: generated/applied `User.ageSegment` + `AcademyProgress`, auth-scoped progress/completion APIs, parent-controlled KIDS/TEENS settings, server-side DR-16 tier + DR-17 segment gates, and fixed +20 XP completion through `addXP`.
+Decisions: lazy-dev rung 7 composed existing guards/registry/XP; null child segment fails closed to KIDS, completion is learner-self-only with server-scored checkpoint evidence, and the unique lesson key plus serializable transaction makes repeats no-ops.
+Verify: Prisma validate/status clean and DB up to date; Academy/family focused 15/15; lint and TypeScript clean; full Vitest 128 files / 919 tests; security re-review passed.
+Open: B5 Academy UI is next; OQ-10 human Sharia-board review still gates final curriculum approval.
+
 ## 2026-07-17 — M10-L8 universal league learning gate ✅
 Shipped: every one of the nine visible league teams now routes to its exact lesson, while detailed metrics, historical comparison, and trade ledger render only after that setup's sealed result.
 Decisions: removed the unsupported-team evidence bypass, kept unknown future setups fail-closed, and split client-safe setup IDs from the server replay registry so gzip/hash validation never enters the browser bundle.

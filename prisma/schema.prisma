@@ -30,6 +30,16 @@ enum Currency {
   USD
 }
 
+// DR-17 age gate. Ordinal via src/academy/schema.ts AGE_SEGMENT_RANK
+// (KIDS < TEENS < ADULTS). Nullable: a CHILD with no segment set is
+// treated as KIDS (fail-closed, most protective); PARENT-role accounts
+// see everything regardless of this field.
+enum AgeSegment {
+  KIDS
+  TEENS
+  ADULTS
+}
+
 enum TransactionType {
   DEPOSIT
   WITHDRAWAL
@@ -57,9 +67,12 @@ model User {
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
 
-  parentId String?
-  parent   User?   @relation("FamilyMembers", fields: [parentId], references: [id])
-  children User[]  @relation("FamilyMembers")
+  parentId   String?
+  parent     User?       @relation("FamilyMembers", fields: [parentId], references: [id])
+  children   User[]      @relation("FamilyMembers")
+  // DR-17: parent-set on CHILD accounts at create/settings. Null on CHILD
+  // means "not yet set" and is treated as KIDS by the segment gate.
+  ageSegment AgeSegment?
 
   gamificationProfile      GamificationProfile?
   portfolioItems           PortfolioItem[]
@@ -70,6 +83,7 @@ model User {
   strategies               Strategy[]
   decisions                Decision[]
   purificationEntries      PurificationEntry[]
+  academyProgress          AcademyProgress[]
 
   @@unique([parentId, username])
   @@index([parentId])
@@ -134,6 +148,30 @@ model QuizAttempt {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// Rushd Academy (M12/DR-17) progress. Content itself is code-resident
+// (src/academy/**); this row is the only DB-persisted state per lesson.
+// The unique constraint is the idempotency key for the completion API —
+// a repeat completion updates this row rather than inserting a second one,
+// so XP is granted at most once per (userId, trackId, unitId, lessonId).
+model AcademyProgress {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId        String
+  unitId         String
+  lessonId       String
+  status         String // 'COMPLETED' — reserved for future 'IN_PROGRESS' states
+  score          Int?
+  answers        Json?
+  contentVersion Int
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, trackId, unitId, lessonId])
+  @@index([userId])
 }
 
 // Immutable sealed learner policy. Replay output is stored separately so this row is never updated
