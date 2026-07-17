@@ -1,8 +1,21 @@
 'use client';
-import Image from 'next/image';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, ShieldCheck, ShieldAlert, Gavel, Database } from 'lucide-react';
+import {
+  Bot,
+  ShieldCheck,
+  ShieldAlert,
+  Gavel,
+  Database,
+  Cpu,
+  TrendingUp,
+  Zap,
+  Flame,
+  PieChart,
+  GraduationCap,
+  Sliders,
+  type LucideIcon,
+} from 'lucide-react';
 import type { PassResult, SimStep, Stance } from './CommitteeClient';
 import { stanceStyle, pct } from './CommitteeClient';
 
@@ -13,36 +26,22 @@ interface CommitteeNode {
   x: string;
   y: string;
   type: 'data' | 'analyst' | 'gate' | 'debate' | 'pm' | 'risk';
-  icon?: typeof Database;
+  icon: LucideIcon;
 }
 
 const NODES: CommitteeNode[] = [
   { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '12%', y: '50%', type: 'data', icon: Database },
-  { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '31%', y: '16%', type: 'analyst' },
-  { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '31%', y: '39%', type: 'analyst' },
-  { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '31%', y: '61%', type: 'analyst' },
-  { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '31%', y: '84%', type: 'analyst' },
-  { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '20%', type: 'analyst' },
-  { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '45%', type: 'analyst' },
-  { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '75%', type: 'gate' },
+  { id: 'QUANT_CORE', name: 'Quant Core', nameAr: 'المؤشر الكمي', x: '31%', y: '16%', type: 'analyst', icon: Cpu },
+  { id: 'TECHNICAL', name: 'Technical', nameAr: 'التحليل الفني', x: '31%', y: '39%', type: 'analyst', icon: TrendingUp },
+  { id: 'PATTERN_ANALOG', name: 'Pattern Analog', nameAr: 'تحليل الأنماط', x: '31%', y: '61%', type: 'analyst', icon: Zap },
+  { id: 'NEWS_CATALYST', name: 'News Catalyst', nameAr: 'الأخبار والمحفزات', x: '31%', y: '84%', type: 'analyst', icon: Flame },
+  { id: 'FUNDAMENTAL', name: 'Fundamental', nameAr: 'التحليل المالي', x: '50%', y: '20%', type: 'analyst', icon: PieChart },
+  { id: 'RESEARCH', name: 'Research', nameAr: 'البحوث والمنشورات', x: '50%', y: '45%', type: 'analyst', icon: GraduationCap },
+  { id: 'SHARIA', name: 'Sharia Filter', nameAr: 'التوافق الشرعي', x: '50%', y: '75%', type: 'gate', icon: ShieldCheck },
   { id: 'debate', name: 'Debate Circle', nameAr: 'حلقة النقاش', x: '69%', y: '30%', type: 'debate', icon: Gavel },
   { id: 'PORTFOLIO_MANAGER', name: 'Portfolio Manager', nameAr: 'مدير المحفظة', x: '69%', y: '75%', type: 'pm', icon: Bot },
-  { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '88%', y: '50%', type: 'risk', icon: Gavel },
+  { id: 'risk', name: 'Risk Envelope', nameAr: 'ضوابط المخاطر', x: '88%', y: '50%', type: 'risk', icon: Sliders },
 ];
-
-const AVATARS: Record<string, string> = {
-  ingest: '/avatars/quant_core.png',
-  QUANT_CORE: '/avatars/quant_core.png',
-  TECHNICAL: '/avatars/technical.png',
-  PATTERN_ANALOG: '/avatars/technical.png',
-  NEWS_CATALYST: '/avatars/quant_core.png',
-  FUNDAMENTAL: '/avatars/pm.png',
-  RESEARCH: '/avatars/quant_core.png',
-  SHARIA: '/avatars/sharia.png',
-  debate: '/avatars/pm.png',
-  PORTFOLIO_MANAGER: '/avatars/pm.png',
-  risk: '/avatars/sharia.png',
-};
 
 export interface CommitteePipeline2DProps {
   simStep: SimStep;
@@ -314,50 +313,25 @@ export default function CommitteePipeline2D({
               }}
             />
 
-            {/* Compact circular avatar container */}
+            {/* Compact circular icon container */}
             <div
-              className={`relative w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 shadow-md ${
+              className={`relative w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-300 shadow-md ${
                 isActive
-                  ? 'border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.3)] scale-105'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-105'
                   : sStyle && agentSignal
                   ? agentSignal.stance === 'BULLISH'
-                    ? 'border-emerald-500/60'
+                    ? 'bg-emerald-500/10 border-emerald-500/70 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
                     : agentSignal.stance === 'BEARISH'
-                    ? 'border-rose-500/60'
-                    : 'border-white/20'
-                  : 'border-white/10 hover:border-white/30'
+                    ? 'bg-rose-500/10 border-rose-500/70 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.2)]'
+                    : 'bg-[#0f111a] border-white/20 text-gray-300'
+                  : 'bg-[#0a0d16] border-white/10 hover:border-white/30 text-gray-400 group-hover:text-white'
               }`}
             >
-              <Image
-                src={AVATARS[node.id] || '/avatars/quant_core.png'}
-                alt=""
-                fill
-                sizes="64px"
-                className="object-cover rounded-full pointer-events-none"
-              />
-              
-              {/* Overlay Badge at Bottom Right */}
-              <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border flex items-center justify-center text-white ${
-                isActive 
-                  ? 'bg-emerald-500 border-emerald-400 shadow-sm'
-                  : sStyle && agentSignal?.stance === 'BULLISH'
-                  ? 'bg-emerald-600 border-emerald-500'
-                  : sStyle && agentSignal?.stance === 'BEARISH'
-                  ? 'bg-rose-600 border-rose-500'
-                  : 'bg-[#0f111a] border-white/10'
-              }`}>
-                {node.icon ? (
-                  <node.icon className="w-2.5 h-2.5" />
-                ) : node.id === 'SHARIA' ? (
-                  passData?.shariaGate.compliant ?? true ? (
-                    <ShieldCheck className="w-2.5 h-2.5 text-white" />
-                  ) : (
-                    <ShieldAlert className="w-2.5 h-2.5 text-white" />
-                  )
-                ) : (
-                  <Bot className="w-2.5 h-2.5" />
-                )}
-              </div>
+              {node.id === 'SHARIA' && passData?.shariaGate && !passData.shariaGate.compliant ? (
+                <ShieldAlert className="w-6 h-6 text-rose-400" />
+              ) : (
+                <node.icon className="w-6 h-6" />
+              )}
             </div>
 
             {/* Label below the circle */}
