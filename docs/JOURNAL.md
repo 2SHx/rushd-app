@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M12 Academy B5 learner UI + family segment controls ✅
+Shipped: server-filtered en/ar Academy catalog→track→lesson→checkpoint→progress, exact theory→quiz/strategy links, Academy navigation, and parent-set KIDS/TEENS controls at child creation and family settings.
+Decisions: lazy-dev rung 7 reused the registry, `can()`, B4 APIs, and native Next routes; inaccessible content never enters child props, checkpoint state is the only client leaf, and all four ui-craft states fail honestly.
+Verify: focused 60/60, lint/TypeScript/diff clean; QA/security/design PASS; en desktop and ar RTL 390×844 walkthroughs passed with exact quiz opening, saved checkpoint, 12px adaptive nav, no overflow or console errors.
+Open: full Vitest reached 128/130 files and 921/926 tests; only pre-existing quant shared-DB/time-budget failures remained (`portfolio.test.ts` 4, `quant-eval.test.ts` 1), reproducible in isolation and unrelated to Academy files.
+
 ## 2026-07-17 — M12 Academy B4 progress, gates, and parent-set age segment ✅
 Shipped: generated/applied `User.ageSegment` + `AcademyProgress`, auth-scoped progress/completion APIs, parent-controlled KIDS/TEENS settings, server-side DR-16 tier + DR-17 segment gates, and fixed +20 XP completion through `addXP`.
 Decisions: lazy-dev rung 7 composed existing guards/registry/XP; null child segment fails closed to KIDS, completion is learner-self-only with server-scored checkpoint evidence, and the unique lesson key plus serializable transaction makes repeats no-ops.

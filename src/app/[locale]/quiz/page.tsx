@@ -29,13 +29,16 @@ export default function QuizListPage({
   searchParams,
 }: {
   params: { locale: string };
-  searchParams?: { setupId?: string | string[] };
+  searchParams?: { setupId?: string | string[]; topic?: string | string[] };
 }) {
   const t = useTranslations('Quiz');
   const locale = params.locale || 'en';
   const requestedSetupId = typeof searchParams?.setupId === 'string' ? searchParams.setupId : undefined;
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const requestedTopic = typeof searchParams?.topic === 'string'
+    ? QUIZ_TOPICS.find((item) => item.topic === searchParams.topic)?.topic ?? null
+    : null;
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(requestedTopic);
+  const [isModalOpen, setIsModalOpen] = useState(requestedTopic !== null);
   const [lastResult, setLastResult] = useState<{ passed: boolean; xp: number; level: number } | null>(null);
 
   const handleComplete = async (passed: boolean, topic: string) => {

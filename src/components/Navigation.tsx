@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Wallet, LineChart, BookOpen, User, Sparkles } from 'lucide-react';
+import { Wallet, LineChart, BookOpen, GraduationCap, User, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from './ThemeToggle';
@@ -38,6 +38,7 @@ export default function Navigation({
     { href: `/${locale}/dashboard`, icon: Wallet, label: t('portfolio'), shortLabel: t('portfolio') },
     { href: `/${locale}/markets`, icon: LineChart, label: t('stocks'), shortLabel: t('stocks') },
     { href: `/${locale}/quant`, icon: Sparkles, label: t('quant'), shortLabel: t('quantShort') },
+    { href: `/${locale}/academy`, icon: GraduationCap, label: t('academy'), shortLabel: t('academyShort') },
     { href: `/${locale}/quiz`, icon: BookOpen, label: t('quizzes'), shortLabel: t('quizzes') },
     { href: `/${locale}/profile`, icon: User, label: t('profile'), shortLabel: t('profile') },
   ];
@@ -61,6 +62,7 @@ export default function Navigation({
                 <Link
                   key={link.href}
                   href={link.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                     isActive
                       ? 'bg-accent/10 text-accent font-semibold border-s-2 border-accent'
@@ -88,14 +90,15 @@ export default function Navigation({
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-4 inset-x-4 max-w-lg mx-auto glass-panel rounded-full z-50 h-16 flex items-center justify-around px-2">
+      <nav className="md:hidden fixed bottom-4 inset-x-3 max-w-lg mx-auto glass-panel rounded-full z-50 h-16 flex items-center px-1.5 sm:inset-x-4 sm:px-2">
         {navItems.map((link) => {
           const isActive = pathname.startsWith(link.href);
           return (
             <Link
               key={link.href}
               href={link.href}
-              className={`flex flex-col items-center justify-center gap-0.5 w-14 h-full relative ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 ${
                 isActive ? 'text-accent' : 'text-foreground/70'
               }`}
             >
@@ -103,7 +106,7 @@ export default function Navigation({
                 <span className="absolute inset-0 bg-accent/10 rounded-2xl -z-10" />
               )}
               <link.icon className="w-5 h-5" />
-              <span className="text-[9px] font-semibold ltr:tracking-tight">{link.shortLabel}</span>
+              <span className="max-w-full truncate px-0.5 text-xs font-semibold ltr:tracking-tight">{link.shortLabel}</span>
             </Link>
           );
         })}

@@ -1,16 +1,19 @@
 'use client';
 // 'use client' reason: local form state + fetch('/api/family/children').
 import { useState, type FormEvent } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
 
 const inputClass =
   'w-full rounded-xl border border-[var(--border-color)] bg-foreground/[0.03] px-4 py-3 text-start text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-colors duration-150';
 
 export default function NewChildForm() {
   const t = useTranslations('Auth.newChild');
+  const locale = useLocale();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
+  const [ageSegment, setAgeSegment] = useState<'KIDS' | 'TEENS'>('KIDS');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [createdUsername, setCreatedUsername] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export default function NewChildForm() {
       const res = await fetch('/api/family/children', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, username, pin }),
+        body: JSON.stringify({ name, username, pin, ageSegment }),
       });
       if (res.status !== 201) {
         setHasError(true);
@@ -47,6 +50,9 @@ export default function NewChildForm() {
           <p className="text-2xl font-semibold text-foreground">{createdUsername}</p>
         </div>
         <p className="text-sm text-foreground/60">{t('doneNote')}</p>
+        <Link href={`/${locale}/family/settings`} className="inline-flex rounded-xl px-4 py-2 text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          {t('manageSegments')}
+        </Link>
       </div>
     );
   }
@@ -99,6 +105,23 @@ export default function NewChildForm() {
             className={inputClass}
           />
         </div>
+        <div>
+          <label htmlFor="childAgeSegment" className="block text-sm text-foreground/60 mb-1 text-start">
+            {t('ageSegmentLabel')}
+          </label>
+          <select
+            id="childAgeSegment"
+            value={ageSegment}
+            onChange={(event) => setAgeSegment(event.target.value as 'KIDS' | 'TEENS')}
+            className={inputClass}
+          >
+            <option value="KIDS">{t('ageSegments.kids')}</option>
+            <option value="TEENS">{t('ageSegments.teens')}</option>
+          </select>
+          <p className="mt-2 text-start text-xs leading-relaxed text-foreground/65">
+            {t('ageSegmentNote')}
+          </p>
+        </div>
 
         {hasError && (
           <p role="alert" className="text-sm text-down">
@@ -109,7 +132,7 @@ export default function NewChildForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-accent font-semibold text-white transition-colors duration-150 hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-60"
         >
           {isSubmitting ? t('submitting') : t('submit')}
         </button>
