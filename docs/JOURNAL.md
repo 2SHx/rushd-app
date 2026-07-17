@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — DR-19 adaptive Academy contract + Strategy-Teams presentation flag ✅
+Shipped: SYSTEM_DESIGN.md amended — DR-19 (LearnerProfile, zero-LLM 6–8-question diagnostic + deterministic `nextUp` recommender bounded by the DR-16/DR-17 `can()` guard), M14 milestone table, OQ-12, §4 LearnerProfile row; `SHOW_STRATEGY_TEAMS=false` in src/lib/featureFlags.ts hides the nav entry, quant hero card (+conditional grid, gated view-model fetch), StrategyLearningLab deep link, and 404s /quant/league — DR-14 engine/APIs/data untouched.
+Decisions: age never enters LearnerProfile (stays on parent-set User.ageSegment); persona is an adjustable "starting path", never psychometric; League hidden by presentation flag, not deletion — practiceLink invariant preserved; message keys "teams"/"teamsShort" retained for key identity.
+Verify: lint clean; tsc clean except pre-existing markets/page.tsx fundamentalsAnnual error; vitest learning+academy 22 files/119 tests; en/ar 962-key identity; qa-reviewer PASS; design-reviewer findings (dead 22rem grid track, dead league fetch) fixed and re-verified; flag-ON round-trip restores all surfaces.
+Open: M14 implementation (diagnostic content+scorer, LearnerProfile migration+signals API with security gate, adaptive recommender TDD, Arabic/Sharia diagnostic review) queued after M13; OQ-12 persona taxonomy awaits first cohort data.
+
 ## 2026-07-17 — M12 Academy B5 learner UI + family segment controls ✅
 Shipped: server-filtered en/ar Academy catalog→track→lesson→checkpoint→progress, exact theory→quiz/strategy links, Academy navigation, and parent-set KIDS/TEENS controls at child creation and family settings.
 Decisions: lazy-dev rung 7 reused the registry, `can()`, B4 APIs, and native Next routes; inaccessible content never enters child props, checkpoint state is the only client leaf, and all four ui-craft states fail honestly.

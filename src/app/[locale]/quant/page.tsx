@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
+import { SHOW_STRATEGY_TEAMS } from '@/lib/featureFlags';
 
 export default async function QuantPage({ params }: { params: { locale: string } }) {
   const locale = params.locale || 'en';
@@ -87,12 +88,12 @@ export default async function QuantPage({ params }: { params: { locale: string }
     })),
   }));
 
-  const league = await loadStrategyLeagueViewModel();
-  const leagueAcceptedCount = league.teams.filter(team => team.status === 'ACCEPTED').length;
-  const leagueRejectedCount = league.teams.filter(team => team.status === 'REJECTED').length;
+  const league = SHOW_STRATEGY_TEAMS ? await loadStrategyLeagueViewModel() : null;
+  const leagueAcceptedCount = league ? league.teams.filter(team => team.status === 'ACCEPTED').length : 0;
+  const leagueRejectedCount = league ? league.teams.filter(team => team.status === 'REJECTED').length : 0;
 
   const t = await getTranslations('Quant');
-  const resultsT = await getTranslations('QuantResults');
+  const resultsT = SHOW_STRATEGY_TEAMS ? await getTranslations('QuantResults') : null;
   const ForwardIcon = locale === 'ar' ? ArrowLeft : ArrowRight;
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
@@ -125,7 +126,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
       <section className="relative isolate overflow-hidden rounded-[2rem] bg-surface-card p-6 shadow-[0_24px_80px_-48px_rgba(79,70,229,0.55)] ring-1 ring-border-color sm:p-8">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-accent/[0.10] via-transparent to-up/[0.08]" />
         <div className="pointer-events-none absolute -end-20 -top-24 -z-10 size-72 rounded-full bg-accent/10 blur-3xl" />
-        <div className="grid items-end gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className={`grid items-end gap-8 ${SHOW_STRATEGY_TEAMS ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
           <div className="max-w-3xl text-start">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-up/[0.10] px-3 py-1.5 text-xs font-semibold text-up ring-1 ring-inset ring-up/20">
               <GraduationCap className="size-4" aria-hidden="true" />
@@ -136,6 +137,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
             <p className="mt-5 max-w-2xl text-xs leading-5 text-foreground/50">{t('ultraNote')}</p>
           </div>
 
+          {SHOW_STRATEGY_TEAMS ? (
           <Link
             href={`/${locale}/quant/league`}
             className="group flex min-h-36 items-center justify-between gap-4 rounded-3xl bg-surface-card/80 p-5 text-start shadow-[0_18px_55px_-40px_rgba(15,23,42,0.65)] ring-1 ring-border-color backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:ring-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -145,22 +147,23 @@ export default async function QuantPage({ params }: { params: { locale: string }
                 <BarChart3 className="size-5" aria-hidden="true" />
               </span>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">{resultsT('eyebrow')}</p>
-                <h2 className="mt-1 text-base font-bold text-foreground">{resultsT('navLabel')}</h2>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">{resultsT!('eyebrow')}</p>
+                <h2 className="mt-1 text-base font-bold text-foreground">{resultsT!('navLabel')}</h2>
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold tabular-nums">
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-up/10 px-2 py-1 text-up">
                     <CheckCircle2 className="size-3" aria-hidden="true" />
-                    {resultsT('acceptedCount', { count: count(leagueAcceptedCount) })}
+                    {resultsT!('acceptedCount', { count: count(leagueAcceptedCount) })}
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-down/10 px-2 py-1 text-down">
                     <XCircle className="size-3" aria-hidden="true" />
-                    {resultsT('rejectedCount', { count: count(leagueRejectedCount) })}
+                    {resultsT!('rejectedCount', { count: count(leagueRejectedCount) })}
                   </span>
                 </div>
               </div>
             </div>
             <ForwardIcon className="size-5 shrink-0 text-foreground/35 transition-transform duration-200 group-hover:translate-x-1 rtl:group-hover:-translate-x-1" aria-hidden="true" />
           </Link>
+          ) : null}
         </div>
       </section>
 

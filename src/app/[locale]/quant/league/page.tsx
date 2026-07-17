@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, BarChart3 } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import StrategyLeagueClient from '@/components/quant/StrategyLeagueClient';
 import RunLabPanel, { type RunnableSetup } from '@/components/quant/RunLabPanel';
 import { STRATEGY_SETUP_CATALOG } from '@/quant/strategies/catalog';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
+import { SHOW_STRATEGY_TEAMS } from '@/lib/featureFlags';
 
 export default async function QuantResultsPage({ params }: { params: { locale: string } }) {
+  if (!SHOW_STRATEGY_TEAMS) notFound();
   const locale = params.locale || 'ar';
   const session = await auth();
   if (!session?.user?.id) redirect(`/${locale}/login`);

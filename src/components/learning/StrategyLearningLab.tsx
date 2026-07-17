@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { SHOW_STRATEGY_TEAMS } from '@/lib/featureFlags';
 import type { StrategyLearningReplayResult } from '@/quant/learning/strategyLearningReplay';
 import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningSetupIds';
 import StrategyLearningComparisonChart from './StrategyLearningComparisonChart';
@@ -450,6 +451,7 @@ export default function StrategyLearningLab({
                     <RotateCcw className="size-4" aria-hidden="true" />
                     {t('newAttempt')}
                   </button>
+                  {SHOW_STRATEGY_TEAMS ? (
                   <Link
                     href={`/${locale}/quant/league?setup=${encodeURIComponent(completion.result.setupId)}`}
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-xs font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -457,6 +459,7 @@ export default function StrategyLearningLab({
                     {t('viewTeamEvidence')}
                     <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
                   </Link>
+                  ) : null}
                 </aside>
               </div>
             </div>
