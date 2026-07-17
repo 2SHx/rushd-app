@@ -12,13 +12,16 @@ import {
   TS_MOMENTUM_HALAL_BASKET_V3_CURRICULUM,
   compileTsMomentumHalalBasketV3Policy,
 } from './tsMomentumHalalBasketV3Curriculum';
+import { TOM_OVERLAY_CURRICULUM, compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
   loadTsMomentumHalalBasketV3LearningFixture,
+  loadTomOverlayLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
+  replayTomOverlayLearningPolicy,
   type BollingerLearningReplayFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
@@ -27,6 +30,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'bollinger-mr-long-v2',
   'ts-momentum-halal-basket-v2',
   'ts-momentum-halal-basket-v3',
+  'tom-overlay',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -76,6 +80,12 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     compile: compileTsMomentumHalalBasketV3Policy,
     loadFixture: loadTsMomentumHalalBasketV3LearningFixture,
     replay: replayTsMomentumHalalBasketV3LearningPolicy,
+  },
+  'tom-overlay': {
+    curriculum: TOM_OVERLAY_CURRICULUM,
+    compile: compileTomOverlayPolicy,
+    loadFixture: loadTomOverlayLearningFixture,
+    replay: replayTomOverlayLearningPolicy,
   },
 };
 

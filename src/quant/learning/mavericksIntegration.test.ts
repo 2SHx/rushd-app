@@ -22,6 +22,7 @@ describe('Mavericks strategy-learning bridge', () => {
     expect(isStrategyLearningSetupId('bollinger-mr-long-v2')).toBe(true);
     expect(isStrategyLearningSetupId('ts-momentum-halal-basket-v2')).toBe(true);
     expect(isStrategyLearningSetupId('ts-momentum-halal-basket-v3')).toBe(true);
+    expect(isStrategyLearningSetupId('tom-overlay')).toBe(true);
     expect(isStrategyLearningSetupId('gapper-orb')).toBe(false);
   });
 

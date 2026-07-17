@@ -22,6 +22,7 @@ import {
   TS_MOMENTUM_HALAL_BASKET_V3,
   tsMomentumV3BookPolicy,
 } from '../strategies/tsMomentumHalalBasketV3';
+import { tomOverlayBookPolicy, tomOverlaySetup, TOM_OVERLAY_UNIVERSE, TOM_OVERLAY_V1 } from '../strategies/tomOverlay';
 import type { StrategySetup } from '../strategies/types';
 import {
   compileBollingerMrLongV2Policy,
@@ -29,6 +30,7 @@ import {
 } from './bollingerMrLongV2Curriculum';
 import { compileTsMomentumHalalBasketV2Policy } from './tsMomentumHalalBasketV2Curriculum';
 import { compileTsMomentumHalalBasketV3Policy } from './tsMomentumHalalBasketV3Curriculum';
+import { compileTomOverlayPolicy } from './tomOverlayCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -44,6 +46,7 @@ const FIXTURE_DIR = path.join(
 const BOLLINGER_FIXTURE_VERSION = 'bollinger-mr-long-v2.learning-replay.v1';
 const TS_MOMENTUM_V2_FIXTURE_VERSION = 'ts-momentum-halal-basket-v2.learning-replay.v1';
 const TS_MOMENTUM_V3_FIXTURE_VERSION = 'ts-momentum-halal-basket-v3.learning-replay.v1';
+const TOM_OVERLAY_FIXTURE_VERSION = 'tom-overlay.learning-replay.v1';
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -156,7 +159,7 @@ function validateFixture(
     || expectedUniverse.some(symbol => !fixture.strategyUniverse.includes(symbol))) {
     throw new Error('learning_fixture_team_universe_mismatch');
   }
-  const required = [...expectedUniverse, 'SPUS', 'SPY'];
+  const required = Array.from(new Set([...expectedUniverse, 'SPUS', 'SPY']));
   const symbols = fixture.series.map(item => item.symbol);
   if (new Set(symbols).size !== symbols.length
     || required.length !== symbols.length
@@ -176,8 +179,15 @@ function loadFixture(version: string, expectedUniverse: readonly string[]): Boll
   if (!reference.success) return validateFixture(raw, version, expectedUniverse);
   if (reference.data.fixtureVersion !== version) throw new Error('learning_fixture_reference_version_mismatch');
   const source: unknown = JSON.parse(fs.readFileSync(fixturePath(reference.data.dataFixtureVersion), 'utf8'));
+  const sourceFixture = fixtureSchema.parse(source);
+  const required = new Set([...expectedUniverse, 'SPUS', 'SPY']);
   return validateFixture(
-    { ...(source as Record<string, unknown>), fixtureVersion: version },
+    {
+      ...sourceFixture,
+      fixtureVersion: version,
+      strategyUniverse: [...expectedUniverse],
+      series: sourceFixture.series.filter(item => required.has(item.symbol)),
+    },
     version,
     expectedUniverse,
   );
@@ -194,6 +204,10 @@ export function loadTsMomentumHalalBasketV2LearningFixture(): BollingerLearningR
 
 export function loadTsMomentumHalalBasketV3LearningFixture(): BollingerLearningReplayFixture {
   return loadFixture(TS_MOMENTUM_V3_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
+}
+
+export function loadTomOverlayLearningFixture(): BollingerLearningReplayFixture {
+  return loadFixture(TOM_OVERLAY_FIXTURE_VERSION, TOM_OVERLAY_UNIVERSE);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -352,7 +366,10 @@ function weeklyTimestamps(daily: readonly number[]): number[] {
 function normalizedSeries(points: readonly EquityPoint[], timestamps: readonly number[]): LearningComparisonPoint[] {
   const baseline = latestValue(points, timestamps[0]);
   if (!(baseline > 0)) throw new Error('learning_comparison_invalid_baseline');
-  return timestamps.map(ts => ({ ts: new Date(ts).toISOString(), value: 100 * latestValue(points, ts) / baseline }));
+  return timestamps.map((ts, index) => ({
+    ts: new Date(ts).toISOString(),
+    value: index === 0 ? 100 : 100 * latestValue(points, ts) / baseline,
+  }));
 }
 
 function metrics(points: readonly EquityPoint[], timestamps: readonly number[], trades: number): LearningReplayMetrics {
@@ -373,6 +390,41 @@ function metrics(points: readonly EquityPoint[], timestamps: readonly number[], 
     maxDrawdown,
     annualizedVolatility: Math.sqrt(variance) * Math.sqrt(252),
     trades,
+  };
+}
+
+function assembleLearningReplay(
+  identity: { setupId: string; setupVersion: string; policyHash: string },
+  fixture: BollingerLearningReplayFixture,
+  learner: { curve: EquityPoint[]; trades: number },
+  team: { curve: EquityPoint[]; trades: number },
+): StrategyLearningReplayResult {
+  const spus = closeCurve(fixture, 'SPUS');
+  const spy = closeCurve(fixture, 'SPY');
+  const dailyTimestamps = commonDailyTimestamps(fixture, spy, spus);
+  const sampledTimestamps = weeklyTimestamps(dailyTimestamps);
+  const shariaState = deriveShariaState(fixture.sharia.screened, []);
+  if (shariaState !== 'UNSCREENED_EXECUTION_BLOCKED') throw new Error('learning_fixture_sharia_state_mismatch');
+  return {
+    ...identity,
+    basis: 'NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS',
+    interval: { start: new Date(dailyTimestamps[0]).toISOString(), end: new Date(dailyTimestamps.at(-1)!).toISOString(), oosStart: fixture.interval.oosStart },
+    labels: { learner: 'Learner policy', team: 'Strategy team', spus: 'SPUS price-only benchmark', spy: 'S&P 500 ETF price-only proxy' },
+    series: {
+      learner: normalizedSeries(learner.curve, sampledTimestamps), team: normalizedSeries(team.curve, sampledTimestamps),
+      spus: normalizedSeries(spus, sampledTimestamps), spy: normalizedSeries(spy, sampledTimestamps),
+    },
+    metrics: {
+      learner: metrics(learner.curve, dailyTimestamps, learner.trades), team: metrics(team.curve, dailyTimestamps, team.trades),
+      spus: metrics(spus, dailyTimestamps, 0), spy: metrics(spy, dailyTimestamps, 0),
+    },
+    provenance: {
+      fixtureVersion: fixture.fixtureVersion, capturedAt: fixture.capturedAt, warmupStart: fixture.warmupStart,
+      oosBoundary: fixture.interval.oosStart, dataSources: Array.from(new Set(fixture.series.map(item => item.source))).sort(),
+      strategyUniverse: [...fixture.strategyUniverse], riskLimits: { ...DEFAULT_BT_LIMITS },
+      fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
+      sharia: { screened: false, source: 'none', state: shariaState, executionBlocked: true },
+    },
   };
 }
 
@@ -539,4 +591,20 @@ export function replayTsMomentumHalalBasketV3LearningPolicy(
       sharia: { screened: false, source: 'none', state: shariaState, executionBlocked: true },
     },
   };
+}
+
+export function replayTomOverlayLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: BollingerLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateFixture(inputFixture, TOM_OVERLAY_FIXTURE_VERSION, TOM_OVERLAY_UNIVERSE);
+  const policy = compileTomOverlayPolicy(answers);
+  const learner = strategyBookCurve(fixture, tomOverlaySetup, policy.params, tomOverlayBookPolicy());
+  const team = strategyBookCurve(fixture, tomOverlaySetup, TOM_OVERLAY_V1, tomOverlayBookPolicy());
+  return assembleLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    learner,
+    team,
+  );
 }

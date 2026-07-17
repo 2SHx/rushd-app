@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 turn-of-month learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `tom-overlay`, exact fixed-SPUS strategy-book replay, shared closed-map compiler helper, and frozen ≤6-month captured-real PIT descriptor.
+Decisions: lazy-dev rung 2 reuses observed-session eligibility, shared portfolio fills/risk, and the immutable SPUS snapshot; the REJECTED seasonal hypothesis remains research-only and execution-blocked.
+Verify: focused 26/26; lint clean; TypeScript clean; full Vitest 121 files / 888 tests; key identity green; future/MOCK injections fail closed and all four lines start at exact 100.
+Open: five visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 TS momentum v3 learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `ts-momentum-halal-basket-v3`, exact strategy-book replay with its volatility governor/holding cap, and frozen ≤6-month captured-real PIT descriptor.
 Decisions: lazy-dev rung 2 reuses the v2 signal, shared portfolio engine, v3 book policy, and immutable daily snapshot; the REJECTED setup remains research-only and execution-blocked.
