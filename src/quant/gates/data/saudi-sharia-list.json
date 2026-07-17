@@ -1,6 +1,0 @@
-{
-  "asOf": null,
-  "publisher": null,
-  "symbols": [],
-  "notes": "No free, programmatically-retrievable Saudi Sharia-compliant securities list was found. Attempted on 2026-07-16: Saudi Exchange (saudiexchange.sa) rules-guidance/shariah pages and the S&P Saudi Arabia Shariah index page on spglobal.com — all returned HTTP 403. Real per-issuer Saudi Sharia screens (Zoya, Musaffa, S&P/FTSE Shariah index membership files) are paywalled or login-gated. Shipping an empty snapshot rather than transcribing a list from memory, per doctrine: never hand-invent membership. Run scripts/refresh-sharia-snapshots.ts to retry, or replace this file with a real dated export if a free source becomes available."
-}
