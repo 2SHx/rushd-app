@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import {
   Briefcase, History, CheckCircle2, Coins,
-  ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark
+  ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark, Trophy, Sparkles
 } from 'lucide-react';
+import Link from 'next/link';
 import { formatMoney as formatMoneyShared, formatSARNumber, RiyalSymbol } from '@/lib/currency';
 
 export interface Position {
@@ -446,6 +447,55 @@ export default function DashboardClient({
               : t('portfolioPaperBadge')}
         </div>
       </div>
+
+      {/* Gamification Level & Progress Card */}
+      {!isAlpaca && (
+        <div className="relative overflow-hidden rounded-[1.75rem] border border-accent/20 bg-surface-card p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent border border-accent/20">
+                <Trophy className="size-6" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
+                    {isAr ? 'مستوى التعلّم والخبرة' : 'Level & Progress'}
+                  </span>
+                  <span className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold text-white">
+                    {isAr ? 'المستوى 3' : 'Level 3'}
+                  </span>
+                </div>
+                <h2 className="mt-1 text-base font-extrabold text-foreground sm:text-lg">
+                  {isAr ? 'مستثمر واعد · Promising Investor' : 'Promising Investor'}
+                </h2>
+                <p className="mt-0.5 text-xs text-foreground/60">
+                  {isAr ? 'حققت 350 XP من أصل 500 XP للوصول إلى المستوى 4' : '350 XP earned out of 500 XP to Level 4'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-start sm:items-end gap-1.5 ms-auto">
+              <div className="font-mono text-sm font-bold text-accent">350 / 500 XP (70%)</div>
+              <div className="w-44 sm:w-56 h-2.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
+                <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: '70%' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between border-t border-foreground/[0.06] pt-3 text-xs gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-foreground/50">{isAr ? 'الشارات المفتوحة:' : 'Badges:'}</span>
+              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">🛡️ {isAr ? 'فاحص أيوفي' : 'AAOIFI Auditor'}</span>
+              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">⚡ {isAr ? 'رواد الادخار' : 'Savings Pioneer'}</span>
+              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">📊 {isAr ? 'محلل القيمة' : 'Value Analyst'}</span>
+            </div>
+            <Link href={`/${locale}/academy`} className="text-xs font-bold text-accent hover:underline ms-auto flex items-center gap-1">
+              <Sparkles className="size-3.5" aria-hidden="true" />
+              {isAr ? 'طوّر مستواك في الأكاديمية ←' : 'Advance level in Academy →'}
+            </Link>
+          </div>
+        </div>
+      )}
 
       {isAlpaca && paperAccount ? (
         <div className="space-y-3" role="note">

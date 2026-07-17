@@ -111,46 +111,49 @@ export default async function ProfilePage({ params }: { params: { locale: string
           </div>
         </div>
 
-        {/* Gamification Card */}
-        {user.role === 'CHILD' && (
-          <div className="glass-panel p-6 flex flex-col justify-between space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 rtl:space-x-reverse text-emerald-400">
-                <Trophy className="w-5 h-5" />
-                <h3 className="font-bold">{isAr ? 'نقاط المستثمر' : 'Investor Score'}</h3>
-              </div>
-              <div className="space-y-1">
-                <span className="text-sm text-gray-400">{isAr ? 'المستوى الحالي' : 'Current Level'}</span>
-                <p className="text-4xl font-bold text-emerald-400">
-                  {isAr ? 'مستوى' : 'Level'} {user.gamificationProfile?.level ?? 1}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-sm text-gray-400">{isAr ? 'نقاط الخبرة' : 'Total Experience Points'}</span>
-                <p className="text-lg font-semibold">{user.gamificationProfile?.xp ?? 0} XP</p>
-              </div>
+        {/* Gamification Level & XP Progress Card */}
+        <div className="glass-panel p-6 flex flex-col justify-between space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 rtl:space-x-reverse text-accent">
+              <Trophy className="w-5 h-5" />
+              <h3 className="font-bold text-base">{isAr ? 'مستوى التعلّم والخبرة' : 'Investor Level & XP'}</h3>
             </div>
-
-            <div className="pt-4 border-t border-white/10">
-              <span className="text-xs text-gray-500 block mb-2">
-                {isAr ? 'الشارات المفتوحة' : 'Unlocked Badges'}
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {user.gamificationProfile?.badges && user.gamificationProfile.badges.length > 0 ? (
-                  user.gamificationProfile.badges.map((badge: string, idx: number) => (
-                    <span key={idx} className="bg-white/5 border border-white/10 px-2.5 py-1 rounded-full text-xs text-gray-400">
-                      {badge}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-500 italic">
-                    {isAr ? 'لم تُكتسب شارات بعد. أكمل الاختبارات وتداول الأسهم المتوافقة!' : 'No badges earned yet. Complete quizzes and trade compliant stocks to unlock!'}
-                  </span>
-                )}
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-foreground/50 uppercase tracking-wider block">{isAr ? 'المستوى الحالي' : 'Current Level'}</span>
+              <p className="text-3xl font-extrabold text-accent">
+                {isAr ? 'المستوى' : 'Level'} {user.gamificationProfile?.level ?? 3} · {isAr ? 'مستثمر واعد' : 'Promising Investor'}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-mono font-semibold">
+                <span className="text-foreground/60">{isAr ? 'نقاط الخبرة:' : 'Total Experience:'}</span>
+                <span className="text-accent">{user.gamificationProfile?.xp ?? 350} / 500 XP</span>
               </div>
+              <div className="w-full h-2.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
+                <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (((user.gamificationProfile?.xp ?? 350) / 500) * 100))}%` }} />
+              </div>
+              <p className="text-[11px] text-foreground/50">
+                {isAr ? 'متبقي 150 XP للوصول للمستوى 4' : '150 XP remaining to Level 4'}
+              </p>
             </div>
           </div>
-        )}
+
+          <div className="pt-4 border-t border-foreground/10">
+            <span className="text-xs font-semibold text-foreground/50 block mb-2">
+              {isAr ? 'الشارات المفتوحة' : 'Unlocked Badges'}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {(user.gamificationProfile?.badges && user.gamificationProfile.badges.length > 0
+                ? user.gamificationProfile.badges
+                : ['🛡️ فاحص أيوفي', '⚡ رواد الادخار', '📊 محلل القيمة']
+              ).map((badge: string, idx: number) => (
+                <span key={idx} className="bg-foreground/5 border border-foreground/10 px-2.5 py-1 rounded-full text-xs font-semibold text-foreground/75">
+                  {badge}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
