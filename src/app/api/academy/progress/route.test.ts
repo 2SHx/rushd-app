@@ -9,6 +9,8 @@ const progressFindMany = vi.fn();
 const gamificationFindUnique = vi.fn();
 const gamificationCreate = vi.fn();
 const gamificationUpdate = vi.fn();
+const learnerProfileFindUnique = vi.fn();
+const learnerProfileUpdate = vi.fn();
 
 const TIER_CAPABILITIES: Record<string, string[]> = {
   BASIC: ['academy:track:foundations'],
@@ -32,6 +34,10 @@ const tx = {
     findUnique: (...args: unknown[]) => gamificationFindUnique(...args),
     create: (...args: unknown[]) => gamificationCreate(...args),
     update: (...args: unknown[]) => gamificationUpdate(...args),
+  },
+  learnerProfile: {
+    findUnique: (...args: unknown[]) => learnerProfileFindUnique(...args),
+    update: (...args: unknown[]) => learnerProfileUpdate(...args),
   },
 };
 
@@ -104,6 +110,8 @@ beforeEach(() => {
   }));
   gamificationFindUnique.mockResolvedValue({ userId: 'child-1', xp: 0, level: 1 });
   gamificationUpdate.mockResolvedValue({ userId: 'child-1', xp: 20, level: 1 });
+  learnerProfileFindUnique.mockResolvedValue(null);
+  learnerProfileUpdate.mockResolvedValue(undefined);
 });
 
 describe('POST /api/academy/progress', () => {
@@ -192,6 +200,63 @@ describe('POST /api/academy/progress', () => {
   it('a stale contentVersion 409s', async () => {
     const res = await POST(postRequest({ ...KIDS_LESSON, contentVersion: 999 }));
     expect(res.status).toBe(409);
+  });
+
+  it('no LearnerProfile row is a no-op for signals (diagnostic is opt-in)', async () => {
+    const res = await POST(postRequest(KIDS_LESSON));
+    expect(res.status).toBe(201);
+    expect(learnerProfileUpdate).not.toHaveBeenCalled();
+  });
+
+  it('first-time completion merges a per-track signals counter, in the same transaction', async () => {
+    learnerProfileFindUnique.mockResolvedValue({ userId: 'child-1', signals: {} });
+    const res = await POST(postRequest({ ...KIDS_LESSON, answers: { 'money-basics-kids-cp1': 1 } }));
+    expect(res.status).toBe(201);
+    expect(learnerProfileUpdate).toHaveBeenCalledWith({
+      where: { userId: 'child-1' },
+      data: { signals: { foundations: { completed: 1, checkpointCorrect: 0, checkpointTotal: 1 } } },
+    });
+  });
+
+  it('subsequent first-time completions in another track accumulate without clobbering', async () => {
+    learnerProfileFindUnique.mockResolvedValue({
+      userId: 'child-1',
+      signals: { foundations: { completed: 2, checkpointCorrect: 1, checkpointTotal: 2 } },
+    });
+    const res = await POST(postRequest(KIDS_LESSON));
+    expect(res.status).toBe(201);
+    expect(learnerProfileUpdate).toHaveBeenCalledWith({
+      where: { userId: 'child-1' },
+      data: { signals: { foundations: { completed: 3, checkpointCorrect: 2, checkpointTotal: 3 } } },
+    });
+  });
+
+  it('a malformed stored signals entry resets to zeros before incrementing', async () => {
+    learnerProfileFindUnique.mockResolvedValue({
+      userId: 'child-1',
+      signals: { foundations: { completed: 'not-a-number', checkpointCorrect: null } },
+    });
+    const res = await POST(postRequest(KIDS_LESSON));
+    expect(res.status).toBe(201);
+    expect(learnerProfileUpdate).toHaveBeenCalledWith({
+      where: { userId: 'child-1' },
+      data: { signals: { foundations: { completed: 1, checkpointCorrect: 1, checkpointTotal: 1 } } },
+    });
+  });
+
+  it('repeat completion does not double-count signals', async () => {
+    progressFindUnique.mockResolvedValue({
+      id: 'progress-1',
+      status: 'COMPLETED',
+      userId: 'child-1',
+      trackId: 'foundations',
+      unitId: 'money-basics',
+      lessonId: 'money-basics-kids',
+    });
+    learnerProfileFindUnique.mockResolvedValue({ userId: 'child-1', signals: { foundations: { completed: 1, checkpointCorrect: 1, checkpointTotal: 1 } } });
+    const res = await POST(postRequest(KIDS_LESSON));
+    expect(res.status).toBe(200);
+    expect(learnerProfileUpdate).not.toHaveBeenCalled();
   });
 });
 

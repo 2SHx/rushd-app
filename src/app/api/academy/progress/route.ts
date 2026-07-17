@@ -16,6 +16,15 @@ import { ACADEMY_TRACKS, AGE_SEGMENTS, type AgeSegment } from '@/academy/registr
 // (same anti-loot-box stance as DR-14).
 const LESSON_COMPLETION_XP = 20;
 
+// DR-19 security-audit fix: LearnerProfile.signals is a Json read-back —
+// never trust it structurally before incrementing. A malformed per-track
+// entry resets to zeros rather than NaN-poisoning the counters.
+const signalEntrySchema = z.object({
+  completed: z.number().int().min(0),
+  checkpointCorrect: z.number().int().min(0),
+  checkpointTotal: z.number().int().min(0),
+});
+
 const AGE_SEGMENT_RANK: Record<AgeSegment, number> = Object.fromEntries(
   AGE_SEGMENTS.map((segment, index) => [segment, index]),
 ) as Record<AgeSegment, number>;
@@ -160,6 +169,28 @@ export async function POST(request: Request): Promise<Response> {
         },
       });
       await addXP(userId, LESSON_COMPLETION_XP, tx);
+      // DR-19 feedback loop: per-track counters merged into
+      // LearnerProfile.signals. First-time completion only (guarded above),
+      // so this never double-counts on a repeat completion. No profile row
+      // yet is a no-op — the diagnostic is opt-in, not a prerequisite.
+      const existingProfile = await tx.learnerProfile.findUnique({ where: { userId } });
+      if (existingProfile) {
+        const rawSignals = existingProfile.signals;
+        const signals: Record<string, { completed: number; checkpointCorrect: number; checkpointTotal: number }> =
+          rawSignals && typeof rawSignals === 'object' && !Array.isArray(rawSignals)
+            ? { ...(rawSignals as Record<string, unknown>) as Record<string, { completed: number; checkpointCorrect: number; checkpointTotal: number }> }
+            : {};
+        const rawTrackSignal = signalEntrySchema.safeParse(signals[trackId]);
+        const trackSignal = rawTrackSignal.success
+          ? rawTrackSignal.data
+          : { completed: 0, checkpointCorrect: 0, checkpointTotal: 0 };
+        signals[trackId] = {
+          completed: trackSignal.completed + 1,
+          checkpointCorrect: trackSignal.checkpointCorrect + (score === 100 ? 1 : 0),
+          checkpointTotal: trackSignal.checkpointTotal + 1,
+        };
+        await tx.learnerProfile.update({ where: { userId }, data: { signals } });
+      }
       return { progress, xpAwarded: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 

@@ -84,6 +84,7 @@ model User {
   decisions                Decision[]
   purificationEntries      PurificationEntry[]
   academyProgress          AcademyProgress[]
+  learnerProfile           LearnerProfile?
 
   @@unique([parentId, username])
   @@index([parentId])
@@ -172,6 +173,24 @@ model AcademyProgress {
 
   @@unique([userId, trackId, unitId, lessonId])
   @@index([userId])
+}
+
+// DR-19 diagnostic/adaptive-learning profile. Additive to AcademyProgress —
+// this row is the single feedback-loop target (`signals`) fed by the
+// progress-completion API and the single source persona/skillLevel are read
+// from. Age is NEVER stored here (see src/academy/diagnostic — the scorer
+// only ever receives an `isChild` boolean, never age/birthdate).
+model LearnerProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  persona           String
+  baselineKnowledge Int
+  skillLevel        Int
+  diagnosticAnswers Json     @default("{}")
+  signals           Json     @default("{}")
+  profileVersion    Int
+  updatedAt         DateTime @updatedAt
 }
 
 // Immutable sealed learner policy. Replay output is stored separately so this row is never updated
