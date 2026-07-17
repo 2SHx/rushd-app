@@ -181,34 +181,16 @@ body {
   }
 }
 
-/* Institutional button interactive fill, colored borders, & active press transitions (ui-craft) */
-button:not(:disabled), [role="button"]:not([aria-disabled="true"]), .btn:not(:disabled) {
+/* Clean button interactive utilities (ui-craft) */
+.btn-interactive {
   position: relative;
-  border: 1px solid rgba(var(--accent-color-rgb), 0.3);
-  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.15s ease-out;
+  border: 1px solid rgba(var(--accent-color-rgb), 0.35);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
-
-button:hover:not(:disabled), [role="button"]:hover:not(:disabled), .btn:hover:not(:disabled) {
+.btn-interactive:hover:not(:disabled) {
   border-color: rgba(var(--accent-color-rgb), 0.85);
   box-shadow: 0 0 10px rgba(var(--accent-color-rgb), 0.2);
-  transform: translateY(-1px);
 }
-
-button:active:not(:disabled), [role="button"]:active:not(:disabled), .btn:active:not(:disabled) {
+.btn-interactive:active:not(:disabled) {
   border-color: rgb(var(--accent-color-rgb));
-  transform: translateY(1px) scale(0.98);
-}
-
-button:disabled, [role="button"][aria-disabled="true"], .btn:disabled {
-  border-color: rgba(0, 0, 0, 0.06);
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.dark button:disabled, .dark [role="button"][aria-disabled="true"], .dark .btn:disabled {
-  border-color: rgba(255, 255, 255, 0.06);
 }
