@@ -5,6 +5,7 @@ import { AGE_SEGMENTS, type AgeSegment, type Track } from '@/academy/registry';
 const TRACK_CAPABILITIES: Readonly<Record<string, Capability>> = {
   foundations: 'academy:track:foundations', economics: 'academy:track:economics',
   'advanced-analysis': 'academy:track:advanced-financial-analysis',
+  'wealth-building': 'academy:track:wealth-building',
 };
 const SEGMENT_RANK = Object.fromEntries(AGE_SEGMENTS.map((segment, index) => [segment, index])) as Record<AgeSegment, number>;
 export type AcademyAudience = { tier: Tier; role: 'PARENT' | 'CHILD'; ageSegment: AgeSegment };

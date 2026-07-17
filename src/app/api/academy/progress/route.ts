@@ -36,6 +36,7 @@ const TRACK_CAPABILITY: Record<string, Capability> = {
   foundations: 'academy:track:foundations',
   economics: 'academy:track:economics',
   'advanced-analysis': 'academy:track:advanced-financial-analysis',
+  'wealth-building': 'academy:track:wealth-building',
 };
 
 function findLesson(trackId: string, unitId: string, lessonId: string) {

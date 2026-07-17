@@ -72,6 +72,7 @@ export type Capability =
   | 'academy:track:foundations'
   | 'academy:track:economics'
   | 'academy:track:advanced-financial-analysis'
+  | 'academy:track:wealth-building'
   | 'academy:capstones'
   | 'academy:strategy-team:lesson1'
   | 'academy:strategy-team:all'
@@ -88,6 +89,7 @@ const BASIC_CAPABILITIES: readonly Capability[] = [
   'trading:tasi',
   'quiz:access',
   'academy:track:foundations',
+  'academy:track:wealth-building',
   'academy:strategy-team:lesson1',
   'workspace:unlock',
 ];
