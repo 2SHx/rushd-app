@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — Academy diagnostic-first reveal + apply-learning loop ✅ (deployed)
+Shipped: first Academy visit renders ONLY "أسئلة نقطة الانطلاق" (diagnostic invite; hero/road/chapters gated on LearnerProfile existence); post-quiz "apply what you learned" CTA routes to /quiz?setupId= (StrategyLearningLab learner-vs-strategy comparison) only when the practice unit co-locates a strategySetup practiceLink — honest absence otherwise, league links stay flag-hidden.
+Decisions: skip still creates the default profile and reveals the journey; when the apply CTA is present, continue-journey demotes to ghost so one accent primary remains (design LOW fixed inline).
+Verify: design gate all 5 acceptance PASS; lint/tsc/vitest 97/build clean; en/ar key identity.
+Open: /quiz destination surface has pre-existing craft debt (inline locale ternaries, tab chrome) — separate ticket; `&apply=` href append assumes ?-bearing quiz href (worth a unit assertion); live 390px/RTL visual pass still recommended.
+
 ## 2026-07-17 — Academy story journey + quiz folded into Academy ✅ (deployed)
 Shipped: Academy landing restructured as progressive narrative — diagnostic beat → single loud "current step" hero → muted what's-ahead timeline → collapsible per-track Chapters (native details/summary, current track pre-expanded); new /academy/practice?topic= route embeds the existing QuizModal in Academy chrome (breadcrumb, inline pass/fail + retry-save, restart, continue-journey loop); quiz-kind practiceLinks repointed from /quiz; shared quizTopics module extracted.
 Decisions: story = presentation over the deterministic nextUp queue, never a new access rule; accessible content collapsed, never fake-locked; save-failure keeps the earned outcome visible with an actionable retry; /quiz remains functional.
