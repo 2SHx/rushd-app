@@ -11,17 +11,24 @@ import {
 import { deriveShariaState } from '../backtest/shariaSnapshot';
 import type { EquityPoint } from '../backtest/metrics';
 import type { TradeRecord } from '../backtest/intradayEngine';
+import { simulateStrategyBook, type StrategyBookPolicy } from '../backtest/portfolioEngine';
 import { bollingerMrLongV2Setup, BOLLINGER_MR_LONG_V2, NASDAQ_HALAL_UNIVERSE } from '../strategies/bollingerMrLongV2';
 import {
   tsMomentumHalalBasketV2Setup,
   TS_MOMENTUM_HALAL_BASKET_V2,
 } from '../strategies/tsMomentumHalalBasketV2';
+import {
+  tsMomentumHalalBasketV3Setup,
+  TS_MOMENTUM_HALAL_BASKET_V3,
+  tsMomentumV3BookPolicy,
+} from '../strategies/tsMomentumHalalBasketV3';
 import type { StrategySetup } from '../strategies/types';
 import {
   compileBollingerMrLongV2Policy,
   type StrategyLearningAnswer,
 } from './bollingerMrLongV2Curriculum';
 import { compileTsMomentumHalalBasketV2Policy } from './tsMomentumHalalBasketV2Curriculum';
+import { compileTsMomentumHalalBasketV3Policy } from './tsMomentumHalalBasketV3Curriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -36,6 +43,7 @@ const FIXTURE_DIR = path.join(
 );
 const BOLLINGER_FIXTURE_VERSION = 'bollinger-mr-long-v2.learning-replay.v1';
 const TS_MOMENTUM_V2_FIXTURE_VERSION = 'ts-momentum-halal-basket-v2.learning-replay.v1';
+const TS_MOMENTUM_V3_FIXTURE_VERSION = 'ts-momentum-halal-basket-v3.learning-replay.v1';
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -184,6 +192,10 @@ export function loadTsMomentumHalalBasketV2LearningFixture(): BollingerLearningR
   return loadFixture(TS_MOMENTUM_V2_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
 }
 
+export function loadTsMomentumHalalBasketV3LearningFixture(): BollingerLearningReplayFixture {
+  return loadFixture(TS_MOMENTUM_V3_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
+}
+
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
   const item = fixture.series.find(candidate => candidate.symbol === symbol);
   if (!item) throw new Error(`learning_fixture_missing_symbol:${symbol}`);
@@ -260,6 +272,39 @@ function pooledTradeCurve<P>(
   }
   if (curve.at(-1)?.ts.getTime() !== intervalEnd) curve.push({ ts: new Date(intervalEnd), equity });
   return { curve, trades: records.length };
+}
+
+function strategyBookCurve<P>(
+  fixture: BollingerLearningReplayFixture,
+  setup: StrategySetup<P>,
+  params: P,
+  policy: StrategyBookPolicy,
+): { curve: EquityPoint[]; trades: number } {
+  prepareDailySetup(fixture, setup);
+  const result = simulateStrategyBook({
+    setup,
+    params,
+    series: fixture.strategyUniverse.map(symbol => ({
+      symbol,
+      market: 'NASDAQ' as const,
+      bars: toBars(fixture, symbol).map(bar => ({
+        ...bar,
+        source: fixture.series.find(item => item.symbol === symbol)!.source,
+      })),
+    })),
+    startingCash: STARTING_CASH,
+    limits: DEFAULT_BT_LIMITS,
+    policy,
+  });
+  const start = asTimestamp(fixture.interval.start);
+  const end = asTimestamp(fixture.interval.end);
+  return {
+    curve: result.daily.map(point => ({ ts: point.ts, equity: Number(point.nav) })),
+    trades: result.tradeRecords.filter(record => {
+      const exit = record.exitTs.getTime();
+      return exit >= start && exit <= end;
+    }).length,
+  };
 }
 
 function closeCurve(fixture: BollingerLearningReplayFixture, symbol: 'SPUS' | 'SPY'): EquityPoint[] {
@@ -450,6 +495,48 @@ export function replayTsMomentumHalalBasketV2LearningPolicy(
       sharia: {
         screened: false, source: 'none', state: shariaState, executionBlocked: true,
       },
+    },
+  };
+}
+
+export function replayTsMomentumHalalBasketV3LearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: BollingerLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateFixture(inputFixture, TS_MOMENTUM_V3_FIXTURE_VERSION, NASDAQ_HALAL_UNIVERSE);
+  const policy = compileTsMomentumHalalBasketV3Policy(answers);
+  const learner = strategyBookCurve(
+    fixture, tsMomentumHalalBasketV3Setup, policy.params, tsMomentumV3BookPolicy(policy.params),
+  );
+  const team = strategyBookCurve(
+    fixture, tsMomentumHalalBasketV3Setup, TS_MOMENTUM_HALAL_BASKET_V3,
+    tsMomentumV3BookPolicy(TS_MOMENTUM_HALAL_BASKET_V3),
+  );
+  const spus = closeCurve(fixture, 'SPUS');
+  const spy = closeCurve(fixture, 'SPY');
+  const dailyTimestamps = commonDailyTimestamps(fixture, spy, spus);
+  const sampledTimestamps = weeklyTimestamps(dailyTimestamps);
+  const shariaState = deriveShariaState(fixture.sharia.screened, []);
+  if (shariaState !== 'UNSCREENED_EXECUTION_BLOCKED') throw new Error('learning_fixture_sharia_state_mismatch');
+  return {
+    setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash,
+    basis: 'NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS',
+    interval: { start: new Date(dailyTimestamps[0]).toISOString(), end: new Date(dailyTimestamps.at(-1)!).toISOString(), oosStart: fixture.interval.oosStart },
+    labels: { learner: 'Learner policy', team: 'Strategy team', spus: 'SPUS price-only benchmark', spy: 'S&P 500 ETF price-only proxy' },
+    series: {
+      learner: normalizedSeries(learner.curve, sampledTimestamps), team: normalizedSeries(team.curve, sampledTimestamps),
+      spus: normalizedSeries(spus, sampledTimestamps), spy: normalizedSeries(spy, sampledTimestamps),
+    },
+    metrics: {
+      learner: metrics(learner.curve, dailyTimestamps, learner.trades), team: metrics(team.curve, dailyTimestamps, team.trades),
+      spus: metrics(spus, dailyTimestamps, 0), spy: metrics(spy, dailyTimestamps, 0),
+    },
+    provenance: {
+      fixtureVersion: fixture.fixtureVersion, capturedAt: fixture.capturedAt, warmupStart: fixture.warmupStart,
+      oosBoundary: fixture.interval.oosStart, dataSources: Array.from(new Set(fixture.series.map(item => item.source))).sort(),
+      strategyUniverse: [...fixture.strategyUniverse], riskLimits: { ...DEFAULT_BT_LIMITS },
+      fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
+      sharia: { screened: false, source: 'none', state: shariaState, executionBlocked: true },
     },
   };
 }

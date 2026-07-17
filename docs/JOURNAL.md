@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 TS momentum v3 learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `ts-momentum-halal-basket-v3`, exact strategy-book replay with its volatility governor/holding cap, and frozen ≤6-month captured-real PIT descriptor.
+Decisions: lazy-dev rung 2 reuses the v2 signal, shared portfolio engine, v3 book policy, and immutable daily snapshot; the REJECTED setup remains research-only and execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 118 files / 861 tests; key identity green; future-bar injection fails closed and four series align at normalized 100.
+Open: six visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M10-L7 TS momentum v2 learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `ts-momentum-halal-basket-v2`, registry/API dispatch, generalized result types, and a frozen ≤6-month descriptor over the captured-real daily PIT snapshot.
 Decisions: lazy-dev rung 2 reuses the exact v2 setup, shared daily risk/fill engine, and immutable Bollinger data snapshot; the REJECTED setup stays research-only and Sharia-unscreened/execution-blocked.
