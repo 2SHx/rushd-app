@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M12 Academy B0-B3: engine + 3-track curriculum + Arabic/Sharia review ✅
+Shipped: DR-16 capability matrix `can()` slice (8feba5a); Academy content engine — zod schema with required bilingual fields/complianceTag/ageSegment/practiceLink + registry + 6 negative lint fixtures (6574971); v1 curriculum — Foundations (KIDS min, 16 lessons, age variants, riba HARAM/Mudarabah HALAL), Economics (TEENS, 15), Advanced Financial Analysis (ADULTS, 16, sukuk/arbun vs bonds/options, CFA no-affiliation disclaimer per OQ-9) = 47 bilingual lessons, every unit practice-linked (dd03992); i18n-fintech review PASS with 3 editorial fixes (df717c0).
+Decisions: M11 slice landed early (matrix only — architect to note in M11; pre-existing PREMIUM child-seat 3-vs-4 discrepancy flagged); parallel-lane split with Codex (docs/handoffs/M10_L7_L8_CODEX_BRIEF.md, e86eb5e) — Codex owns M10 L7/L8, this lane owns src/academy/**.
+Verify: `npx vitest run academy` 4 files/39 tests; full suite green at every commit; lint/tsc clean throughout.
+Open: B4 (AcademyProgress + User.ageSegment migrations + API) BLOCKED on Postgres/Docker being down; B5 UI after B4; sukuk-generalization + arbun HALAL tag → OQ-10 human Sharia board before final; quiz TOPIC_ALLOWLIST worth exporting for cleaner content-test imports.
+
 ## 2026-07-17 — M10-L7 turn-of-month learning module ✅
 Shipped: seven-question en/ar curriculum + bounded compiler for `tom-overlay`, exact fixed-SPUS strategy-book replay, shared closed-map compiler helper, and frozen ≤6-month captured-real PIT descriptor.
 Decisions: lazy-dev rung 2 reuses observed-session eligibility, shared portfolio fills/risk, and the immutable SPUS snapshot; the REJECTED seasonal hypothesis remains research-only and execution-blocked.
