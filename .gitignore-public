@@ -68,3 +68,11 @@ src/quant/learning/fixtures/
 # ── PRIVATE: opencode / local AI config ─────────────────────────
 .opencode/
 opencode.json
+
+# Additional private paths
+.claude/
+.codex/
+.github/
+mcp/
+public/avatars/
+scripts/
