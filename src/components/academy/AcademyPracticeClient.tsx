@@ -99,7 +99,7 @@ export default function AcademyPracticeClient({ topic, locale, academyHref, appl
       <section className="mt-4 flex flex-col gap-3 rounded-2xl bg-accent/[0.07] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-foreground">{tAcademy('practice.applyTitle')}</p>
         <Link
-          href={`/${locale}/quiz?setupId=${encodeURIComponent(applySetupId)}`}
+          href={`/${locale}/academy/apply?setupId=${encodeURIComponent(applySetupId)}`}
           className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           {tAcademy('practice.applyCta')}

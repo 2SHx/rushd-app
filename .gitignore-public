@@ -1,0 +1,70 @@
+# ── INHERITED from main .gitignore ──────────────────────────────
+node_modules/
+.next/
+.env
+.env.local
+.env*.local
+*.env
+dist/
+build/
+.DS_Store
+prisma/migrations/
+
+# ── PRIVATE: quant engine & strategies (not for public) ─────────
+src/quant/automation/
+src/quant/execution/
+src/quant/strategies/
+src/quant/backtest/
+src/quant/risk/
+src/quant/allocation/
+src/quant/committee/
+src/quant/analysts/
+src/quant/llm/
+src/quant/gates/
+src/quant/portfolio/
+src/quant/data/
+src/quant/learning/
+
+# ── PRIVATE: API routes for trading execution ────────────────────
+src/app/api/quant/execute/
+src/app/api/quant/autonomy/
+src/app/api/quant/pass/
+src/app/api/quant/lab/
+src/app/api/cron/
+
+# ── PRIVATE: backtest results & data snapshots ───────────────────
+results/
+data/
+src/quant/data/fixtures/
+
+# ── PRIVATE: quant CLI scripts ───────────────────────────────────
+scripts/backtest.ts
+scripts/quant-*.ts
+scripts/backfill-*.ts
+scripts/capture-*.ts
+scripts/pool-report-card.ts
+scripts/ingest-*.ts
+scripts/calibrate-*.ts
+scripts/discover-*.ts
+scripts/verify-alpaca.mjs
+
+# ── PRIVATE: internal agent orchestration & design docs ─────────
+.agents/
+docs/AGENTS.md
+docs/JOURNAL.md
+docs/QUANT_DESIGN.md
+docs/recon/
+docs/handoffs/
+mcp/
+scripts/dispatch.mjs
+scripts/models.map.json
+scripts/seed-research*.ts
+scripts/seed-research*.mjs
+
+# ── PRIVATE: Alpaca / broker credentials helpers ─────────────────
+scripts/verify-alpaca.mjs
+src/quant/learning/fixtures/
+
+# ── PRIVATE: opencode / local AI config ─────────────────────────
+.opencode/
+opencode.json

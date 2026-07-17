@@ -8,6 +8,8 @@ import {
   isStrategyLearningSetupId,
 } from '@/quant/learning/strategyLearningModules';
 
+export const dynamic = 'force-dynamic';
+
 function authzResponse(error: unknown): Response | null {
   if (error && typeof error === 'object' && 'response' in error) {
     return (error as { response: Response }).response;

@@ -1,0 +1,8 @@
+.codegraph
+.agents
+.claude
+.codex
+.cache
+results
+.env
+.env.local

@@ -12,9 +12,20 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const map = JSON.parse(readFileSync(join(root, 'scripts/models.map.json'), 'utf8'));
+
+// OpenRouter credential-file fallback (~/.config/rushd/openrouter.key, chmod 600):
+// spawned runners inherit env, so loading here covers opencode's openrouter/* models
+// without persisting the secret in shell profiles or the repo.
+if (!process.env.OPENROUTER_API_KEY) {
+  try {
+    const k = readFileSync(join(homedir(), '.config', 'rushd', 'openrouter.key'), 'utf8').trim();
+    if (k) process.env.OPENROUTER_API_KEY = k;
+  } catch { /* no key file — openrouter-routed runners will fail with their own auth error */ }
+}
 const args = process.argv.slice(2);
 
 if (args[0] === '--list' || args.length === 0) {

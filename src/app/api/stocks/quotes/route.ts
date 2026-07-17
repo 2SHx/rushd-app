@@ -4,6 +4,8 @@ import { requireSession } from '@/lib/authz';
 import { TokenBucket } from '@/services/marketData';
 import { TICKERS } from '@/lib/tickers';
 
+export const dynamic = 'force-dynamic';
+
 const limiters = new Map<string, TokenBucket>();
 function limiterFor(userId: string): TokenBucket {
   let bucket = limiters.get(userId);

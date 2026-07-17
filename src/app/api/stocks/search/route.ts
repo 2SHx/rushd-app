@@ -11,6 +11,8 @@ import { requireSession } from '@/lib/authz';
 import { TokenBucket, getStockUniverse } from '@/services/marketData';
 import { searchUniverse } from '@/lib/stockUniverse';
 
+export const dynamic = 'force-dynamic';
+
 const limiters = new Map<string, TokenBucket>();
 function limiterFor(userId: string): TokenBucket {
   let bucket = limiters.get(userId);

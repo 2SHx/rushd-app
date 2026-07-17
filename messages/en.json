@@ -116,6 +116,12 @@
       "retrySave": "Try saving again",
       "applyTitle": "See how your answer compares to the strategy",
       "applyCta": "Apply what you learned"
+    },
+    "apply": {
+      "eyebrow": "Apply the learning",
+      "title": "Compare your answer with the strategy",
+      "invalidTitle": "This strategy comparison is not available",
+      "invalidBody": "Choose an apply-the-learning link from your Academy queue to continue."
     }
   },
   "Landing": {
