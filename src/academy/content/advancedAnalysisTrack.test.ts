@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { validateAcademyContentList } from '../schema';
 import {
   ADVANCED_ANALYSIS_TRACK,
-  CFA_NO_AFFILIATION_DISCLAIMER_AR,
-  CFA_NO_AFFILIATION_DISCLAIMER_EN,
+  ADVANCED_ANALYSIS_DISCLAIMER_AR,
+  ADVANCED_ANALYSIS_DISCLAIMER_EN,
 } from './advancedAnalysisTrack';
 
 // Mirrors src/app/api/quiz/route.ts's TOPIC_ALLOWLIST (read-only, not exported —
@@ -52,15 +52,13 @@ describe('advanced financial analysis track content', () => {
     }
   });
 
-  it('contains the OQ-9 no-CFA-affiliation disclaimer, in both languages, in the shipped content', () => {
+  it('contains the educational depth disclaimer, in both languages, in the shipped content', () => {
     const introLesson = ADVANCED_ANALYSIS_TRACK.units
       .flatMap((u) => u.lessons)
       .find((l) => l.id === 'adv-u1-intro');
     expect(introLesson).toBeDefined();
-    expect(introLesson!.body.en).toContain(CFA_NO_AFFILIATION_DISCLAIMER_EN);
-    expect(introLesson!.body.ar).toContain(CFA_NO_AFFILIATION_DISCLAIMER_AR);
-    // Guard against silent naming drift implying CFA Institute affiliation.
-    expect(CFA_NO_AFFILIATION_DISCLAIMER_EN).toMatch(/not affiliated with, endorsed by, or sponsored by CFA Institute/);
+    expect(introLesson!.body.en).toContain(ADVANCED_ANALYSIS_DISCLAIMER_EN);
+    expect(introLesson!.body.ar).toContain(ADVANCED_ANALYSIS_DISCLAIMER_AR);
   });
 
   it('tags every bond/interest/derivative mechanics lesson HARAM or EDUCATIONAL_ONLY', () => {

@@ -3,10 +3,7 @@ import type { Track } from '../schema';
 /**
  * Rushd Academy — Advanced Financial Analysis track (DR-17, M12-B2, OQ-9).
  *
- * Public naming is a PLACEHOLDER pending OQ-9 (docs/SYSTEM_DESIGN.md §OQ-9):
- * describes the depth level ("CFA-candidate level") without ever implying
- * CFA Institute affiliation or endorsement. "CFA®" never appears without
- * counsel review. ADULTS only. Fixed-income, portfolio-theory, and
+ * ADULTS only. Fixed-income, portfolio-theory, and
  * derivatives units connect valuation/risk language honestly to the app's
  * own reviewed metrics (drawdown-first framing, deflated Sharpe) and to
  * DR-14 strategy learning (`bollinger-mr-long-v2`, the lab's only reviewed
@@ -15,10 +12,10 @@ import type { Track } from '../schema';
 
 /** OQ-9 no-affiliation disclaimer — kept as one exported constant so the
  * colocated test can assert the exact text lives in the track content. */
-export const CFA_NO_AFFILIATION_DISCLAIMER_EN =
-  'This track is educational only and is not affiliated with, endorsed by, or sponsored by CFA Institute; it describes depth of content, not a credential.';
-export const CFA_NO_AFFILIATION_DISCLAIMER_AR =
-  'هذا المسار تعليمي فقط وغير تابع لمعهد CFA أو معتمد أو برعاية منه؛ يصف عمق المحتوى فقط وليست شهادة معتمدة.';
+export const ADVANCED_ANALYSIS_DISCLAIMER_EN =
+  'This track is educational only; it describes depth of content, not a professional credential.';
+export const ADVANCED_ANALYSIS_DISCLAIMER_AR =
+  'هذا المسار تعليمي فقط؛ يصف عمق المحتوى وليس شهادة مهنية.';
 
 export const ADVANCED_ANALYSIS_TRACK: Track = {
   id: 'advanced-analysis',
@@ -41,8 +38,8 @@ export const ADVANCED_ANALYSIS_TRACK: Track = {
             ar: 'ماذا يغطي التحليل المالي المتقدم هنا، وكيف يعمل.',
           },
           body: {
-            en: `${CFA_NO_AFFILIATION_DISCLAIMER_EN} This track goes deeper than Foundations and Economics: financial statements, valuation models, fixed income, portfolio theory, and derivatives awareness, all still framed by Rushd's own Sharia stance (DR-5) — every non-compliant mechanic is taught openly and labeled, never hidden and never executed by the app.`,
-            ar: `${CFA_NO_AFFILIATION_DISCLAIMER_AR} يذهب هذا المسار إلى ما هو أعمق من مساري الأساسيات والاقتصاد: القوائم المالية، ونماذج التقييم، والدخل الثابت، ونظرية المحفظة، والتوعية بالمشتقات المالية، كل ذلك ضمن موقف رُشد الشرعي الخاص (DR-5) — كل آلية غير متوافقة تُدرَّس علناً وتحمل علامة واضحة، ولا تُخفى أبداً ولا يُنفذها التطبيق أبداً.`,
+            en: `${ADVANCED_ANALYSIS_DISCLAIMER_EN} This track goes deeper than Foundations and Economics: financial statements, valuation models, fixed income, portfolio theory, and derivatives awareness, all still framed by Rushd's own Sharia stance (DR-5) — every non-compliant mechanic is taught openly and labeled, never hidden and never executed by the app.`,
+            ar: `${ADVANCED_ANALYSIS_DISCLAIMER_AR} يذهب هذا المسار إلى ما هو أعمق من مساري الأساسيات والاقتصاد: القوائم المالية، ونماذج التقييم، والدخل الثابت، ونظرية المحفظة، والتوعية بالمشتقات المالية، كل ذلك ضمن موقف رُشد الشرعي الخاص (DR-5) — كل آلية غير متوافقة تُدرَّس علناً وتحمل علامة واضحة، ولا تُخفى أبداً ولا يُنفذها التطبيق أبداً.`,
           },
           complianceTag: 'EDUCATIONAL_ONLY',
           ageSegment: 'ADULTS',
@@ -54,14 +51,14 @@ export const ADVANCED_ANALYSIS_TRACK: Track = {
               ar: 'عمق المحتوى في هذا المسار يعني:',
             },
             options: [
-              { en: 'A depth-of-content description, with no CFA Institute affiliation or endorsement', ar: 'وصف لعمق المحتوى، دون أي تبعية أو اعتماد من معهد CFA' },
-              { en: 'Official certification from CFA Institute', ar: 'شهادة رسمية من معهد CFA' },
-              { en: 'A guarantee of passing the CFA exams', ar: 'ضمان لاجتياز اختبارات CFA' },
+              { en: 'A depth-of-content description for advanced financial analysis', ar: 'وصف لعمق المحتوى في التحليل المالي المتقدم' },
+              { en: 'An official financial advisory license', ar: 'ترخيص رسمي للاستشارات المالية' },
+              { en: 'A guarantee of investment returns', ar: 'ضمان لتحقيق العوائد الاستثمارية' },
             ],
             correctOptionIndex: 0,
             explanation: {
-              en: 'The phrase describes content depth only; Rushd is not affiliated with, endorsed by, or sponsored by CFA Institute.',
-              ar: 'العبارة تصف عمق المحتوى فقط؛ رُشد غير تابعة لمعهد CFA ولا معتمدة منه ولا برعايته.',
+              en: 'The content provides educational depth for learning purposes only.',
+              ar: 'المحتوى يوفر عمقاً تعليمياً لأغراض التعلم فقط.',
             },
             complianceTag: 'EDUCATIONAL_ONLY',
           },
