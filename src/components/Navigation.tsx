@@ -37,7 +37,6 @@ export default function Navigation({
   const navItems = [
     { href: `/${locale}/dashboard`, icon: Wallet, label: t('portfolio'), shortLabel: t('portfolio') },
     { href: `/${locale}/markets`, icon: LineChart, label: t('stocks'), shortLabel: t('stocks') },
-    { href: `/${locale}/quant`, icon: Sparkles, label: t('quant'), shortLabel: t('quantShort') },
     { href: `/${locale}/academy`, icon: GraduationCap, label: t('academy'), shortLabel: t('academyShort') },
     { href: `/${locale}/quiz`, icon: BookOpen, label: t('quizzes'), shortLabel: t('quizzes') },
     { href: `/${locale}/profile`, icon: User, label: t('profile'), shortLabel: t('profile') },

@@ -140,12 +140,12 @@ interface Metrics {
 
 interface CommitteeClientProps {
   locale: string;
-  initialNAV: number;
-  initialCash: number;
-  initialPositions: Position[];
-  initialSnapshots: Snapshot[];
-  initialPurification: PurificationEntry[];
-  initialMetrics: Metrics;
+  initialNAV?: number;
+  initialCash?: number;
+  initialPositions?: Position[];
+  initialSnapshots?: Snapshot[];
+  initialPurification?: PurificationEntry[];
+  initialMetrics?: Metrics;
   initialTrades?: Trade[];
   initialDecisions?: DecisionRecord[];
   initialAutonomyTier?: 'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL';
@@ -199,11 +199,11 @@ export type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 
 
 export default function CommitteeClient({
   locale,
-  initialNAV,
-  initialCash,
-  initialPositions,
-  initialSnapshots,
-  initialPurification,
+  initialNAV = 100000,
+  initialCash = 100000,
+  initialPositions = [],
+  initialSnapshots = [],
+  initialPurification = [],
   initialMetrics,
   initialTrades = [],
   initialDecisions = [],
