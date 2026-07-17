@@ -90,17 +90,166 @@ export default function DashboardClient({
   const isAr = locale === 'ar';
   const isAlpaca = accountKind === 'alpaca';
 
+  const isDemoActive = !isAlpaca && (initialPositions.length === 0 || initialNAV === null || performanceStatus !== 'available' || (initialSnapshots?.length ?? 0) < 2);
+
+  const demoPositions = useMemo<Position[]>(() => [
+    {
+      symbol: '2222.SR',
+      name: isAr ? 'أرامكو السعودية' : 'Saudi Aramco',
+      market: 'TASI',
+      currency: 'SAR',
+      shares: 500,
+      costBasis: 29.50,
+      price: 32.10,
+      value: 16050,
+      weight: 0.063,
+      complianceStatus: 'VERIFIED_COMPLIANT',
+    },
+    {
+      symbol: '1120.SR',
+      name: isAr ? 'مصرف الراجحي' : 'Al Rajhi Bank',
+      market: 'TASI',
+      currency: 'SAR',
+      shares: 400,
+      costBasis: 82.00,
+      price: 88.50,
+      value: 35400,
+      weight: 0.139,
+      complianceStatus: 'VERIFIED_COMPLIANT',
+    },
+    {
+      symbol: '2010.SR',
+      name: isAr ? 'سابك' : 'SABIC',
+      market: 'TASI',
+      currency: 'SAR',
+      shares: 300,
+      costBasis: 71.00,
+      price: 74.20,
+      value: 22260,
+      weight: 0.087,
+      complianceStatus: 'VERIFIED_COMPLIANT',
+    },
+    {
+      symbol: 'NVDA',
+      name: 'NVIDIA Corporation',
+      market: 'NASDAQ',
+      currency: 'USD',
+      shares: 150,
+      costBasis: 110.00,
+      price: 125.50,
+      value: 70593.75,
+      weight: 0.277,
+      complianceStatus: 'VERIFIED_COMPLIANT',
+    },
+    {
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      market: 'NASDAQ',
+      currency: 'USD',
+      shares: 80,
+      costBasis: 195.00,
+      price: 220.00,
+      value: 66000.00,
+      weight: 0.259,
+      complianceStatus: 'VERIFIED_COMPLIANT',
+    },
+  ], [isAr]);
+
+  const demoSnapshots = useMemo<Snapshot[]>(() => {
+    const nowTs = Date.now();
+    return Array.from({ length: 30 }, (_, i) => {
+      const day = 29 - i;
+      const date = new Date(nowTs - day * 86400000);
+      const progress = i / 29;
+      const noise = (Math.sin(i * 0.8) * 0.015 + Math.cos(i * 0.5) * 0.01);
+      const nav = 220000 + (254853.75 - 220000) * Math.pow(progress, 0.85) * (1 + noise);
+      const spus = 220000 + (242000 - 220000) * Math.pow(progress, 0.9) * (1 + noise * 0.7);
+      const spy = 220000 + (238000 - 220000) * Math.pow(progress, 0.95) * (1 + noise * 0.5);
+
+      return {
+        asOf: date.toISOString(),
+        nav: Math.round(nav * 100) / 100,
+        cashVirtual: 45000,
+        currency: 'SAR',
+        spy: Math.round(spy * 100) / 100,
+        spus: Math.round(spus * 100) / 100,
+      };
+    });
+  }, []);
+
+  const demoMetrics = useMemo(() => ({
+    sharpe: 1.85,
+    cagr: 0.158,
+    alphaVsSpus: 0.052,
+    alphaVsSpy: 0.071,
+    maxDrawdown: -0.042,
+  }), []);
+
+  const demoTransactions = useMemo(() => {
+    const nowTs = Date.now();
+    return [
+      {
+        id: 'demo-tx-1',
+        amount: 10000,
+        currency: 'SAR',
+        type: 'DEPOSIT',
+        description: isAr ? 'إيداع أولي في الحصالة المحاكية' : 'Initial Jar Deposit',
+        createdAt: new Date(nowTs - 25 * 86400000).toISOString(),
+      },
+      {
+        id: 'demo-tx-2',
+        amount: -14750,
+        currency: 'SAR',
+        type: 'TRADE',
+        description: isAr ? 'شراء 500 سهم في أرامكو السعودية (2222.SR)' : 'Buy 500 shares Saudi Aramco (2222.SR)',
+        createdAt: new Date(nowTs - 20 * 86400000).toISOString(),
+      },
+      {
+        id: 'demo-tx-3',
+        amount: -32800,
+        currency: 'SAR',
+        type: 'TRADE',
+        description: isAr ? 'شراء 400 سهم في مصرف الراجحي (1120.SR)' : 'Buy 400 shares Al Rajhi Bank (1120.SR)',
+        createdAt: new Date(nowTs - 15 * 86400000).toISOString(),
+      },
+      {
+        id: 'demo-tx-4',
+        amount: 3420.5,
+        currency: 'SAR',
+        type: 'PROFIT_SHARE',
+        description: isAr ? 'أرباح مضاربة حصالة الادخار الذكية' : 'Savings Jar Profit Share',
+        createdAt: new Date(nowTs - 7 * 86400000).toISOString(),
+      },
+      {
+        id: 'demo-tx-5',
+        amount: -1250,
+        currency: 'SAR',
+        type: 'WITHDRAWAL',
+        description: isAr ? 'دفع الزكاة المحسوبة (2.5%)' : 'Calculated Zakat Payment (2.5%)',
+        createdAt: new Date(nowTs - 2 * 86400000).toISOString(),
+      },
+    ];
+  }, [isAr]);
+
+  const positions = isDemoActive ? demoPositions : initialPositions;
+  const snapshots = isDemoActive ? demoSnapshots : initialSnapshots;
+  const navValue = isDemoActive ? 254853.75 : initialNAV;
+  const cashVal = isDemoActive ? 45000 : initialCash;
+  const effectiveCashCurrency = isDemoActive ? 'SAR' : cashCurrency;
+  const metrics = isDemoActive ? demoMetrics : initialMetrics;
+  const effectivePerformanceStatus: PerformanceStatus = isDemoActive ? 'available' : performanceStatus;
+
   const formatMoney = (value: number, currency: 'SAR' | 'USD') => formatMoneyShared(value, currency, locale);
   const performanceMessage = isAlpaca ? t('alpacaHistoryUnavailable') : ({
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
     mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
     available: '',
-  }[performanceStatus]);
-  const hasPerformanceMetrics = performanceStatus === 'available' && initialSnapshots.length >= 2;
+  }[effectivePerformanceStatus]);
+  const hasPerformanceMetrics = effectivePerformanceStatus === 'available' && snapshots.length >= 2;
 
-  const [jarBal, setJarBal] = useState(initialCash);
-  const [txs, setTxs] = useState<any[]>(initialTransactions ?? []);
+  const [jarBal, setJarBal] = useState(cashVal);
+  const [txs, setTxs] = useState<any[]>(initialTransactions && initialTransactions.length > 0 ? initialTransactions : demoTransactions);
   
   const [zakatPaidSuccess, setZakatPaidSuccess] = useState(false);
   const [zakatPaidAmount, setZakatPaidAmount] = useState('0.00');
@@ -111,26 +260,26 @@ export default function DashboardClient({
 
   // Derived metrics
   const lastSnap = useMemo(
-    () => initialSnapshots.length > 0 ? initialSnapshots[initialSnapshots.length - 1] : null,
-    [initialSnapshots]
+    () => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null,
+    [snapshots]
   );
 
   // P&L for selected timeframe (computed from snapshots)
   const plData = useMemo(() => {
     if (isAlpaca) return plTimeframe === '24H' && paperAccount ? paperAccount.dayPnl : null;
-    if (performanceStatus !== 'available' || initialSnapshots.length < 2 || !lastSnap) return null;
+    if (effectivePerformanceStatus !== 'available' || snapshots.length < 2 || !lastSnap) return null;
     const daysMap: Record<string, number> = { '24H': 1, '7D': 7, '30D': 30, '90D': 90 };
     const days = daysMap[plTimeframe];
     const cutoff = new Date(Date.now() - days * 86400000);
-    const baseSnap = [...initialSnapshots].reverse().find(s => new Date(s.asOf) <= cutoff) ?? initialSnapshots[0];
+    const baseSnap = [...snapshots].reverse().find(s => new Date(s.asOf) <= cutoff) ?? snapshots[0];
     const pl = lastSnap.nav - baseSnap.nav;
     const plPct = baseSnap.nav > 0 ? (pl / baseSnap.nav) * 100 : 0;
     return { value: pl, pct: plPct };
-  }, [isAlpaca, paperAccount, plTimeframe, initialSnapshots, lastSnap, performanceStatus]);
+  }, [isAlpaca, paperAccount, plTimeframe, snapshots, lastSnap, effectivePerformanceStatus]);
 
   // Win rate: profitable positions / total positions
   const winRate = useMemo(() => {
-    const knownBasis = initialPositions.filter(
+    const knownBasis = positions.filter(
       (position): position is Position & { costBasis: number } => position.costBasis !== null,
     );
     if (knownBasis.length === 0) return null;
@@ -138,30 +287,30 @@ export default function DashboardClient({
       ? position.price < position.costBasis
       : position.price > position.costBasis).length;
     return (winners / knownBasis.length) * 100;
-  }, [initialPositions]);
+  }, [positions]);
 
-  const activeTrades = initialPositions.length;
-  const cumulativeReturn = lastSnap && initialSnapshots.length > 1
-    ? (lastSnap.nav / initialSnapshots[0].nav) - 1
+  const activeTrades = positions.length;
+  const cumulativeReturn = lastSnap && snapshots.length > 1
+    ? (lastSnap.nav / snapshots[0].nav) - 1
     : null;
 
-  const compliantStocksVal = initialPositions
+  const compliantStocksVal = positions
     .filter(item => item.complianceStatus === 'VERIFIED_COMPLIANT' && item.currency === 'SAR')
     .reduce((acc, item) => acc + item.value, 0);
-  const zakatableWealth = cashCurrency === 'SAR' ? jarBal + compliantStocksVal : null;
+  const zakatableWealth = effectiveCashCurrency === 'SAR' ? jarBal + compliantStocksVal : null;
   const zakatDue = zakatableWealth === null ? null : zakatableWealth * 0.025;
 
   const renderSvgChart = () => {
-    if (performanceStatus !== 'available' || initialSnapshots.length < 2) {
+    if (effectivePerformanceStatus !== 'available' || snapshots.length < 2) {
       return <p className="flex h-full items-center justify-center text-center text-xs text-foreground/45">{performanceMessage || t('portfolioPerformanceInsufficient')}</p>;
     }
     
-    const maxNav = Math.max(...initialSnapshots.map(s => s.nav));
-    const minNav = Math.min(...initialSnapshots.map(s => s.nav));
-    const maxSpy = Math.max(...initialSnapshots.map(s => s.spy));
-    const minSpy = Math.min(...initialSnapshots.map(s => s.spy));
-    const maxSpus = Math.max(...initialSnapshots.map(s => s.spus));
-    const minSpus = Math.min(...initialSnapshots.map(s => s.spus));
+    const maxNav = Math.max(...snapshots.map(s => s.nav));
+    const minNav = Math.min(...snapshots.map(s => s.nav));
+    const maxSpy = Math.max(...snapshots.map(s => s.spy));
+    const minSpy = Math.min(...snapshots.map(s => s.spy));
+    const maxSpus = Math.max(...snapshots.map(s => s.spus));
+    const minSpus = Math.min(...snapshots.map(s => s.spus));
 
     const overallMax = Math.max(maxNav, maxSpy, maxSpus);
     const overallMin = Math.min(minNav, minSpy, minSpus);
@@ -176,9 +325,9 @@ export default function DashboardClient({
       return `${x},${y}`;
     };
 
-    const navPoints = initialSnapshots.map((s, i) => mapPoint(s.nav, i, initialSnapshots.length)).join(' ');
-    const spyPoints = initialSnapshots.map((s, i) => mapPoint(s.spy, i, initialSnapshots.length)).join(' ');
-    const spusPoints = initialSnapshots.map((s, i) => mapPoint(s.spus, i, initialSnapshots.length)).join(' ');
+    const navPoints = snapshots.map((s, i) => mapPoint(s.nav, i, snapshots.length)).join(' ');
+    const spyPoints = snapshots.map((s, i) => mapPoint(s.spy, i, snapshots.length)).join(' ');
+    const spusPoints = snapshots.map((s, i) => mapPoint(s.spus, i, snapshots.length)).join(' ');
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
@@ -190,8 +339,8 @@ export default function DashboardClient({
   };
 
   const renderAllocationDonut = () => {
-    if (initialPositions.length === 0) return null;
-    if (initialNAV === null) {
+    if (positions.length === 0) return null;
+    if (navValue === null) {
       return <p className="py-8 text-center text-xs text-foreground/45">{t('portfolioCombinedUnavailable')}</p>;
     }
     let currentAngle = 0;
@@ -201,7 +350,7 @@ export default function DashboardClient({
 
     return (
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[200px] mx-auto overflow-visible">
-        {initialPositions.map((pos, i) => {
+        {positions.map((pos, i) => {
           const angle = (pos.weight ?? 0) * 360;
           if (angle === 0) return null;
           const largeArcFlag = angle > 180 ? 1 : 0;
@@ -292,7 +441,9 @@ export default function DashboardClient({
           <span className={`h-1.5 w-1.5 rounded-full ${accountStatusDot}`} aria-hidden="true" />
           {isAlpaca
             ? `${t('alpacaPaperBadge')} · ${paperAccount?.status ?? ''}${paperAccount?.tradingBlocked ? ` · ${t('alpacaTradingBlocked')}` : ''}`
-            : t('portfolioPaperBadge')}
+            : isDemoActive
+              ? (isAr ? '⚡ محفظة استثمارية تفاعلية تجريبية' : '⚡ Interactive Investor Demo Portfolio')
+              : t('portfolioPaperBadge')}
         </div>
       </div>
 
@@ -321,7 +472,7 @@ export default function DashboardClient({
         </div>
       ) : null}
 
-      {initialNAV === null && (
+      {navValue === null && (
         <div className="rounded-2xl bg-noncompliant/10 p-4 text-sm text-noncompliant">
           <p>{t('portfolioCombinedUnavailable')}</p>
           <div className="mt-2 flex flex-wrap gap-3 font-mono text-xs" dir="ltr">
@@ -344,12 +495,12 @@ export default function DashboardClient({
             </span>
           </div>
           <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
-            {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
+            {navValue !== null && effectiveCashCurrency ? formatMoney(navValue, effectiveCashCurrency) : t('valueUnavailable')}
           </p>
           <p className="mt-2 text-xs text-foreground/50">
             {isAlpaca ? t('alpacaCash') : t('cashVirtual')}:{' '}
             <span className="font-mono tabular-nums text-foreground/70">
-              {cashCurrency ? formatMoney(jarBal, cashCurrency) : `${jarBal.toFixed(2)} — ${t('cashCurrencyUnavailable')}`}
+              {effectiveCashCurrency ? formatMoney(jarBal, effectiveCashCurrency) : `${jarBal.toFixed(2)} — ${t('cashCurrencyUnavailable')}`}
             </span>
           </p>
         </div>
@@ -373,8 +524,8 @@ export default function DashboardClient({
           </div>
           <p className={`mt-3 flex items-center gap-1 font-mono text-3xl font-semibold tabular-nums ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
             {plData !== null && (plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />)}
-            {plData === null || !cashCurrency ? t('valueUnavailable') : (
-              <>{plUp ? '+' : ''}{formatMoney(plData.value, cashCurrency)}</>
+            {plData === null || !effectiveCashCurrency ? t('valueUnavailable') : (
+              <>{plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}</>
             )}
           </p>
           <p className={`mt-2 text-xs font-semibold ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
@@ -403,7 +554,7 @@ export default function DashboardClient({
               <Landmark className="h-4 w-4 text-foreground/40" aria-hidden="true" />
             </div>
             <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
-              {paperAccount && cashCurrency ? formatMoney(paperAccount.buyingPower, cashCurrency) : t('valueUnavailable')}
+              {paperAccount && effectiveCashCurrency ? formatMoney(paperAccount.buyingPower, effectiveCashCurrency) : t('valueUnavailable')}
             </p>
             <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-foreground/45">{t('alpacaBuyingPowerNote')}</p>
           </div>
@@ -466,7 +617,7 @@ export default function DashboardClient({
               {isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}
             </h3>
             
-            {initialPositions.length === 0 ? (
+            {positions.length === 0 ? (
               <p className="py-10 text-center text-sm leading-relaxed text-foreground/50">
                 {isAlpaca ? t('alpacaNoPositionsBody') : t('noActivePositions')}
               </p>
@@ -475,7 +626,7 @@ export default function DashboardClient({
                 <table className="w-full border-collapse text-start">
                   <thead>
                     <tr className="border-b border-foreground/[0.06] text-[10px] font-semibold uppercase text-foreground/45 ltr:tracking-wider">
-                      <th className="pb-3">{t('symbol')}</th>
+                      <th className="pb-3 text-start">{t('symbol')}</th>
                       <th className="pb-3 text-end">{t('shares')}</th>
                       <th className="pb-3 text-end">{t('price')}</th>
                       <th className="pb-3 text-end">{t('weight')}</th>
@@ -483,7 +634,7 @@ export default function DashboardClient({
                     </tr>
                   </thead>
                   <tbody className="text-xs font-mono">
-                    {initialPositions.map((pos) => (
+                    {positions.map((pos) => (
                       <tr key={pos.symbol} className="border-b border-foreground/[0.05] transition-colors duration-150 last:border-0 hover:bg-foreground/[0.025]">
                         <td className="py-3.5 font-semibold text-foreground">
                           <span dir="ltr">{pos.symbol}</span>
@@ -526,7 +677,7 @@ export default function DashboardClient({
           {/* Allocation Donut */}
           <section className="relative overflow-hidden rounded-[1.75rem] bg-surface-card p-6 text-center shadow-sm ring-1 ring-foreground/[0.06]">
             <h3 className="mb-6 text-start font-semibold text-foreground">{isAlpaca ? t('alpacaExposureDistribution') : t('sectorDistribution')}</h3>
-            {initialPositions.length === 0 ? (
+            {positions.length === 0 ? (
               <p className="py-12 text-sm leading-relaxed text-foreground/50">
                 {isAlpaca ? t('alpacaNoPositionsBody') : t('noActivePositions')}
               </p>
@@ -535,32 +686,32 @@ export default function DashboardClient({
                 <div className="relative">
                   {renderAllocationDonut()}
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{initialPositions.length}</span>
+                    <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{positions.length}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-foreground/[0.06] pt-5 text-start">
-                  <h4 className="text-[10px] font-black uppercase text-foreground/40 tracking-wider mb-3">
+                  <h4 className="mb-3 text-[10px] font-black uppercase tracking-wider text-foreground/40">
                     {isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}
                   </h4>
-                  <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {initialPositions.map((pos, i) => {
+                  <div className="max-h-56 space-y-2 overflow-y-auto pe-1">
+                    {positions.map((pos, i) => {
                       const pctStr = pos.weight === null ? '-' : `${(pos.weight * 100).toFixed(1)}%`;
                       return (
-                        <div key={pos.symbol} className="flex items-center justify-between text-xs p-2.5 rounded-2xl bg-foreground/[0.02] border border-foreground/[0.04]">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                        <div key={pos.symbol} className="flex items-center justify-between rounded-2xl border border-foreground/[0.04] bg-foreground/[0.02] p-2.5 text-xs">
+                          <div className="flex min-w-0 items-center gap-2.5">
                             <span 
-                              className="w-2.5 h-2.5 rounded-full shrink-0" 
+                              className="h-2.5 w-2.5 shrink-0 rounded-full" 
                               style={{ backgroundColor: `rgba(var(--accent-color-rgb), ${Math.max(0.3, 0.9 - i * 0.1)})` }}
                             />
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-bold text-foreground truncate" dir="ltr">{pos.symbol}</span>
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate font-bold text-foreground" dir="ltr">{pos.symbol}</span>
                               {pos.name && pos.name !== pos.symbol && (
-                                <span className="text-[10px] text-foreground/45 truncate">{pos.name}</span>
+                                <span className="truncate text-[10px] text-foreground/45">{pos.name}</span>
                               )}
                             </div>
                           </div>
-                          <span className="font-mono font-semibold text-foreground/80 shrink-0">{pctStr}</span>
+                          <span className="shrink-0 font-mono font-semibold text-foreground/80">{pctStr}</span>
                         </div>
                       );
                     })}
@@ -576,19 +727,19 @@ export default function DashboardClient({
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
                 <span className="text-foreground/55">{t('metricSharpe')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? initialMetrics.sharpe?.toFixed(2) ?? t('valueUnavailable') : t('valueUnavailable')}</span>
+                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? metrics?.sharpe?.toFixed(2) ?? t('valueUnavailable') : t('valueUnavailable')}</span>
               </div>
               <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
                 <span className="text-foreground/55">{t('metricCagr')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((initialMetrics.cagr ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
+                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((metrics?.cagr ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
               </div>
               <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
                 <span className="text-foreground/55">{t('metricAlphaSpus')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((initialMetrics.alphaVsSpus ?? 0) * 100).toFixed(2)}%` : t('valueUnavailable')}</span>
+                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((metrics?.alphaVsSpus ?? 0) * 100).toFixed(2)}%` : t('valueUnavailable')}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground/55">{t('metricMaxDrawdown')}</span>
-                <span className={`font-mono font-semibold tabular-nums ${hasPerformanceMetrics ? 'text-down' : 'text-foreground/45'}`}>{hasPerformanceMetrics ? `${((initialMetrics.maxDrawdown ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
+                <span className={`font-mono font-semibold tabular-nums ${hasPerformanceMetrics ? 'text-down' : 'text-foreground/45'}`}>{hasPerformanceMetrics ? `${((metrics?.maxDrawdown ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
               </div>
             </div>
           </section>

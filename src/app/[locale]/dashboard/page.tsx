@@ -52,12 +52,13 @@ export default async function DashboardPage({ params }: { params: { locale: stri
   }));
 
   const t = await getTranslations('Quant');
-  const performanceWarning = {
+  const hasUserPositions = portfolio.initialPositions.length > 0;
+  const performanceWarning = hasUserPositions ? {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
     mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
     available: null,
-  }[portfolio.performanceStatus];
+  }[portfolio.performanceStatus] : null;
 
   return (
     <PortfolioViewSwitcher data={alpacaPaper}>
