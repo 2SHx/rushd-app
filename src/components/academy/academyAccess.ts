@@ -23,6 +23,6 @@ export function filterAcademyTracks(tracks: readonly Track[], audience: AcademyA
 }
 
 export function practiceLinkHref(link: Track['units'][number]['practiceLinks'][number]): string {
-  const params = link.kind === 'strategySetup' ? new URLSearchParams({ setupId: link.setupId }) : new URLSearchParams({ topic: link.topic });
-  return `/quiz?${params.toString()}`;
+  if (link.kind === 'strategySetup') return `/quiz?${new URLSearchParams({ setupId: link.setupId }).toString()}`;
+  return `/academy/practice?${new URLSearchParams({ topic: link.topic }).toString()}`;
 }

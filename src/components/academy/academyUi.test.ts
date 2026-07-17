@@ -24,7 +24,7 @@ describe('academy UI server boundary', () => {
   it('maps every theory link to the exact existing practice surface', () => {
     for (const link of ACADEMY_TRACKS.flatMap((track) => track.units).flatMap((unit) => unit.practiceLinks)) {
       const href = practiceLinkHref(link);
-      expect(href).toBe(link.kind === 'strategySetup' ? `/quiz?setupId=${encodeURIComponent(link.setupId)}` : `/quiz?topic=${encodeURIComponent(link.topic).replace(/%20/g, '+')}`);
+      expect(href).toBe(link.kind === 'strategySetup' ? `/quiz?setupId=${encodeURIComponent(link.setupId)}` : `/academy/practice?topic=${encodeURIComponent(link.topic).replace(/%20/g, '+')}`);
     }
     expect(quizSource).toContain("QUIZ_TOPICS.find((item) => item.topic === searchParams.topic)");
     expect(quizSource).toContain('useState(requestedTopic !== null)');

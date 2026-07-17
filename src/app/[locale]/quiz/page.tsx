@@ -6,18 +6,7 @@ import { useTranslations } from 'next-intl';
 import QuizModal from '@/components/QuizModal';
 import StrategyLearningLab from '@/components/learning/StrategyLearningLab';
 import CommitteeClient from '@/components/quant/CommitteeClient';
-
-const QUIZ_TOPICS = [
-  { id: 'stockBasics', topic: 'Stock Market Basics', level: 1 },
-  { id: 'savingsJars', topic: 'Savings & Jars', level: 1 },
-  { id: 'compoundInterest', topic: 'Compound Interest', level: 1 },
-  { id: 'shariaCompliance', topic: 'Sharia Compliance', level: 2 },
-  { id: 'riskManagement', topic: 'Risk Management', level: 2 },
-  { id: 'valueInvesting', topic: 'Value Investing', level: 2 },
-  { id: 'halalFunds', topic: 'Halal Mutual Funds', level: 3 },
-  { id: 'tasiMarkets', topic: 'TASI Markets', level: 3 },
-  { id: 'nasdaqMarkets', topic: 'NASDAQ Markets', level: 3 },
-] as const;
+import { QUIZ_TOPICS } from '@/components/academy/quizTopics';
 
 const TIERS = [
   { level: 1, Icon: Compass },

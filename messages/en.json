@@ -51,7 +51,12 @@
     "errorTitle": "Academy could not be loaded",
     "errorBody": "We could not verify this learner's access or progress. Nothing has been exposed; try again shortly.",
     "retry": "Try again",
-    "compliance": { "HALAL": "Sharia-aligned concept", "HARAM": "Non-compliant concept · education only", "MASHBOOH": "Requires Sharia review", "EDUCATIONAL_ONLY": "Education only" },
+    "compliance": {
+      "HALAL": "Sharia-aligned concept",
+      "HARAM": "Non-compliant concept · education only",
+      "MASHBOOH": "Requires Sharia review",
+      "EDUCATIONAL_ONLY": "Education only"
+    },
     "diagnostic": {
       "inviteEyebrow": "Starting path",
       "inviteTitle": "Set your starting path",
@@ -87,6 +92,28 @@
         "advance": "Next lesson",
         "practice": "Practice"
       }
+    },
+    "hero": {
+      "eyebrow": "Your current step",
+      "cta": "Continue"
+    },
+    "ahead": {
+      "title": "What's ahead",
+      "subtitle": "A glimpse of the road ahead as you keep going."
+    },
+    "chapters": {
+      "title": "Chapters",
+      "subtitle": "Expand a track to see its lessons.",
+      "open": "Open track"
+    },
+    "practice": {
+      "eyebrow": "Practice",
+      "invalidTitle": "This practice topic isn't available",
+      "invalidBody": "Choose a practice item from your Academy queue to continue.",
+      "continueJourney": "Continue your journey",
+      "title": "Practice",
+      "restart": "Restart practice",
+      "retrySave": "Try saving again"
     }
   },
   "Landing": {
