@@ -219,8 +219,8 @@ export default function CommitteeClient({
 
   const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(null);
 
-  const [market, setMarket] = useState<MarketKind>('NASDAQ');
-  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.NASDAQ);
+  const [market, setMarket] = useState<MarketKind>('TASI');
+  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.TASI);
 
   const [passLoading, setPassLoading] = useState(false);
   const [passError, setPassError] = useState<string | null>(null);

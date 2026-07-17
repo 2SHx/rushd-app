@@ -32,7 +32,7 @@ export default function MarketsContainer({
   const isAr = locale === 'ar';
   const t = useTranslations('Markets');
 
-  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(initialMarket ?? 'NASDAQ');
+  const [marketTab, setMarketTab] = useState<'TASI' | 'NASDAQ'>(initialMarket ?? 'TASI');
   // Overview-first UX: only show a stock if explicitly in the URL
   const [activeSymbol, setActiveSymbol] = useState<string | null>(
     initialActiveSymbol ?? null
