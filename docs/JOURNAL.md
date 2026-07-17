@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-17 — M10-L7 Stocks-in-Play ORB learning module ✅
+Shipped: seven-question en/ar curriculum + bounded compiler for `stocks-in-play-orb`, exact intraday-engine replay, registry/API dispatch, and a frozen captured-real PIT fixture with two sealed sessions plus the minimum real opening-range warm-up.
+Decisions: reused the setup's exact 11-name book, 14-session relative-volume reference, intraday risk/fill envelope, and immutable ALPACA/YAHOO rows; REJECTED remains research-only, Sharia-unscreened, and execution-blocked.
+Verify: focused 16/16; lint clean; TypeScript clean; full Vitest 124 files / 903 tests; future/MOCK injections fail closed and all four normalized series align at 100.
+Open: three visible league teams still lack reviewed modules; L8 remains disabled. Protected terminal-period run was not executed.
+
 ## 2026-07-17 — M12 Academy B0-B3: engine + 3-track curriculum + Arabic/Sharia review ✅
 Shipped: DR-16 capability matrix `can()` slice (8feba5a); Academy content engine — zod schema with required bilingual fields/complianceTag/ageSegment/practiceLink + registry + 6 negative lint fixtures (6574971); v1 curriculum — Foundations (KIDS min, 16 lessons, age variants, riba HARAM/Mudarabah HALAL), Economics (TEENS, 15), Advanced Financial Analysis (ADULTS, 16, sukuk/arbun vs bonds/options, CFA no-affiliation disclaimer per OQ-9) = 47 bilingual lessons, every unit practice-linked (dd03992); i18n-fintech review PASS with 3 editorial fixes (df717c0).
 Decisions: M11 slice landed early (matrix only — architect to note in M11; pre-existing PREMIUM child-seat 3-vs-4 discrepancy flagged); parallel-lane split with Codex (docs/handoffs/M10_L7_L8_CODEX_BRIEF.md, e86eb5e) — Codex owns M10 L7/L8, this lane owns src/academy/**.

@@ -14,18 +14,21 @@ import {
 } from './tsMomentumHalalBasketV3Curriculum';
 import { TOM_OVERLAY_CURRICULUM, compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import { DUAL_MOMENTUM_ROTATION_CURRICULUM, compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
+import { STOCKS_IN_PLAY_ORB_CURRICULUM, compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 import {
   loadBollingerMrLongV2LearningFixture,
   loadTsMomentumHalalBasketV2LearningFixture,
   loadTsMomentumHalalBasketV3LearningFixture,
   loadTomOverlayLearningFixture,
   loadDualMomentumRotationLearningFixture,
+  loadStocksInPlayOrbLearningFixture,
   replayBollingerMrLongV2LearningPolicy,
   replayTsMomentumHalalBasketV2LearningPolicy,
   replayTsMomentumHalalBasketV3LearningPolicy,
   replayTomOverlayLearningPolicy,
   replayDualMomentumRotationLearningPolicy,
-  type BollingerLearningReplayFixture,
+  replayStocksInPlayOrbLearningPolicy,
+  type StrategyLearningFixture,
   type StrategyLearningReplayResult,
 } from './strategyLearningReplay';
 
@@ -35,6 +38,7 @@ export const STRATEGY_LEARNING_SETUP_IDS = [
   'ts-momentum-halal-basket-v3',
   'tom-overlay',
   'dual-momentum-rotation',
+  'stocks-in-play-orb',
 ] as const;
 
 export type StrategyLearningSetupId = (typeof STRATEGY_LEARNING_SETUP_IDS)[number];
@@ -59,10 +63,10 @@ export interface StrategyLearningModule {
     questions: readonly StrategyLearningQuestion[];
   };
   compile(answers: readonly StrategyLearningAnswer[]): CompiledStrategyLearningModulePolicy;
-  loadFixture(): BollingerLearningReplayFixture;
+  loadFixture(): StrategyLearningFixture;
   replay(
     answers: readonly StrategyLearningAnswer[],
-    fixture: BollingerLearningReplayFixture,
+    fixture: StrategyLearningFixture,
   ): StrategyLearningReplayResult;
 }
 
@@ -96,6 +100,15 @@ const STRATEGY_LEARNING_MODULES: Record<StrategyLearningSetupId, StrategyLearnin
     compile: compileDualMomentumRotationPolicy,
     loadFixture: loadDualMomentumRotationLearningFixture,
     replay: replayDualMomentumRotationLearningPolicy,
+  },
+  'stocks-in-play-orb': {
+    curriculum: STOCKS_IN_PLAY_ORB_CURRICULUM,
+    compile: compileStocksInPlayOrbPolicy,
+    loadFixture: loadStocksInPlayOrbLearningFixture,
+    replay: (answers, fixture) => replayStocksInPlayOrbLearningPolicy(
+      answers,
+      fixture as ReturnType<typeof loadStocksInPlayOrbLearningFixture>,
+    ),
   },
 };
 

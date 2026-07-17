@@ -10,8 +10,16 @@ import {
 } from '../backtest/engine';
 import { deriveShariaState } from '../backtest/shariaSnapshot';
 import type { EquityPoint } from '../backtest/metrics';
-import type { TradeRecord } from '../backtest/intradayEngine';
+import {
+  DEFAULT_INTRADAY_LIMITS,
+  simulateIntraday,
+  type DayContext,
+  type IntradayBarInput,
+  type TradeRecord,
+} from '../backtest/intradayEngine';
 import { simulateStrategyBook, type StrategyBookPolicy } from '../backtest/portfolioEngine';
+import { nasdaqDateKey } from '../data/snapshot';
+import type { RiskLimits } from '../risk/envelope';
 import { bollingerMrLongV2Setup, BOLLINGER_MR_LONG_V2, NASDAQ_HALAL_UNIVERSE } from '../strategies/bollingerMrLongV2';
 import {
   tsMomentumHalalBasketV2Setup,
@@ -29,6 +37,15 @@ import {
   DUAL_MOMENTUM_ROTATION_V1,
   DUAL_MOMENTUM_UNIVERSE,
 } from '../strategies/dualMomentumRotation';
+import {
+  buildStocksInPlayBook,
+  STOCKS_IN_PLAY_ORB_V1,
+  STOCKS_IN_PLAY_UNIVERSE_V1,
+  stocksInPlayOrbSetup,
+  type SourcedDailyRow,
+  type SourcedMinuteRow,
+  type StocksInPlayOrbParams,
+} from '../strategies/stocksInPlayOrb';
 import type { StrategySetup } from '../strategies/types';
 import {
   compileBollingerMrLongV2Policy,
@@ -38,6 +55,7 @@ import { compileTsMomentumHalalBasketV2Policy } from './tsMomentumHalalBasketV2C
 import { compileTsMomentumHalalBasketV3Policy } from './tsMomentumHalalBasketV3Curriculum';
 import { compileTomOverlayPolicy } from './tomOverlayCurriculum';
 import { compileDualMomentumRotationPolicy } from './dualMomentumRotationCurriculum';
+import { compileStocksInPlayOrbPolicy } from './stocksInPlayOrbCurriculum';
 
 const D = Prisma.Decimal;
 const DAY_MS = 86_400_000;
@@ -55,6 +73,8 @@ const TS_MOMENTUM_V2_FIXTURE_VERSION = 'ts-momentum-halal-basket-v2.learning-rep
 const TS_MOMENTUM_V3_FIXTURE_VERSION = 'ts-momentum-halal-basket-v3.learning-replay.v1';
 const TOM_OVERLAY_FIXTURE_VERSION = 'tom-overlay.learning-replay.v1';
 const DUAL_MOMENTUM_FIXTURE_VERSION = 'dual-momentum-rotation.learning-replay.v1';
+const STOCKS_IN_PLAY_FIXTURE_VERSION = 'stocks-in-play-orb.learning-replay.v1';
+const intradayReplayCache = new WeakMap<object, Map<string, StrategyLearningReplayResult>>();
 
 const barSchema = z.tuple([
   z.string().datetime(),
@@ -93,7 +113,47 @@ const fixtureReferenceSchema = z.object({
   dataFixtureVersion: z.string().min(1),
 }).strict();
 
+const minuteBarSchema = z.tuple([
+  z.string().datetime(),
+  z.number().positive(),
+  z.number().positive(),
+  z.number().positive(),
+  z.number().positive(),
+  z.number().nonnegative(),
+  z.enum(['PRE', 'REGULAR', 'POST']),
+]);
+
+const sourcedDailySeriesSchema = z.object({
+  symbol: z.string().min(1),
+  source: z.enum(['YAHOO', 'ALPACA']),
+  bars: z.array(barSchema).min(2),
+}).strict();
+
+const intradayFixtureSchema = z.object({
+  fixtureVersion: z.string().min(1),
+  capturedAt: z.string().datetime(),
+  market: z.literal('NASDAQ'),
+  warmupStart: z.string().datetime(),
+  interval: z.object({
+    start: z.string().datetime(),
+    end: z.string().datetime(),
+    oosStart: z.string().datetime(),
+  }).strict(),
+  strategyUniverse: z.array(z.string().min(1)),
+  benchmarkSymbols: z.tuple([z.literal('SPUS'), z.literal('SPY')]),
+  sharia: z.object({ screened: z.literal(false), source: z.literal('none') }).strict(),
+  series: z.array(z.object({
+    symbol: z.string().min(1),
+    source: z.literal('ALPACA'),
+    bars: z.array(minuteBarSchema).min(2),
+  }).strict()),
+  dailySeries: z.array(sourcedDailySeriesSchema),
+  benchmarkSeries: z.tuple([sourcedDailySeriesSchema, sourcedDailySeriesSchema]),
+}).strict();
+
 export type BollingerLearningReplayFixture = z.infer<typeof fixtureSchema>;
+export type IntradayLearningReplayFixture = z.infer<typeof intradayFixtureSchema>;
+export type StrategyLearningFixture = BollingerLearningReplayFixture | IntradayLearningReplayFixture;
 
 export interface LearningComparisonPoint {
   ts: string;
@@ -128,8 +188,10 @@ export interface StrategyLearningReplayResult {
     oosBoundary: string;
     dataSources: Array<'YAHOO' | 'ALPACA'>;
     strategyUniverse: string[];
-    riskLimits: typeof DEFAULT_BT_LIMITS;
-    fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE';
+    riskLimits: RiskLimits;
+    fillModel:
+      | 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE'
+      | 'INTRADAY_NEXT_OPEN_VOLATILITY_SLIPPAGE_10BPS_COMMISSION_PARTICIPATION_CAP';
     sharia: {
       screened: false;
       source: 'none';
@@ -177,6 +239,40 @@ function validateFixture(
   return fixture;
 }
 
+function validateIntradayFixture(
+  input: unknown,
+  expectedVersion: string,
+  expectedUniverse: readonly string[],
+): IntradayLearningReplayFixture {
+  const fixture = intradayFixtureSchema.parse(input);
+  if (fixture.fixtureVersion !== expectedVersion) throw new Error('learning_fixture_version_mismatch');
+  const start = asTimestamp(fixture.interval.start);
+  const end = asTimestamp(fixture.interval.end);
+  if (fixture.interval.oosStart !== fixture.interval.start) throw new Error('learning_fixture_oos_boundary_mismatch');
+  if (end <= start || end - start > MAX_REPLAY_DAYS * DAY_MS) throw new Error('learning_fixture_interval_exceeds_six_months');
+  if (asTimestamp(fixture.warmupStart) >= start) throw new Error('learning_fixture_warmup_missing');
+  if (fixture.strategyUniverse.length !== expectedUniverse.length
+    || expectedUniverse.some(symbol => !fixture.strategyUniverse.includes(symbol))) {
+    throw new Error('learning_fixture_team_universe_mismatch');
+  }
+  for (const collection of [fixture.series, fixture.dailySeries]) {
+    const symbols = collection.map(item => item.symbol);
+    if (new Set(symbols).size !== expectedUniverse.length
+      || expectedUniverse.some(symbol => !symbols.includes(symbol))) {
+      throw new Error('learning_fixture_series_mismatch');
+    }
+  }
+  if (fixture.benchmarkSeries[0].symbol !== 'SPUS' || fixture.benchmarkSeries[1].symbol !== 'SPY') {
+    throw new Error('learning_fixture_benchmark_mismatch');
+  }
+  const futureMinute = fixture.series.some(item => item.bars.some(([ts]) => {
+    const value = asTimestamp(ts);
+    return value < asTimestamp(fixture.warmupStart) || value > end;
+  }));
+  if (futureMinute) throw new Error('learning_fixture_minute_outside_interval');
+  return fixture;
+}
+
 function fixturePath(version: string): string {
   return path.join(FIXTURE_DIR, `${version.replace('.learning-replay.v1', '')}.learning-replay-v1.json`);
 }
@@ -220,6 +316,11 @@ export function loadTomOverlayLearningFixture(): BollingerLearningReplayFixture 
 
 export function loadDualMomentumRotationLearningFixture(): BollingerLearningReplayFixture {
   return loadFixture(DUAL_MOMENTUM_FIXTURE_VERSION, DUAL_MOMENTUM_UNIVERSE);
+}
+
+export function loadStocksInPlayOrbLearningFixture(): IntradayLearningReplayFixture {
+  const raw: unknown = JSON.parse(fs.readFileSync(fixturePath(STOCKS_IN_PLAY_FIXTURE_VERSION), 'utf8'));
+  return validateIntradayFixture(raw, STOCKS_IN_PLAY_FIXTURE_VERSION, STOCKS_IN_PLAY_UNIVERSE_V1);
 }
 
 function toBars(fixture: BollingerLearningReplayFixture, symbol: string): BacktestBar[] {
@@ -355,7 +456,7 @@ function weekKey(ts: number): string {
 }
 
 function commonDailyTimestamps(
-  fixture: BollingerLearningReplayFixture,
+  fixture: Pick<StrategyLearningFixture, 'interval'>,
   spy: readonly EquityPoint[],
   spus: readonly EquityPoint[],
 ): number[] {
@@ -435,6 +536,154 @@ function assembleLearningReplay(
       oosBoundary: fixture.interval.oosStart, dataSources: Array.from(new Set(fixture.series.map(item => item.source))).sort(),
       strategyUniverse: [...fixture.strategyUniverse], riskLimits: { ...DEFAULT_BT_LIMITS },
       fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
+      sharia: { screened: false, source: 'none', state: shariaState, executionBlocked: true },
+    },
+  };
+}
+
+function intradayBars(
+  fixture: IntradayLearningReplayFixture,
+  symbol: string,
+): IntradayBarInput[] {
+  const item = fixture.series.find(candidate => candidate.symbol === symbol);
+  if (!item) throw new Error(`learning_fixture_missing_symbol:${symbol}`);
+  const start = asTimestamp(fixture.interval.start);
+  const end = asTimestamp(fixture.interval.end);
+  return item.bars
+    .filter(([ts]) => asTimestamp(ts) >= start && asTimestamp(ts) <= end)
+    .map(([ts, open, high, low, close, volume, session]) => ({
+      ts: new Date(ts), open, high, low, close, volume, session, source: item.source,
+    }));
+}
+
+function intradayDayContext(
+  fixture: IntradayLearningReplayFixture,
+  symbol: string,
+  bars: readonly IntradayBarInput[],
+): Map<string, DayContext> {
+  const daily = fixture.dailySeries.find(item => item.symbol === symbol);
+  if (!daily) throw new Error(`learning_fixture_missing_daily_symbol:${symbol}`);
+  const contexts = new Map<string, DayContext>();
+  for (const date of Array.from(new Set(bars.map(bar => nasdaqDateKey(bar.ts))))) {
+    const prior = daily.bars.filter(([ts]) => ts.slice(0, 10) < date).at(-1);
+    contexts.set(date, { priorClose: prior?.[4] ?? null, mcap: null, mcapSource: null });
+  }
+  return contexts;
+}
+
+function prepareIntradaySetup(fixture: IntradayLearningReplayFixture): void {
+  const minuteRows: SourcedMinuteRow[] = fixture.series.flatMap(item => item.bars.map(
+    ([ts, open, high, low, close, volume, session]) => ({
+      symbol: item.symbol, ts: new Date(ts), open, high, low, close, volume, session, source: item.source,
+    }),
+  ));
+  const dailyRows: SourcedDailyRow[] = fixture.dailySeries.flatMap(item => item.bars.map(
+    ([ts, , high, low, close, volume]) => ({
+      symbol: item.symbol, ts: new Date(ts), high, low, close, volume, source: item.source,
+    }),
+  ));
+  const prepared = buildStocksInPlayBook(minuteRows, dailyRows);
+  if (prepared.excludedNonAlpacaMinute !== 0 || prepared.excludedUnsupportedDaily !== 0) {
+    throw new Error('learning_fixture_unsupported_intraday_provenance');
+  }
+  stocksInPlayOrbSetup.prepareUniverse?.({
+    symbols: [...fixture.strategyUniverse],
+    closesBySymbol: new Map(),
+    stocksInPlayBook: prepared.book,
+  });
+}
+
+function pooledIntradayTradeCurve(
+  fixture: IntradayLearningReplayFixture,
+  params: StocksInPlayOrbParams,
+): { curve: EquityPoint[]; trades: number } {
+  const start = asTimestamp(fixture.interval.start);
+  const end = asTimestamp(fixture.interval.end);
+  const records: Array<TradeRecord & { symbol: string }> = [];
+  for (const symbol of fixture.strategyUniverse) {
+    const bars = intradayBars(fixture, symbol);
+    const simulation = simulateIntraday({
+      setup: stocksInPlayOrbSetup,
+      params,
+      symbol,
+      market: 'NASDAQ',
+      bars,
+      dayContext: intradayDayContext(fixture, symbol, bars),
+      startingCash: STARTING_CASH,
+      limits: DEFAULT_INTRADAY_LIMITS,
+    });
+    records.push(...simulation.tradeRecords
+      .filter(record => record.exitTs.getTime() >= start && record.exitTs.getTime() <= end)
+      .map(record => ({ ...record, symbol })));
+  }
+  records.sort((left, right) => left.exitTs.getTime() - right.exitTs.getTime()
+    || left.symbol.localeCompare(right.symbol));
+  let equity = 100;
+  const curve: EquityPoint[] = [{ ts: new Date(start), equity }];
+  for (const record of records) {
+    equity *= 1 + record.ret;
+    curve.push({ ts: record.exitTs, equity });
+  }
+  if (curve.at(-1)?.ts.getTime() !== end) curve.push({ ts: new Date(end), equity });
+  return { curve, trades: records.length };
+}
+
+function intradayBenchmarkCurve(
+  fixture: IntradayLearningReplayFixture,
+  symbol: 'SPUS' | 'SPY',
+): EquityPoint[] {
+  const item = fixture.benchmarkSeries.find(candidate => candidate.symbol === symbol);
+  if (!item) throw new Error(`learning_fixture_missing_benchmark:${symbol}`);
+  return item.bars.map(([ts, , , , close]) => ({ ts: new Date(ts), equity: close }));
+}
+
+function assembleIntradayLearningReplay(
+  identity: { setupId: string; setupVersion: string; policyHash: string },
+  fixture: IntradayLearningReplayFixture,
+  learner: { curve: EquityPoint[]; trades: number },
+  team: { curve: EquityPoint[]; trades: number },
+): StrategyLearningReplayResult {
+  const spus = intradayBenchmarkCurve(fixture, 'SPUS');
+  const spy = intradayBenchmarkCurve(fixture, 'SPY');
+  const dailyTimestamps = commonDailyTimestamps(fixture, spy, spus);
+  const sampledTimestamps = weeklyTimestamps(dailyTimestamps);
+  const shariaState = deriveShariaState(fixture.sharia.screened, []);
+  if (shariaState !== 'UNSCREENED_EXECUTION_BLOCKED') throw new Error('learning_fixture_sharia_state_mismatch');
+  const sources = [
+    ...fixture.series.map(item => item.source),
+    ...fixture.dailySeries.map(item => item.source),
+    ...fixture.benchmarkSeries.map(item => item.source),
+  ];
+  return {
+    ...identity,
+    basis: 'NORMALIZED_100_WEEKLY_CLOSE_PRICE_NO_DIVIDENDS',
+    interval: {
+      start: new Date(dailyTimestamps[0]).toISOString(),
+      end: new Date(dailyTimestamps.at(-1)!).toISOString(),
+      oosStart: fixture.interval.oosStart,
+    },
+    labels: { learner: 'Learner policy', team: 'Strategy team', spus: 'SPUS price-only benchmark', spy: 'S&P 500 ETF price-only proxy' },
+    series: {
+      learner: normalizedSeries(learner.curve, sampledTimestamps),
+      team: normalizedSeries(team.curve, sampledTimestamps),
+      spus: normalizedSeries(spus, sampledTimestamps),
+      spy: normalizedSeries(spy, sampledTimestamps),
+    },
+    metrics: {
+      learner: metrics(learner.curve, dailyTimestamps, learner.trades),
+      team: metrics(team.curve, dailyTimestamps, team.trades),
+      spus: metrics(spus, dailyTimestamps, 0),
+      spy: metrics(spy, dailyTimestamps, 0),
+    },
+    provenance: {
+      fixtureVersion: fixture.fixtureVersion,
+      capturedAt: fixture.capturedAt,
+      warmupStart: fixture.warmupStart,
+      oosBoundary: fixture.interval.oosStart,
+      dataSources: Array.from(new Set(sources)).sort(),
+      strategyUniverse: [...fixture.strategyUniverse],
+      riskLimits: { ...DEFAULT_INTRADAY_LIMITS },
+      fillModel: 'INTRADAY_NEXT_OPEN_VOLATILITY_SLIPPAGE_10BPS_COMMISSION_PARTICIPATION_CAP',
       sharia: { screened: false, source: 'none', state: shariaState, executionBlocked: true },
     },
   };
@@ -639,4 +888,33 @@ export function replayDualMomentumRotationLearningPolicy(
     learner,
     team,
   );
+}
+
+export function replayStocksInPlayOrbLearningPolicy(
+  answers: readonly StrategyLearningAnswer[],
+  inputFixture: IntradayLearningReplayFixture,
+): StrategyLearningReplayResult {
+  const fixture = validateIntradayFixture(
+    inputFixture,
+    STOCKS_IN_PLAY_FIXTURE_VERSION,
+    STOCKS_IN_PLAY_UNIVERSE_V1,
+  );
+  const policy = compileStocksInPlayOrbPolicy(answers);
+  const cached = intradayReplayCache.get(inputFixture)?.get(policy.policyHash);
+  if (cached) return cached;
+  prepareIntradaySetup(fixture);
+  const learner = pooledIntradayTradeCurve(fixture, policy.params);
+  const team = JSON.stringify(policy.params) === JSON.stringify(STOCKS_IN_PLAY_ORB_V1)
+    ? learner
+    : pooledIntradayTradeCurve(fixture, STOCKS_IN_PLAY_ORB_V1);
+  const result = assembleIntradayLearningReplay(
+    { setupId: policy.setupId, setupVersion: policy.setupVersion, policyHash: policy.policyHash },
+    fixture,
+    learner,
+    team,
+  );
+  const byPolicy = intradayReplayCache.get(inputFixture) ?? new Map<string, StrategyLearningReplayResult>();
+  byPolicy.set(policy.policyHash, result);
+  intradayReplayCache.set(inputFixture, byPolicy);
+  return result;
 }

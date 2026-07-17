@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authorizeAccess, requireSession } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import type { StrategyLearningAnswer } from '@/quant/learning/bollingerMrLongV2Curriculum';
-import type { BollingerLearningReplayFixture } from '@/quant/learning/strategyLearningReplay';
+import type { StrategyLearningFixture } from '@/quant/learning/strategyLearningReplay';
 import {
   awardStrategyLearningMastery,
   strategyLearningMasteryState,
@@ -103,7 +103,7 @@ async function createSealedAttempt(input: {
   retryOfId: string | null;
   policy: CompiledStrategyLearningModulePolicy;
   complianceTag: 'EDUCATIONAL_ONLY';
-  fixture: BollingerLearningReplayFixture;
+  fixture: StrategyLearningFixture;
 }): Promise<{ attempt: StoredAttempt; created: boolean }> {
   for (let tries = 0; tries < 3; tries++) {
     try {
@@ -129,8 +129,10 @@ async function createSealedAttempt(input: {
               interval: input.fixture.interval,
               setupId: input.policy.setupId,
               setupVersion: input.policy.setupVersion,
-              fillModel: 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
-              riskEnvelope: 'DEFAULT_BT_LIMITS',
+              fillModel: 'dailySeries' in input.fixture
+                ? 'INTRADAY_NEXT_OPEN_VOLATILITY_SLIPPAGE_10BPS_COMMISSION_PARTICIPATION_CAP'
+                : 'DECIDE_CLOSE_FILL_NEXT_OPEN_10BPS_COMMISSION_5BPS_SLIPPAGE',
+              riskEnvelope: 'dailySeries' in input.fixture ? 'DEFAULT_INTRADAY_LIMITS' : 'DEFAULT_BT_LIMITS',
               comparisonSymbols: ['SPUS', 'SPY'],
             },
             dataProvenance: {
@@ -173,7 +175,7 @@ async function ensureCompletionMastery(attempt: StoredAttempt) {
 async function persistReplayResult(
   attempt: StoredAttempt,
   answers: readonly StrategyLearningAnswer[],
-  fixture: BollingerLearningReplayFixture,
+  fixture: StrategyLearningFixture,
   learningModule: StrategyLearningModule,
 ): Promise<Prisma.JsonValue> {
   if (attempt.result) return attempt.result.payload;
