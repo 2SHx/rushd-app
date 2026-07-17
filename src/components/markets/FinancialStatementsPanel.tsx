@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { FileText, Calendar, Filter, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { RiyalSymbol } from '@/lib/currency';
 
 interface FinancialStatementsPanelProps {
   data: any;
@@ -15,7 +16,7 @@ type FrequencyType = 'annual' | 'quarterly';
 export default function FinancialStatementsPanel({ data, locale }: FinancialStatementsPanelProps) {
   const t = useTranslations('Markets');
   const isAr = locale === 'ar';
-  const currencySymbol = data.market === 'TASI' ? (isAr ? 'ر.س' : 'SAR') : '$';
+  const isSAR = data.market === 'TASI';
 
   const [statement, setStatement] = useState<StatementType>('income');
   const [frequency, setFrequency] = useState<FrequencyType>('annual');
@@ -63,7 +64,13 @@ export default function FinancialStatementsPanel({ data, locale }: FinancialStat
     if (fmt === 'pct') return `${val.toFixed(1)}%`;
     if (fmt === 'num') return val.toFixed(2);
     const inBillions = val / 1e9;
-    return `${currencySymbol}${inBillions.toFixed(2)}B`;
+    return isSAR
+      ? <span className="inline-flex items-center gap-0.5">{isAr ? (
+          <><span>{inBillions.toFixed(2)}B</span><RiyalSymbol /></>
+        ) : (
+          <><RiyalSymbol /><span>{inBillions.toFixed(2)}B</span></>
+        )}</span>
+      : `$${inBillions.toFixed(2)}B`;
   };
 
   return (

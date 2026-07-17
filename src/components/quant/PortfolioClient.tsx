@@ -13,6 +13,7 @@ import {
   Loader2,
   ShieldCheck,
 } from 'lucide-react';
+import { formatMoney as formatMoneyShared, formatSARNumber } from '@/lib/currency';
 
 interface Position {
   symbol: string;
@@ -132,12 +133,7 @@ export default function PortfolioClient({
   });
 
   // Formatter helpers
-  const fmtMoney = (val: number, currency: 'SAR' | 'USD') => {
-    return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency,
-    }).format(val);
-  };
+  const fmtMoney = (val: number, currency: 'SAR' | 'USD') => formatMoneyShared(val, currency, locale);
 
   const performanceMessage = {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
@@ -357,6 +353,9 @@ export default function PortfolioClient({
               <div className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
                 Current Balance
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold normal-case tracking-wide text-amber-500 dark:text-amber-400">
+                  {t('paperEvidenceTag')}
+                </span>
               </div>
               <div className="flex items-center gap-4 mt-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]">

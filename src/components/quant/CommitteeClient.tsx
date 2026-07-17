@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 import MavericksSquadPanel from './MavericksSquadPanel';
+import { RiyalAmount, formatSARNumber } from '@/lib/currency';
 
 type MarketKind = 'TASI' | 'NASDAQ';
 export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -650,13 +651,7 @@ export default function CommitteeClient({
     return new Date(s.asOf).getTime() >= cutoff;
   });
 
-  const fmtMoney = (val: number, _currency?: string) => {
-    const formattedNum = new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    }).format(val);
-    return isAr ? `${formattedNum} ر.س` : `${formattedNum} SAR`;
-  };
+  const fmtMoney = (val: number, _currency?: string) => <RiyalAmount value={val} locale={locale} />;
 
   const fmtPercent = (val: number) => {
     return `${(val * 100).toFixed(2)}%`;
@@ -733,7 +728,7 @@ export default function CommitteeClient({
             <g key={idx}>
               <line x1={padding} y1={y} x2={w - padding} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
               <text x={padding - 5} y={y + 4} textAnchor="end" className="text-[8px] font-mono fill-gray-500">
-                {fmtMoney(gridVal).replace('.00', '')}
+                {formatSARNumber(gridVal, locale, { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
               </text>
             </g>
           );

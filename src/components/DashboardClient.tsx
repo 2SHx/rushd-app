@@ -2,10 +2,11 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { 
+import {
   Briefcase, History, CheckCircle2, Coins,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark
 } from 'lucide-react';
+import { formatMoney as formatMoneyShared, formatSARNumber, RiyalSymbol } from '@/lib/currency';
 
 export interface Position {
   symbol: string;
@@ -89,10 +90,7 @@ export default function DashboardClient({
   const isAr = locale === 'ar';
   const isAlpaca = accountKind === 'alpaca';
 
-  const formatMoney = (value: number, currency: 'SAR' | 'USD') => new Intl.NumberFormat(
-    isAr ? 'ar-SA' : 'en-US',
-    { style: 'currency', currency },
-  ).format(value);
+  const formatMoney = (value: number, currency: 'SAR' | 'USD') => formatMoneyShared(value, currency, locale);
   const performanceMessage = isAlpaca ? t('alpacaHistoryUnavailable') : ({
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
@@ -255,7 +253,7 @@ export default function DashboardClient({
           amount: -parseFloat(data.amountPaid),
           currency: 'SAR',
           type: 'WITHDRAWAL',
-          description: `Zakat payment / دفع الزكاة (2.5% of ${(zakatableWealth ?? 0).toFixed(2)} SAR)`,
+          description: 'Zakat payment / دفع الزكاة (2.5%)',
           createdAt: new Date().toISOString()
         };
         setTxs(prev => [newTx, ...prev]);
@@ -339,7 +337,12 @@ export default function DashboardClient({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-12">
         {/* Portfolio Value */}
         <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-3">
-          <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
+            <span className="shrink-0 rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground/45">
+              {t('paperEvidenceTag')}
+            </span>
+          </div>
           <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
             {initialNAV !== null && cashCurrency ? formatMoney(initialNAV, cashCurrency) : t('valueUnavailable')}
           </p>
@@ -370,7 +373,9 @@ export default function DashboardClient({
           </div>
           <p className={`mt-3 flex items-center gap-1 font-mono text-3xl font-semibold tabular-nums ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
             {plData !== null && (plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />)}
-            {plData === null || !cashCurrency ? t('valueUnavailable') : `${plUp ? '+' : ''}${formatMoney(plData.value, cashCurrency)}`}
+            {plData === null || !cashCurrency ? t('valueUnavailable') : (
+              <>{plUp ? '+' : ''}{formatMoney(plData.value, cashCurrency)}</>
+            )}
           </p>
           <p className={`mt-2 text-xs font-semibold ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
             {plData === null ? performanceMessage || t('portfolioPerformanceInsufficient') : `${plUp ? '+' : ''}${plData.pct.toFixed(2)}% ${t('overTimeframe', { period: plTimeframe })}`}
@@ -661,7 +666,10 @@ export default function DashboardClient({
               </div>
               <h3 id="zakat-success-title" className="text-lg font-semibold">{t('zakatSuccessTitle')}</h3>
               <p id="zakat-success-description" className="text-xs leading-relaxed text-foreground/55">
-                {t('zakatSuccessBody', { amount: parseFloat(zakatPaidAmount).toFixed(2) })}
+                {t.rich('zakatSuccessBody', {
+                  amount: formatSARNumber(parseFloat(zakatPaidAmount), locale),
+                  riyal: () => <RiyalSymbol className="mx-0.5" />,
+                })}
               </p>
               <button
                 onClick={() => setZakatPaidSuccess(false)}

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { User, Users, Plus, Award, Wallet, Briefcase, Key } from 'lucide-react';
 import { TICKERS } from '@/lib/tickers';
+import { RiyalAmount, formatUSD } from '@/lib/currency';
 
 interface ParentDashboardClientProps {
   parentName: string;
@@ -132,7 +133,9 @@ export default function ParentDashboardClient({ parentName, familyCode, children
                         </span>
                       </div>
                       <p className="text-2xl font-bold">
-                        {Number(jar?.balance ?? 0).toFixed(2)} <span className="text-xs text-gray-400 font-normal">{jar?.currency ?? 'SAR'}</span>
+                        {jar?.currency === 'USD'
+                          ? formatUSD(Number(jar?.balance ?? 0), locale ?? 'en')
+                          : <RiyalAmount value={Number(jar?.balance ?? 0)} locale={locale ?? 'en'} />}
                       </p>
                     </div>
                   </div>

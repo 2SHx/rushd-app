@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Loader2, ArrowRight } from 'lucide-react';
+import { RiyalAmount, RiyalSymbol, formatUSD } from '@/lib/currency';
 
 interface TradeActionProps {
   symbol: string;
@@ -75,8 +76,8 @@ export default function TradeAction({
   };
 
   const formattedTotal = market === 'TASI'
-    ? t('formatTasi', { amount: totalCost.toFixed(2) })
-    : t('formatNasdaq', { amount: totalCost.toFixed(2) });
+    ? <RiyalAmount value={totalCost} locale={locale} />
+    : formatUSD(totalCost, locale);
 
   return (
     <div className="space-y-4">
@@ -84,7 +85,7 @@ export default function TradeAction({
       <div className="glass-panel p-4 rounded-3xl flex justify-between items-center space-x-3 rtl:space-x-reverse text-start">
         <div>
           <span className="text-[10px] text-foreground/50 block uppercase">{t('virtualBalance')}</span>
-          <span className="font-extrabold text-foreground font-mono tabular-nums">{jarBalance.toFixed(2)} SAR</span>
+          <span className="font-extrabold text-foreground font-mono tabular-nums"><RiyalAmount value={jarBalance} locale={locale} /></span>
         </div>
         <div className="flex space-x-2 rtl:space-x-reverse">
           <button
@@ -210,8 +211,8 @@ export default function TradeAction({
                 </h3>
                 <span className="text-xs text-foreground/50 font-mono tabular-nums">
                   {market === 'TASI'
-                    ? t('formatTasi', { amount: currentPrice.toFixed(2) })
-                    : t('formatNasdaq', { amount: currentPrice.toFixed(2) })
+                    ? <RiyalAmount value={currentPrice} locale={locale} />
+                    : formatUSD(currentPrice, locale)
                   } / {t('sharePriceLabel')}
                 </span>
               </div>
@@ -238,7 +239,7 @@ export default function TradeAction({
               <div className="grid grid-cols-2 gap-3 text-xs bg-foreground/[0.03] p-3 rounded-xl border border-[var(--border-color)] font-mono">
                 <div>
                   <span className="text-[10px] text-foreground/50 block">{t('availableCash')}</span>
-                  <span className="font-bold text-up tabular-nums">{jarBalance.toFixed(2)} SAR</span>
+                  <span className="font-bold text-up tabular-nums"><RiyalAmount value={jarBalance} locale={locale} /></span>
                 </div>
                 <div>
                   <span className="text-[10px] text-foreground/50 block">{t('sharesOwned')}</span>
@@ -310,10 +311,11 @@ export default function TradeAction({
               </div>
               <h3 className="font-bold text-lg text-foreground">{t('questComplete')}</h3>
               <p className="text-xs text-foreground/60 leading-relaxed">
-                {t('tradeSuccessDesc', {
+                {t.rich('tradeSuccessDesc', {
                   action: tradeAction === 'BUY' ? t('buy') : t('sell'),
                   symbol: cleanSymbol,
-                  balance: jarBalance.toFixed(2)
+                  balance: jarBalance.toFixed(2),
+                  riyal: () => <RiyalSymbol className="mx-0.5" />,
                 })}
               </p>
               <button

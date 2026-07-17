@@ -17,6 +17,7 @@ import {
 import Link from 'next/link';
 import PriceChartPanel from './PriceChartPanel';
 import FundamentalsPanel from './FundamentalsPanel';
+import { RiyalAmount, formatUSD } from '@/lib/currency';
 
 interface StockDetailProps {
   data: any;
@@ -148,14 +149,10 @@ export default function StockDetail({
   const complianceKnown = typeof data.isShariaCompliant === 'boolean';
   const purificationKnown = Number.isFinite(data.purificationRatioBps);
   const currency = data.market === 'TASI' ? 'SAR' : 'USD';
-  const numberLocale = isAr ? 'ar-SA' : 'en-US';
   const marketCap = Number.isFinite(data.statistics?.marketCap)
-    ? new Intl.NumberFormat(numberLocale, {
-        style: 'currency',
-        currency,
-        notation: 'compact',
-        maximumFractionDigits: 1,
-      }).format(data.statistics.marketCap)
+    ? (currency === 'SAR'
+        ? <RiyalAmount value={data.statistics.marketCap} locale={locale} notation="compact" maximumFractionDigits={1} minimumFractionDigits={0} />
+        : formatUSD(data.statistics.marketCap, locale, { notation: 'compact', maximumFractionDigits: 1, minimumFractionDigits: 0 }))
     : t('workspace.unverified');
   const provenance = data.marketDataSource === 'live' && data.shariaSource === 'zoya'
     ? t('workspace.chips.live')
@@ -210,9 +207,9 @@ export default function StockDetail({
                 <div>
                   <h1 className="truncate text-sm font-semibold text-foreground">{displayName}</h1>
                   <span className="font-mono text-2xl font-bold leading-none tabular-nums text-foreground md:text-3xl" dir="ltr">
-                    {data.market === 'TASI'
-                      ? t('formatTasi', { amount: data.price.toFixed(2) })
-                      : t('formatNasdaq', { amount: data.price.toFixed(2) })}
+                    {currency === 'SAR'
+                      ? <RiyalAmount value={data.price} locale={locale} />
+                      : formatUSD(data.price, locale)}
                   </span>
                 </div>
                 <div className={`mb-0.5 flex items-center gap-1 font-mono text-xs font-bold tabular-nums ${

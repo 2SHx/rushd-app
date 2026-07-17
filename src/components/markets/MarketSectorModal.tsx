@@ -5,6 +5,7 @@ import { TrendingUp, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { SectorGroup } from './marketOverviewUtils';
 import MarketSparkline from './MarketSparkline';
+import { formatMoney } from '@/lib/currency';
 
 interface Props {
   sector: SectorGroup | null;
@@ -19,11 +20,6 @@ export default function MarketSectorModal({ sector, isAr, locale, market, onClos
   const t = useTranslations('Markets');
   const advancing = sector?.stocks.filter((stock) => stock.pct > 0).length ?? 0;
   const currency = market === 'TASI' ? 'SAR' : 'USD';
-  const currencyFormatter = new Intl.NumberFormat(locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 2,
-  });
 
   return (
     <AnimatePresence>
@@ -106,7 +102,7 @@ export default function MarketSectorModal({ sector, isAr, locale, market, onClos
                       <span className={`text-xs font-bold font-mono tabular-nums ${stock.pct >= 0 ? 'text-up' : 'text-down'}`}>
                         {stock.pct >= 0 ? '+' : ''}{stock.pct.toFixed(2)}%
                       </span>
-                      <p className="text-[9px] text-foreground/50 font-mono tabular-nums mt-0.5" dir="ltr">{currencyFormatter.format(stock.price)}</p>
+                      <p className="text-[9px] text-foreground/50 font-mono tabular-nums mt-0.5" dir="ltr">{formatMoney(stock.price, currency, locale)}</p>
                     </div>
                   </div>
                 </button>
