@@ -1,4 +1,4 @@
-import { fetchMarketData } from '@/services/marketData';
+import { fetchMarketData, getFundamentalsHistory, getEarningsCalendar, filingsLinks } from '@/services/marketData';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import MarketsClient from '@/components/MarketsClient';
@@ -22,7 +22,13 @@ export default async function MarketsPage({ searchParams, params }: MarketsPageP
     ? searchParams.symbol
     : defaultSymbol;
 
-  const currentData = await fetchMarketData(symbol, rawMarket);
+  const [currentData, fundamentalsAnnual, fundamentalsQuarterly, earningsCalendar] = await Promise.all([
+    fetchMarketData(symbol, rawMarket),
+    getFundamentalsHistory(symbol, rawMarket, 'annual', 5),
+    getFundamentalsHistory(symbol, rawMarket, 'quarterly', 8),
+    getEarningsCalendar(symbol, rawMarket),
+  ]);
+  const filings = filingsLinks(symbol, rawMarket);
   const isParent = session?.user?.role === 'PARENT';
 
   const userId = session?.user?.id;
@@ -63,6 +69,10 @@ export default async function MarketsPage({ searchParams, params }: MarketsPageP
       initialJarBalance={jarBalance}
       initialSharesOwned={sharesOwned}
       initialMarket={rawMarket}
+      fundamentalsAnnual={fundamentalsAnnual}
+      fundamentalsQuarterly={fundamentalsQuarterly}
+      earningsCalendar={earningsCalendar}
+      filings={filings}
     />
   );
 }
