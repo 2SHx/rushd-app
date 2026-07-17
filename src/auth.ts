@@ -140,18 +140,26 @@ export const auth = async (...args: any[]) => {
     return session;
   }
 
-  // Skip Auth Mode: auth is hidden for now (user decision, 2026-07-14) —
-  // in development the mock session is ALWAYS fabricated so the app never
-  // shows a login wall locally; SKIP_AUTH=1 opts in from other non-prod
-  // environments. NODE_ENV=production is a hard gate: a missing session
-  // there is always null, never fabricated.
-  const skipAuthEnabled = (process.env.SKIP_AUTH === '1' || process.env.NODE_ENV === 'development') && process.env.NODE_ENV !== 'production';
+  // Skip Auth Mode: auth is hidden for now (user decision, 2026-07-14).
+  // - development ALWAYS fabricates the mock session so local work never
+  //   hits a login wall
+  // - SKIP_AUTH=1 opts in from other non-production environments
+  // - PUBLIC_DEMO_MODE=1 is the explicit production-only escape hatch for
+  //   publishing a temporary unauthenticated demo
+  const skipAuthEnabled =
+    process.env.PUBLIC_DEMO_MODE === '1' ||
+    ((process.env.SKIP_AUTH === '1' || process.env.NODE_ENV === 'development') &&
+      process.env.NODE_ENV !== 'production');
   if (!skipAuthEnabled) {
     return null;
   }
   if (!skipAuthWarned) {
     skipAuthWarned = true;
-    console.warn('[AUTH_AUDIT] SKIP_AUTH=1 — fabricating a mock ULTRA/PARENT session. Never enable this in production.');
+    console.warn(
+      process.env.PUBLIC_DEMO_MODE === '1'
+        ? '[AUTH_AUDIT] PUBLIC_DEMO_MODE=1 — publishing with a fabricated public demo session.'
+        : '[AUTH_AUDIT] SKIP_AUTH=1 — fabricating a mock ULTRA/PARENT session. Never enable this in production.'
+    );
   }
 
   // Fallback: Skip Auth Mode (Seeds mock parent user if not already present in the DB)

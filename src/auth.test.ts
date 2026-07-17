@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const mutableEnv = process.env as Record<string, string | undefined>;
 const ORIGINAL_SKIP_AUTH = mutableEnv.SKIP_AUTH;
 const ORIGINAL_NODE_ENV = mutableEnv.NODE_ENV;
+const ORIGINAL_PUBLIC_DEMO_MODE = mutableEnv.PUBLIC_DEMO_MODE;
 
 const nextAuthInnerAuth = vi.fn();
 const findUnique = vi.fn();
@@ -62,6 +63,7 @@ beforeEach(() => {
 afterEach(() => {
   mutableEnv.SKIP_AUTH = ORIGINAL_SKIP_AUTH;
   mutableEnv.NODE_ENV = ORIGINAL_NODE_ENV;
+  mutableEnv.PUBLIC_DEMO_MODE = ORIGINAL_PUBLIC_DEMO_MODE;
 });
 
 describe('auth() wrapper — no-session means no-session', () => {
@@ -94,9 +96,10 @@ describe('auth() wrapper — no-session means no-session', () => {
     warnSpy.mockRestore();
   });
 
-  it('returns null when SKIP_AUTH=1 but NODE_ENV=production (both gates required)', async () => {
+  it('returns null when SKIP_AUTH=1 but NODE_ENV=production without PUBLIC_DEMO_MODE', async () => {
     mutableEnv.SKIP_AUTH = '1';
     mutableEnv.NODE_ENV = 'production';
+    delete mutableEnv.PUBLIC_DEMO_MODE;
     nextAuthInnerAuth.mockResolvedValue(null);
 
     const { auth } = await import('./auth');
@@ -108,6 +111,7 @@ describe('auth() wrapper — no-session means no-session', () => {
 
   it('passes through a real session untouched', async () => {
     delete mutableEnv.SKIP_AUTH;
+    delete mutableEnv.PUBLIC_DEMO_MODE;
     mutableEnv.NODE_ENV = 'production';
     const realSession = { user: { id: 'real-user', role: 'CHILD', tier: 'BASIC', parentId: 'p1' } };
     nextAuthInnerAuth.mockResolvedValue(realSession);
@@ -118,6 +122,7 @@ describe('auth() wrapper — no-session means no-session', () => {
 
   it('fabricates the mock ULTRA/PARENT session ONLY when SKIP_AUTH=1 AND NODE_ENV!=production, and warns once', async () => {
     mutableEnv.SKIP_AUTH = '1';
+    delete mutableEnv.PUBLIC_DEMO_MODE;
     mutableEnv.NODE_ENV = 'development';
     nextAuthInnerAuth.mockResolvedValue(null);
     findUnique.mockResolvedValue({ id: 'mock-child-id', role: 'PARENT', tier: 'ULTRA' });
@@ -134,6 +139,26 @@ describe('auth() wrapper — no-session means no-session', () => {
 
     await auth();
     expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('fabricates the mock ULTRA/PARENT session in production when PUBLIC_DEMO_MODE=1', async () => {
+    delete mutableEnv.SKIP_AUTH;
+    mutableEnv.PUBLIC_DEMO_MODE = '1';
+    mutableEnv.NODE_ENV = 'production';
+    nextAuthInnerAuth.mockResolvedValue(null);
+    findUnique.mockResolvedValue({ id: 'mock-child-id', role: 'PARENT', tier: 'ULTRA' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { auth } = await import('./auth');
+    const session = await auth();
+
+    expect(session?.user?.id).toBe('mock-child-id');
+    expect(session?.user?.role).toBe('PARENT');
+    expect(session?.user?.tier).toBe('ULTRA');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toMatch(/PUBLIC_DEMO_MODE/);
 
     warnSpy.mockRestore();
   });

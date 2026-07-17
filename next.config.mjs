@@ -4,8 +4,10 @@ const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  outputFileTracingIncludes: {
-    '/api/cron/quant-intraday': ['./src/quant/data/fixtures/intraday/**/*.json'],
+  experimental: {
+    outputFileTracingIncludes: {
+      '/api/cron/quant-intraday': ['./src/quant/data/fixtures/intraday/**/*.json'],
+    },
   },
 };
 

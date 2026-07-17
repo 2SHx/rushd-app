@@ -8,6 +8,7 @@ zero-outbound **bundled mode**. Keys do nothing unless their integration is expl
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/rushd"
 AUTH_SECRET=""          # openssl rand -base64 32   (required outside local dev)
 CRON_SECRET=""          # openssl rand -hex 24      (schedulers' Bearer token)
+PUBLIC_DEMO_MODE="0"    # set to "1" only for a temporary public no-login demo
 ```
 
 ## Alpaca — PAPER trading (real NASDAQ data + real paper order execution)
