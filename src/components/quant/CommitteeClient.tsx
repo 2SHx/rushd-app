@@ -260,6 +260,23 @@ const DEFAULT_MOCK_PURIFICATION: PurificationEntry[] = [
   },
 ];
 
+const COMMITTEE_LABELS = {
+  committeeTab: { en: 'Committee Pipeline Board', ar: 'لوحة قرار اللجنة' },
+  mavericksTitle: { en: 'Advisory Team Workspace', ar: 'مساحة عمل المستشارين' },
+  portfolioAnalyticsTab: { en: 'Portfolio & Performance Analytics', ar: 'تحليلات الأداء والمحفظة' },
+  holdingsHeading: { en: 'Active Holdings & Positions', ar: 'الأصول والأسهم المملوكة' },
+  symbol: { en: 'Symbol', ar: 'الرمز' },
+  marketLabel: { en: 'Market', ar: 'السوق' },
+  shares: { en: 'Shares', ar: 'الأسهم' },
+  costBasis: { en: 'Cost Basis', ar: 'سعر التكلفة' },
+  value: { en: 'Value', ar: 'القيمة الحالية' },
+  weight: { en: 'Weight', ar: 'الوزن' },
+  noActivePositions: { en: 'No active holdings in portfolio', ar: 'لا تتوفر أسهم نشطة في المحفظة حالياً' },
+  rebalanceButton: { en: 'Trigger Portfolio Rebalance', ar: 'إعادة موازنة المحفظة' },
+  rebalancing: { en: 'Rebalancing Portfolio...', ar: 'جاري إعادة الموازنة...' },
+  rebalanceErrorGeneric: { en: 'Rebalance operation failed. Please try again.', ar: 'فشلت عملية إعادة الموازنة. يرجى المحاولة لاحقاً.' },
+};
+
 export default function CommitteeClient({
   locale,
   initialNAV,
@@ -275,6 +292,14 @@ export default function CommitteeClient({
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+
+  const getLabel = (key: keyof typeof COMMITTEE_LABELS) => {
+    try {
+      const translated = t(key);
+      if (translated && !translated.startsWith('Quant.')) return translated;
+    } catch {}
+    return isAr ? COMMITTEE_LABELS[key].ar : COMMITTEE_LABELS[key].en;
+  };
 
   const [activeTab, setActiveTab] = useState<'board' | 'mavericks' | 'portfolio'>('board');
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
@@ -1346,19 +1371,19 @@ export default function CommitteeClient({
             <div className="glass-panel rounded-3xl p-6 border border-foreground/10 bg-surface-card overflow-hidden shadow-md">
               <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-foreground">
                 <Coins className="w-4 h-4 text-accent" />
-                <span>{t('holdingsHeading')}</span>
+                <span>{getLabel('holdingsHeading')}</span>
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-start border-collapse text-[11px]">
                   <thead>
                     <tr className="border-b border-foreground/10 text-foreground/60 font-black uppercase tracking-wider text-[9px]">
-                      <th className="py-3 text-start px-2">{t('symbol')}</th>
-                      <th className="py-3 text-start px-2">{t('marketLabel')}</th>
+                      <th className="py-3 text-start px-2">{getLabel('symbol')}</th>
+                      <th className="py-3 text-start px-2">{getLabel('marketLabel')}</th>
                       <th className="py-3 text-start px-2">{isAr ? 'الحكم الشرعي' : 'Sharia Screen'}</th>
-                      <th className="py-3 text-end px-2">{t('shares')}</th>
-                      <th className="py-3 text-end px-2">{t('costBasis')}</th>
-                      <th className="py-3 text-end px-2">{t('value')}</th>
-                      <th className="py-3 text-end px-2">{t('weight')}</th>
+                      <th className="py-3 text-end px-2">{getLabel('shares')}</th>
+                      <th className="py-3 text-end px-2">{getLabel('costBasis')}</th>
+                      <th className="py-3 text-end px-2">{getLabel('value')}</th>
+                      <th className="py-3 text-end px-2">{getLabel('weight')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1394,7 +1419,7 @@ export default function CommitteeClient({
                       );
                     })}
                     {positions.length === 0 && (
-                      <tr><td colSpan={7} className="py-8 text-center text-foreground/50">{t('noActivePositions')}</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-foreground/50">{getLabel('noActivePositions')}</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1442,7 +1467,7 @@ export default function CommitteeClient({
                 className="w-full py-3 rounded-2xl bg-accent text-white font-black text-xs uppercase tracking-wider hover:opacity-90 transition-all shadow-lg shadow-accent/25 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {rebalanceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-white" />}
-                <span>{rebalanceLoading ? t('rebalancing') : t('rebalanceButton')}</span>
+                <span>{rebalanceLoading ? getLabel('rebalancing') : getLabel('rebalanceButton')}</span>
               </button>
             </div>
           </div>

@@ -45,9 +45,60 @@ interface MavericksSquadPanelProps {
   onRunFinished?: (earnedXp: number) => void;
 }
 
+const LABELS = {
+  mavericksTitle: {
+    en: 'AI Advisory Team & Strategy Workspace',
+    ar: 'مساحة عمل فريق المستشارين والذكاء الاصطناعي',
+  },
+  mavericksSubtitle: {
+    en: 'Draft your AI expert team, customize agent personalities, and launch live simulated trading runs.',
+    ar: 'اختر تشكيلة المستشارين الأذكياء، وتخصيص قدراتهم، واطلق محاكاة التداول المباشرة.',
+  },
+  squadXp: {
+    en: 'Squad XP',
+    ar: 'خبرة التشكيلة',
+  },
+  launchBattle: {
+    en: 'Launch Market Simulation',
+    ar: 'إطلاق محاكاة المعركة',
+  },
+  battleInProgress: {
+    en: 'Simulating Market Battle...',
+    ar: 'جاري محاكاة المعركة...',
+  },
+  battleLog: {
+    en: 'Live Battle Stream & Agent Reactions',
+    ar: 'سجل المعركة المباشر وتفاعلات الوكلاء',
+  },
+  draftSquad: {
+    en: 'Draft Advisory Squad',
+    ar: 'تشكيل فريق الوكلاء',
+  },
+  discipline: {
+    en: 'Discipline',
+    ar: 'الالتزام',
+  },
+  executionSpeed: {
+    en: 'Execution Speed',
+    ar: 'سرعة التنفيذ',
+  },
+  specialAbility: {
+    en: 'Special Ability',
+    ar: 'المهارة الخاصة',
+  },
+};
+
 export default function MavericksSquadPanel({ locale, onRunFinished }: MavericksSquadPanelProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+
+  const getLabel = (key: keyof typeof LABELS) => {
+    try {
+      const translated = t(key);
+      if (translated && !translated.startsWith('Quant.')) return translated;
+    } catch {}
+    return isAr ? LABELS[key].ar : LABELS[key].en;
+  };
 
   const agentPool: AgentPersonality[] = [
     {
@@ -297,14 +348,14 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
           <div className="space-y-1">
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
               <Trophy className="w-5 h-5 text-amber-400 animate-bounce" />
-              <h2 className="text-xl font-extrabold text-foreground">{t('mavericksTitle')}</h2>
+              <h2 className="text-xl font-extrabold text-foreground">{getLabel('mavericksTitle')}</h2>
             </div>
-            <p className="text-xs text-foreground/60 leading-relaxed">{t('mavericksSubtitle')}</p>
+            <p className="text-xs text-foreground/60 leading-relaxed">{getLabel('mavericksSubtitle')}</p>
           </div>
 
           <div className="flex items-center space-x-4 rtl:space-x-reverse self-start">
             <div className="px-4 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-end">
-              <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">{t('squadXp')}</span>
+              <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">{getLabel('squadXp')}</span>
               <p className="text-lg font-black font-mono text-amber-400">{squadXp} XP</p>
             </div>
 
@@ -318,7 +369,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
               }`}
             >
               {isBattleRunning ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />}
-              <span>{isBattleRunning ? t('battleInProgress') : t('launchBattle')}</span>
+              <span>{isBattleRunning ? getLabel('battleInProgress') : getLabel('launchBattle')}</span>
             </button>
           </div>
         </div>
@@ -336,7 +387,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="flex items-center space-x-2 rtl:space-x-reverse">
                 <Activity className="w-4 h-4 text-purple-400 animate-pulse" />
-                <h4 className="text-xs font-bold">{t('battleLog')}</h4>
+                <h4 className="text-xs font-bold">{getLabel('battleLog')}</h4>
               </div>
               <span className="text-[10px] font-mono text-purple-400">{battleLogs.length}/5 Events</span>
             </div>
@@ -359,7 +410,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-sm text-foreground flex items-center space-x-2 rtl:space-x-reverse">
             <Cpu className="w-4 h-4 text-accent" />
-            <span>{t('draftSquad')} ({activeSquad.length}/{agentPool.length} Active)</span>
+            <span>{getLabel('draftSquad')} ({activeSquad.length}/{agentPool.length} Active)</span>
           </h3>
         </div>
 
@@ -415,7 +466,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="space-y-1 p-2 rounded-xl bg-foreground/[0.02] border border-foreground/[0.04]">
                     <div className="flex justify-between text-foreground/60">
-                      <span>{t('discipline')}</span>
+                      <span>{getLabel('discipline')}</span>
                       <span className="font-mono font-bold text-foreground">{agent.discipline}%</span>
                     </div>
                     <div className="h-1 bg-foreground/10 rounded-full overflow-hidden">
@@ -425,7 +476,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
 
                   <div className="space-y-1 p-2 rounded-xl bg-foreground/[0.02] border border-foreground/[0.04]">
                     <div className="flex justify-between text-foreground/60">
-                      <span>{t('executionSpeed')}</span>
+                      <span>{getLabel('executionSpeed')}</span>
                       <span className="font-mono font-bold text-purple-400">
                         {isAr
                           ? { Instant: 'فوري', 'Ultra-Fast': 'فائق السرعة', Fast: 'سريع', Strategic: 'استراتيجي' }[agent.speed]
@@ -441,7 +492,7 @@ export default function MavericksSquadPanel({ locale, onRunFinished }: Mavericks
 
                 {/* Special Ability Badge */}
                 <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between text-[10px]">
-                  <span className="text-foreground/50">{t('specialAbility')}:</span>
+                  <span className="text-foreground/50">{getLabel('specialAbility')}:</span>
                   <span className="font-extrabold text-foreground bg-foreground/5 px-2 py-0.5 rounded-full border border-foreground/10">
                     {isAr ? agent.abilityAr : agent.abilityEn}
                   </span>
