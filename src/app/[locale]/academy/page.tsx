@@ -42,7 +42,7 @@ export default async function AcademyPage({ params }: { params: { locale: string
   const currentTrackId = currentStep?.trackId;
 
   function queueItemHref(item: (typeof queue)[number], unitEntry: NonNullable<ReturnType<typeof unitById.get>>) {
-    if (item.reason !== 'practice') return `/${params.locale}/academy/${item.trackId}/${item.unitId}/${item.lessonId}`;
+    if (item.reason !== 'practice') return `/academy/${item.trackId}/${item.unitId}/${item.lessonId}`;
     const primary = unitEntry.unit.practiceLinks[0];
     let href = practiceLinkHref(primary);
     if (primary.kind !== 'strategySetup') {

@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import {
   Briefcase, History, CheckCircle2, Coins,
-  ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark, Trophy, Sparkles
+  ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark, Trophy, Sparkles,
+  Gift, Zap, Check, Lock, X, ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatMoney as formatMoneyShared, formatSARNumber, RiyalSymbol } from '@/lib/currency';
@@ -256,6 +257,20 @@ export default function DashboardClient({
   const [zakatPaidAmount, setZakatPaidAmount] = useState('0.00');
   const [isZakatSubmitting, setIsZakatSubmitting] = useState(false);
 
+  // Interactive Gamification Level & XP states
+  const [xp, setXp] = useState(350);
+  const [dailyClaimed, setDailyClaimed] = useState(false);
+  const [showLevelModal, setShowLevelModal] = useState(false);
+  const [xpNotification, setXpNotification] = useState<string | null>(null);
+
+  const handleClaimDailyXp = () => {
+    if (dailyClaimed) return;
+    setXp(prev => prev + 50);
+    setDailyClaimed(true);
+    setXpNotification(isAr ? '🎉 مبروك! حصلت على +50 XP مكافأة الحضور اليومي!' : '🎉 Congrats! Earned +50 XP Daily Reward!');
+    setTimeout(() => setXpNotification(null), 4000);
+  };
+
   // P&L timeframe selector
   const [plTimeframe, setPlTimeframe] = useState<'24H'|'7D'|'30D'|'90D'>('24H');
 
@@ -450,34 +465,83 @@ export default function DashboardClient({
 
       {/* Gamification Level & Progress Card */}
       {!isAlpaca && (
-        <div className="relative overflow-hidden rounded-[1.75rem] border border-accent/20 bg-surface-card p-5 sm:p-6 shadow-sm">
+        <div className="relative overflow-hidden rounded-[1.75rem] border border-accent/20 bg-surface-card p-5 sm:p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-accent/40">
+          {/* XP Toast Notification */}
+          <AnimatePresence>
+            {xpNotification && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-4 flex items-center justify-between rounded-2xl bg-accent px-4 py-2.5 text-xs font-bold text-white shadow-lg"
+              >
+                <span>{xpNotification}</span>
+                <button onClick={() => setXpNotification(null)} className="rounded-full p-1 hover:bg-white/20">
+                  <X className="size-3.5" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent border border-accent/20">
-                <Trophy className="size-6" aria-hidden="true" />
-              </div>
+              <button
+                onClick={() => setShowLevelModal(true)}
+                className="group relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent border border-accent/20 transition-all duration-300 hover:scale-105 hover:bg-accent hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                title={isAr ? 'عرض خريطة المستويات والمكافآت' : 'View Level Perks & Roadmap'}
+              >
+                <Trophy className="size-7 transition-transform duration-300 group-hover:rotate-12" aria-hidden="true" />
+              </button>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
                     {isAr ? 'مستوى التعلّم والخبرة' : 'Level & Progress'}
                   </span>
-                  <span className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold text-white">
+                  <button
+                    onClick={() => setShowLevelModal(true)}
+                    className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold text-white transition-all hover:bg-accent/80 hover:scale-105 active:scale-95"
+                  >
                     {isAr ? 'المستوى 3' : 'Level 3'}
-                  </span>
+                  </button>
                 </div>
                 <h2 className="mt-1 text-base font-extrabold text-foreground sm:text-lg">
                   {isAr ? 'مستثمر واعد · Promising Investor' : 'Promising Investor'}
                 </h2>
                 <p className="mt-0.5 text-xs text-foreground/60">
-                  {isAr ? 'حققت 350 XP من أصل 500 XP للوصول إلى المستوى 4' : '350 XP earned out of 500 XP to Level 4'}
+                  {isAr ? `حققت ${xp} XP من أصل 500 XP للوصول إلى المستوى 4` : `${xp} XP earned out of 500 XP to Level 4`}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col items-start sm:items-end gap-1.5 ms-auto">
-              <div className="font-mono text-sm font-bold text-accent">350 / 500 XP (70%)</div>
-              <div className="w-44 sm:w-56 h-2.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
-                <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: '70%' }} />
+            <div className="flex flex-col items-start sm:items-end gap-2 ms-auto">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-bold text-accent">{xp} / 500 XP ({Math.round((xp / 500) * 100)}%)</span>
+                <button
+                  onClick={handleClaimDailyXp}
+                  disabled={dailyClaimed}
+                  className={`group relative overflow-hidden rounded-full px-3 py-1 text-xs font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    dailyClaimed
+                      ? 'bg-foreground/10 text-foreground/50 cursor-default'
+                      : 'bg-accent text-white hover:bg-accent/90 hover:shadow-md active:scale-95'
+                  }`}
+                >
+                  <span className="relative z-10 flex items-center gap-1">
+                    <Zap className="size-3.5 fill-current" />
+                    {dailyClaimed ? (isAr ? 'تم الاستلام ✓' : 'Claimed ✓') : (isAr ? '+50 XP يومية' : '+50 Daily XP')}
+                  </span>
+                </button>
+              </div>
+
+              <div
+                onClick={() => setShowLevelModal(true)}
+                className="w-44 sm:w-64 h-3 overflow-hidden rounded-full bg-foreground/10 cursor-pointer p-0.5 ring-1 ring-accent/20 transition-all hover:ring-accent"
+                title={isAr ? 'اضغط لعرض التفاصيل' : 'Click to inspect details'}
+                aria-hidden="true"
+              >
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
+                  style={{ width: `${Math.min(100, (xp / 500) * 100)}%` }}
+                />
               </div>
             </div>
           </div>
@@ -489,10 +553,101 @@ export default function DashboardClient({
               <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">⚡ {isAr ? 'رواد الادخار' : 'Savings Pioneer'}</span>
               <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">📊 {isAr ? 'محلل القيمة' : 'Value Analyst'}</span>
             </div>
-            <Link href={`/${locale}/academy`} className="text-xs font-bold text-accent hover:underline ms-auto flex items-center gap-1">
-              <Sparkles className="size-3.5" aria-hidden="true" />
-              {isAr ? 'طوّر مستواك في الأكاديمية ←' : 'Advance level in Academy →'}
-            </Link>
+            
+            <div className="flex items-center gap-3 ms-auto">
+              <button
+                onClick={() => setShowLevelModal(true)}
+                className="text-xs font-bold text-foreground/70 hover:text-accent transition-colors flex items-center gap-1"
+              >
+                {isAr ? 'خريطة المستويات' : 'Level Roadmap'}
+              </button>
+              <Link
+                href={`/${locale}/academy`}
+                className="group relative overflow-hidden rounded-xl bg-accent/10 px-3.5 py-1.5 text-xs font-extrabold text-accent transition-all duration-300 hover:bg-accent hover:text-white hover:shadow-md active:scale-95 flex items-center gap-1.5"
+              >
+                <Sparkles className="size-3.5" aria-hidden="true" />
+                <span>{isAr ? 'طوّر مستواك ←' : 'Advance Level →'}</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Level Roadmap Modal */}
+      {showLevelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl border border-foreground/10 bg-surface-card p-6 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-foreground/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-accent text-white font-extrabold text-sm">
+                  L{Math.floor(xp / 150) + 1}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">{isAr ? 'مستويات الخبراء والمكافآت' : 'Investor Level Roadmap'}</h3>
+                  <p className="text-xs text-foreground/60">{isAr ? 'تقدمك في الأكاديمية والمميزات المفتوحة' : 'Your progress and unlocked platform perks'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLevelModal(false)}
+                className="rounded-full p-2 text-foreground/50 hover:bg-foreground/5 hover:text-foreground"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Level Milestones list */}
+            <div className="space-y-3 max-h-80 overflow-y-auto pe-1">
+              {[
+                { lvl: 1, title: isAr ? 'طالب علوم مالية' : 'Financial Apprentice', xpReq: 0, perks: isAr ? 'التداول الافتراضي وبناء الحصالات' : 'Virtual Trading & Savings Jars', done: true },
+                { lvl: 2, title: isAr ? 'فاحص الشريعة' : 'Sharia Auditor', xpReq: 150, perks: isAr ? 'فحص أسهم أيوفي (AAOIFI) وحاسبة الزكاة' : 'AAOIFI Screening & Zakat Calc', done: true },
+                { lvl: 3, title: isAr ? 'مستثمر واعد' : 'Promising Investor', xpReq: 350, perks: isAr ? 'المحفظة التفاعلية وتخصيص الأصول' : 'Interactive Demo & Asset Allocation', current: true },
+                { lvl: 4, title: isAr ? 'محلل المخاطر' : 'Risk Analyst', xpReq: 500, perks: isAr ? 'أدوات المحافظ الكمية وتقييم Sharpe' : 'Quant Risk Suite & Sharpe Analytics', locked: true },
+                { lvl: 5, title: isAr ? 'خبير المحافظ' : 'Portfolio Master', xpReq: 1000, perks: isAr ? 'إعادة التوازن التلقائي ودوري الاستراتيجيات' : 'Auto Rebalancing & Strategy League', locked: true },
+              ].map((m) => (
+                <div
+                  key={m.lvl}
+                  className={`flex items-start justify-between rounded-2xl p-3.5 border text-xs transition-all ${
+                    m.current
+                      ? 'border-accent bg-accent/10 text-foreground ring-1 ring-accent/30'
+                      : m.done
+                      ? 'border-foreground/10 bg-foreground/[0.02] text-foreground/80'
+                      : 'border-foreground/5 bg-foreground/[0.01] opacity-60 text-foreground/50'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
+                      m.current ? 'bg-accent text-white' : m.done ? 'bg-up/20 text-up' : 'bg-foreground/10 text-foreground/40'
+                    }`}>
+                      {m.done ? <Check className="size-4" /> : m.locked ? <Lock className="size-3.5" /> : `L${m.lvl}`}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">{m.title}</span>
+                        {m.current && <span className="rounded-full bg-accent px-2 py-0.2 text-[9px] font-extrabold text-white">{isAr ? 'مستواك الحالي' : 'Current'}</span>}
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed opacity-80">{m.perks}</p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[11px] font-semibold shrink-0 ms-2">{m.xpReq} XP</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-foreground/10 pt-4 flex items-center justify-between">
+              <button
+                onClick={handleClaimDailyXp}
+                disabled={dailyClaimed}
+                className="min-h-11 rounded-2xl bg-accent px-5 text-xs font-bold text-white transition-all hover:bg-accent/90 disabled:opacity-50"
+              >
+                {dailyClaimed ? (isAr ? 'تم استلام مكافأة اليوم' : 'Daily Reward Claimed') : (isAr ? 'مطالبة بـ +50 XP الآن' : 'Claim +50 XP Now')}
+              </button>
+              <button
+                onClick={() => setShowLevelModal(false)}
+                className="min-h-11 rounded-2xl border border-foreground/15 px-4 text-xs font-semibold text-foreground/75 hover:bg-foreground/5"
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}
