@@ -651,7 +651,21 @@
       "meterTitle": "Open the full stock workspace",
       "meterCost": "This opens 1 of your {limit} monthly workspaces. The cost is shown before access is recorded.",
       "meterRevisit": "Revisiting a workspace you already opened does not use another credit.",
-      "meterAction": "Review workspace access"
+      "meterAction": "Review workspace access",
+      "sharia": {
+        "demoNote": "Demo AAOIFI screening — not a verified verdict. Verify before acting.",
+        "unverifiedNote": "Not yet screened — trading is blocked until AAOIFI screening is available.",
+        "verifiedNoteZoya": "Verified AAOIFI screening supplied by Zoya.",
+        "verifiedNoteEtf": "Screened via S&P/FTSE Shariah fund membership — a real Sharia-compliant fund already holds this stock.",
+        "verifiedNoteSaudiList": "Verified against the Saudi Exchange's quarterly Shariah-compliant securities list.",
+        "purificationTitle": "Purification ratio",
+        "purificationValue": "{value}% of income must be purified (donated) for minor non-compliant income.",
+        "purificationExplain": "Purification removes the portion of income considered impermissible so the remaining return stays halal.",
+        "purificationZakatNote": "Purification is separate from zakat, which is calculated independently on wealth and assets.",
+        "academyNote": "New to Sharia screening? Learn the AAOIFI criteria and purification in the Academy's Islamic finance unit.",
+        "academyLink": "Open Islamic finance foundations",
+        "ratioUnavailable": "Unavailable"
+      }
     }
   },
   "Quiz": {

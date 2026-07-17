@@ -328,83 +328,124 @@ export default function StockDetail({
 }
 
 // ── Sharia Tab (inline) ──────────────────────────────────────────
+type VerdictState = 'verified' | 'demo' | 'unverified';
+
+function getVerdictState(data: any): VerdictState {
+  if (data.shariaSource === 'mock') return 'demo';
+  if (data.isShariaCompliant === null || data.isShariaCompliant === undefined || data.shariaSource === 'none') return 'unverified';
+  return 'verified';
+}
+
 function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: any; isAr: boolean }) {
   const compliance = data.financials?.complianceRatios;
+  const purificationKnown = Number.isFinite(data.purificationRatioBps);
+  const verdictState = getVerdictState(data);
+  const compliant = data.isShariaCompliant === true;
+
+  const bannerTone = verdictState === 'unverified'
+    ? 'neutral'
+    : compliant ? 'positive' : 'caution';
+
+  const bannerClass = bannerTone === 'positive'
+    ? 'bg-up/5 border-up/20'
+    : bannerTone === 'caution'
+      ? 'bg-noncompliant/5 border-noncompliant/20'
+      : 'bg-foreground/[0.03] border-foreground/10';
+
+  const bannerTextClass = bannerTone === 'positive' ? 'text-up' : bannerTone === 'caution' ? 'text-noncompliant' : 'text-foreground/70';
+
+  const verdictLabel = verdictState === 'unverified'
+    ? t('workspace.unverified')
+    : compliant ? t('workspace.chips.compliant') : t('workspace.chips.nonCompliant');
+
+  const sourceNote = verdictState === 'demo'
+    ? t('workspace.sharia.demoNote')
+    : verdictState === 'unverified'
+      ? t('workspace.sharia.unverifiedNote')
+      : data.shariaSource === 'zoya'
+        ? t('workspace.sharia.verifiedNoteZoya')
+        : data.shariaSource === 'etf-holdings'
+          ? t('workspace.sharia.verifiedNoteEtf')
+          : t('workspace.sharia.verifiedNoteSaudiList');
 
   const criteria = [
     {
       label: isAr ? 'نشاط تجاري حلال' : 'Halal Business Activity',
       description: isAr ? 'لا يشمل الكحول أو التبغ أو الأسلحة أو الترفيه المحظور' : 'No alcohol, tobacco, weapons, or prohibited entertainment',
-      pass: data.isShariaCompliant,
+      known: verdictState !== 'unverified',
+      pass: compliant,
+      hasRatio: false,
+      value: null as string | null,
+      ratio: 0,
     },
     {
       label: isAr ? 'نسبة الديون الربوية (<30%)' : 'Interest-Bearing Debt (<30%)',
       description: isAr ? 'الديون الربوية مقسومة على متوسط القيمة السوقية' : 'Interest-bearing debt divided by trailing 36-month average market cap',
-      pass: compliance ? compliance.debtToMcap < 30 : data.isShariaCompliant,
-      value: compliance ? `${Number(compliance.debtToMcap).toFixed(1)}%` : null,
+      known: Number.isFinite(compliance?.debtToMcap),
+      pass: Number.isFinite(compliance?.debtToMcap) ? compliance.debtToMcap < 30 : false,
+      hasRatio: true,
+      value: Number.isFinite(compliance?.debtToMcap) ? `${Number(compliance.debtToMcap).toFixed(1)}%` : null,
+      ratio: Number.isFinite(compliance?.debtToMcap) ? Math.min((compliance.debtToMcap / 30) * 100, 100) : 0,
     },
     {
       label: isAr ? 'دخل الفوائد (<5%)' : 'Interest Income (<5%)',
       description: isAr ? 'دخل الفوائد مقسوماً على إجمالي الإيرادات' : 'Interest income as a percentage of total revenue',
-      pass: compliance ? compliance.interestIncomeToRevenue < 5 : data.isShariaCompliant,
-      value: compliance ? `${Number(compliance.interestIncomeToRevenue).toFixed(1)}%` : null,
+      known: Number.isFinite(compliance?.interestIncomeToRevenue),
+      pass: Number.isFinite(compliance?.interestIncomeToRevenue) ? compliance.interestIncomeToRevenue < 5 : false,
+      hasRatio: true,
+      value: Number.isFinite(compliance?.interestIncomeToRevenue) ? `${Number(compliance.interestIncomeToRevenue).toFixed(1)}%` : null,
+      ratio: Number.isFinite(compliance?.interestIncomeToRevenue) ? Math.min((compliance.interestIncomeToRevenue / 5) * 100, 100) : 0,
     },
   ];
 
   return (
     <div className="space-y-4">
       {/* Verdict Banner */}
-      <div className={`p-5 rounded-2xl border flex items-center gap-4 ${
-        data.isShariaCompliant
-          ? 'bg-up/5 border-up/20'
-          : 'bg-noncompliant/5 border-noncompliant/20'
-      }`}>
-        {data.isShariaCompliant
-          ? <ShieldCheck className="w-8 h-8 text-up shrink-0" />
-          : <ShieldAlert className="w-8 h-8 text-noncompliant shrink-0" />}
+      <div className={`flex items-center gap-4 rounded-2xl border p-5 ${bannerClass}`}>
+        {verdictState === 'unverified'
+          ? <ShieldAlert className="size-8 shrink-0 text-foreground/50" />
+          : compliant
+            ? <ShieldCheck className="size-8 shrink-0 text-up" />
+            : <ShieldAlert className="size-8 shrink-0 text-noncompliant" />}
         <div>
-          <p className={`font-extrabold text-sm ${data.isShariaCompliant ? 'text-up' : 'text-noncompliant'}`}>
-            {data.isShariaCompliant
-              ? t('workspace.chips.compliant')
-              : t('workspace.chips.nonCompliant')}
-          </p>
-          <p className="text-xs text-foreground/60 mt-1">
-            {data.shariaSource === 'zoya' ? t('shariaVerifiedNote') : t('shariaDemoNote')}
-          </p>
+          <p className={`text-sm font-extrabold ${bannerTextClass}`}>{verdictLabel}</p>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/60">{sourceNote}</p>
+          {verdictState === 'demo' && (
+            <span className="mt-1 inline-flex w-fit rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
+              {t('workspace.chips.demo')}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Criteria Cards */}
       <div className="space-y-3">
         {criteria.map((c, i) => (
-          <div key={i} className="flex items-start gap-3 p-4 rounded-2xl glass-panel">
-            <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-xs font-black mt-0.5 ${
-              c.pass ? 'bg-up/20 text-up' : 'bg-down/20 text-down'
+          <div key={i} className="flex items-start gap-3 rounded-2xl glass-panel p-4">
+            <div className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+              !c.known ? 'bg-foreground/10 text-foreground/50' : c.pass ? 'bg-up/20 text-up' : 'bg-down/20 text-down'
             }`}>
-              {c.pass ? '✓' : '✗'}
+              {!c.known ? '?' : c.pass ? '✓' : '✗'}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-center">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-bold text-foreground">{c.label}</p>
-                {c.value && (
-                  <span className={`text-xs font-mono font-bold tabular-nums px-2 py-0.5 rounded-full ${
-                    c.pass ? 'bg-up/10 text-up' : 'bg-down/10 text-down'
-                  }`}>{c.value}</span>
+                {c.hasRatio && (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-xs font-bold tabular-nums ${
+                    !c.known ? 'bg-foreground/[0.06] text-foreground/50' : c.pass ? 'bg-up/10 text-up' : 'bg-down/10 text-down'
+                  }`}>
+                    {c.value ?? t('workspace.sharia.ratioUnavailable')}
+                  </span>
                 )}
               </div>
-              <p className="text-xs text-foreground/50 mt-1 leading-relaxed">{c.description}</p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/50">{c.description}</p>
 
               {/* Progress bar for ratio criteria */}
-              {c.value && compliance && (
-                <div className="mt-2 h-1.5 bg-foreground/10 rounded-full overflow-hidden">
+              {c.hasRatio && c.known && (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-foreground/10">
                   <div
-                    className={`h-full rounded-full transition-all ${c.pass ? 'bg-up' : 'bg-down'}`}
-                    style={{
-                      width: `${Math.min(
-                        i === 1 ? (compliance.debtToMcap / 30) * 100 : (compliance.interestIncomeToRevenue / 5) * 100,
-                        100
-                      )}%`
-                    }}
+                    className={`h-full rounded-full transition-all duration-300 ${c.pass ? 'bg-up' : 'bg-down'}`}
+                    style={{ width: `${c.ratio}%` }}
                   />
                 </div>
               )}
@@ -414,13 +455,26 @@ function ShariaTab({ data, locale, t, isAr }: { data: any; locale: string; t: an
       </div>
 
       {/* Purification Note */}
-      <div className="p-4 rounded-2xl bg-noncompliant/5 border border-noncompliant/10 text-xs text-noncompliant/80 leading-relaxed">
-        <span className="font-bold text-noncompliant">
-          {isAr ? 'ملاحظة التطهير: ' : 'Purification Note: '}
-        </span>
-        {isAr
-          ? 'إذا كانت الشركة تحقق دخلاً من فوائد بنسبة أقل من الحد المسموح، يجب تبرع جزء من الأرباح للجهات الخيرية.'
-          : 'If a compliant company earns minor interest income below the threshold, a proportionate amount of dividends must be donated to charity.'}
+      <div className="rounded-2xl border border-foreground/10 bg-foreground/[0.025] p-4 text-xs leading-relaxed text-foreground/70">
+        <p>
+          <span className="font-bold text-foreground">{t('workspace.sharia.purificationTitle')}: </span>
+          {purificationKnown
+            ? t('workspace.sharia.purificationValue', { value: (data.purificationRatioBps / 100).toFixed(2) })
+            : t('workspace.unverified')}
+        </p>
+        <p className="mt-2 text-foreground/55">{t('workspace.sharia.purificationExplain')}</p>
+        <p className="mt-1 text-foreground/55">{t('workspace.sharia.purificationZakatNote')}</p>
+      </div>
+
+      {/* Academy education note */}
+      <div className="rounded-2xl border border-accent/15 bg-accent/5 p-4 text-xs leading-relaxed text-foreground/70">
+        <p>{t('workspace.sharia.academyNote')}</p>
+        <Link
+          href={`/${locale}/academy/foundations`}
+          className="mt-2 inline-flex items-center gap-1 font-semibold text-accent underline-offset-2 transition-opacity duration-150 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {t('workspace.sharia.academyLink')}
+        </Link>
       </div>
     </div>
   );
