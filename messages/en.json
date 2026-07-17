@@ -59,7 +59,7 @@
     },
     "diagnostic": {
       "inviteEyebrow": "Starting path",
-      "inviteTitle": "Set your starting path",
+      "inviteTitle": "Starting-point questions",
       "inviteBody": "Answer 7 quick questions so your lesson queue starts in the right place. You can skip and start from a default path, and retake this anytime — it's never a label, just an adjustable starting point.",
       "start": "Start",
       "skip": "Skip for now",
@@ -113,7 +113,9 @@
       "continueJourney": "Continue your journey",
       "title": "Practice",
       "restart": "Restart practice",
-      "retrySave": "Try saving again"
+      "retrySave": "Try saving again",
+      "applyTitle": "See how your answer compares to the strategy",
+      "applyCta": "Apply what you learned"
     }
   },
   "Landing": {
