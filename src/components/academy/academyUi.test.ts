@@ -40,6 +40,16 @@ describe('academy UI server boundary', () => {
     expect(strategyEntrySource).toContain('aria-pressed={isSelected}');
     expect(strategyEntrySource).toContain('/academy/apply?setupId=${encodeURIComponent(selected.setupId)}');
   });
+  it('uses a local reversible cinematic timeline with an accessible static fallback', () => {
+    expect(strategyEntrySource).toContain("useScroll({ target: sectionRef, offset: ['start start', 'end end'] })");
+    expect(strategyEntrySource).toContain('SCENE_BOUNDARIES');
+    expect(strategyEntrySource).toContain('data-testid="academy-cinematic-timeline"');
+    expect(strategyEntrySource).toContain('sticky top-8');
+    expect(strategyEntrySource).toContain('motion-reduce:block');
+    expect(strategyEntrySource).toContain('motion-reduce:hidden');
+    expect(strategyEntrySource).toContain("interactive={activeScene === 'compare'}");
+    expect(strategyEntrySource).toContain("scrollIntoView({ behavior: shouldReduceMotion ? 'auto' : 'smooth'");
+  });
   it('ships populated, loading, empty, and error states with logical RTL classes', () => {
     expect(source).toContain("state: 'ready'"); expect(source).toContain('kind="empty"');
     expect(readFileSync(new URL('../../app/[locale]/academy/error.tsx', import.meta.url), 'utf8')).toContain('onClick={reset}');
@@ -50,6 +60,7 @@ describe('academy UI server boundary', () => {
     expect(Object.keys(en.Academy)).toEqual(Object.keys(ar.Academy)); expect(Object.keys(en.Academy.compliance)).toEqual(Object.keys(ar.Academy.compliance));
     expect(Object.keys(en.Academy.labEntry)).toEqual(Object.keys(ar.Academy.labEntry));
     expect(Object.keys(en.Academy.labEntry.steps)).toEqual(Object.keys(ar.Academy.labEntry.steps));
+    expect(Object.keys(en.Academy.labEntry.cinematic)).toEqual(Object.keys(ar.Academy.labEntry.cinematic));
     expect(Object.keys(en.Academy.labEntry.riskOptions)).toEqual(Object.keys(ar.Academy.labEntry.riskOptions));
     expect(Object.keys(en.Academy.labEntry.strategies)).toEqual(Object.keys(ar.Academy.labEntry.strategies));
   });

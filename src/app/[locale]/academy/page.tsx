@@ -84,22 +84,24 @@ export default async function AcademyPage({ params }: { params: { locale: string
   const currentTrack = currentStep ? academy.tracks.find((track) => track.id === currentStep.trackId) : undefined;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-28 pt-10 sm:px-6 md:pb-16 text-start">
-      <header className="max-w-3xl text-start">
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent rtl:tracking-normal">{t('eyebrow')}</p>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.035em] text-foreground rtl:tracking-normal sm:text-4xl md:text-5xl">{t('title')}</h1>
-        <p className="mt-3 text-sm leading-relaxed text-foreground/65 md:text-base">{t('subtitle')}</p>
-      </header>
+    <main className="mx-auto max-w-5xl px-4 pb-28 pt-10 text-start sm:px-6 md:pb-16">
+      <div className="mx-auto max-w-3xl">
+        <header className="max-w-3xl text-start">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent rtl:tracking-normal">{t('eyebrow')}</p>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.035em] text-foreground rtl:tracking-normal sm:text-4xl md:text-5xl">{t('title')}</h1>
+          <p className="mt-3 text-sm leading-relaxed text-foreground/65 md:text-base">{t('subtitle')}</p>
+        </header>
 
-      <AcademyDiagnostic locale={language} questions={diagnosticQuestions} hasProfile={hasProfile} personaLabel={personaLabel} />
+        <AcademyDiagnostic locale={language} questions={diagnosticQuestions} hasProfile={hasProfile} personaLabel={personaLabel} />
+      </div>
 
       {hasProfile ? <StrategyPracticeEntry locale={params.locale} /> : null}
 
       {hasProfile ? (
         !currentStep || !currentUnitEntry ? (
-          <div className="mt-10"><AcademyState kind="empty" title={t('nextUp.emptyTitle')} body={t('nextUp.emptyBody')} /></div>
+          <div className="mx-auto mt-10 max-w-3xl"><AcademyState kind="empty" title={t('nextUp.emptyTitle')} body={t('nextUp.emptyBody')} /></div>
         ) : (
-          <section aria-labelledby="journey-title" className="mt-10">
+          <section aria-labelledby="journey-title" className="mx-auto mt-10 max-w-3xl">
             <h2 id="journey-title" className="text-lg font-bold text-foreground">{t('journey.title')}</h2>
             <p className="mt-1 text-xs text-foreground/60">{t('journey.subtitle')}</p>
 

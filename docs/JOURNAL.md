@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Cinematic Academy strategy journey ✅
+Shipped: Turned the Academy risk-comfort entry into a reversible four-scene scroll journey—risk context → exact strategy match → answer/seal/compare contract → interactive three-strategy selector—with a normal-flow reduced-motion version.
+Decisions: Adapted the MIT cinematic-scroll-prompt-kit pattern using existing Framer Motion and semantic DOM/CSS layers only; transforms stay local to one sticky timeline, final controls remain native buttons/links, and all simulation/Sharia framing stays intact in Arabic and English.
+Verify: lint/tsc/build clean; Academy/learning/i18n 77/77 green; headless visual QA passed ar RTL desktop + 390×844 and en LTR with zero overflow, exact matched URL, reverse-scroll restoration, no browser exceptions, and reduced-motion fallback.
+Open: no deployment performed; the scene contract and asset manifest are documented in docs/ACADEMY_CINEMATIC.md for future art-direction changes.
+
 ## 2026-07-18 — Risk-comfort strategy matching entry ✅
 Shipped: Replaced Academy's direct strategy CTA with an explicit lower/balanced/higher risk-comfort selector that reveals one exact reviewed strategy, its educational match rationale, then routes into that setup's existing questions → seal → replay comparison.
 Decisions: lazy-dev rung 2 maps to three existing DR-14 modules without persisting or inventing a suitability profile; copy states the match is simulation-only, not financial profiling or advice, and every strategy can lose; shared lab overview made strategy-neutral so non-Bollinger matches stay truthful.

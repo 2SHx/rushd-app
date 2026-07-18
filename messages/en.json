@@ -123,12 +123,35 @@
       "eyebrow": "Strategy practice",
       "title": "Choose a strategy through your risk comfort",
       "body": "Start by choosing how much short-term movement you are comfortable seeing in this simulation. Rushd will match that choice to one specific reviewed learning strategy before you answer its questions.",
+      "scrollLabel": "Scroll to build your practice path",
       "processLabel": "Strategy practice journey",
       "steps": {
         "risk": "Choose risk comfort",
         "match": "See one strategy",
         "answer": "Answer and seal",
         "compare": "Compare the evidence"
+      },
+      "cinematic": {
+        "risk": {
+          "title": "Risk comfort comes before strategy choice",
+          "body": "Begin with the movement you are prepared to study—not with a return promise. This preference shapes which reviewed strategy you will explore."
+        },
+        "match": {
+          "eyebrow": "One choice · one exact setup",
+          "title": "Your preference reveals a specific practice strategy",
+          "body": "Lower, balanced, and higher risk comfort each route to a different existing strategy module. The match is transparent and can be changed before you continue."
+        },
+        "answer": {
+          "eyebrow": "The learning contract",
+          "title": "Understand the rules before seeing the outcome",
+          "body": "You will answer the selected strategy’s questions, seal your policy, and only then open the frozen historical comparison.",
+          "processLabel": "Questions, seal, and comparison",
+          "steps": {
+            "answer": "Answer the strategy questions",
+            "seal": "Review and seal your policy",
+            "compare": "Compare the same frozen interval"
+          }
+        }
       },
       "riskQuestion": "How much short-term price movement are you comfortable seeing in this learning simulation?",
       "riskHelp": "There is no correct level. This choice is not saved and is not a real-world suitability assessment.",
@@ -147,6 +170,8 @@
         }
       },
       "selected": "Selected",
+      "previousStrategy": "Previous risk-comfort option",
+      "nextStrategy": "Next risk-comfort option",
       "matchEyebrow": "Your matched practice strategy",
       "strategies": {
         "lower": {
