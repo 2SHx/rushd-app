@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — QDR-8 amended (2026-07-19b): internal-sim $1M bankroll, no Alpaca reset ✅
+Shipped: QDR-8 + R4 preamble/B1 row/G4 status row amended — the Alpaca paper account cannot be reset (verified live: cash −$82,800.08, buying power $0), so the $1,000,000 bankroll lives in the InternalSimBroker isolated Decimal book ledgers, marked from real persisted bars with the existing cost/slippage fills; Alpaca demotes to data-only.
+Decisions: annotate-don't-delete supersession notes; the optional legacy-liquidation Alpaca-mirror pass is gated (explicit user auth + security-auditor) and explicitly OUT of B1 scope; cash-never-buying-power now binds the virtual book cash.
+Open: a parallel writer (Codex, B1) is active in the tree (schema AllocationDecision/BookEvaluation + allocator incubation admission observed uncommitted) — B1 still requires a GENERATED prisma migration and the mandatory security-auditor gate before acceptance.
+
 ## 2026-07-19 — QDR-8 paper INCUBATION tier + R4 briefs + Kimi routing ✅
 Shipped: QDR-8 in QUANT_DESIGN.md (paper-only incubation books for the 4 positive-OOS near-misses, $1M reset envelope, promotion path v2 = 63 live book-days + single FULL card, daily-target readout policy, token-economy caps, zero-cost Sharia tiers); R4 Codex briefs B1/B2/C1/D1/E1–E5 in QUANT_LAB_PLAN.md; kimi-k2.6:free as implementation fallback in models.map.json.
 Decisions: incubation supersedes "only ACCEPTED trades" for the paper tier ONLY (user-authorized per version, REJECTED cards stand unedited); no whole-market runs ever (25-name sleeve / halal top-100 caps); halal universe from published SPUS/HLAL holdings + own SEC-XBRL AAOIFI screener, no scraping, fail-closed; Kimi K3 has no free route — excluded.
