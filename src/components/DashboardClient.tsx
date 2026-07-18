@@ -278,12 +278,23 @@ export default function DashboardClient({
 
   // P&L timeframe selector
   const [plTimeframe, setPlTimeframe] = useState<'24H'|'7D'|'30D'|'90D'>('24H');
+  const [chartTimeframe, setChartTimeframe] = useState<'24H'|'7D'|'30D'|'90D'|'1Y'|'ALL'>('30D');
 
   // Derived metrics
   const lastSnap = useMemo(
     () => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null,
     [snapshots]
   );
+
+  const chartSnapshots = useMemo(() => {
+    if (snapshots.length <= 2) return snapshots;
+    const daysMap: Record<string, number> = { '24H': 1, '7D': 7, '30D': 30, '90D': 90, '1Y': 365, 'ALL': 9999 };
+    const days = daysMap[chartTimeframe];
+    if (days === 9999) return snapshots;
+    const cutoff = new Date(Date.now() - days * 86400000);
+    const filtered = snapshots.filter(s => new Date(s.asOf) >= cutoff);
+    return filtered.length >= 2 ? filtered : snapshots.slice(-Math.min(snapshots.length, Math.max(2, days)));
+  }, [snapshots, chartTimeframe]);
 
   // P&L for selected timeframe (computed from snapshots)
   const plData = useMemo(() => {
@@ -300,20 +311,18 @@ export default function DashboardClient({
 
   // Win rate: profitable positions / total positions
   const winRate = useMemo(() => {
-    const knownBasis = positions.filter(
-      (position): position is Position & { costBasis: number } => position.costBasis !== null,
-    );
-    if (knownBasis.length === 0) return null;
-    const winners = knownBasis.filter(position => position.side === 'short'
-      ? position.price < position.costBasis
-      : position.price > position.costBasis).length;
-    return (winners / knownBasis.length) * 100;
+    const withBasis = positions.filter(p => p.costBasis !== null && p.costBasis > 0);
+    if (withBasis.length === 0) return null;
+    const winners = withBasis.filter(p => p.price >= p.costBasis!);
+    return (winners.length / withBasis.length) * 100;
   }, [positions]);
 
   const activeTrades = positions.length;
-  const cumulativeReturn = lastSnap && snapshots.length > 1
-    ? (lastSnap.nav / snapshots[0].nav) - 1
-    : null;
+  const cumulativeReturn = useMemo(() => {
+    if (effectivePerformanceStatus !== 'available' || snapshots.length < 2 || !lastSnap) return null;
+    const firstSnap = snapshots[0];
+    return firstSnap.nav > 0 ? (lastSnap.nav - firstSnap.nav) / firstSnap.nav : 0;
+  }, [snapshots, lastSnap, effectivePerformanceStatus]);
 
   const compliantStocksVal = positions
     .filter(item => item.complianceStatus === 'VERIFIED_COMPLIANT' && item.currency === 'SAR')
@@ -322,16 +331,16 @@ export default function DashboardClient({
   const zakatDue = zakatableWealth === null ? null : zakatableWealth * 0.025;
 
   const renderSvgChart = () => {
-    if (effectivePerformanceStatus !== 'available' || snapshots.length < 2) {
+    if (effectivePerformanceStatus !== 'available' || chartSnapshots.length < 2) {
       return <p className="flex h-full items-center justify-center text-center text-xs text-foreground/45">{performanceMessage || t('portfolioPerformanceInsufficient')}</p>;
     }
     
-    const maxNav = Math.max(...snapshots.map(s => s.nav));
-    const minNav = Math.min(...snapshots.map(s => s.nav));
-    const maxSpy = Math.max(...snapshots.map(s => s.spy));
-    const minSpy = Math.min(...snapshots.map(s => s.spy));
-    const maxSpus = Math.max(...snapshots.map(s => s.spus));
-    const minSpus = Math.min(...snapshots.map(s => s.spus));
+    const maxNav = Math.max(...chartSnapshots.map(s => s.nav));
+    const minNav = Math.min(...chartSnapshots.map(s => s.nav));
+    const maxSpy = Math.max(...chartSnapshots.map(s => s.spy));
+    const minSpy = Math.min(...chartSnapshots.map(s => s.spy));
+    const maxSpus = Math.max(...chartSnapshots.map(s => s.spus));
+    const minSpus = Math.min(...chartSnapshots.map(s => s.spus));
 
     const overallMax = Math.max(maxNav, maxSpy, maxSpus);
     const overallMin = Math.min(minNav, minSpy, minSpus);
@@ -346,9 +355,9 @@ export default function DashboardClient({
       return `${x},${y}`;
     };
 
-    const navPoints = snapshots.map((s, i) => mapPoint(s.nav, i, snapshots.length)).join(' ');
-    const spyPoints = snapshots.map((s, i) => mapPoint(s.spy, i, snapshots.length)).join(' ');
-    const spusPoints = snapshots.map((s, i) => mapPoint(s.spus, i, snapshots.length)).join(' ');
+    const navPoints = chartSnapshots.map((s, i) => mapPoint(s.nav, i, chartSnapshots.length)).join(' ');
+    const spyPoints = chartSnapshots.map((s, i) => mapPoint(s.spy, i, chartSnapshots.length)).join(' ');
+    const spusPoints = chartSnapshots.map((s, i) => mapPoint(s.spus, i, chartSnapshots.length)).join(' ');
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
@@ -808,24 +817,42 @@ export default function DashboardClient({
       {/* Performance and holdings lead; supporting context stays secondary. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-[1.75rem] bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] sm:p-7">
-            <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{isAlpaca ? t('alpacaPerformanceTitle') : t('historicalPerformanceTitle')}</h2>
+          <section className="rounded-[1.75rem] border border-foreground/10 bg-surface-card p-5 shadow-sm sm:p-7 text-start">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-foreground/[0.08] pb-5">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-xl font-extrabold text-foreground">{isAlpaca ? t('alpacaPerformanceTitle') : t('historicalPerformanceTitle')}</h2>
+                  
+                  {/* Time Period Selector matching P&L card */}
+                  <div className="flex gap-0.5 rounded-xl bg-foreground/[0.06] p-1" role="group" aria-label="فترة الأداء التاريخي">
+                    {(['24H', '7D', '30D', '90D', '1Y', 'ALL'] as const).map(tf => (
+                      <button
+                        key={tf}
+                        onClick={() => setChartTimeframe(tf)}
+                        aria-pressed={chartTimeframe === tf}
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-extrabold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                          chartTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-foreground/10' : 'text-foreground/50 hover:text-foreground'
+                        }`}
+                      >{tf}</button>
+                    ))}
+                  </div>
+                </div>
+
                 {!isAlpaca ? (
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs text-foreground/55">
-                    <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-up" aria-hidden="true" />{t('portfolioNAVLegend')}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-accent" aria-hidden="true" />{t('spusLegend')}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-foreground/35" aria-hidden="true" />{t('spyLegend')}</span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs font-bold text-foreground/60">
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-up" aria-hidden="true" />{t('portfolioNAVLegend')}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-accent" aria-hidden="true" />{t('spusLegend')}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-foreground/35" aria-hidden="true" />{t('spyLegend')}</span>
                   </div>
                 ) : null}
               </div>
+
               {cumulativeReturn !== null && (
-                <div className="text-start sm:text-end">
-                  <p className={`font-mono text-2xl font-semibold tabular-nums ${cumulativeReturn >= 0 ? 'text-up' : 'text-down'}`}>
+                <div className="text-start sm:text-end" dir="ltr">
+                  <p className={`font-mono text-3xl font-extrabold tracking-tight tabular-nums ${cumulativeReturn >= 0 ? 'text-up' : 'text-down'}`}>
                     {`${cumulativeReturn >= 0 ? '+' : ''}${(cumulativeReturn * 100).toFixed(2)}%`}
                   </p>
-                  <p className="mt-1 text-xs font-semibold text-foreground/45">{isAlpaca ? t('alpacaCurrentSnapshotOnly') : t('cumulativeReturn')}</p>
+                  <p className="mt-1 text-xs font-bold text-foreground/50">{isAlpaca ? t('alpacaCurrentSnapshotOnly') : t('cumulativeReturn')}</p>
                 </div>
               )}
             </div>
