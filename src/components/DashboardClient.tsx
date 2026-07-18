@@ -69,12 +69,14 @@ interface DashboardClientProps {
   initialMetrics: any;
   initialTransactions: any[];
   performanceStatus: PerformanceStatus;
-  currencyTotals: CurrencyTotal[];
+  /** @deprecated unused — the combined-NAV-unavailable banner that read this was removed as
+   * unreachable dead code. Kept optional so existing callers don't need updating. */
+  currencyTotals?: CurrencyTotal[];
   accountKind?: 'rushd' | 'alpaca';
   paperAccount?: PaperAccountView;
 }
 
-export default function DashboardClient({ 
+export default function DashboardClient({
   locale,
   initialNAV,
   initialCash,
@@ -84,7 +86,6 @@ export default function DashboardClient({
   initialMetrics,
   initialTransactions,
   performanceStatus,
-  currencyTotals,
   accountKind = 'rushd',
   paperAccount,
 }: DashboardClientProps) {
@@ -242,16 +243,20 @@ export default function DashboardClient({
   const effectivePerformanceStatus: PerformanceStatus = isDemoActive ? 'available' : performanceStatus;
 
   const formatMoney = (value: number, currency: 'SAR' | 'USD') => formatMoneyShared(value, currency, locale);
-  const performanceMessage = isAlpaca ? t('alpacaHistoryUnavailable') : ({
+  // Alpaca's paper account snapshot never carries a persisted NAV series, so it always
+  // reports as 'no_snapshots' — the same honest empty state a fresh Rushd strategy shows.
+  const performanceMessage = {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
     mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
     available: '',
-  }[effectivePerformanceStatus]);
+  }[effectivePerformanceStatus];
   const hasPerformanceMetrics = effectivePerformanceStatus === 'available' && snapshots.length >= 2;
 
   const [jarBal, setJarBal] = useState(cashVal);
-  const [txs, setTxs] = useState<any[]>(initialTransactions && initialTransactions.length > 0 ? initialTransactions : demoTransactions);
+  // Demo transactions are only ever a stand-in for the demo portfolio; a real account with
+  // a genuinely empty ledger must reach the honest noTransactions empty state, not fabricated rows.
+  const [txs, setTxs] = useState<any[]>(isDemoActive ? demoTransactions : (initialTransactions ?? []));
   
   const [zakatPaidSuccess, setZakatPaidSuccess] = useState(false);
   const [zakatPaidAmount, setZakatPaidAmount] = useState('0.00');
@@ -356,9 +361,7 @@ export default function DashboardClient({
 
   const renderAllocationDonut = () => {
     if (positions.length === 0) return null;
-    if (navValue === null) {
-      return <p className="py-8 text-center text-xs text-foreground/45">{t('portfolioCombinedUnavailable')}</p>;
-    }
+    if (navValue === null) return null;
     let currentAngle = 0;
     const size = 200;
     const center = size / 2;
@@ -677,112 +680,115 @@ export default function DashboardClient({
         </div>
       ) : null}
 
-      {navValue === null && (
-        <div className="rounded-2xl bg-noncompliant/10 p-4 text-sm text-noncompliant">
-          <p>{t('portfolioCombinedUnavailable')}</p>
-          <div className="mt-2 flex flex-wrap gap-3 font-mono text-xs" dir="ltr">
-            {currencyTotals.map(total => (
-              <span key={total.currency}>{formatMoney(total.positionsValue, total.currency)}</span>
-            ))}
-          </div>
-          <p className="mt-2 text-xs opacity-80">{t('cashCurrencyUnavailable')}</p>
-        </div>
-      )}
-
-      {/* ── KPI strip: one dominant number per card ── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-12">
-        {/* Portfolio Value */}
-        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
-            <span className="shrink-0 rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground/45">
-              {t('paperEvidenceTag')}
-            </span>
-          </div>
-          <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
-            {navValue !== null && effectiveCashCurrency ? formatMoney(navValue, effectiveCashCurrency) : t('valueUnavailable')}
-          </p>
-          <p className="mt-2 text-xs text-foreground/50">
-            {isAlpaca ? t('alpacaCash') : t('cashVirtual')}:{' '}
-            <span className="font-mono tabular-nums text-foreground/70">
-              {effectiveCashCurrency ? formatMoney(jarBal, effectiveCashCurrency) : `${jarBal.toFixed(2)} — ${t('cashCurrencyUnavailable')}`}
-            </span>
-          </p>
-        </div>
-
-        {/* P&L with Timeframe Selector */}
-        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
-            <div className="flex gap-0.5 rounded-lg bg-foreground/[0.035] p-0.5" role="group" aria-label={t('pnlTimeframe')}>
-              {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
-                <button
-                  key={tf}
-                  onClick={() => setPlTimeframe(tf)}
-                  aria-pressed={plTimeframe === tf}
-                  className={`min-h-11 min-w-11 rounded-md px-1.5 text-[9px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                    plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm' : 'text-foreground/45 hover:text-foreground/75'
-                  }`}
-                >{tf}</button>
-              ))}
+      {/* ── KPI strip: one dominant number per card. Auto-fit grid (not fixed 12-col spans) so
+           omitted cards reflow instead of leaving dead columns. ── */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]">
+        {/* Portfolio Value — omitted entirely when NAV or its currency is unknown, never shown as a placeholder */}
+        {navValue !== null && effectiveCashCurrency && (
+          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
+              <span className="shrink-0 rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground/45">
+                {t('paperEvidenceTag')}
+              </span>
             </div>
+            <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
+              {formatMoney(navValue, effectiveCashCurrency)}
+            </p>
+            <p className="mt-2 text-xs text-foreground/50">
+              {isAlpaca ? t('alpacaCash') : t('cashVirtual')}:{' '}
+              <span className="font-mono tabular-nums text-foreground/70">
+                {formatMoney(jarBal, effectiveCashCurrency)}
+              </span>
+            </p>
           </div>
-          <p className={`mt-3 flex items-center gap-1 font-mono text-3xl font-semibold tabular-nums ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
-            {plData !== null && (plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />)}
-            {plData === null || !effectiveCashCurrency ? t('valueUnavailable') : (
-              <>{plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}</>
-            )}
-          </p>
-          <p className={`mt-2 text-xs font-semibold ${plData === null ? 'text-foreground/50' : plUp ? 'text-up' : 'text-down'}`}>
-            {plData === null ? performanceMessage || t('portfolioPerformanceInsufficient') : `${plUp ? '+' : ''}${plData.pct.toFixed(2)}% ${t('overTimeframe', { period: plTimeframe })}`}
-          </p>
-        </div>
+        )}
 
-        {/* Active Trades */}
-        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-2">
+        {/* P&L with Timeframe Selector — omitted when there is no computable P&L for any offered timeframe */}
+        {plData !== null && effectiveCashCurrency && (
+          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
+              <div className="flex gap-0.5 rounded-lg bg-foreground/[0.035] p-0.5" role="group" aria-label={t('pnlTimeframe')}>
+                {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    onClick={() => setPlTimeframe(tf)}
+                    aria-pressed={plTimeframe === tf}
+                    className={`min-h-11 min-w-11 rounded-md px-1.5 text-[9px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm' : 'text-foreground/45 hover:text-foreground/75'
+                    }`}
+                  >{tf}</button>
+                ))}
+              </div>
+            </div>
+            <p className={`mt-3 flex items-center gap-1 font-mono text-3xl font-semibold tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
+              {plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+              {plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}
+            </p>
+            <p className={`mt-2 text-xs font-semibold ${plUp ? 'text-up' : 'text-down'}`}>
+              {`${plUp ? '+' : ''}${plData.pct.toFixed(2)}% ${t('overTimeframe', { period: plTimeframe })}`}
+            </p>
+          </div>
+        )}
+
+        {/* Active Trades — a real zero is data, always shown */}
+        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
           <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}</p>
           <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">{activeTrades}</p>
           <p className="mt-2 text-xs text-foreground/50">{activeTrades === 0 ? t('noActivePositions') : t('openPositionsCount')}</p>
         </div>
 
-        {/* Win Rate */}
-        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-2">
-          <p className="text-xs font-semibold text-foreground/50">{t('profitablePositions')}</p>
-          <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">{winRate === null ? t('valueUnavailable') : `${winRate.toFixed(1)}%`}</p>
-          <p className="mt-2 text-xs text-foreground/50">{winRate === null ? t('winRateUnavailable') : t('winRateRecordedBasis')}</p>
-        </div>
+        {/* Win Rate — omitted when no position has a recorded cost basis to judge */}
+        {winRate !== null && (
+          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <p className="text-xs font-semibold text-foreground/50">{t('profitablePositions')}</p>
+            <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
+            <p className="mt-2 text-xs text-foreground/50">{t('winRateRecordedBasis')}</p>
+          </div>
+        )}
 
         {isAlpaca ? (
-          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground/50">{t('alpacaBuyingPower')}</span>
-              <Landmark className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+          paperAccount && effectiveCashCurrency && (
+            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground/50">{t('alpacaBuyingPower')}</span>
+                <Landmark className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+              </div>
+              <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
+                {formatMoney(paperAccount.buyingPower, effectiveCashCurrency)}
+              </p>
+              <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-foreground/45">{t('alpacaBuyingPowerNote')}</p>
             </div>
-            <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
-              {paperAccount && effectiveCashCurrency ? formatMoney(paperAccount.buyingPower, effectiveCashCurrency) : t('valueUnavailable')}
-            </p>
-            <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-foreground/45">{t('alpacaBuyingPowerNote')}</p>
-          </div>
+          )
         ) : (
-          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06] xl:col-span-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground/50">{t('zakatDue')}</span>
-              <Coins className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+          zakatDue !== null && (
+            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground/50">{t('zakatDue')}</span>
+                <Coins className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+              </div>
+              <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
+                {formatMoney(zakatDue, 'SAR')}
+              </p>
+              {/* Demo-derived Zakat is an illustrative estimate only — the live payment action is a
+                  real money-adjacent API call, so it never appears next to a fabricated figure. */}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="line-clamp-2 text-[10px] leading-tight text-foreground/45">
+                  {isDemoActive ? (isAr ? 'تقدير من المحفظة التجريبية — غير قابل للدفع' : 'Demo portfolio estimate — not payable') : t('zakatVerifiedAssetsOnly')}
+                </span>
+                {!isDemoActive && (
+                  <button
+                    onClick={handlePayZakat}
+                    disabled={isZakatSubmitting || zakatDue <= 0.01}
+                    className="min-h-8 shrink-0 rounded-lg bg-accent px-3 text-[10px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isZakatSubmitting ? '...' : t('payZakat')}
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
-              {zakatDue === null ? t('valueUnavailable') : formatMoney(zakatDue, 'SAR')}
-            </p>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="line-clamp-2 text-[10px] leading-tight text-foreground/45">{t('zakatVerifiedAssetsOnly')}</span>
-              <button
-                onClick={handlePayZakat}
-                disabled={isZakatSubmitting || zakatDue === null || zakatDue <= 0.01}
-                className="min-h-8 shrink-0 rounded-lg bg-accent px-3 text-[10px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isZakatSubmitting ? '...' : t('payZakat')}
-              </button>
-            </div>
-          </div>
+          )
         )}
       </div>
 
@@ -801,14 +807,14 @@ export default function DashboardClient({
                   </div>
                 ) : null}
               </div>
-              <div className="text-start sm:text-end">
-                <p className={`font-mono text-2xl font-semibold tabular-nums ${cumulativeReturn === null ? 'text-foreground/45' : cumulativeReturn >= 0 ? 'text-up' : 'text-down'}`}>
-                  {cumulativeReturn !== null
-                    ? `${cumulativeReturn >= 0 ? '+' : ''}${(cumulativeReturn * 100).toFixed(2)}%`
-                    : t('valueUnavailable')}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-foreground/45">{isAlpaca ? t('alpacaCurrentSnapshotOnly') : t('cumulativeReturn')}</p>
-              </div>
+              {cumulativeReturn !== null && (
+                <div className="text-start sm:text-end">
+                  <p className={`font-mono text-2xl font-semibold tabular-nums ${cumulativeReturn >= 0 ? 'text-up' : 'text-down'}`}>
+                    {`${cumulativeReturn >= 0 ? '+' : ''}${(cumulativeReturn * 100).toFixed(2)}%`}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-foreground/45">{isAlpaca ? t('alpacaCurrentSnapshotOnly') : t('cumulativeReturn')}</p>
+                </div>
+              )}
             </div>
             <div className="relative h-64 w-full" dir="ltr">
               {renderSvgChart()}
@@ -866,7 +872,7 @@ export default function DashboardClient({
                         </td>
                         <td className="py-3.5 text-end tabular-nums text-foreground/60">{pos.shares.toFixed(2)}</td>
                         <td className="py-3.5 text-end tabular-nums text-foreground/60">{formatMoney(pos.price, pos.currency)}</td>
-                        <td className="py-3.5 text-end tabular-nums text-foreground/60">{pos.weight === null ? t('valueUnavailable') : `${(pos.weight * 100).toFixed(1)}%`}</td>
+                        <td className="py-3.5 text-end tabular-nums text-foreground/60">{pos.weight === null ? '-' : `${(pos.weight * 100).toFixed(1)}%`}</td>
                         <td className="py-3.5 text-end font-semibold tabular-nums text-foreground">{formatMoney(pos.value, pos.currency)}</td>
                       </tr>
                     ))}
@@ -888,12 +894,14 @@ export default function DashboardClient({
               </p>
             ) : (
               <div className="space-y-6">
-                <div className="relative">
-                  {renderAllocationDonut()}
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{positions.length}</span>
+                {navValue !== null && (
+                  <div className="relative">
+                    {renderAllocationDonut()}
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="font-mono text-xl font-semibold tabular-nums text-foreground">{positions.length}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="border-t border-foreground/[0.06] pt-5 text-start">
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-wider text-foreground/40">
@@ -926,28 +934,30 @@ export default function DashboardClient({
             )}
           </section>
 
-          {/* Key Metrics */}
-          <section className="rounded-[1.75rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06]">
-            <h3 className="mb-4 font-semibold text-foreground">{isAlpaca ? t('alpacaMetricsTitle') : t('metricsHeading')}</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                <span className="text-foreground/55">{t('metricSharpe')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? metrics?.sharpe?.toFixed(2) ?? t('valueUnavailable') : t('valueUnavailable')}</span>
+          {/* Key Metrics — the whole section is dropped when there is no persisted performance history to compute it from */}
+          {hasPerformanceMetrics && (
+            <section className="rounded-[1.75rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06]">
+              <h3 className="mb-4 font-semibold text-foreground">{isAlpaca ? t('alpacaMetricsTitle') : t('metricsHeading')}</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
+                  <span className="text-foreground/55">{t('metricSharpe')}</span>
+                  <span className="font-mono font-semibold tabular-nums text-foreground">{metrics.sharpe.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
+                  <span className="text-foreground/55">{t('metricCagr')}</span>
+                  <span className="font-mono font-semibold tabular-nums text-foreground">{`${(metrics.cagr * 100).toFixed(1)}%`}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
+                  <span className="text-foreground/55">{t('metricAlphaSpus')}</span>
+                  <span className="font-mono font-semibold tabular-nums text-foreground">{`${(metrics.alphaVsSpus * 100).toFixed(2)}%`}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-foreground/55">{t('metricMaxDrawdown')}</span>
+                  <span className="font-mono font-semibold tabular-nums text-down">{`${(metrics.maxDrawdown * 100).toFixed(1)}%`}</span>
+                </div>
               </div>
-              <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                <span className="text-foreground/55">{t('metricCagr')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((metrics?.cagr ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
-              </div>
-              <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                <span className="text-foreground/55">{t('metricAlphaSpus')}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{hasPerformanceMetrics ? `${((metrics?.alphaVsSpus ?? 0) * 100).toFixed(2)}%` : t('valueUnavailable')}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-foreground/55">{t('metricMaxDrawdown')}</span>
-                <span className={`font-mono font-semibold tabular-nums ${hasPerformanceMetrics ? 'text-down' : 'text-foreground/45'}`}>{hasPerformanceMetrics ? `${((metrics?.maxDrawdown ?? 0) * 100).toFixed(1)}%` : t('valueUnavailable')}</span>
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
           {/* Transaction Ledger */}
           <section className="space-y-4 rounded-[1.75rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06]">
              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">

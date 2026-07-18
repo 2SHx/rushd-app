@@ -33,4 +33,51 @@ describe('DashboardClient visual contract', () => {
     expect(source).toContain("if (event.key === 'Tab') event.preventDefault()");
     expect(source).toContain('autoFocus');
   });
+
+  it('omits unknown values instead of rendering an "Unavailable" placeholder', () => {
+    // Honesty rule: absence over placeholder text — cards/rows with an unknown value
+    // must not render, never fabricate a number or label it "Unavailable".
+    expect(source).not.toContain('Unavailable');
+    expect(source).toContain('{navValue !== null && effectiveCashCurrency && (');
+    expect(source).toContain('{plData !== null && effectiveCashCurrency && (');
+    expect(source).toContain('{winRate !== null && (');
+    expect(source).toContain('{hasPerformanceMetrics && (');
+  });
+
+  it('keeps the daily XP claim, level roadmap modal, and gamification progress bar intact', () => {
+    expect(source).toContain('handleClaimDailyXp');
+    expect(source).toContain('showLevelModal');
+    expect(source).toContain('setShowLevelModal(true)');
+    expect(source).toContain('xp / 500');
+  });
+
+  it('only substitutes demo transactions while isDemoActive — a real account with a genuinely empty ledger renders the honest noTransactions state, not fabricated rows', () => {
+    expect(source).toContain("useState<any[]>(isDemoActive ? demoTransactions : (initialTransactions ?? []))");
+    // the branch that would otherwise be unreachable when a real, empty ledger fell back to demo rows
+    expect(source).toContain("txs.length === 0 ? (");
+    expect(source).toContain("t('noTransactions')");
+  });
+
+  it('never pairs a demo-derived Zakat figure with the live pay-Zakat action', () => {
+    expect(source).toContain('{!isDemoActive && (');
+    expect(source).toContain('onClick={handlePayZakat}');
+    // the live button must be declared inside the !isDemoActive guard, and the demo estimate
+    // caption must exist as the honest alternative shown when isDemoActive is true
+    const zakatCardStart = source.indexOf("t('zakatDue')");
+    const guardIndex = source.indexOf('{!isDemoActive && (', zakatCardStart);
+    const buttonIndex = source.indexOf('onClick={handlePayZakat}', zakatCardStart);
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(buttonIndex).toBeGreaterThan(guardIndex);
+    expect(source).toContain('Demo portfolio estimate — not payable');
+  });
+
+  it('reflows the KPI strip instead of leaving dead fixed-span columns when cards are omitted', () => {
+    expect(source).not.toContain('xl:col-span-3');
+    expect(source).not.toContain('xl:col-span-2');
+    expect(source).toContain('xl:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]');
+  });
+
+  it('never shows a zero-height allocation-donut wrapper when the donut cannot render', () => {
+    expect(source).toContain('{navValue !== null && (\n                  <div className="relative">');
+  });
 });

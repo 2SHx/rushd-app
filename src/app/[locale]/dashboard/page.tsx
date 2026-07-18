@@ -82,7 +82,6 @@ export default async function DashboardPage({ params }: { params: { locale: stri
         initialMetrics={portfolio.initialMetrics}
         initialTransactions={initialTransactions}
         performanceStatus={portfolio.performanceStatus}
-        currencyTotals={portfolio.currencyTotals}
       />
     </PortfolioViewSwitcher>
   );

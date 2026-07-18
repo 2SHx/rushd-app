@@ -17,7 +17,9 @@ export default function PortfolioViewSwitcher({ children, data }: Props) {
   const locale = useLocale();
   const [view, setView] = useState<'rushd' | 'alpaca'>('rushd');
 
-  if (data.status === 'hidden') return children;
+  // Only offer the Alpaca Paper tab once there is a real, ready account snapshot to show —
+  // otherwise (hidden/unconfigured/error) render the Rushd paper view alone with no tab UI.
+  if (data.status !== 'ready') return children;
 
   return (
     <>
