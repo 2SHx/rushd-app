@@ -682,106 +682,119 @@ export default function DashboardClient({
 
       {/* ── KPI strip: one dominant number per card. Auto-fit grid (not fixed 12-col spans) so
            omitted cards reflow instead of leaving dead columns. ── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]">
-        {/* Portfolio Value — omitted entirely when NAV or its currency is unknown, never shown as a placeholder */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] text-start">
+        {/* Portfolio Value — NAV Card */}
         {navValue !== null && effectiveCashCurrency && (
-          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+          <div className="rounded-2xl border border-accent/30 bg-surface-card p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
-              <span className="shrink-0 rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground/45">
+              <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
+              <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold text-accent">
                 {t('paperEvidenceTag')}
               </span>
             </div>
-            <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
-              {formatMoney(navValue, effectiveCashCurrency)}
-            </p>
-            <p className="mt-2 text-xs text-foreground/50">
-              {isAlpaca ? t('alpacaCash') : t('cashVirtual')}:{' '}
-              <span className="font-mono tabular-nums text-foreground/70">
+            <div className="mt-3" dir="ltr">
+              <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">
+                {formatMoney(navValue, effectiveCashCurrency)}
+              </p>
+            </div>
+            <p className="mt-2 text-xs font-medium text-foreground/60 flex items-center gap-1">
+              <span>{isAlpaca ? t('alpacaCash') : t('cashVirtual')}:</span>
+              <span dir="ltr" className="font-mono font-bold tabular-nums text-foreground/80">
                 {formatMoney(jarBal, effectiveCashCurrency)}
               </span>
             </p>
           </div>
         )}
 
-        {/* P&L with Timeframe Selector — omitted when there is no computable P&L for any offered timeframe */}
+        {/* P&L Card with Timeframe Selector */}
         {plData !== null && effectiveCashCurrency && (
-          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
-              <div className="flex gap-0.5 rounded-lg bg-foreground/[0.035] p-0.5" role="group" aria-label={t('pnlTimeframe')}>
+          <div className={`rounded-2xl border p-5 shadow-sm ${
+            plUp ? 'border-up/30 bg-up/[0.04]' : 'border-down/30 bg-down/[0.04]'
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
+              <div className="flex gap-0.5 rounded-xl bg-foreground/[0.06] p-1" role="group" aria-label={t('pnlTimeframe')}>
                 {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
                   <button
                     key={tf}
                     onClick={() => setPlTimeframe(tf)}
                     aria-pressed={plTimeframe === tf}
-                    className={`min-h-11 min-w-11 rounded-md px-1.5 text-[9px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                      plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm' : 'text-foreground/45 hover:text-foreground/75'
+                    className={`rounded-lg px-2 py-1 text-[10px] font-extrabold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-foreground/10' : 'text-foreground/50 hover:text-foreground'
                     }`}
                   >{tf}</button>
                 ))}
               </div>
             </div>
-            <p className={`mt-3 flex items-center gap-1 font-mono text-3xl font-semibold tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
-              {plUp ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
-              {plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}
-            </p>
-            <p className={`mt-2 text-xs font-semibold ${plUp ? 'text-up' : 'text-down'}`}>
-              {`${plUp ? '+' : ''}${plData.pct.toFixed(2)}% ${t('overTimeframe', { period: plTimeframe })}`}
+            <div className="mt-3 flex items-center gap-1.5" dir="ltr">
+              <p className={`font-mono text-3xl font-extrabold tracking-tight tabular-nums flex items-center gap-1 ${plUp ? 'text-up' : 'text-down'}`}>
+                {plUp ? <ArrowUpRight className="size-6 shrink-0" /> : <ArrowDownRight className="size-6 shrink-0" />}
+                <span>{plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}</span>
+              </p>
+            </div>
+            <p className={`mt-2 text-xs font-extrabold ${plUp ? 'text-up' : 'text-down'}`}>
+              <span dir="ltr" className="inline-block">{`${plUp ? '+' : ''}${plData.pct.toFixed(2)}%`}</span>
+              <span className="ms-1 font-normal text-foreground/60">{t('overTimeframe', { period: plTimeframe })}</span>
             </p>
           </div>
         )}
 
-        {/* Active Trades — a real zero is data, always shown */}
-        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
-          <p className="text-xs font-semibold text-foreground/50">{isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}</p>
-          <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">{activeTrades}</p>
-          <p className="mt-2 text-xs text-foreground/50">{activeTrades === 0 ? t('noActivePositions') : t('openPositionsCount')}</p>
+        {/* Active Trades */}
+        <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
+          <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}</p>
+          <div className="mt-3" dir="ltr">
+            <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">{activeTrades}</p>
+          </div>
+          <p className="mt-2 text-xs text-foreground/60">{activeTrades === 0 ? t('noActivePositions') : t('openPositionsCount')}</p>
         </div>
 
-        {/* Win Rate — omitted when no position has a recorded cost basis to judge */}
+        {/* Win Rate */}
         {winRate !== null && (
-          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
-            <p className="text-xs font-semibold text-foreground/50">{t('profitablePositions')}</p>
-            <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
-            <p className="mt-2 text-xs text-foreground/50">{t('winRateRecordedBasis')}</p>
+          <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
+            <p className="text-xs font-bold text-foreground/60">{t('profitablePositions')}</p>
+            <div className="mt-3" dir="ltr">
+              <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
+            </div>
+            <p className="mt-2 text-xs text-foreground/60">{t('winRateRecordedBasis')}</p>
           </div>
         )}
 
         {isAlpaca ? (
           paperAccount && effectiveCashCurrency && (
-            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-foreground/50">{t('alpacaBuyingPower')}</span>
-                <Landmark className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+                <span className="text-xs font-bold text-foreground/60">{t('alpacaBuyingPower')}</span>
+                <Landmark className="size-4 text-accent" aria-hidden="true" />
               </div>
-              <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
-                {formatMoney(paperAccount.buyingPower, effectiveCashCurrency)}
-              </p>
-              <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-foreground/45">{t('alpacaBuyingPowerNote')}</p>
+              <div className="mt-3" dir="ltr">
+                <p className="font-mono text-2xl font-extrabold tracking-tight tabular-nums text-foreground">
+                  {formatMoney(paperAccount.buyingPower, effectiveCashCurrency)}
+                </p>
+              </div>
+              <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-foreground/50">{t('alpacaBuyingPowerNote')}</p>
             </div>
           )
         ) : (
           zakatDue !== null && (
-            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <div className="rounded-2xl border border-accent/25 bg-surface-card p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-foreground/50">{t('zakatDue')}</span>
-                <Coins className="h-4 w-4 text-foreground/40" aria-hidden="true" />
+                <span className="text-xs font-bold text-foreground/60">{t('zakatDue')}</span>
+                <Coins className="size-4 text-accent" aria-hidden="true" />
               </div>
-              <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-foreground">
-                {formatMoney(zakatDue, 'SAR')}
-              </p>
-              {/* Demo-derived Zakat is an illustrative estimate only — the live payment action is a
-                  real money-adjacent API call, so it never appears next to a fabricated figure. */}
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="line-clamp-2 text-[10px] leading-tight text-foreground/45">
+              <div className="mt-3" dir="ltr">
+                <p className="font-mono text-2xl font-extrabold tracking-tight tabular-nums text-accent">
+                  {formatMoney(zakatDue, 'SAR')}
+                </p>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-foreground/[0.08] pt-2">
+                <span className="line-clamp-2 text-[10px] leading-tight text-foreground/50">
                   {isDemoActive ? (isAr ? 'تقدير من المحفظة التجريبية — غير قابل للدفع' : 'Demo portfolio estimate — not payable') : t('zakatVerifiedAssetsOnly')}
                 </span>
                 {!isDemoActive && (
                   <button
                     onClick={handlePayZakat}
                     disabled={isZakatSubmitting || zakatDue <= 0.01}
-                    className="min-h-8 shrink-0 rounded-lg bg-accent px-3 text-[10px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="min-h-8 shrink-0 rounded-xl bg-accent px-3.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-accent/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {isZakatSubmitting ? '...' : t('payZakat')}
                   </button>
