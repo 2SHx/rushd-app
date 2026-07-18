@@ -119,6 +119,35 @@
       "invalidTitle": "This strategy comparison is not available",
       "invalidBody": "Choose an apply-the-learning link from your Academy queue to continue."
     },
+    "labEntry": {
+      "eyebrow": "Practice lab",
+      "title": "Answer the strategy questions, then compare the evidence",
+      "body": "Choose the entry, risk, and discipline rules yourself. Outcomes stay hidden until your choices are sealed, then the same frozen period is replayed for an honest comparison.",
+      "processLabel": "Answer-and-compare process",
+      "steps": {
+        "answer": {
+          "title": "Answer the decisions",
+          "body": "Work through the knowledge check and choose the rules your strategy will follow."
+        },
+        "seal": {
+          "title": "Seal your choices",
+          "body": "Review and lock the policy before any historical outcome is revealed."
+        },
+        "compare": {
+          "title": "Compare the evidence",
+          "body": "See how your policy behaved beside the reviewed strategy and market benchmarks."
+        }
+      },
+      "comparisonLabel": "Comparison set",
+      "series": {
+        "learner": "Your policy",
+        "strategy": "Reviewed strategy",
+        "spus": "SPUS",
+        "spy": "SPY"
+      },
+      "cta": "Start answering",
+      "disclosure": "Educational replay using virtual money and a sealed historical interval. Results are not investment advice or a promise of future performance."
+    },
     "journey": {
       "title": "Your learning path",
       "subtitle": "One path, in order — from where you started to what comes next.",

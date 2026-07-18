@@ -42,7 +42,7 @@ describe('Mavericks strategy-learning bridge', () => {
   it('routes direct selections to the exact lesson and gates all detailed evidence', () => {
     expect(leagueSource).toContain("searchParams.get('setup')");
     expect(leagueSource).toContain('team.setupId === requestedSetupId');
-    expect(leagueSource).toContain('setupId=${encodeURIComponent(team.setupId)}');
+    expect(leagueSource).toContain('/academy/apply?setupId=${encodeURIComponent(team.setupId)}');
     expect(leagueSource).toContain('summary=1');
     expect(leagueSource).toContain('isStrategyLearningSetupId(selected.setupId)');
     expect(leagueSource).toContain("{learningGateStatus === 'unlocked' ? (");

@@ -102,7 +102,7 @@ function TeamLearningGate({
             </ol>
           </div>
           <Link
-            href={`/${locale}/quiz?setupId=${encodeURIComponent(team.setupId)}`}
+            href={`/${locale}/academy/apply?setupId=${encodeURIComponent(team.setupId)}`}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {t('learningGate.start')}

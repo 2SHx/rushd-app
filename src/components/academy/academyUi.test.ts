@@ -9,6 +9,7 @@ import { filterAcademyTracks, practiceLinkHref } from './academyAccess';
 
 const files = ['./AcademyCheckpoint.tsx', './AcademyState.tsx', './PracticeLinks.tsx', './academyAccess.ts', './academyServer.ts', '../../app/[locale]/academy/page.tsx', '../../app/[locale]/academy/[trackId]/page.tsx', '../../app/[locale]/academy/[trackId]/[unitId]/[lessonId]/page.tsx'];
 const source = files.map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
+const academyLandingSource = readFileSync(new URL('../../app/[locale]/academy/page.tsx', import.meta.url), 'utf8');
 const quizSource = readFileSync(new URL('../../app/[locale]/quiz/page.tsx', import.meta.url), 'utf8');
 const en = JSON.parse(readFileSync(new URL('../../../messages/en.json', import.meta.url), 'utf8'));
 const ar = JSON.parse(readFileSync(new URL('../../../messages/ar.json', import.meta.url), 'utf8'));
@@ -29,6 +30,12 @@ describe('academy UI server boundary', () => {
     expect(quizSource).toContain("QUIZ_TOPICS.find((item) => item.topic === searchParams.topic)");
     expect(quizSource).toContain('useState(requestedTopic !== null)');
   });
+  it('makes Academy the visible entry to the sealed strategy comparison', () => {
+    expect(academyLandingSource).toContain('data-testid="academy-strategy-entry"');
+    expect(academyLandingSource).toContain('DEFAULT_STRATEGY_LEARNING_SETUP_ID');
+    expect(academyLandingSource).toContain('/academy/apply?setupId=');
+    expect(academyLandingSource).toContain("t('labEntry.cta')");
+  });
   it('ships populated, loading, empty, and error states with logical RTL classes', () => {
     expect(source).toContain("state: 'ready'"); expect(source).toContain('kind="empty"');
     expect(readFileSync(new URL('../../app/[locale]/academy/error.tsx', import.meta.url), 'utf8')).toContain('onClick={reset}');
@@ -37,5 +44,7 @@ describe('academy UI server boundary', () => {
   });
   it('keeps Academy chrome keys identical in English and Arabic', () => {
     expect(Object.keys(en.Academy)).toEqual(Object.keys(ar.Academy)); expect(Object.keys(en.Academy.compliance)).toEqual(Object.keys(ar.Academy.compliance));
+    expect(Object.keys(en.Academy.labEntry)).toEqual(Object.keys(ar.Academy.labEntry));
+    expect(Object.keys(en.Academy.labEntry.steps)).toEqual(Object.keys(ar.Academy.labEntry.steps));
   });
 });

@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Academy strategy answer-and-compare entry ✅
+Shipped: Added a bilingual Practice Lab entry to /academy that explains answer → seal → compare, names the learner/reviewed-strategy/SPUS/SPY comparison set, and opens the existing seven-question sealed replay under /academy/apply; league learning links now use the same Academy route.
+Decisions: lazy-dev rung 2 reused the DR-14 StrategyLearningLab and frozen replay instead of duplicating UI or quant logic; the entry remains gated behind the diagnostic profile so first visit is still diagnostic-only.
+Verify: lint/tsc/build clean; Academy + learning integration 75/75 and i18n 9/9 green; browser-verified ar RTL desktop + 390×844 and en 390×844 with zero overflow, 48px CTA, and the Arabic first question opening correctly.
+Open: no deployment performed; the unbounded repository-wide Vitest command was stopped after exceeding the verification window, while all affected suites passed in isolation.
+
 ## 2026-07-18 — Dashboard hierarchy and truthful learning progress ✅
 Shipped: Rebuilt /dashboard around a portfolio-value/P&L hero, compact persisted-XP learning card, quieter supporting KPIs, semantic chart colors, accessible level dialog, and removed the contradictory hardcoded sidebar level summary.
 Decisions: lazy-dev rung 2 reused the loaded GamificationProfile, existing tokens/components, and Academy route; client-only daily XP was removed because presentation must never fabricate persisted progress.
