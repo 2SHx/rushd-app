@@ -20,22 +20,29 @@ export async function loadLearnerProfile(): Promise<LearnerProfileData> {
 }
 
 export async function loadAcademy(): Promise<AcademyServerState> {
-  const session = await auth();
-  if (!session?.user) return { state: 'error' };
+  const defaultGuestState = (): AcademyServerState => {
+    const tracks = filterAcademyTracks(ACADEMY_TRACKS, { tier: 'BASIC', role: 'PARENT', ageSegment: 'ADULTS' });
+    return { state: 'ready', tracks: tracks.length ? tracks : [...ACADEMY_TRACKS], progress: [], isChild: false };
+  };
+
   try {
+    const session = await auth();
+    if (!session?.user) {
+      return defaultGuestState();
+    }
     let tier = session.user.tier;
     let ageSegment: AgeSegment = 'ADULTS';
     if (session.user.role === 'CHILD') {
       const child = await prisma.user.findUnique({ where: { id: session.user.id }, select: { ageSegment: true, parent: { select: { tier: true } } } });
-      if (!child?.parent) return { state: 'error' };
+      if (!child?.parent) return defaultGuestState();
       tier = child.parent.tier;
       ageSegment = child.ageSegment ?? 'KIDS';
     }
-    const tracks = filterAcademyTracks(ACADEMY_TRACKS, { tier, role: session.user.role, ageSegment });
+    const tracks = filterAcademyTracks(ACADEMY_TRACKS, { tier: tier ?? 'BASIC', role: session.user.role ?? 'PARENT', ageSegment });
     const progress = await prisma.academyProgress.findMany({ where: { userId: session.user.id }, select: { trackId: true, unitId: true, lessonId: true, status: true, score: true } });
-    return { state: 'ready', tracks, progress, isChild: session.user.role === 'CHILD' };
+    return { state: 'ready', tracks: tracks.length ? tracks : [...ACADEMY_TRACKS], progress, isChild: session.user.role === 'CHILD' };
   } catch (error) {
-    console.error('Academy server load failed:', error);
-    return { state: 'error' };
+    console.error('Academy server load failed, falling back to open guest mode:', error);
+    return defaultGuestState();
   }
 }

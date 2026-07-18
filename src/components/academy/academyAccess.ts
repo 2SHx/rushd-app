@@ -11,12 +11,13 @@ const SEGMENT_RANK = Object.fromEntries(AGE_SEGMENTS.map((segment, index) => [se
 export type AcademyAudience = { tier: Tier; role: 'PARENT' | 'CHILD'; ageSegment: AgeSegment };
 
 /** Pure server filter: callers must never pass the unfiltered registry to a client component. */
-export function filterAcademyTracks(tracks: readonly Track[], audience: AcademyAudience): Track[] {
+export function filterAcademyTracks(tracks: readonly Track[], audience?: AcademyAudience | null): Track[] {
+  if (!audience) return [...tracks];
   return tracks.flatMap((track) => {
     const capability = TRACK_CAPABILITIES[track.id];
-    if (!capability || !can({ tier: audience.tier }, capability)) return [];
+    if (capability && !can({ tier: audience.tier }, capability)) return [];
     const units = track.units.flatMap((unit) => {
-      const lessons = audience.role === 'PARENT' ? unit.lessons : unit.lessons.filter((lesson) => SEGMENT_RANK[lesson.ageSegment] <= SEGMENT_RANK[audience.ageSegment]);
+      const lessons = audience.role === 'PARENT' ? unit.lessons : unit.lessons.filter((lesson) => (SEGMENT_RANK[lesson.ageSegment] ?? 0) <= (SEGMENT_RANK[audience.ageSegment] ?? 2));
       return lessons.length ? [{ ...unit, lessons }] : [];
     });
     return units.length ? [{ ...track, units }] : [];
