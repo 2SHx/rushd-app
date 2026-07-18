@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Dashboard hierarchy and truthful learning progress ✅
+Shipped: Rebuilt /dashboard around a portfolio-value/P&L hero, compact persisted-XP learning card, quieter supporting KPIs, semantic chart colors, accessible level dialog, and removed the contradictory hardcoded sidebar level summary.
+Decisions: lazy-dev rung 2 reused the loaded GamificationProfile, existing tokens/components, and Academy route; client-only daily XP was removed because presentation must never fabricate persisted progress.
+Verify: lint/tsc/production build/diff clean; DashboardClient 10/10 + i18n parity green; browser-verified ar desktop + 390×844 RTL and en desktop with zero horizontal overflow.
+Open: full Vitest remains red on 8 unrelated pre-existing failures (Academy cross-user fixture, two authz capability expectations, portfolio stale GOOGL marks/timeout, quant-eval timeout); no deployment performed.
+
 ## 2026-07-18 — Academy landing as continuous journey path ✅ (deploy #7)
 Shipped: /academy rewritten as one winding node path (persona start marker → single loud current-step node → muted upcoming beads → chapter waypoints via details linking to the user's Duolingo track roadmaps); diagnostic-first gate preserved; matching skeleton; fixed client-bundle regression (schema.ts now imports client-safe strategyLearningSetupIds, not the fs/zlib replay registry); authored Unit 6 third lesson `econ-u6-ai-sharia-screening` (hedged AI-screening content) restoring the ≥3-lessons invariant.
 Decisions: no fake locks (honest ordinals), connector terminates at last node with opaque node backing, waypoints tint-only so exactly one accent-filled element, psychometric "Assessed Level" chip replaced with starting-path key, contrast floored at /55.

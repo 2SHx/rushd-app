@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import {
   Briefcase, History, CheckCircle2, Coins,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Landmark, Trophy, Sparkles,
-  Gift, Zap, Check, Lock, X, ChevronRight
+  Check, Lock, X
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatMoney as formatMoneyShared, formatSARNumber, RiyalSymbol } from '@/lib/currency';
@@ -68,6 +68,8 @@ interface DashboardClientProps {
   initialSnapshots: Snapshot[];
   initialMetrics: any;
   initialTransactions: any[];
+  initialXP: number;
+  initialLevel: number;
   performanceStatus: PerformanceStatus;
   /** @deprecated unused — the combined-NAV-unavailable banner that read this was removed as
    * unreachable dead code. Kept optional so existing callers don't need updating. */
@@ -85,6 +87,8 @@ export default function DashboardClient({
   initialSnapshots,
   initialMetrics,
   initialTransactions,
+  initialXP,
+  initialLevel,
   performanceStatus,
   accountKind = 'rushd',
   paperAccount,
@@ -262,19 +266,14 @@ export default function DashboardClient({
   const [zakatPaidAmount, setZakatPaidAmount] = useState('0.00');
   const [isZakatSubmitting, setIsZakatSubmitting] = useState(false);
 
-  // Interactive Gamification Level & XP states
-  const [xp, setXp] = useState(350);
-  const [dailyClaimed, setDailyClaimed] = useState(false);
+  // The dashboard only presents persisted learning progress. XP mutations stay in the
+  // Academy/quiz mastery flows so a visual interaction can never fabricate progress.
   const [showLevelModal, setShowLevelModal] = useState(false);
-  const [xpNotification, setXpNotification] = useState<string | null>(null);
-
-  const handleClaimDailyXp = () => {
-    if (dailyClaimed) return;
-    setXp(prev => prev + 50);
-    setDailyClaimed(true);
-    setXpNotification(isAr ? '🎉 مبروك! حصلت على +50 XP مكافأة الحضور اليومي!' : '🎉 Congrats! Earned +50 XP Daily Reward!');
-    setTimeout(() => setXpNotification(null), 4000);
-  };
+  const xp = Math.max(0, initialXP);
+  const level = Math.max(1, initialLevel);
+  const levelStartXP = 100 * Math.pow(level - 1, 2);
+  const nextLevelXP = 100 * Math.pow(level, 2);
+  const levelProgress = Math.min(100, Math.max(0, ((xp - levelStartXP) / (nextLevelXP - levelStartXP)) * 100));
 
   // P&L timeframe selector
   const [plTimeframe, setPlTimeframe] = useState<'24H'|'7D'|'30D'|'90D'>('24H');
@@ -361,9 +360,9 @@ export default function DashboardClient({
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
-        <polyline points={spyPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-foreground/30" />
-        <polyline points={spusPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-accent/60" />
-        <polyline points={navPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-up" />
+        <polyline points={spyPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-foreground/25" />
+        <polyline points={spusPoints} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" className="text-foreground/50" />
+        <polyline points={navPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-accent" />
       </svg>
     );
   };
@@ -470,192 +469,202 @@ export default function DashboardClient({
           {isAlpaca
             ? `${t('alpacaPaperBadge')} · ${paperAccount?.status ?? ''}${paperAccount?.tradingBlocked ? ` · ${t('alpacaTradingBlocked')}` : ''}`
             : isDemoActive
-              ? (isAr ? '⚡ محفظة استثمارية تفاعلية تجريبية' : '⚡ Interactive Investor Demo Portfolio')
+              ? t('paperEvidenceTag')
               : t('portfolioPaperBadge')}
         </div>
       </div>
 
-      {/* Gamification Level & Progress Card */}
-      {!isAlpaca && (
-        <div className="relative overflow-hidden rounded-[1.75rem] border border-accent/20 bg-surface-card p-5 sm:p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-accent/40">
-          {/* XP Toast Notification */}
-          <AnimatePresence>
-            {xpNotification && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-4 flex items-center justify-between rounded-2xl bg-accent px-4 py-2.5 text-xs font-bold text-white shadow-lg"
-              >
-                <span>{xpNotification}</span>
-                <button onClick={() => setXpNotification(null)} className="rounded-full p-1 hover:bg-white/20">
-                  <X className="size-3.5" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {/* Portfolio value leads the page; learning progress stays visible without competing with it. */}
+      <div className={`grid gap-4 ${!isAlpaca ? 'lg:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]' : ''}`}>
+        {navValue !== null && effectiveCashCurrency && (
+          <section className="rounded-[2rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06] sm:p-8">
+            <div className="flex items-center">
+              <p className="text-xs font-semibold text-foreground/55">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
+            </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowLevelModal(true)}
-                className="group relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent border border-accent/20 transition-all duration-300 hover:scale-105 hover:bg-accent hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                title={isAr ? 'عرض خريطة المستويات والمكافآت' : 'View Level Perks & Roadmap'}
-              >
-                <Trophy className="size-7 transition-transform duration-300 group-hover:rotate-12" aria-hidden="true" />
-              </button>
+            <p className="mt-5 font-mono text-4xl font-semibold tracking-tight tabular-nums text-foreground sm:text-5xl" dir="ltr">
+              {formatMoney(navValue, effectiveCashCurrency)}
+            </p>
+
+            <div className="mt-8 grid gap-5 border-t border-foreground/[0.06] pt-5 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] sm:items-end">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
-                    {isAr ? 'مستوى التعلّم والخبرة' : 'Level & Progress'}
-                  </span>
-                  <button
-                    onClick={() => setShowLevelModal(true)}
-                    className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold text-white transition-all hover:bg-accent/80 hover:scale-105 active:scale-95"
-                  >
-                    {isAr ? 'المستوى 3' : 'Level 3'}
-                  </button>
-                </div>
-                <h2 className="mt-1 text-base font-extrabold text-foreground sm:text-lg">
-                  {isAr ? 'مستثمر واعد · Promising Investor' : 'Promising Investor'}
-                </h2>
-                <p className="mt-0.5 text-xs text-foreground/60">
-                  {isAr ? `حققت ${xp} XP من أصل 500 XP للوصول إلى المستوى 4` : `${xp} XP earned out of 500 XP to Level 4`}
+                <p className="text-[10px] font-semibold text-foreground/45">{isAlpaca ? t('alpacaCash') : t('cashVirtual')}</p>
+                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground/80" dir="ltr">
+                  {formatMoney(jarBal, effectiveCashCurrency)}
                 </p>
               </div>
-            </div>
 
-            <div className="flex flex-col items-start sm:items-end gap-2 ms-auto">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold text-accent">{xp} / 500 XP ({Math.round((xp / 500) * 100)}%)</span>
-                <button
-                  onClick={handleClaimDailyXp}
-                  disabled={dailyClaimed}
-                  className={`group relative overflow-hidden rounded-full px-3 py-1 text-xs font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                    dailyClaimed
-                      ? 'bg-foreground/10 text-foreground/50 cursor-default'
-                      : 'bg-accent text-white hover:bg-accent/90 hover:shadow-md active:scale-95'
-                  }`}
-                >
-                  <span className="relative z-10 flex items-center gap-1">
-                    <Zap className="size-3.5 fill-current" />
-                    {dailyClaimed ? (isAr ? 'تم الاستلام ✓' : 'Claimed ✓') : (isAr ? '+50 XP يومية' : '+50 Daily XP')}
-                  </span>
-                </button>
-              </div>
-
-              <div
-                onClick={() => setShowLevelModal(true)}
-                className="w-44 sm:w-64 h-3 overflow-hidden rounded-full bg-foreground/10 cursor-pointer p-0.5 ring-1 ring-accent/20 transition-all hover:ring-accent"
-                title={isAr ? 'اضغط لعرض التفاصيل' : 'Click to inspect details'}
-                aria-hidden="true"
-              >
-                <div
-                  className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
-                  style={{ width: `${Math.min(100, (xp / 500) * 100)}%` }}
-                />
-              </div>
+              {plData !== null && (
+                <div className="sm:border-s sm:border-foreground/[0.06] sm:ps-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[10px] font-semibold text-foreground/45">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
+                    <div className="flex gap-0.5 rounded-xl bg-foreground/[0.05] p-1" role="group" aria-label={t('pnlTimeframe')}>
+                      {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
+                        <button
+                          key={tf}
+                          onClick={() => setPlTimeframe(tf)}
+                          aria-pressed={plTimeframe === tf}
+                          className={`min-h-7 rounded-lg px-2 text-[10px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                            plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-foreground/[0.06]' : 'text-foreground/45 hover:text-foreground'
+                          }`}
+                        >{tf}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-end justify-between gap-3" dir="ltr">
+                    <p className={`flex items-center gap-1 font-mono text-2xl font-semibold tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
+                      {plUp ? <ArrowUpRight className="size-5 shrink-0" aria-hidden="true" /> : <ArrowDownRight className="size-5 shrink-0" aria-hidden="true" />}
+                      <span>{plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}</span>
+                    </p>
+                    <p className={`font-mono text-sm font-semibold tabular-nums ${plUp ? 'text-up' : 'text-down'}`}>
+                      {`${plUp ? '+' : ''}${plData.pct.toFixed(2)}%`}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </section>
+        )}
 
-          <div className="mt-4 flex flex-wrap items-center justify-between border-t border-foreground/[0.06] pt-3 text-xs gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-foreground/50">{isAr ? 'الشارات المفتوحة:' : 'Badges:'}</span>
-              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">🛡️ {isAr ? 'فاحص أيوفي' : 'AAOIFI Auditor'}</span>
-              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">⚡ {isAr ? 'رواد الادخار' : 'Savings Pioneer'}</span>
-              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-foreground/75">📊 {isAr ? 'محلل القيمة' : 'Value Analyst'}</span>
-            </div>
-            
-            <div className="flex items-center gap-3 ms-auto">
+        {!isAlpaca && (
+          <aside className="flex flex-col rounded-[2rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06]">
+            <div className="flex items-start justify-between gap-4">
               <button
                 onClick={() => setShowLevelModal(true)}
-                className="text-xs font-bold text-foreground/70 hover:text-accent transition-colors flex items-center gap-1"
+                className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent transition-colors duration-150 hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label={t('dashboardLevelRoadmapAria')}
               >
-                {isAr ? 'خريطة المستويات' : 'Level Roadmap'}
+                <Trophy className="size-5" aria-hidden="true" />
               </button>
+              <span className="rounded-full bg-foreground/[0.05] px-2.5 py-1 text-[10px] font-semibold text-foreground/55">
+                {t('dashboardLevelLabel', { level })}
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[10px] font-semibold text-accent">{t('dashboardLearningProgress')}</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">{t('dashboardPromisingInvestor')}</h2>
+              <p className="mt-2 text-xs leading-relaxed text-foreground/50">
+                {t('dashboardXpToNext', { xp, target: nextLevelXP, level: level + 1 })}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowLevelModal(true)}
+              className="mt-5 w-full rounded-full bg-foreground/[0.07] p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label={t('dashboardLevelProgressAria')}
+            >
+              <span className="block h-1.5 rounded-full bg-accent transition-[transform] duration-300 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${levelProgress / 100})`, transformOrigin: isAr ? 'right' : 'left' }} />
+            </button>
+            <div className="mt-2 flex items-center justify-between text-[10px] text-foreground/45" dir="ltr">
+              <span>{xp} XP</span>
+              <span>{nextLevelXP} XP</span>
+            </div>
+
+            <div className="mt-auto flex items-center gap-2 pt-6">
               <Link
                 href={`/${locale}/academy`}
-                className="group relative overflow-hidden rounded-xl bg-accent/10 px-3.5 py-1.5 text-xs font-extrabold text-accent transition-all duration-300 hover:bg-accent hover:text-white hover:shadow-md active:scale-95 flex items-center gap-1.5"
+                className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-xs font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
               >
                 <Sparkles className="size-3.5" aria-hidden="true" />
-                <span>{isAr ? 'طوّر مستواك ←' : 'Advance Level →'}</span>
+                <span>{t('dashboardContinueLearning')}</span>
               </Link>
+              <button
+                onClick={() => setShowLevelModal(true)}
+                className="min-h-10 rounded-xl px-3 text-xs font-semibold text-foreground/60 transition-colors duration-150 hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {t('dashboardRoadmap')}
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+          </aside>
+        )}
+      </div>
 
       {/* Interactive Level Roadmap Modal */}
       {showLevelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-3xl border border-foreground/10 bg-surface-card p-6 shadow-2xl space-y-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="level-roadmap-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setShowLevelModal(false);
+          }}
+        >
+          <div className="relative w-full max-w-lg space-y-6 rounded-3xl bg-surface-card p-6 shadow-2xl ring-1 ring-foreground/[0.08]">
             <div className="flex items-center justify-between border-b border-foreground/10 pb-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-accent text-white font-extrabold text-sm">
-                  L{Math.floor(xp / 150) + 1}
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-accent text-sm font-semibold text-white">
+                  L{level}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">{isAr ? 'مستويات الخبراء والمكافآت' : 'Investor Level Roadmap'}</h3>
+                  <h3 id="level-roadmap-title" className="text-lg font-semibold text-foreground">{isAr ? 'مستويات الخبراء والمكافآت' : 'Investor Level Roadmap'}</h3>
                   <p className="text-xs text-foreground/60">{isAr ? 'تقدمك في الأكاديمية والمميزات المفتوحة' : 'Your progress and unlocked platform perks'}</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowLevelModal(false)}
-                className="rounded-full p-2 text-foreground/50 hover:bg-foreground/5 hover:text-foreground"
+                className="rounded-full p-2 text-foreground/50 transition-colors duration-150 hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label={t('dashboardCloseRoadmap')}
               >
-                <X className="size-5" />
+                <X className="size-5" aria-hidden="true" />
               </button>
             </div>
 
             {/* Level Milestones list */}
             <div className="space-y-3 max-h-80 overflow-y-auto pe-1">
               {[
-                { lvl: 1, title: isAr ? 'طالب علوم مالية' : 'Financial Apprentice', xpReq: 0, perks: isAr ? 'التداول الافتراضي وبناء الحصالات' : 'Virtual Trading & Savings Jars', done: true },
-                { lvl: 2, title: isAr ? 'فاحص الشريعة' : 'Sharia Auditor', xpReq: 150, perks: isAr ? 'فحص أسهم أيوفي (AAOIFI) وحاسبة الزكاة' : 'AAOIFI Screening & Zakat Calc', done: true },
-                { lvl: 3, title: isAr ? 'مستثمر واعد' : 'Promising Investor', xpReq: 350, perks: isAr ? 'المحفظة التفاعلية وتخصيص الأصول' : 'Interactive Demo & Asset Allocation', current: true },
-                { lvl: 4, title: isAr ? 'محلل المخاطر' : 'Risk Analyst', xpReq: 500, perks: isAr ? 'أدوات المحافظ الكمية وتقييم Sharpe' : 'Quant Risk Suite & Sharpe Analytics', locked: true },
-                { lvl: 5, title: isAr ? 'خبير المحافظ' : 'Portfolio Master', xpReq: 1000, perks: isAr ? 'إعادة التوازن التلقائي ودوري الاستراتيجيات' : 'Auto Rebalancing & Strategy League', locked: true },
-              ].map((m) => (
+                { lvl: 1, title: isAr ? 'طالب علوم مالية' : 'Financial Apprentice', xpReq: 0, perks: isAr ? 'التداول الافتراضي وبناء الحصالات' : 'Virtual Trading & Savings Jars' },
+                { lvl: 2, title: isAr ? 'فاحص الشريعة' : 'Sharia Auditor', xpReq: 100, perks: isAr ? 'فحص أسهم أيوفي (AAOIFI) وحاسبة الزكاة' : 'AAOIFI Screening & Zakat Calc' },
+                { lvl: 3, title: isAr ? 'مستثمر واعد' : 'Promising Investor', xpReq: 400, perks: isAr ? 'المحفظة التفاعلية وتخصيص الأصول' : 'Interactive Demo & Asset Allocation' },
+                { lvl: 4, title: isAr ? 'محلل المخاطر' : 'Risk Analyst', xpReq: 900, perks: isAr ? 'أدوات المحافظ الكمية وتقييم Sharpe' : 'Quant Risk Suite & Sharpe Analytics' },
+                { lvl: 5, title: isAr ? 'خبير المحافظ' : 'Portfolio Master', xpReq: 1600, perks: isAr ? 'إعادة التوازن التلقائي ودوري الاستراتيجيات' : 'Auto Rebalancing & Strategy League' },
+              ].map((m) => {
+                const current = m.lvl === level;
+                const done = m.lvl < level;
+                const locked = m.lvl > level;
+                return (
                 <div
                   key={m.lvl}
                   className={`flex items-start justify-between rounded-2xl p-3.5 border text-xs transition-all ${
-                    m.current
+                    current
                       ? 'border-accent bg-accent/10 text-foreground ring-1 ring-accent/30'
-                      : m.done
+                      : done
                       ? 'border-foreground/10 bg-foreground/[0.02] text-foreground/80'
                       : 'border-foreground/5 bg-foreground/[0.01] opacity-60 text-foreground/50'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
-                      m.current ? 'bg-accent text-white' : m.done ? 'bg-up/20 text-up' : 'bg-foreground/10 text-foreground/40'
+                      current ? 'bg-accent text-white' : done ? 'bg-up/20 text-up' : 'bg-foreground/10 text-foreground/40'
                     }`}>
-                      {m.done ? <Check className="size-4" /> : m.locked ? <Lock className="size-3.5" /> : `L${m.lvl}`}
+                      {done ? <Check className="size-4" aria-hidden="true" /> : locked ? <Lock className="size-3.5" aria-hidden="true" /> : `L${m.lvl}`}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold">{m.title}</span>
-                        {m.current && <span className="rounded-full bg-accent px-2 py-0.2 text-[9px] font-extrabold text-white">{isAr ? 'مستواك الحالي' : 'Current'}</span>}
+                        {current && <span className="rounded-full bg-accent px-2 py-0.5 text-[9px] font-semibold text-white">{isAr ? 'مستواك الحالي' : 'Current'}</span>}
                       </div>
                       <p className="mt-1 text-[11px] leading-relaxed opacity-80">{m.perks}</p>
                     </div>
                   </div>
                   <span className="font-mono text-[11px] font-semibold shrink-0 ms-2">{m.xpReq} XP</span>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
-            <div className="border-t border-foreground/10 pt-4 flex items-center justify-between">
-              <button
-                onClick={handleClaimDailyXp}
-                disabled={dailyClaimed}
-                className="min-h-11 rounded-2xl bg-accent px-5 text-xs font-bold text-white transition-all hover:bg-accent/90 disabled:opacity-50"
+            <div className="flex items-center justify-between gap-3 border-t border-foreground/10 pt-4">
+              <Link
+                href={`/${locale}/academy`}
+                onClick={() => setShowLevelModal(false)}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-accent px-5 text-xs font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                {dailyClaimed ? (isAr ? 'تم استلام مكافأة اليوم' : 'Daily Reward Claimed') : (isAr ? 'مطالبة بـ +50 XP الآن' : 'Claim +50 XP Now')}
-              </button>
+                {t('dashboardContinueLearning')}
+              </Link>
               <button
                 onClick={() => setShowLevelModal(false)}
-                className="min-h-11 rounded-2xl border border-foreground/15 px-4 text-xs font-semibold text-foreground/75 hover:bg-foreground/5"
+                className="min-h-11 rounded-2xl px-4 text-xs font-semibold text-foreground/65 transition-colors duration-150 hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {isAr ? 'إغلاق' : 'Close'}
               </button>
@@ -692,77 +701,21 @@ export default function DashboardClient({
       {/* ── KPI strip: one dominant number per card. Auto-fit grid (not fixed 12-col spans) so
            omitted cards reflow instead of leaving dead columns. ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] text-start">
-        {/* Portfolio Value — NAV Card */}
-        {navValue !== null && effectiveCashCurrency && (
-          <div className="rounded-2xl border border-accent/30 bg-surface-card p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaEquity') : t('portfolioNav')}</p>
-              <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold text-accent">
-                {t('paperEvidenceTag')}
-              </span>
-            </div>
-            <div className="mt-3" dir="ltr">
-              <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">
-                {formatMoney(navValue, effectiveCashCurrency)}
-              </p>
-            </div>
-            <p className="mt-2 text-xs font-medium text-foreground/60 flex items-center gap-1">
-              <span>{isAlpaca ? t('alpacaCash') : t('cashVirtual')}:</span>
-              <span dir="ltr" className="font-mono font-bold tabular-nums text-foreground/80">
-                {formatMoney(jarBal, effectiveCashCurrency)}
-              </span>
-            </p>
-          </div>
-        )}
-
-        {/* P&L Card with Timeframe Selector */}
-        {plData !== null && effectiveCashCurrency && (
-          <div className={`rounded-2xl border p-5 shadow-sm ${
-            plUp ? 'border-up/30 bg-up/[0.04]' : 'border-down/30 bg-down/[0.04]'
-          }`}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaDayPnl') : t('pnlLabel')}</p>
-              <div className="flex gap-0.5 rounded-xl bg-foreground/[0.06] p-1" role="group" aria-label={t('pnlTimeframe')}>
-                {(isAlpaca ? ['24H'] as const : ['24H','7D','30D','90D'] as const).map(tf => (
-                  <button
-                    key={tf}
-                    onClick={() => setPlTimeframe(tf)}
-                    aria-pressed={plTimeframe === tf}
-                    className={`rounded-lg px-2 py-1 text-[10px] font-extrabold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                      plTimeframe === tf ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-foreground/10' : 'text-foreground/50 hover:text-foreground'
-                    }`}
-                  >{tf}</button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-1.5" dir="ltr">
-              <p className={`font-mono text-3xl font-extrabold tracking-tight tabular-nums flex items-center gap-1 ${plUp ? 'text-up' : 'text-down'}`}>
-                {plUp ? <ArrowUpRight className="size-6 shrink-0" /> : <ArrowDownRight className="size-6 shrink-0" />}
-                <span>{plUp ? '+' : ''}{formatMoney(plData.value, effectiveCashCurrency)}</span>
-              </p>
-            </div>
-            <p className={`mt-2 text-xs font-extrabold ${plUp ? 'text-up' : 'text-down'}`}>
-              <span dir="ltr" className="inline-block">{`${plUp ? '+' : ''}${plData.pct.toFixed(2)}%`}</span>
-              <span className="ms-1 font-normal text-foreground/60">{t('overTimeframe', { period: plTimeframe })}</span>
-            </p>
-          </div>
-        )}
-
         {/* Active Trades */}
-        <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
-          <p className="text-xs font-bold text-foreground/60">{isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}</p>
+        <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+          <p className="text-xs font-semibold text-foreground/55">{isAlpaca ? t('alpacaPositions') : t('holdingsHeading')}</p>
           <div className="mt-3" dir="ltr">
-            <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">{activeTrades}</p>
+            <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-foreground">{activeTrades}</p>
           </div>
           <p className="mt-2 text-xs text-foreground/60">{activeTrades === 0 ? t('noActivePositions') : t('openPositionsCount')}</p>
         </div>
 
         {/* Win Rate */}
         {winRate !== null && (
-          <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
-            <p className="text-xs font-bold text-foreground/60">{t('profitablePositions')}</p>
+          <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
+            <p className="text-xs font-semibold text-foreground/55">{t('profitablePositions')}</p>
             <div className="mt-3" dir="ltr">
-              <p className="font-mono text-3xl font-extrabold tracking-tight tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
+              <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-foreground">{winRate.toFixed(1)}%</p>
             </div>
             <p className="mt-2 text-xs text-foreground/60">{t('winRateRecordedBasis')}</p>
           </div>
@@ -770,13 +723,13 @@ export default function DashboardClient({
 
         {isAlpaca ? (
           paperAccount && effectiveCashCurrency && (
-            <div className="rounded-2xl border border-foreground/10 bg-surface-card p-5 shadow-sm">
+            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-foreground/60">{t('alpacaBuyingPower')}</span>
                 <Landmark className="size-4 text-accent" aria-hidden="true" />
               </div>
               <div className="mt-3" dir="ltr">
-                <p className="font-mono text-2xl font-extrabold tracking-tight tabular-nums text-foreground">
+                <p className="font-mono text-2xl font-semibold tracking-tight tabular-nums text-foreground">
                   {formatMoney(paperAccount.buyingPower, effectiveCashCurrency)}
                 </p>
               </div>
@@ -785,13 +738,13 @@ export default function DashboardClient({
           )
         ) : (
           zakatDue !== null && (
-            <div className="rounded-2xl border border-accent/25 bg-surface-card p-5 shadow-sm">
+            <div className="rounded-2xl bg-surface-card p-5 shadow-sm ring-1 ring-foreground/[0.06]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-foreground/60">{t('zakatDue')}</span>
                 <Coins className="size-4 text-accent" aria-hidden="true" />
               </div>
               <div className="mt-3" dir="ltr">
-                <p className="font-mono text-2xl font-extrabold tracking-tight tabular-nums text-accent">
+                <p className="font-mono text-2xl font-semibold tracking-tight tabular-nums text-foreground">
                   {formatMoney(zakatDue, 'SAR')}
                 </p>
               </div>
@@ -824,7 +777,7 @@ export default function DashboardClient({
                   <h2 className="text-xl font-extrabold text-foreground">{isAlpaca ? t('alpacaPerformanceTitle') : t('historicalPerformanceTitle')}</h2>
                   
                   {/* Time Period Selector matching P&L card */}
-                  <div className="flex gap-0.5 rounded-xl bg-foreground/[0.06] p-1" role="group" aria-label="فترة الأداء التاريخي">
+                  <div className="flex gap-0.5 rounded-xl bg-foreground/[0.06] p-1" role="group" aria-label={t('pnlTimeframe')}>
                     {(['24H', '7D', '30D', '90D', '1Y', 'ALL'] as const).map(tf => (
                       <button
                         key={tf}
@@ -840,9 +793,9 @@ export default function DashboardClient({
 
                 {!isAlpaca ? (
                   <div className="flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs font-bold text-foreground/60">
-                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-up" aria-hidden="true" />{t('portfolioNAVLegend')}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-accent" aria-hidden="true" />{t('spusLegend')}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-foreground/35" aria-hidden="true" />{t('spyLegend')}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-accent" aria-hidden="true" />{t('portfolioNAVLegend')}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-foreground/50" aria-hidden="true" />{t('spusLegend')}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-1 w-3 rounded-full bg-foreground/25" aria-hidden="true" />{t('spyLegend')}</span>
                   </div>
                 ) : null}
               </div>

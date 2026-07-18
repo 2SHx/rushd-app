@@ -63,12 +63,12 @@ export default async function DashboardPage({ params }: { params: { locale: stri
   return (
     <PortfolioViewSwitcher data={alpacaPaper}>
       {portfolio.unpricedSymbols.length > 0 && (
-        <div className="mx-auto mt-6 max-w-6xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="mx-auto mt-6 max-w-6xl rounded-2xl bg-noncompliant/10 p-4 text-sm leading-relaxed text-noncompliant ring-1 ring-noncompliant/20">
           {t('portfolioPricingIncomplete', { symbols: portfolio.unpricedSymbols.join(', ') })}
         </div>
       )}
       {performanceWarning && (
-        <div className="mx-auto mt-3 max-w-6xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="mx-auto mt-3 max-w-6xl rounded-2xl bg-noncompliant/10 p-4 text-sm leading-relaxed text-noncompliant ring-1 ring-noncompliant/20">
           {performanceWarning}
         </div>
       )}
@@ -81,6 +81,8 @@ export default async function DashboardPage({ params }: { params: { locale: stri
         initialSnapshots={portfolio.initialSnapshots}
         initialMetrics={portfolio.initialMetrics}
         initialTransactions={initialTransactions}
+        initialXP={profile.xp}
+        initialLevel={profile.level}
         performanceStatus={portfolio.performanceStatus}
       />
     </PortfolioViewSwitcher>

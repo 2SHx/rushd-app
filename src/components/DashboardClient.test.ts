@@ -39,16 +39,20 @@ describe('DashboardClient visual contract', () => {
     // must not render, never fabricate a number or label it "Unavailable".
     expect(source).not.toContain('Unavailable');
     expect(source).toContain('{navValue !== null && effectiveCashCurrency && (');
-    expect(source).toContain('{plData !== null && effectiveCashCurrency && (');
+    expect(source).toContain('{plData !== null && (');
     expect(source).toContain('{winRate !== null && (');
     expect(source).toContain('{hasPerformanceMetrics && (');
   });
 
-  it('keeps the daily XP claim, level roadmap modal, and gamification progress bar intact', () => {
-    expect(source).toContain('handleClaimDailyXp');
+  it('renders persisted XP in the level roadmap without a client-only reward mutation', () => {
+    expect(source).not.toContain('handleClaimDailyXp');
+    expect(source).not.toContain('useState(350)');
+    expect(source).toContain('initialXP: number');
+    expect(source).toContain('initialLevel: number');
     expect(source).toContain('showLevelModal');
     expect(source).toContain('setShowLevelModal(true)');
-    expect(source).toContain('xp / 500');
+    expect(source).toContain('const nextLevelXP = 100 * Math.pow(level, 2)');
+    expect(source).toContain('style={{ transform: `scaleX(${levelProgress / 100})`');
   });
 
   it('only substitutes demo transactions while isDemoActive — a real account with a genuinely empty ledger renders the honest noTransactions state, not fabricated rows', () => {

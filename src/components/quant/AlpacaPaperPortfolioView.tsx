@@ -73,6 +73,8 @@ export default function AlpacaPaperPortfolioView({ data, locale }: Props) {
       initialSnapshots={[]}
       initialMetrics={{}}
       initialTransactions={[]}
+      initialXP={0}
+      initialLevel={1}
       performanceStatus="no_snapshots"
       currencyTotals={[{ currency: 'USD', positionsValue, cashValue: cash, totalValue: equity }]}
       paperAccount={{

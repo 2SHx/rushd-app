@@ -55,25 +55,6 @@ export default function Navigation({
             <p className="text-[10px] text-foreground/70 font-semibold uppercase ltr:tracking-wider mt-1">
               {t('tagline')}
             </p>
-            <Link
-              href={`/${locale}/profile`}
-              className="mt-3 flex items-center justify-between rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 transition-all hover:bg-accent/10"
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex size-6 items-center justify-center rounded-lg bg-accent text-[10px] font-extrabold text-white">
-                  L3
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-foreground leading-tight">
-                    {locale === 'ar' ? 'مستثمر واعد' : 'Level 3'}
-                  </p>
-                  <p className="text-[9px] font-mono font-semibold text-accent">350 / 500 XP</p>
-                </div>
-              </div>
-              <div className="h-1.5 w-10 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
-                <div className="h-full rounded-full bg-accent" style={{ width: '70%' }} />
-              </div>
-            </Link>
           </div>
 
           <nav className="space-y-1">
