@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Academy landing as continuous journey path ✅ (deploy #7)
+Shipped: /academy rewritten as one winding node path (persona start marker → single loud current-step node → muted upcoming beads → chapter waypoints via details linking to the user's Duolingo track roadmaps); diagnostic-first gate preserved; matching skeleton; fixed client-bundle regression (schema.ts now imports client-safe strategyLearningSetupIds, not the fs/zlib replay registry); authored Unit 6 third lesson `econ-u6-ai-sharia-screening` (hedged AI-screening content) restoring the ≥3-lessons invariant.
+Decisions: no fake locks (honest ordinals), connector terminates at last node with opaque node backing, waypoints tint-only so exactly one accent-filled element, psychometric "Assessed Level" chip replaced with starting-path key, contrast floored at /55.
+Verify: design gate 4 MED/3 LOW all fixed; lint/tsc/next build clean; vitest academy+adaptive+diagnostic 97/97 incl. economicsTrack 10/10; en/ar key identity.
+Open: live 390px/ar visual walkthrough still recommended (all verification code/build/test-based); LESSON_XP stays a UI-mirrored literal until a shared constants module exists.
+
 ## 2026-07-18 — Portfolio paper-money-only + honesty fixes ✅ (deploy #6 incl. user's parallel Academy commits)
 Shipped: dashboard omits every unavailable-value card whole (auto-fit KPI reflow), Alpaca tab renders only with ready data, real-empty ledger reaches the honest noTransactions state (was: unlabeled demo rows — HIGH), demo-derived Zakat shows "not payable" instead of the live pay button, allocation-donut ghost wrapper gated, dead currencyTotals plumbing removed; deploy also carries the user's 10 parallel commits (Duolingo roadmaps, XP claim + Level modal, colored feedback, wealth-building gating, new lessons).
 Decisions: omission over placeholder per honesty rules; real zeros stay visible; source-contract tests lock the user's XP/Level markup untouched; demo-zakat caption is an inline bilingual string per this file's existing demo-badge convention (deviation from the messages-key rule, noted).
