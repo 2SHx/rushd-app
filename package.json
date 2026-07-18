@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "dev": "tsx scripts/next-workspace.ts dev",
+    "build": "prisma generate && tsx scripts/next-workspace.ts build",
     "postinstall": "prisma generate",
-    "start": "next start",
+    "start": "tsx scripts/next-workspace.ts start",
     "backtest": "tsx scripts/backtest.ts",
     "lint": "next lint",
     "test": "vitest run"

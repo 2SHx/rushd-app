@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — Exclusive Next.js workspace lifecycle guard ✅
+Shipped: Wrapped `dev`, `build`, and `start` with one atomic workspace lock that rejects concurrent Next.js writers and automatically replaces malformed or dead-PID locks, preventing cross-page `.next/vendor-chunks` corruption.
+Decisions: lazy-dev rung 3 used Node's exclusive file creation and the already-installed `tsx`; no dependency or Next.js upgrade was needed because the reproduced cause was two Antigravity-launched dev trees sharing one `.next` directory.
+Verify: duplicate dev/build rejection passed; clean dev returned 200 for `/ar/dashboard`, `/ar/academy`, `/ar/quant?section=teams`, and `/ar/markets`; lint/tsc/build/diff clean and focused tests 5/5 green.
+Open: no deployment performed; direct `next dev` bypasses npm-script protection, while an abrupt terminal kill may leave a harmless stale lock that the next guarded invocation removes.
+
 ## 2026-07-18 — Quant Advisor + Strategy Teams unified workspace ✅
 Shipped: Combined the real strategy validation lab and evidence league with the Quant Advisor under one `/quant` entry, three accessible tabs, anchored Academy/deep links, and a legacy `/quant/league` redirect that preserves the selected setup.
 Decisions: lazy-dev rung 2 reused RunLabPanel, StrategyLeagueClient, and the persisted committee; removed the separate Mavericks battle simulator and its fabricated prices/win rates/XP, while retaining deterministic Sharia and risk gates as vetoes rather than votes.
