@@ -453,7 +453,7 @@ export default function StrategyLearningLab({
                   </button>
                   {SHOW_STRATEGY_TEAMS ? (
                   <Link
-                    href={`/${locale}/quant/league?setup=${encodeURIComponent(completion.result.setupId)}`}
+                    href={`/${locale}/quant?section=teams&setup=${encodeURIComponent(completion.result.setupId)}#quant-workspace`}
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 text-xs font-semibold text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
                     {t('viewTeamEvidence')}

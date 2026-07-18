@@ -30,8 +30,12 @@ import {
   Trophy,
 } from 'lucide-react';
 
-import MavericksSquadPanel from './MavericksSquadPanel';
 import { RiyalAmount, formatSARNumber } from '@/lib/currency';
+import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
+import type { RunnableSetup } from './RunLabPanel';
+
+const StrategyLeagueClient = dynamic(() => import('./StrategyLeagueClient'));
+const RunLabPanel = dynamic(() => import('./RunLabPanel'));
 
 type MarketKind = 'TASI' | 'NASDAQ';
 export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -151,6 +155,9 @@ interface CommitteeClientProps {
   initialDecisions?: DecisionRecord[];
   initialAutonomyTier?: 'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL';
   initialInternalPortfolioAvailable?: boolean;
+  initialStrategyTeams?: StrategyLeagueTeam[];
+  initialRunnableSetups?: RunnableSetup[];
+  initialSection?: 'advisor' | 'teams' | 'portfolio';
 }
 
 const DEFAULT_SYMBOL: Record<MarketKind, string> = {
@@ -262,8 +269,9 @@ const DEFAULT_MOCK_PURIFICATION: PurificationEntry[] = [
 ];
 
 const COMMITTEE_LABELS = {
-  committeeTab: { en: 'Committee Pipeline Board', ar: 'لوحة قرار اللجنة' },
-  mavericksTitle: { en: 'Advisory Team Workspace', ar: 'مساحة عمل المستشارين' },
+  committeeTab: { en: 'Quant Advisor', ar: 'المستشار الكمي' },
+  strategyTeamsTab: { en: 'Strategy Teams', ar: 'فرق الاستراتيجيات' },
+  sectionTabsLabel: { en: 'Quant Advisor sections', ar: 'أقسام المستشار الكمي' },
   portfolioAnalyticsTab: { en: 'Portfolio & Performance Analytics', ar: 'تحليلات الأداء والمحفظة' },
   holdingsHeading: { en: 'Active Holdings & Positions', ar: 'الأصول والأسهم المملوكة' },
   symbol: { en: 'Symbol', ar: 'الرمز' },
@@ -290,6 +298,9 @@ export default function CommitteeClient({
   initialDecisions = [],
   initialAutonomyTier = 'HUMAN_APPROVE',
   initialInternalPortfolioAvailable = true,
+  initialStrategyTeams,
+  initialRunnableSetups = [],
+  initialSection = 'advisor',
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
@@ -302,7 +313,9 @@ export default function CommitteeClient({
     return isAr ? COMMITTEE_LABELS[key].ar : COMMITTEE_LABELS[key].en;
   };
 
-  const [activeTab, setActiveTab] = useState<'board' | 'mavericks' | 'portfolio'>('board');
+  const [activeTab, setActiveTab] = useState<'advisor' | 'teams' | 'portfolio'>(
+    initialSection === 'teams' && initialStrategyTeams === undefined ? 'advisor' : initialSection,
+  );
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
   const [decisions, setDecisions] = useState<DecisionRecord[]>(initialDecisions ?? []);
 
@@ -814,36 +827,38 @@ export default function CommitteeClient({
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
       {initialInternalPortfolioAvailable ? (
-        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.04] p-1 sm:w-fit" role="tablist" aria-label={isAr ? 'أقسام اللجنة' : 'Committee Sections'}>
+        <div className="flex w-full gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.04] p-1 sm:w-fit" role="tablist" aria-label={getLabel('sectionTabsLabel')}>
           <>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'board'}
-              onClick={() => setActiveTab('board')}
+              aria-selected={activeTab === 'advisor'}
+              onClick={() => setActiveTab('advisor')}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                activeTab === 'board'
+                activeTab === 'advisor'
                   ? 'bg-surface-card text-foreground shadow-sm'
                   : 'text-foreground/55 hover:text-foreground'
               }`}
             >
               <Cpu className="size-3.5 text-accent" aria-hidden="true" />
-              <span>{isAr ? 'لوحة قرار اللجنة' : 'Committee Pipeline Board'}</span>
+              <span>{getLabel('committeeTab')}</span>
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'mavericks'}
-              onClick={() => setActiveTab('mavericks')}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                activeTab === 'mavericks'
-                  ? 'bg-surface-card text-foreground shadow-sm'
-                  : 'text-foreground/55 hover:text-foreground'
-              }`}
-            >
-              <Trophy className="size-3.5 text-amber-400" aria-hidden="true" />
-              <span>{isAr ? 'مساحة عمل المستشارين' : 'Advisory Team Workspace'}</span>
-            </button>
+            {initialStrategyTeams !== undefined ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'teams'}
+                onClick={() => setActiveTab('teams')}
+                className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  activeTab === 'teams'
+                    ? 'bg-surface-card text-foreground shadow-sm'
+                    : 'text-foreground/55 hover:text-foreground'
+                }`}
+              >
+                <Trophy className="size-3.5 text-accent" aria-hidden="true" />
+                <span>{getLabel('strategyTeamsTab')}</span>
+              </button>
+            ) : null}
             <button
               type="button"
               role="tab"
@@ -856,17 +871,20 @@ export default function CommitteeClient({
               }`}
             >
               <Coins className="size-3.5 text-accent" aria-hidden="true" />
-              <span>{isAr ? 'تحليلات الأداء والمحفظة' : 'Portfolio & Performance Analytics'}</span>
+              <span>{getLabel('portfolioAnalyticsTab')}</span>
             </button>
           </>
         </div>
       ) : null}
 
-      {activeTab === 'mavericks' && (
-        <MavericksSquadPanel locale={locale} />
-      )}
+      {activeTab === 'teams' && initialStrategyTeams !== undefined ? (
+        <div className="space-y-6">
+          <RunLabPanel setups={initialRunnableSetups} />
+          <StrategyLeagueClient teams={initialStrategyTeams} />
+        </div>
+      ) : null}
 
-      {activeTab === 'board' && (
+      {activeTab === 'advisor' && (
         <>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           {/* ── AI Autopilot Control Card ── */}

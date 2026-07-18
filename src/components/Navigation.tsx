@@ -1,12 +1,11 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Wallet, LineChart, GraduationCap, User, Trophy } from 'lucide-react';
+import { Wallet, LineChart, GraduationCap, User, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from './ThemeToggle';
 import LanguageSwitcher from './LanguageSwitcher';
-import { SHOW_STRATEGY_TEAMS } from '@/lib/featureFlags';
 
 export default function Navigation({
   locale,
@@ -38,10 +37,8 @@ export default function Navigation({
   const navItems = [
     { href: `/${locale}/dashboard`, icon: Wallet, label: t('portfolio'), shortLabel: t('portfolio') },
     { href: `/${locale}/markets`, icon: LineChart, label: t('stocks'), shortLabel: t('stocks') },
+    { href: `/${locale}/quant`, icon: Sparkles, label: t('quant'), shortLabel: t('quantShort') },
     { href: `/${locale}/academy`, icon: GraduationCap, label: t('academy'), shortLabel: t('academyShort') },
-    ...(SHOW_STRATEGY_TEAMS
-      ? [{ href: `/${locale}/quant/league`, icon: Trophy, label: t('teams'), shortLabel: t('teamsShort') }]
-      : []),
     { href: `/${locale}/profile`, icon: User, label: t('profile'), shortLabel: t('profile') },
   ];
 

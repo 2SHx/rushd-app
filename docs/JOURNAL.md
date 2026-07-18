@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Quant Advisor + Strategy Teams unified workspace ✅
+Shipped: Combined the real strategy validation lab and evidence league with the Quant Advisor under one `/quant` entry, three accessible tabs, anchored Academy/deep links, and a legacy `/quant/league` redirect that preserves the selected setup.
+Decisions: lazy-dev rung 2 reused RunLabPanel, StrategyLeagueClient, and the persisted committee; removed the separate Mavericks battle simulator and its fabricated prices/win rates/XP, while retaining deterministic Sharia and risk gates as vetoes rather than votes.
+Verify: lint/tsc/production build/diff clean; focused quant/integration/i18n 14/14 green; browser-verified ar RTL desktop + en 390×844, tab switching, exact legacy redirect, one Quant nav entry, anchored mobile landing, and zero horizontal overflow.
+Open: no deployment performed; production build retains pre-existing next-intl cache and jose Edge-runtime warnings.
+
 ## 2026-07-18 — Cinematic Academy strategy journey ✅
 Shipped: Turned the Academy risk-comfort entry into a reversible four-scene scroll journey—risk context → exact strategy match → answer/seal/compare contract → interactive three-strategy selector—with a normal-flow reduced-motion version.
 Decisions: Adapted the MIT cinematic-scroll-prompt-kit pattern using existing Framer Motion and semantic DOM/CSS layers only; transforms stay local to one sticky timeline, final controls remain native buttons/links, and all simulation/Sharia framing stays intact in Arabic and English.

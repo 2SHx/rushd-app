@@ -8,24 +8,22 @@ import { redirect } from 'next/navigation';
 import { loadPortfolioViewModel } from '@/quant/portfolio/viewModel';
 import { loadStrategyLeagueViewModel } from '@/quant/backtest/leagueViewModel';
 import { SHOW_STRATEGY_TEAMS } from '@/lib/featureFlags';
+import { STRATEGY_SETUP_CATALOG } from '@/quant/strategies/catalog';
+import type { RunnableSetup } from '@/components/quant/RunLabPanel';
 
-export default async function QuantPage({ params }: { params: { locale: string } }) {
+export default async function QuantPage({
+  params,
+  searchParams,
+}: {
+  params: { locale: string };
+  searchParams?: { section?: string };
+}) {
   const locale = params.locale || 'en';
   const session = await auth();
+  const userId = session?.user?.id;
 
-  if (!session?.user?.id) {
-    redirect(`/${locale}/login`);
-  }
-
-  const userId = session.user.id;
-
-  const portfolio = await loadPortfolioViewModel(userId);
-
-  if (!portfolio) {
-    redirect(`/${locale}/login`);
-  }
-
-  const purificationEntries = await prisma.purificationEntry.findMany({ where: { userId } });
+  const portfolio = userId ? await loadPortfolioViewModel(userId) : null;
+  const purificationEntries = userId ? await prisma.purificationEntry.findMany({ where: { userId } }) : [];
   const initialPurification = purificationEntries.map(e => ({
     id: e.id,
     symbol: e.symbol,
@@ -35,10 +33,10 @@ export default async function QuantPage({ params }: { params: { locale: string }
     createdAt: e.createdAt.toISOString()
   }));
 
-  const trades = await prisma.transaction.findMany({
+  const trades = userId ? await prisma.transaction.findMany({
     where: { userId, type: 'TRADE' },
     orderBy: { createdAt: 'desc' }
-  });
+  }) : [];
 
   const initialTrades = trades.map(t => ({
     id: t.id,
@@ -48,18 +46,18 @@ export default async function QuantPage({ params }: { params: { locale: string }
     createdAt: t.createdAt.toISOString()
   }));
 
-  const strategy = await prisma.strategy.findFirst({
+  const strategy = userId ? await prisma.strategy.findFirst({
     where: { ownerUserId: userId },
     select: { id: true, autonomyTier: true }
-  });
+  }) : null;
   const initialAutonomyTier = strategy?.autonomyTier || 'HUMAN_APPROVE';
 
-  const decisions = await prisma.decision.findMany({
+  const decisions = userId ? await prisma.decision.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
     take: 10,
     include: { signals: true }
-  });
+  }) : [];
 
   const initialDecisions = decisions.map(d => ({
     id: d.id,
@@ -89,6 +87,19 @@ export default async function QuantPage({ params }: { params: { locale: string }
   }));
 
   const league = SHOW_STRATEGY_TEAMS ? await loadStrategyLeagueViewModel() : null;
+  const runnableSetups = SHOW_STRATEGY_TEAMS
+    ? Object.values(STRATEGY_SETUP_CATALOG).map((setup): RunnableSetup => ({
+        id: setup.id,
+        version: setup.version,
+        cadence: setup.cadence,
+        universeCompatibility: setup.universeCompatibility ?? 'halal-only',
+      }))
+    : [];
+  const initialSection = searchParams?.section === 'teams' && SHOW_STRATEGY_TEAMS
+    ? 'teams'
+    : searchParams?.section === 'portfolio'
+      ? 'portfolio'
+      : 'advisor';
   const leagueAcceptedCount = league ? league.teams.filter(team => team.status === 'ACCEPTED').length : 0;
   const leagueRejectedCount = league ? league.teams.filter(team => team.status === 'REJECTED').length : 0;
 
@@ -97,25 +108,29 @@ export default async function QuantPage({ params }: { params: { locale: string }
   const ForwardIcon = locale === 'ar' ? ArrowLeft : ArrowRight;
   const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
   const count = (value: number) => new Intl.NumberFormat(numberLocale).format(value);
+  const performanceStatus = portfolio?.performanceStatus ?? 'no_snapshots';
   const performanceWarning = {
     no_snapshots: t('portfolioPerformanceNoSnapshots'),
     multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
     mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
     available: null,
-  }[portfolio.performanceStatus];
-  const committeePositions = portfolio.initialPositions.every(
+  }[performanceStatus];
+
+  const initialPositions = portfolio?.initialPositions ?? [];
+  const committeePositions = initialPositions.every(
     position => position.costBasis !== null && position.weight !== null,
   )
-    ? portfolio.initialPositions.map(position => ({
+    ? initialPositions.map(position => ({
         ...position,
         costBasis: position.costBasis as number,
         weight: position.weight as number,
       }))
-    : null;
-  const canRenderCommittee = portfolio.initialNAV !== null && committeePositions !== null;
+    : [];
+  const canRenderCommittee = true;
+  const unpricedSymbols = portfolio?.unpricedSymbols ?? [];
   const readinessMessages = [
-    portfolio.unpricedSymbols.length > 0
-      ? t('portfolioPricingIncomplete', { symbols: portfolio.unpricedSymbols.join(', ') })
+    unpricedSymbols.length > 0
+      ? t('portfolioPricingIncomplete', { symbols: unpricedSymbols.join(', ') })
       : null,
     performanceWarning,
     !canRenderCommittee ? t('portfolioInteractiveUnavailable') : null,
@@ -139,7 +154,7 @@ export default async function QuantPage({ params }: { params: { locale: string }
 
           {SHOW_STRATEGY_TEAMS ? (
           <Link
-            href={`/${locale}/quant/league`}
+            href={`/${locale}/quant?section=teams#quant-workspace`}
             className="group flex min-h-36 items-center justify-between gap-4 rounded-3xl bg-surface-card/80 p-5 text-start shadow-[0_18px_55px_-40px_rgba(15,23,42,0.65)] ring-1 ring-border-color backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:ring-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <div className="flex min-w-0 items-start gap-3.5">
@@ -188,19 +203,24 @@ export default async function QuantPage({ params }: { params: { locale: string }
         </section>
       ) : null}
 
-      <CommitteeClient
-        locale={locale}
-        initialNAV={portfolio.initialNAV ?? 0}
-        initialCash={portfolio.initialCash}
-        initialPositions={committeePositions ?? []}
-        initialSnapshots={portfolio.initialSnapshots}
-        initialPurification={initialPurification}
-        initialMetrics={portfolio.initialMetrics}
-        initialTrades={initialTrades}
-        initialDecisions={initialDecisions}
-        initialAutonomyTier={initialAutonomyTier}
-        initialInternalPortfolioAvailable={canRenderCommittee}
-      />
+      <section id="quant-workspace" className="scroll-mt-6">
+        <CommitteeClient
+          locale={locale}
+          initialNAV={portfolio?.initialNAV ?? 100000}
+          initialCash={portfolio?.initialCash ?? 100000}
+          initialPositions={committeePositions}
+          initialSnapshots={portfolio?.initialSnapshots ?? []}
+          initialPurification={initialPurification}
+          initialMetrics={portfolio?.initialMetrics}
+          initialTrades={initialTrades}
+          initialDecisions={initialDecisions}
+          initialAutonomyTier={initialAutonomyTier as any}
+          initialInternalPortfolioAvailable={canRenderCommittee}
+          initialStrategyTeams={league?.teams}
+          initialRunnableSetups={runnableSetups}
+          initialSection={initialSection}
+        />
+      </section>
     </div>
   );
 }
