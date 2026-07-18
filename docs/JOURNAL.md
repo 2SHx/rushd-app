@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Portfolio paper-money-only + honesty fixes ✅ (deploy #6 incl. user's parallel Academy commits)
+Shipped: dashboard omits every unavailable-value card whole (auto-fit KPI reflow), Alpaca tab renders only with ready data, real-empty ledger reaches the honest noTransactions state (was: unlabeled demo rows — HIGH), demo-derived Zakat shows "not payable" instead of the live pay button, allocation-donut ghost wrapper gated, dead currencyTotals plumbing removed; deploy also carries the user's 10 parallel commits (Duolingo roadmaps, XP claim + Level modal, colored feedback, wealth-building gating, new lessons).
+Decisions: omission over placeholder per honesty rules; real zeros stay visible; source-contract tests lock the user's XP/Level markup untouched; demo-zakat caption is an inline bilingual string per this file's existing demo-badge convention (deviation from the messages-key rule, noted).
+Verify: lint/tsc clean; DashboardClient 10 tests; design gate findings (1 HIGH/1 MED/2 LOW + zakat money-path note) all fixed; grep Unavailable → 0.
+Open: XP/Level card values are hardcoded (350/Level 3) in the user's fresh commits — needs GamificationProfile wiring (flagged to user); AlpacaPaperPortfolioView still passes the ignored currencyTotals prop; DR-20/M15 (outcome contracts, presentation profiles, difficulty variants) proposed, awaiting user go-ahead to codify.
+
 ## 2026-07-17 — Academy diagnostic-first reveal + apply-learning loop ✅ (deployed)
 Shipped: first Academy visit renders ONLY "أسئلة نقطة الانطلاق" (diagnostic invite; hero/road/chapters gated on LearnerProfile existence); post-quiz "apply what you learned" CTA routes to /quiz?setupId= (StrategyLearningLab learner-vs-strategy comparison) only when the practice unit co-locates a strategySetup practiceLink — honest absence otherwise, league links stay flag-hidden.
 Decisions: skip still creates the default profile and reveals the journey; when the apply CTA is present, continue-journey demotes to ghost so one accent primary remains (design LOW fixed inline).
