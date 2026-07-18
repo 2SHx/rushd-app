@@ -20,6 +20,6 @@ export default async function AcademyApplyPage({
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] rtl:tracking-normal">{t('apply.title')}</h1>
     </header>
     {setupId ? <div className="mt-6"><StrategyLearningLab locale={params.locale} setupId={setupId} /></div>
-      : <div className="mt-6"><AcademyState kind="empty" title={t('apply.invalidTitle')} body={t('apply.invalidBody')} /></div>}
+      : <div className="mt-10"><AcademyState kind="empty" title={t('apply.invalidTitle')} body={t('apply.invalidBody')} /></div>}
   </main>;
 }

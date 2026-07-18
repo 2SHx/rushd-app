@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isStrategyLearningSetupId } from '@/quant/learning/strategyLearningModules';
+import { isStrategyLearningSetupId } from '@/quant/learning/strategyLearningSetupIds';
 
 /**
  * Rushd Academy content engine — schema (DR-17).

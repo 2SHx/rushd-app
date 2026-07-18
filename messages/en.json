@@ -97,14 +97,10 @@
       "eyebrow": "Your current step",
       "cta": "Continue"
     },
-    "ahead": {
-      "title": "What's ahead",
-      "subtitle": "A glimpse of the road ahead as you keep going."
-    },
     "chapters": {
       "title": "Chapters",
-      "subtitle": "Expand a track to see its lessons.",
-      "open": "Open track"
+      "open": "Open track",
+      "recommended": "Recommended"
     },
     "practice": {
       "eyebrow": "Practice",
@@ -122,6 +118,12 @@
       "title": "Compare your answer with the strategy",
       "invalidTitle": "This strategy comparison is not available",
       "invalidBody": "Choose an apply-the-learning link from your Academy queue to continue."
+    },
+    "journey": {
+      "title": "Your learning path",
+      "subtitle": "One path, in order — from where you started to what comes next.",
+      "startLabel": "Starting point",
+      "xpBadge": "⚡ +{xp} XP"
     }
   },
   "Landing": {

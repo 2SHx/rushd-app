@@ -23,6 +23,6 @@ export default async function AcademyPracticePage({
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] rtl:tracking-normal">{t('practice.title')}</h1>
     </header>
     {topic ? <div className="mt-6"><AcademyPracticeClient topic={topic} locale={params.locale} academyHref={`/${params.locale}/academy`} applySetupId={applySetupId} /></div>
-      : <div className="mt-6"><AcademyState kind="empty" title={t('practice.invalidTitle')} body={t('practice.invalidBody')} /></div>}
+      : <div className="mt-10"><AcademyState kind="empty" title={t('practice.invalidTitle')} body={t('practice.invalidBody')} /></div>}
   </main>;
 }

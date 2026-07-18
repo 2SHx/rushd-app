@@ -203,7 +203,7 @@ export default function AcademyDiagnostic({
                     {t('diagnostic.chipEyebrow')}
                   </span>
                   <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-bold text-accent">
-                    {locale === 'ar' ? 'مسار محدد' : 'Assessed Level'}
+                    {t('diagnostic.chipEyebrow')}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center gap-2">

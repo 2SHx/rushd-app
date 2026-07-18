@@ -553,7 +553,10 @@ export const ECONOMICS_TRACK: Track = {
     {
       id: 'fintech-ai-economics',
       title: { en: 'Fintech & AI in Modern Economics', ar: 'التقنية المالية والذكاء الاصطناعي في الاقتصاد الحديث' },
-      practiceLinks: [{ kind: 'quizTopic', topic: 'TASI Markets' }],
+      practiceLinks: [
+        { kind: 'quizTopic', topic: 'TASI Markets' },
+        { kind: 'quizTopic', topic: 'Sharia Compliance' },
+      ],
       lessons: [
         {
           id: 'econ-u6-fintech',
@@ -617,6 +620,39 @@ export const ECONOMICS_TRACK: Track = {
             explanation: {
               en: 'AI serves as a high-speed research tool, while human decision-makers enforce ethical and regulatory boundaries.',
               ar: 'يعمل الذكاء الاصطناعي كأداة بحث فائقة السرعة، بينما يضمن صناع القرار البشريون التزام الحدود الأخلاقية والشرعية.',
+            },
+            complianceTag: 'EDUCATIONAL_ONLY',
+          },
+        },
+        {
+          id: 'econ-u6-ai-sharia-screening',
+          title: { en: 'AI-Assisted Sharia Compliance Screening', ar: 'الفحص الشرعي المدعوم بالذكاء الاصطناعي' },
+          summary: {
+            en: 'How screening platforms use AI to speed up the AAOIFI two-stage sector-and-ratio check — and why a human Sharia board still has the final word.',
+            ar: 'كيف تستخدم منصات الفحص الذكاء الاصطناعي لتسريع فحص القطاع والنسب المالية وفق معايير AAOIFI — ولماذا تبقى الكلمة الفصل لهيئة شرعية بشرية.',
+          },
+          body: {
+            en: 'Sharia-compliance screening filters stocks in two stages: a business-activity (sector) screen that excludes companies whose core business is impermissible (conventional banking, alcohol, gambling), and a financial-ratio screen that caps interest-bearing debt, interest income, and receivables against AAOIFI thresholds. AI and automated pipelines can now parse thousands of financial statements far faster than a manual analyst, flagging likely-compliant names for review. This speeds up research, but it does not replace scholarly judgment: automated ratio checks can misread a footnote or rely on a stale filing, so a qualified Sharia board still issues the actual ruling, and any screening result — automated or not — should be treated as a starting point, not a final fatwa.',
+            ar: 'يمر الفحص الشرعي للأسهم بمرحلتين: فحص النشاط التجاري (القطاع) الذي يستبعد الشركات التي يقوم نشاطها الأساسي على أعمال غير جائزة (كالبنوك التقليدية أو الكحول أو القمار)، وفحص النسب المالية الذي يضع حدوداً قصوى للديون الربوية والدخل من الفائدة والذمم المدينة وفق معايير AAOIFI. أصبح بإمكان أدوات الذكاء الاصطناعي والخطوط الآلية الآن تحليل آلاف القوائم المالية بسرعة تفوق بكثير المحلل اليدوي، لترشيح الأسهم التي يُرجَّح توافقها للمراجعة. يُسرّع هذا عملية البحث، لكنه لا يغني عن الاجتهاد الشرعي: فقد يخطئ الفحص الآلي في قراءة حاشية أو يعتمد على إفصاح مالي قديم، لذلك تبقى الهيئة الشرعية المؤهلة هي من يصدر الحكم الفعلي، وينبغي التعامل مع أي نتيجة فحص — آلية كانت أم لا — كنقطة انطلاق، لا كفتوى نهائية.',
+          },
+          complianceTag: 'EDUCATIONAL_ONLY',
+          ageSegment: 'ADULTS',
+          contentVersion: 1,
+          checkpoint: {
+            id: 'econ-u6-ai-sharia-screening-cp',
+            question: {
+              en: 'AAOIFI-style Sharia screening evaluates a stock using:',
+              ar: 'يقيّم الفحص الشرعي على طراز معايير AAOIFI السهم عبر:',
+            },
+            options: [
+              { en: 'Both its business sector and its financial ratios (like interest-bearing debt)', ar: 'قطاعه التجاري ونسبه المالية معاً (كالديون الربوية)' },
+              { en: 'Only its share-price performance over the past year', ar: 'أداء سعر سهمه خلال العام الماضي فقط' },
+              { en: 'Only the size of its market capitalization', ar: 'حجم قيمته السوقية فقط' },
+            ],
+            correctOptionIndex: 0,
+            explanation: {
+              en: 'Sharia screening always combines a sector check with a financial-ratio check — price performance and market cap alone say nothing about compliance.',
+              ar: 'يجمع الفحص الشرعي دائماً بين فحص القطاع وفحص النسب المالية — فأداء السعر والقيمة السوقية وحدهما لا يقولان شيئاً عن التوافق الشرعي.',
             },
             complianceTag: 'EDUCATIONAL_ONLY',
           },
