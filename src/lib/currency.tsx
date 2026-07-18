@@ -49,28 +49,15 @@ export function formatUSD(value: number, locale: string, opts: FormatMoneyOption
 }
 
 /**
- * Official Saudi Riyal symbol (Unicode U+20C0), bundled as inline SVG since
- * font coverage for the codepoint is still uneven — this guarantees no tofu.
- * Simplified stroke rendering; sized in em units so it tracks font-size.
+ * Saudi Riyal symbol — renders clean, standard text "ر.س" in Arabic or "SAR" in English,
+ * eliminating the hashtag (#) visual confusion.
  */
-export function RiyalSymbol({ className = '' }: { className?: string }) {
+export function RiyalSymbol({ className = '', locale = 'ar' }: { className?: string; locale?: string }) {
+  const isAr = locale === 'ar';
   return (
-    <svg
-      viewBox="0 0 100 100"
-      role="img"
-      aria-label="SAR"
-      className={`inline-block h-[0.78em] w-[0.78em] align-[-0.06em] shrink-0 ${className}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={9}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 40 L88 22" />
-      <path d="M20 62 L88 44" />
-      <path d="M38 12 L30 88" />
-      <path d="M62 8 L54 84" />
-    </svg>
+    <span className={`inline-block font-sans font-extrabold text-[0.82em] text-foreground/80 leading-none shrink-0 ${className}`}>
+      {isAr ? 'ر.س' : 'SAR'}
+    </span>
   );
 }
 
@@ -80,7 +67,7 @@ export interface RiyalAmountProps extends FormatMoneyOptions {
   className?: string;
 }
 
-/** Renders a SAR amount with the official riyal symbol, placed per locale direction. */
+/** Renders a SAR amount with clean Saudi Riyal text badge (ر.س / SAR). */
 export function RiyalAmount({
   value,
   locale,
@@ -92,18 +79,18 @@ export function RiyalAmount({
 }: RiyalAmountProps) {
   const isAr = locale === 'ar';
   const number = formatSARNumber(value, locale, { minimumFractionDigits, maximumFractionDigits, signDisplay, notation });
-  const label = `${number} SAR / ${number} ريال`;
+  const label = `${number} ${isAr ? 'ريال' : 'SAR'}`;
 
   return (
     <span className={`inline-flex items-center gap-1 ${className}`} dir="ltr" aria-label={label}>
       {isAr ? (
         <>
           <span>{number}</span>
-          <RiyalSymbol />
+          <RiyalSymbol locale={locale} />
         </>
       ) : (
         <>
-          <RiyalSymbol />
+          <RiyalSymbol locale={locale} />
           <span>{number}</span>
         </>
       )}

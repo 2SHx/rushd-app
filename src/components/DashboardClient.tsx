@@ -1047,7 +1047,7 @@ export default function DashboardClient({
               <p id="zakat-success-description" className="text-xs leading-relaxed text-foreground/55">
                 {t.rich('zakatSuccessBody', {
                   amount: formatSARNumber(parseFloat(zakatPaidAmount), locale),
-                  riyal: () => <RiyalSymbol className="mx-0.5" />,
+                  riyal: () => <RiyalSymbol locale={locale} className="mx-0.5" />,
                 })}
               </p>
               <button
