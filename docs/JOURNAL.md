@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-18 — Risk-comfort strategy matching entry ✅
+Shipped: Replaced Academy's direct strategy CTA with an explicit lower/balanced/higher risk-comfort selector that reveals one exact reviewed strategy, its educational match rationale, then routes into that setup's existing questions → seal → replay comparison.
+Decisions: lazy-dev rung 2 maps to three existing DR-14 modules without persisting or inventing a suitability profile; copy states the match is simulation-only, not financial profiling or advice, and every strategy can lose; shared lab overview made strategy-neutral so non-Bollinger matches stay truthful.
+Verify: lint/tsc/build clean; Academy/learning/i18n 76/76 green; browser-verified all 3 ar setup routes, en matched route → correct curriculum, ar/en 390×844 zero overflow and 48px CTA.
+Open: no deployment performed; risk selection is intentionally session-local and educational rather than a stored investor profile.
+
 ## 2026-07-18 — Academy strategy answer-and-compare entry ✅
 Shipped: Added a bilingual Practice Lab entry to /academy that explains answer → seal → compare, names the learner/reviewed-strategy/SPUS/SPY comparison set, and opens the existing seven-question sealed replay under /academy/apply; league learning links now use the same Academy route.
 Decisions: lazy-dev rung 2 reused the DR-14 StrategyLearningLab and frozen replay instead of duplicating UI or quant logic; the entry remains gated behind the diagnostic profile so first visit is still diagnostic-only.

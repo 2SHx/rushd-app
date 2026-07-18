@@ -1,25 +1,19 @@
-import { ArrowRight, BarChart3, BookOpen, CheckCircle2, ChevronDown, ListChecks, LockKeyhole, PlayCircle, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, ChevronDown, PlayCircle, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { diagnosticQuestions, defaultProfile, type DiagnosticProfile } from '@/academy/diagnostic';
 import { nextUp, type Lesson as AdaptiveLesson, type ProgressEntry } from '@/academy/adaptive';
 import AcademyDiagnostic from '@/components/academy/AcademyDiagnostic';
 import { AcademyState } from '@/components/academy/AcademyState';
+import StrategyPracticeEntry from '@/components/academy/StrategyPracticeEntry';
 import { practiceLinkHref } from '@/components/academy/academyAccess';
 import { loadAcademy, loadLearnerProfile } from '@/components/academy/academyServer';
-import { DEFAULT_STRATEGY_LEARNING_SETUP_ID } from '@/quant/learning/strategyLearningSetupIds';
 
 const MAX_QUEUE_ITEMS = 5;
 const PERSONAS_FALLBACK = ['CURIOUS_KID', 'TEEN_SAVER', 'ADULT_BEGINNER', 'ADULT_PRACTITIONER', 'QUANT_CANDIDATE'] as const;
 // Mirrors LESSON_COMPLETION_XP in src/app/api/academy/progress/route.ts — kept as a UI-only constant, not a cross-module import
 // (that file is a route handler; no shared academy constants module exists yet to import from instead).
 const LESSON_XP = 20;
-const PRACTICE_STEPS = [
-  { key: 'answer', Icon: ListChecks },
-  { key: 'seal', Icon: LockKeyhole },
-  { key: 'compare', Icon: BarChart3 },
-] as const;
-const COMPARISON_SERIES = ['learner', 'strategy', 'spus', 'spy'] as const;
 
 /**
  * Fixed-width icon column shared by every node on the path (start/current/upcoming/waypoint).
@@ -99,61 +93,7 @@ export default async function AcademyPage({ params }: { params: { locale: string
 
       <AcademyDiagnostic locale={language} questions={diagnosticQuestions} hasProfile={hasProfile} personaLabel={personaLabel} />
 
-      {hasProfile ? (
-        <section
-          data-testid="academy-strategy-entry"
-          aria-labelledby="strategy-entry-title"
-          className="mt-10 overflow-hidden rounded-3xl border border-foreground/10 bg-surface-card"
-        >
-          <div className="p-5 sm:p-7">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent rtl:tracking-normal">{t('labEntry.eyebrow')}</p>
-            <h2 id="strategy-entry-title" className="mt-3 text-2xl font-extrabold tracking-[-0.025em] text-foreground rtl:tracking-normal sm:text-3xl">
-              {t('labEntry.title')}
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/65">{t('labEntry.body')}</p>
-
-            <ol className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-foreground/[0.08] bg-foreground/[0.08] sm:grid-cols-3" aria-label={t('labEntry.processLabel')}>
-              {PRACTICE_STEPS.map(({ key, Icon }, index) => (
-                <li key={key} className="bg-background/80 p-4 text-start sm:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-[10px] font-bold tabular-nums text-foreground/45" dir="ltr">0{index + 1}</span>
-                    <Icon className="size-4 text-accent" aria-hidden="true" />
-                  </div>
-                  <h3 className="mt-5 text-sm font-bold text-foreground">{t(`labEntry.steps.${key}.title`)}</h3>
-                  <p className="mt-1.5 text-xs leading-relaxed text-foreground/60">{t(`labEntry.steps.${key}.body`)}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="border-t border-foreground/[0.08] bg-foreground/[0.018] p-5 sm:p-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/50 rtl:tracking-normal">{t('labEntry.comparisonLabel')}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {COMPARISON_SERIES.map((series) => (
-                    <span
-                      key={series}
-                      dir={series === 'spus' || series === 'spy' ? 'ltr' : undefined}
-                      className="rounded-full bg-foreground/[0.055] px-3 py-1.5 text-[11px] font-semibold text-foreground/65"
-                    >
-                      {t(`labEntry.series.${series}`)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <Link
-                href={`/${params.locale}/academy/apply?setupId=${encodeURIComponent(DEFAULT_STRATEGY_LEARNING_SETUP_ID)}`}
-                className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-bold text-white transition-[transform,opacity] duration-150 ease-out hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:-translate-y-0.5"
-              >
-                {t('labEntry.cta')}
-                <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
-              </Link>
-            </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-foreground/50">{t('labEntry.disclosure')}</p>
-          </div>
-        </section>
-      ) : null}
+      {hasProfile ? <StrategyPracticeEntry locale={params.locale} /> : null}
 
       {hasProfile ? (
         !currentStep || !currentUnitEntry ? (

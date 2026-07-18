@@ -55,5 +55,7 @@ describe('Mavericks strategy-learning bridge', () => {
     expect(Object.keys(en.QuantResults.learningGate)).toEqual(Object.keys(ar.QuantResults.learningGate));
     expect(en.StrategyLearning.viewTeamEvidence).toBeTruthy();
     expect(ar.StrategyLearning.viewTeamEvidence).toBeTruthy();
+    expect(en.StrategyLearning.conceptBody).toContain('selected strategy');
+    expect(ar.StrategyLearning.conceptBody).toContain('الاستراتيجية المختارة');
   });
 });

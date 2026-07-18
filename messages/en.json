@@ -120,24 +120,53 @@
       "invalidBody": "Choose an apply-the-learning link from your Academy queue to continue."
     },
     "labEntry": {
-      "eyebrow": "Practice lab",
-      "title": "Answer the strategy questions, then compare the evidence",
-      "body": "Choose the entry, risk, and discipline rules yourself. Outcomes stay hidden until your choices are sealed, then the same frozen period is replayed for an honest comparison.",
-      "processLabel": "Answer-and-compare process",
+      "eyebrow": "Strategy practice",
+      "title": "Choose a strategy through your risk comfort",
+      "body": "Start by choosing how much short-term movement you are comfortable seeing in this simulation. Rushd will match that choice to one specific reviewed learning strategy before you answer its questions.",
+      "processLabel": "Strategy practice journey",
       "steps": {
-        "answer": {
-          "title": "Answer the decisions",
-          "body": "Work through the knowledge check and choose the rules your strategy will follow."
+        "risk": "Choose risk comfort",
+        "match": "See one strategy",
+        "answer": "Answer and seal",
+        "compare": "Compare the evidence"
+      },
+      "riskQuestion": "How much short-term price movement are you comfortable seeing in this learning simulation?",
+      "riskHelp": "There is no correct level. This choice is not saved and is not a real-world suitability assessment.",
+      "riskOptions": {
+        "lower": {
+          "title": "Lower risk comfort",
+          "body": "Prefer slower, basket-level decisions with more emphasis on exposure gates."
         },
-        "seal": {
-          "title": "Seal your choices",
-          "body": "Review and lock the policy before any historical outcome is revealed."
+        "balanced": {
+          "title": "Balanced risk comfort",
+          "body": "Accept measured price movement when entry, loss, and sizing rules are explicit."
         },
-        "compare": {
-          "title": "Compare the evidence",
-          "body": "See how your policy behaved beside the reviewed strategy and market benchmarks."
+        "higher": {
+          "title": "Higher risk comfort",
+          "body": "Comfortable studying faster intraday moves and tighter decision windows."
         }
       },
+      "selected": "Selected",
+      "matchEyebrow": "Your matched practice strategy",
+      "strategies": {
+        "lower": {
+          "title": "Governing trend exposure at the whole-basket level",
+          "body": "Study how one policy gates new exposure across a basket instead of reacting to each stock independently.",
+          "reason": "Matched for this exercise because its decisions are basket-level and its regime gate can keep new exposure out when conditions weaken."
+        },
+        "balanced": {
+          "title": "Buying temporary weakness inside an uptrend",
+          "body": "Study a mean-reversion policy with explicit entry distance, stop, holding period, and volatility budget choices.",
+          "reason": "Matched for this exercise because it combines measured opportunity with visible loss and position-sizing boundaries."
+        },
+        "higher": {
+          "title": "Trading an opening-range break only in active liquid names",
+          "body": "Study an intraday breakout policy that makes faster decisions around the opening range in active, liquid stocks.",
+          "reason": "Matched for this exercise because intraday movement and short decision windows make the learning path more demanding."
+        }
+      },
+      "emptyTitle": "Choose a risk-comfort level to reveal your strategy",
+      "emptyBody": "Your matched strategy and the button to its questions will appear here.",
       "comparisonLabel": "Comparison set",
       "series": {
         "learner": "Your policy",
@@ -145,8 +174,8 @@
         "spus": "SPUS",
         "spy": "SPY"
       },
-      "cta": "Start answering",
-      "disclosure": "Educational replay using virtual money and a sealed historical interval. Results are not investment advice or a promise of future performance."
+      "cta": "Continue to strategy questions",
+      "disclosure": "Educational matching and replay using virtual money. Risk comfort here is not financial profiling, investment advice, or a promise of future performance; every strategy can lose."
     },
     "journey": {
       "title": "Your learning path",
@@ -875,20 +904,20 @@
     "tryAgain": "Try again",
     "emptyTitle": "No lesson is available",
     "emptyBody": "A reviewed strategy lesson will appear here when it is ready.",
-    "chooseTeam": "Selected strategy team",
-    "conceptBody": "This team buys temporary weakness only after price stretches below a volatility band. It exits on reversion, limits holding time, and sizes exposure against a fixed risk budget.",
+    "chooseTeam": "Selected practice strategy",
+    "conceptBody": "This reviewed lesson turns the selected strategy’s entry, exit, sizing, holding, and risk rules into bounded choices. Its historical outcome stays hidden until you seal those choices.",
     "concepts": {
       "entry": {
-        "title": "Wait for a stretch",
-        "body": "A low price alone is not a signal; the entry must be unusual relative to recent volatility."
+        "title": "Read the entry rule",
+        "body": "Identify the exact conditions that must be true before this strategy may take exposure."
       },
       "risk": {
-        "title": "Bound the downside",
-        "body": "Position size and stop distance work together so one idea cannot dominate the portfolio."
+        "title": "Keep risk bounded",
+        "body": "Choose only among reviewed sizing, exposure, and loss-control limits; external caps remain binding."
       },
       "discipline": {
-        "title": "Define the exit first",
-        "body": "The team seals profit, stop, and time exits before seeing what happened next."
+        "title": "Define the discipline",
+        "body": "Set how the strategy exits, holds, or re-evaluates before seeing the historical replay."
       }
     },
     "beforeStart": "Before you begin",
