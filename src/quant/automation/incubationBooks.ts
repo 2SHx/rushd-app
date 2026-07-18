@@ -345,7 +345,7 @@ const defaultDependencies: IncubationDependencies = {
   },
   async evaluation(bookId, asOf) {
     return prisma.bookEvaluation.findFirst({
-      where: { bookId, asOf: { lt: dayStart(asOf) } }, orderBy: { asOf: 'desc' },
+      where: { bookId, asOf: { lte: dayStart(asOf) } }, orderBy: { asOf: 'desc' },
       select: { nav: true, dailyPnl: true, drawdown: true, trackingError: true, benched: true, requiresRevalidation: true },
     });
   },

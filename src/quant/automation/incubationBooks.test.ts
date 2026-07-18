@@ -102,6 +102,20 @@ describe('QDR-8 daily incubation books', () => {
     expect(simulated).not.toContain('bollinger-mr-long-v2');
   });
 
+  it('consumes B2 tracking-error bench state before requesting new entries', async () => {
+    const deps = dependencies({
+      evaluation: vi.fn(async bookId => bookId === 'dual-momentum-rotation' ? {
+        nav: new D(100), dailyPnl: new D(0), drawdown: new D(0), trackingError: new D('0.21'),
+        benched: true, requiresRevalidation: true,
+      } : null),
+    });
+
+    await runDailyIncubationBooks(AS_OF, deps);
+
+    expect((deps.simulate as ReturnType<typeof vi.fn>).mock.calls.map(call => call[0].bookId))
+      .not.toContain('dual-momentum-rotation');
+  });
+
   it('keeps every unverified book at 0% and sends no order to the engine', async () => {
     const deps = dependencies({
       shariaState: vi.fn().mockResolvedValue('UNSCREENED_EXECUTION_BLOCKED'),

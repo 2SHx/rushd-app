@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — R4-B2 nightly incubation evaluation ✅
+Shipped: Signed after-close evaluator backfills each missing per-book B1 snapshot date, marks it against real persisted SPY/SPUS closes, and atomically upserts its `BookEvaluation`.
+Decisions: lazy-dev rung 2 reused `PortfolioSnapshot`, `BookEvaluation`, existing metrics, B1’s owner/watermark rules, and `AutoRunClaim`; drawdown or tracking-error breaches latch bench state, and only a later revalidation can clear TE state.
+Verify: security PASS; focused B2/B1/cron 21/21 plus lint/tsc/Prisma validate/migrate-status/diff clean; full Vitest 1003/1011 with only the same eight pre-existing failures.
+Open: B2 requires the existing signed cron plus a PARENT+ULTRA `QUANT_INCUBATION_OWNER_USER_ID`; B2 deliberately emits no benchmark mark when real SPY/SPUS data is absent.
+
 ## 2026-07-19 — R4-B1 daily incubation-book automation ✅
 Shipped: One signed daily pass for the four exact QDR-8 books through `simulateStrategyBook`, with generated AllocationDecision/BookEvaluation persistence, durable isolated ledgers, allocator wiring, claim leases, breaker, Sharia veto, and InternalSim execution.
 Decisions: lazy-dev rung 2 reused allocator/engine/autoRun/executeDecision; strategy-scoped ledgers never touch the owner wallet and fail closed on replay drift, each book stays ≤40%, Alpaca is data-only, and every output carries the unpromoted-paper label.
