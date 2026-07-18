@@ -1,9 +1,9 @@
 // Rushd Quant — InternalSimBroker (QUANT_DESIGN.md §5).
 // Deterministic paper fills for TASI and all keyless/mock mode. Fills at the reference
 // price adjusted by a fixed slippage (adverse to the taker) plus a commission modeled as
-// a price adjustment; qty fills in full. Positions/cash of record live in the DB
-// (PortfolioItem), not the sim — getPositions/getCash return empty, and executeDecision
-// reconciles the ledger. Pure and deterministic so the backtester replays it identically.
+// a price adjustment; qty fills in full. User-paper positions/cash live in the DB; QDR-8
+// incubation books stay in their isolated deterministic engine ledgers. getPositions/getCash
+// therefore return empty. Pure and deterministic so the backtester replays it identically.
 import { Prisma } from '@prisma/client';
 import type { BrokerAdapter, OrderRequest, OrderResult, Position } from './broker';
 

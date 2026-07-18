@@ -5,12 +5,14 @@
 //    broker call, so two concurrent executes cannot both submit to the broker — the
 //    claim-loser short-circuits (ALREADY_EXECUTED) and never calls out;
 //  - atomic settle: one $transaction updates the Order to FILLED, writes a Transaction(TRADE)
-//    audit row, debits/credits virtual cash, updates the PortfolioItem, flips Decision→EXECUTED;
+//    audit row, settles either the user wallet or an isolated engine-owned book, and flips
+//    Decision→EXECUTED;
 //  - paper/sim only: the live broker path is gated in the AlpacaPaperBroker constructor.
 import { Prisma } from '@prisma/client';
 import type { Currency, OrderSide } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { validateOrderFill, type OrderResult } from './broker';
+import type { BrokerAdapter } from './broker';
 import { selectBroker } from './registry';
 import { acquireUserExecutionLock, releaseUserExecutionLock } from './userLock';
 
@@ -33,6 +35,17 @@ export interface ExecResult {
   status: string; // OrderStatus, or 'HOLD_NOOP' / 'ALREADY_EXECUTED'
 }
 
+export interface ExecutionOptions {
+  /** Automation injects the persisted/env kill-switch here, immediately before broker submission. */
+  beforeSubmit?: () => Promise<void>;
+  /** Trusted automation may pin the paper adapter; user routes omit this and use the registry. */
+  broker?: BrokerAdapter;
+  /** Deterministic books pin the engine's next-open reference instead of repricing at latest close. */
+  refPrice?: Prisma.Decimal;
+  /** Keep incubation cash/positions in its strategy-scoped engine ledger, never the owner's wallet. */
+  isolatedPaperBook?: boolean;
+}
+
 function currencyFor(market: 'TASI' | 'NASDAQ'): Currency {
   return market === 'TASI' ? 'SAR' : 'USD';
 }
@@ -42,7 +55,11 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 /** Execute an APPROVED decision for its owner. Idempotent; HOLD is a no-op. */
-async function executeLockedDecision(decisionId: string, userId: string): Promise<ExecResult> {
+async function executeLockedDecision(
+  decisionId: string,
+  userId: string,
+  options: ExecutionOptions,
+): Promise<ExecResult> {
   const decision = await prisma.decision.findUnique({
     where: { id: decisionId },
     include: { order: true },
@@ -60,25 +77,31 @@ async function executeLockedDecision(decisionId: string, userId: string): Promis
   const side: OrderSide = decision.finalAction === 'BUY' ? 'BUY' : 'SELL';
   const qty = decision.finalQty;
 
-  // Fill reference = latest close on record.
-  const bar = await prisma.marketBar.findFirst({
-    where: { symbol: decision.symbol, market: decision.market },
-    orderBy: { ts: 'desc' },
-  });
-  if (!bar) throw new ExecutionError('no_market_data', 'No market data to price the fill.');
-  const refPrice = bar.close;
+  let refPrice = options.refPrice;
+  if (!refPrice) {
+    const bar = await prisma.marketBar.findFirst({
+      where: { symbol: decision.symbol, market: decision.market },
+      orderBy: { ts: 'desc' },
+    });
+    if (!bar) throw new ExecutionError('no_market_data', 'No market data to price the fill.');
+    refPrice = bar.close;
+  }
+  if (!refPrice.isPositive()) throw new ExecutionError('no_market_data', 'Fill reference must be positive.');
   const limitPrice = side === 'BUY' ? refPrice.mul('1.01') : undefined;
 
   // Constructing the broker asserts the live-execution gate for any live URL (dark by default).
-  const broker = selectBroker(decision.market);
+  const broker = options.broker ?? selectBroker(decision.market);
+  if (options.isolatedPaperBook && (broker.kind !== 'INTERNAL_SIM' || !decision.strategyId)) {
+    throw new ExecutionError('conflict', 'An isolated paper book requires InternalSimBroker and a strategy-scoped decision.');
+  }
 
   // The shared user lock makes these reservations stable until atomic settlement.
-  if (side === 'BUY') {
+  if (!options.isolatedPaperBook && side === 'BUY') {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || !limitPrice || user.cashVirtual.lt(qty.mul(limitPrice))) {
       throw new ExecutionError('insufficient_funds', 'Insufficient virtual cash for this buy.');
     }
-  } else {
+  } else if (!options.isolatedPaperBook) {
     const holding = await prisma.portfolioItem.findUnique({
       where: { userId_symbol: { userId, symbol: decision.symbol } },
     });
@@ -133,7 +156,10 @@ async function executeLockedDecision(decisionId: string, userId: string): Promis
     try {
       fill = order.brokerRef
         ? await broker.getOrder(order.brokerRef)
-        : await broker.submitOrder(request);
+        : await (async () => {
+          await options.beforeSubmit?.();
+          return broker.submitOrder(request);
+        })();
     } catch (e) {
       if (broker.kind === 'INTERNAL_SIM') {
         await prisma.order.update({ where: { id: orderId }, data: { status: 'REJECTED' } });
@@ -190,11 +216,16 @@ async function executeLockedDecision(decisionId: string, userId: string): Promis
         amount: side === 'BUY' ? notional.negated() : notional,
         currency,
         type: 'TRADE',
-        description: `${side} ${fill.filledQty.toString()} ${decision.symbol} @ ${fill.avgFillPrice.toString()}`,
+        description: `${side} ${fill.filledQty.toString()} ${decision.symbol} @ ${fill.avgFillPrice.toString()}${
+          options.isolatedPaperBook ? ` [isolated:${decision.strategyId}]` : ''
+        }`,
       },
     });
 
-    if (side === 'BUY') {
+    if (options.isolatedPaperBook) {
+      // The deterministic strategy engine owns this book's $1m cash/position ledger. We retain
+      // Order + Transaction + Decision audit records without contaminating the user's wallet.
+    } else if (side === 'BUY') {
       const cashUpdate = await tx.user.updateMany({
         where: { id: userId, cashVirtual: { gte: notional } },
         data: { cashVirtual: { decrement: notional } },
@@ -227,7 +258,11 @@ async function executeLockedDecision(decisionId: string, userId: string): Promis
   return { orderId, status: fill.status };
 }
 
-export async function executeDecision(decisionId: string, userId: string): Promise<ExecResult> {
+export async function executeDecision(
+  decisionId: string,
+  userId: string,
+  options: ExecutionOptions = {},
+): Promise<ExecResult> {
   const decision = await prisma.decision.findUnique({
     where: { id: decisionId },
     select: { userId: true },
@@ -237,7 +272,7 @@ export async function executeDecision(decisionId: string, userId: string): Promi
 
   await acquireUserExecutionLock(userId);
   try {
-    return await executeLockedDecision(decisionId, userId);
+    return await executeLockedDecision(decisionId, userId, options);
   } finally {
     await releaseUserExecutionLock(userId);
   }

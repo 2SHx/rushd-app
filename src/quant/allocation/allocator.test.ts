@@ -18,6 +18,7 @@ function mode(
   return {
     modeId,
     validationStatus: overrides.validationStatus ?? 'ACCEPTED',
+    incubationAuthorized: overrides.incubationAuthorized,
     evidenceCardComplete: overrides.evidenceCardComplete ?? true,
     shariaState: overrides.shariaState ?? 'VERIFIED_COMPLIANT',
     implausible: overrides.implausible ?? false,
@@ -82,6 +83,16 @@ describe('QDR-7 tournament allocator', () => {
     expect(result.modes.map(item => item.reason)).toEqual([
       'MISSING_EVIDENCE_CARD', 'REJECTED', 'SHARIA_NOT_VERIFIED',
     ]);
+  });
+
+  it('admits only an explicitly authorized QDR-8 near-miss while retaining every other gate', () => {
+    const result = allocateTournamentCapital({
+      seed: 42,
+      modes: [mode('incubating', { validationStatus: 'REJECTED', incubationAuthorized: true })],
+    });
+
+    expect(result.allocations.incubating).toBe('0.4');
+    expect(result.modes[0]).toMatchObject({ disposition: 'ALLOCATED', reason: 'ELIGIBLE' });
   });
 
   it('benches a drawdown breach immediately, before monthly scoring', () => {

@@ -18,6 +18,11 @@ describe('control', () => {
     expect(await isHalted()).toBe(true);
   });
 
+  it('QUANT_KILL_SWITCH halts before touching the database', async () => {
+    expect(await isHalted({ QUANT_KILL_SWITCH: 'true' })).toBe(true);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it('isHalted returns false and self-heals (creates default) when missing', async () => {
     upsert.mockResolvedValue({ id: 'singleton', halted: false, reason: null });
     expect(await isHalted()).toBe(false);

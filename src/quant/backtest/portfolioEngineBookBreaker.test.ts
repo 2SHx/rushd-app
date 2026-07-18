@@ -167,3 +167,19 @@ describe('memory-bound (union-restricted) ≡ full-load, with a mid-window delis
     expect(heldC(memoryBound)).toBe(true);
   });
 });
+
+describe('incubation tradeFrom replay seam', () => {
+  const sim = simulateStrategyBook({
+    setup: targetWeightSetup(() => 0.5),
+    series: [seriesFrom('A', Array.from({ length: 30 }, (_, day) => 100 + day))],
+    startingCash: new D(100_000),
+    limits: BREAKER_LIMITS,
+    tradeFrom: dateAt(20),
+  });
+
+  it('keeps warm-up history but creates no paper state before the authorized inception', () => {
+    expect(sim.daily[0].ts).toEqual(dateAt(20));
+    expect(sim.fills[0].signalTs).toEqual(dateAt(20));
+    expect(sim.fills[0].ts).toEqual(dateAt(21));
+  });
+});

@@ -6,7 +6,10 @@ import { prisma } from '@/lib/prisma';
 const SINGLETON_ID = 'singleton';
 
 /** True when the kill-switch is engaged. Creates the default (not halted) row if missing. */
-export async function isHalted(): Promise<boolean> {
+export async function isHalted(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): Promise<boolean> {
+  if (['1', 'true', 'on'].includes((env.QUANT_KILL_SWITCH ?? '').toLowerCase())) return true;
   const control = await prisma.quantControl.upsert({
     where: { id: SINGLETON_ID },
     create: { id: SINGLETON_ID, halted: false },

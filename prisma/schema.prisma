@@ -560,6 +560,41 @@ model AutoRunClaim {
   createdAt DateTime @default(now())
 }
 
+// QDR-7/QDR-8 — one auditable daily capital split across isolated paper books.
+model AllocationDecision {
+  id          String   @id @default(uuid())
+  asOf        DateTime
+  windowDays  Int      @default(63)
+  seed        Int
+  gitSha      String?
+  inputs      Json
+  scores      Json
+  allocations Json
+  benched     String[]
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@unique([asOf])
+}
+
+// QDR-8 — nightly per-book marks. B2 owns population and auto-bench transitions.
+model BookEvaluation {
+  id                   String   @id @default(uuid())
+  bookId               String
+  asOf                 DateTime
+  nav                  Decimal  @db.Decimal(18, 4)
+  dailyPnl             Decimal  @db.Decimal(18, 4)
+  drawdown             Decimal  @db.Decimal(8, 6)
+  trackingError        Decimal  @db.Decimal(8, 6)
+  benchFlags           String[]
+  benched              Boolean  @default(false)
+  requiresRevalidation Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  @@unique([bookId, asOf])
+  @@index([bookId, asOf])
+}
+
 // Rushd Quant: research/literature corpus for the RAG analyst (QUANT_DESIGN §4, Q4).
 // embedding is optional — MVP retrieval is keyword/tag based (no embedding API needed).
 model ResearchDoc {

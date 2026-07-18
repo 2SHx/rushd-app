@@ -131,7 +131,11 @@ describe('runAutomatedStrategies', () => {
       userId: 'user-1', symbol: 'AAPL', market: 'NASDAQ', strategyId: 'strat-1', mode: 'AUTO_PAPER',
     });
     expect(h.decisionUpdate).toHaveBeenCalledWith({ where: { id: 'dec-1' }, data: { status: 'APPROVED' } });
-    expect(h.executeDecision).toHaveBeenCalledWith('dec-1', 'user-1');
+    expect(h.executeDecision).toHaveBeenCalledWith(
+      'dec-1',
+      'user-1',
+      expect.objectContaining({ beforeSubmit: expect.any(Function) }),
+    );
     expect(res).toEqual({ processed: true, ran: 1, executed: 1 });
   });
 

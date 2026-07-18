@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — R4-B1 daily incubation-book automation ✅
+Shipped: One signed daily pass for the four exact QDR-8 books through `simulateStrategyBook`, with generated AllocationDecision/BookEvaluation persistence, durable isolated ledgers, allocator wiring, claim leases, breaker, Sharia veto, and InternalSim execution.
+Decisions: lazy-dev rung 2 reused allocator/engine/autoRun/executeDecision; strategy-scoped ledgers never touch the owner wallet and fail closed on replay drift, each book stays ≤40%, Alpaca is data-only, and every output carries the unpromoted-paper label.
+Verify: security PASS + lint/tsc/Prisma validate/migrate-status/diff clean; focused B1 suite 54/54; full Vitest assertions 993/1001 with the same eight pre-existing failures (final run also hit transient Neon cleanup reachability in quant-eval).
+Open: B2 nightly evaluation is next; no deployment performed; production needs `CRON_SECRET` and a PARENT+ULTRA `QUANT_INCUBATION_OWNER_USER_ID`.
+
 ## 2026-07-19 — QDR-8 amended (2026-07-19b): internal-sim $1M bankroll, no Alpaca reset ✅
 Shipped: QDR-8 + R4 preamble/B1 row/G4 status row amended — the Alpaca paper account cannot be reset (verified live: cash −$82,800.08, buying power $0), so the $1,000,000 bankroll lives in the InternalSimBroker isolated Decimal book ledgers, marked from real persisted bars with the existing cost/slippage fills; Alpaca demotes to data-only.
 Decisions: annotate-don't-delete supersession notes; the optional legacy-liquidation Alpaca-mirror pass is gated (explicit user auth + security-auditor) and explicitly OUT of B1 scope; cash-never-buying-power now binds the virtual book cash.

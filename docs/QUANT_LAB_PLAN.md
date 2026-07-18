@@ -51,6 +51,7 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | G4b TradingView webhooks + deep links | backend-expert + security-auditor | 🔒 POST-PAUSE | HMAC-signed `/api/quant/webhooks/tradingview` → same Sharia gate/envelope pipeline; dark until secret set |
 | G5 strategy UI on /quant | frontend-expert + design-reviewer + i18n | ✅ REPORT-CARD UI DONE; PAPER P&L GATED | DB-backed `/quant/league`: accepted + rejected terminal teams, normalized model/SPY/SPUS history, OOS risk, promotion gates, exact persisted trade/P&L drill-down when available, and honest legacy states. Isolated paper-book P&L remains gated until an ACCEPTED team exists. |
 | G6a RL lane (PPO baseline) / G6b linear cross-sectional factor | quant-strategist + architect | 🔄 G6b DONE / REJECTED; G6a PARKED | G6b wide v2 FULL: 90 active months, OOS DSR 0.000, MC p95 DD 54.86%, plateau FAIL, UNSCREENED; exact card in STRATEGY_LAB. RL remains experimental and requires a separate QDR-3 decision. |
+| R4-B1 daily incubation-book automation | backend-expert + security-auditor | ✅ DONE | Four authorized QDR-8 books run through `simulateStrategyBook` in one signed daily pass; generated `AllocationDecision` + `BookEvaluation`, persisted strategy-scoped $1M InternalSim ledgers, cash-only ≤40% allocator, expiring per-(day,book) claim leases, −3% breaker, fail-closed Sharia, DB/env pre-submit kill-switch, and paper-only label; focused B1 suite green. |
 
 ## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
 

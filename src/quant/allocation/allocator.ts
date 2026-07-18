@@ -32,6 +32,8 @@ export type AllocationReason =
 export interface AllocatorModeInput {
   modeId: string;
   validationStatus: TerminalValidationStatus;
+  /** QDR-8: explicit per-version authorization admits a REJECTED near-miss to INCUBATION only. */
+  incubationAuthorized?: boolean;
   evidenceCardComplete: boolean;
   shariaState: ShariaValidationState;
   implausible: boolean;
@@ -147,7 +149,9 @@ function excluded(
 }
 
 function evaluateMode(mode: AllocatorModeInput, priorWeightDays: number): EvaluatedMode {
-  if (mode.validationStatus !== 'ACCEPTED') return excluded(mode.modeId, 'INELIGIBLE', 'REJECTED');
+  if (mode.validationStatus !== 'ACCEPTED' && !mode.incubationAuthorized) {
+    return excluded(mode.modeId, 'INELIGIBLE', 'REJECTED');
+  }
   if (!mode.evidenceCardComplete || !mode.validation) {
     return excluded(mode.modeId, 'INELIGIBLE', 'MISSING_EVIDENCE_CARD');
   }

@@ -54,6 +54,10 @@ function utcDayKey(now: Date): string {
   return now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
+export async function assertAutomationActive(): Promise<void> {
+  if (await isHalted()) throw new Error('quant_automation_halted');
+}
+
 /** Run all opt-in AUTO_PAPER strategies once. Idempotent per (UTC day, strategy, symbol). */
 export async function runAutomatedStrategies(now: Date = new Date()): Promise<AutoRunResult> {
   if (await isHalted()) {
@@ -95,7 +99,7 @@ export async function runAutomatedStrategies(now: Date = new Date()): Promise<Au
         if (await isHalted()) continue; // halt mid-run: stop further executions
 
         await prisma.decision.update({ where: { id: decisionId }, data: { status: 'APPROVED' } });
-        await executeDecision(decisionId, strategy.ownerUserId);
+        await executeDecision(decisionId, strategy.ownerUserId, { beforeSubmit: assertAutomationActive });
         executed += 1;
       }
     }

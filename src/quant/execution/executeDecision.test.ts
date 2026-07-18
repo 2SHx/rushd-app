@@ -94,6 +94,63 @@ describe('executeDecision', () => {
     expect((prisma.order.update as any).mock.calls[0][0].data.status).toBe('REJECTED');
   });
 
+  it('checks an automation kill-switch immediately before submission', async () => {
+    (prisma.decision.findUnique as any).mockResolvedValue(decision());
+    const beforeSubmit = vi.fn().mockRejectedValue(new Error('automation_halted'));
+
+    await expect(executeDecision('dec-1', OWNER, { beforeSubmit })).rejects.toThrow('automation_halted');
+    expect(beforeSubmit).toHaveBeenCalledTimes(1);
+    expect(h.submitOrder).not.toHaveBeenCalled();
+  });
+
+  it('lets trusted paper automation pin InternalSimBroker instead of consulting live-mode selection', async () => {
+    (prisma.decision.findUnique as any).mockResolvedValue(decision());
+    const submitOrder = vi.fn().mockResolvedValue({
+      brokerRef: 'internal-only', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D('100.15'),
+    });
+
+    await executeDecision('dec-1', OWNER, {
+      broker: { kind: 'INTERNAL_SIM', submitOrder } as any,
+    });
+
+    expect(submitOrder).toHaveBeenCalledTimes(1);
+    expect(h.submitOrder).not.toHaveBeenCalled();
+  });
+
+  it('settles a strategy-scoped isolated book without touching the owner wallet or shared holdings', async () => {
+    (prisma.decision.findUnique as any).mockResolvedValue(decision({ strategyId: 'book-strategy' }));
+    const submitOrder = vi.fn().mockResolvedValue({
+      brokerRef: 'internal-only', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D('123.1845'),
+    });
+
+    await executeDecision('dec-1', OWNER, {
+      broker: { kind: 'INTERNAL_SIM', submitOrder } as any,
+      refPrice: new D(123),
+      isolatedPaperBook: true,
+    });
+
+    expect(submitOrder.mock.calls[0][0].refPrice.toString()).toBe('123');
+    expect(prisma.marketBar.findFirst as any).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique as any).not.toHaveBeenCalled();
+    expect(prisma.portfolioItem.findUnique as any).not.toHaveBeenCalled();
+    expect(h.tx.user.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.user.update).not.toHaveBeenCalled();
+    expect(h.tx.portfolioItem.upsert).not.toHaveBeenCalled();
+    expect(h.tx.portfolioItem.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.transaction.create).toHaveBeenCalledTimes(1);
+    expect(h.tx.decision.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when isolated-book execution is not strategy-scoped InternalSim', async () => {
+    (prisma.decision.findUnique as any).mockResolvedValue(decision({ strategyId: null }));
+    await expect(executeDecision('dec-1', OWNER, {
+      broker: { kind: 'INTERNAL_SIM' } as any,
+      refPrice: new D(123),
+      isolatedPaperBook: true,
+    })).rejects.toMatchObject({ code: 'conflict' });
+    expect(prisma.order.create as any).not.toHaveBeenCalled();
+  });
+
   it('rejects a BUY with insufficient virtual cash (no claim, no broker call)', async () => {
     (prisma.decision.findUnique as any).mockResolvedValue(decision({ finalQty: new D(10) }));
     (prisma.user.findUnique as any).mockResolvedValue({ cashVirtual: new D(50) }); // < 10*100

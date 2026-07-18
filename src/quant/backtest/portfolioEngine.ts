@@ -278,6 +278,8 @@ export interface StrategyBookFill {
   readonly symbol: string;
   readonly action: 'BUY' | 'SELL';
   readonly qty: Prisma.Decimal;
+  /** Raw next-open reference; execution adapters reproduce the engine's cost/slippage from this. */
+  readonly refPrice: Prisma.Decimal;
   readonly fillPrice: Prisma.Decimal;
   readonly cashAfter: Prisma.Decimal;
   readonly positionsValueAfter: Prisma.Decimal;
@@ -301,6 +303,8 @@ export interface StrategyBookInput<Params> {
   /** Optional complete trading calendar when zero-weight symbols are omitted to bound memory. */
   readonly calendar?: readonly Date[];
   readonly startingCash: Prisma.Decimal;
+  /** Warm-up bars remain visible to the setup, but no paper positions/orders exist before this date. */
+  readonly tradeFrom?: Date;
   readonly limits: RiskLimits;
   readonly policy?: StrategyBookPolicy;
   /** Shared only across simulations over the exact same immutable input series. */
@@ -576,6 +580,10 @@ function bookContext(
 export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): StrategyBookResult {
   if (input.setup.cadence !== 'daily') throw new Error('Strategy-book engine accepts daily setups only');
   if (input.startingCash.lte(0)) throw new Error('Strategy-book starting cash must be positive');
+  const tradeFromTime = input.tradeFrom?.getTime() ?? Number.NEGATIVE_INFINITY;
+  if (input.tradeFrom && !Number.isFinite(tradeFromTime)) {
+    throw new Error('Strategy-book tradeFrom must be a valid date');
+  }
   if (input.policy) {
     const hasVolLookback = input.policy.realizedVolLookback !== undefined;
     const hasVolTarget = input.policy.targetAnnualVol !== undefined;
@@ -633,13 +641,14 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   const recordFill = (
     order: PendingDirectionalOrder,
     qty: Prisma.Decimal,
+    refPrice: Prisma.Decimal,
     fillPrice: Prisma.Decimal,
     envelope: EnvelopeResult,
   ) => {
     const positionsValueAfter = positionValue(positions);
     fills.push({
       ts: new Date(order.fillTs), signalTs: order.signalTs, symbol: order.symbol,
-      action: order.action, qty, fillPrice, cashAfter: cash,
+      action: order.action, qty, refPrice, fillPrice, cashAfter: cash,
       positionsValueAfter, navAfter: cash.plus(positionsValueAfter),
       positionsAfter: positionSnapshots(positions), envelope,
     });
@@ -658,6 +667,10 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
         todayIndexes.set(item.symbol, index);
       }
     }
+
+    // Incubation replay uses the full real prehistory for indicators, while the isolated paper
+    // book begins empty on its authorized inception date. Existing backtests omit tradeFrom.
+    if (time < tradeFromTime) continue;
 
     // Open marks are the only prices known at the instant pending orders fill.
     for (const [symbol, bar] of Array.from(todaysBars.entries())) {
@@ -772,7 +785,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           });
           position.qty = position.qty.minus(qty);
           if (position.qty.lte(0)) positions.delete(order.symbol);
-          recordFill(order, qty, fillPrice, envelope);
+          recordFill(order, qty, bar.open, fillPrice, envelope);
         } else {
           const fillPrice = executionPrice;
           // Round affordability DOWN so Decimal division precision can never overspend by a tail unit.
@@ -794,7 +807,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
               entryTs: date, entrySignalTs: order.signalTs,
             });
           }
-          recordFill(order, qty, fillPrice, envelope);
+          recordFill(order, qty, bar.open, fillPrice, envelope);
         }
       }
     }
