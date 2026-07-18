@@ -194,3 +194,13 @@ body {
 .btn-interactive:active:not(:disabled) {
   border-color: rgb(var(--accent-color-rgb));
 }
+
+/* Explicitly prevent WebKit/Safari RTL transform matrix bugs on cards & KPI containers */
+[dir="rtl"] .rounded-2xl,
+[dir="rtl"] .rounded-3xl,
+[dir="rtl"] .rounded-\[1\.75rem\],
+[dir="rtl"] .glass-panel {
+  transform: none;
+  -webkit-transform: none;
+}
+
