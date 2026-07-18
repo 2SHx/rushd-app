@@ -550,5 +550,78 @@ export const ECONOMICS_TRACK: Track = {
         },
       ],
     },
+    {
+      id: 'fintech-ai-economics',
+      title: { en: 'Fintech & AI in Modern Economics', ar: 'التقنية المالية والذكاء الاصطناعي في الاقتصاد الحديث' },
+      practiceLinks: [{ kind: 'quizTopic', topic: 'TASI Markets' }],
+      lessons: [
+        {
+          id: 'econ-u6-fintech',
+          title: { en: 'Fintech & Digital Payments Transformation', ar: 'مستقبل المدفوعات والتحول في التقنية المالية' },
+          summary: {
+            en: 'How digital wallets, open banking, and instant transfers reduce friction in trade.',
+            ar: 'كيف تقلل المحافظ الرقمية والمصرفية المفتوحة والتحويلات الفورية التكاليف وتعزز التجارة.',
+          },
+          body: {
+            en: 'Fintech innovations like instant payment networks (such as Saudi Arabia’s Mada and Sarie), open banking APIs, and digital wallets have drastically lowered transaction costs for consumers and businesses. By replacing slow cash cycles with instant digital settlement, money velocity increases, allowing capital to flow efficiently to productive economic activities.',
+            ar: 'أحدثت الابتكارات في التقنية المالية (مثل شبكة مدى ونظام ساريع للتحويلات الفورية والمصرفية المفتوحة) خفضاً هائلاً في تكاليف المعاملات للشركات والأفراد. وبإحلال التسوية الرقمية الفورية محل التعاملات النقدية البطيئة، تزداد سرعة دوران المال في الاقتصاد، مما يسمح بتدفق رأس المال بكفاءة أكبر نحو الأنشطة الإنتاجية.',
+          },
+          complianceTag: 'EDUCATIONAL_ONLY',
+          ageSegment: 'TEENS',
+          contentVersion: 1,
+          checkpoint: {
+            id: 'econ-u6-fintech-cp',
+            question: {
+              en: 'What is the primary economic benefit of instant digital payment networks?',
+              ar: 'ما هي الفائدة الاقتصادية الرئيسية لشبكات المدفوعات الرقمية الفورية؟',
+            },
+            options: [
+              { en: 'Reducing transaction friction and increasing velocity of money', ar: 'تقليل تكاليف المعاملات وزيادة سرعة دوران المال' },
+              { en: 'Eliminating all commercial trade completely', ar: 'إلغاء التجارة التجارية بالكامل' },
+              { en: 'Increasing cash printing costs', ar: 'زيادة تكاليف طباعة النقود الورقية' },
+            ],
+            correctOptionIndex: 0,
+            explanation: {
+              en: 'Digital payment rails reduce transaction costs and speed up settlement across the economy.',
+              ar: 'قنوات الدفع الرقمية تخفض تكاليف المعاملات وتسرع التسويات عبر أرجاء الاقتصاد.',
+            },
+            complianceTag: 'EDUCATIONAL_ONLY',
+          },
+        },
+        {
+          id: 'econ-u6-ai-productivity',
+          title: { en: 'Artificial Intelligence & Market Productivity', ar: 'الذكاء الاصطناعي والإنتاجية في الأسواق المالية' },
+          summary: {
+            en: 'How generative models and automated algorithmic signals transform analysis.',
+            ar: 'كيف تسهم النماذج التوليدية والخوارزميات الكمية في تحسين كفاءة التحليل واتخاذ القرار.',
+          },
+          body: {
+            en: 'Artificial intelligence and quantitative models analyze massive streams of real-time market data, financial disclosures, and sentiment in milliseconds. While AI enhances research productivity and risk monitoring, human oversight remains essential to enforce Sharia compliance boundaries, ethical risk envelopes, and long-term strategic alignment.',
+            ar: 'تقوم نماذج الذكاء الاصطناعي والخوارزميات الكمية بتحليل تدفقات هائلة من بيانات السوق والإفصاحات المالية في أجزاء من الثانية. وفي حين يعزز الذكاء الاصطناعي إنتاجية البحوث ومراقبة المخاطر، تظل الرقابة البشرية إلزامية لإنفاذ حدود الفحص الشرعي، وضوابط المخاطر الأخلاقية، والتوجه الاستراتيجي طويل المدى.',
+          },
+          complianceTag: 'EDUCATIONAL_ONLY',
+          ageSegment: 'ADULTS',
+          contentVersion: 1,
+          checkpoint: {
+            id: 'econ-u6-ai-productivity-cp',
+            question: {
+              en: 'Why does human oversight remain critical when utilizing AI financial models?',
+              ar: 'لماذا تظل الرقابة البشرية حاسمة عند استخدام نماذج الذكاء الاصطناعي المالية؟',
+            },
+            options: [
+              { en: 'To enforce Sharia compliance boundaries and risk envelopes', ar: 'لإنفاذ حدود الفحص الشرعي وضوابط المخاطر الإلزامية' },
+              { en: 'Because computers cannot calculate math', ar: 'لأن الكمبيوتر لا يستطيع القيام بالحسابات' },
+              { en: 'To prevent people from saving money', ar: 'لمنع الناس من ادخار الأموال' },
+            ],
+            correctOptionIndex: 0,
+            explanation: {
+              en: 'AI serves as a high-speed research tool, while human decision-makers enforce ethical and regulatory boundaries.',
+              ar: 'يعمل الذكاء الاصطناعي كأداة بحث فائقة السرعة، بينما يضمن صناع القرار البشريون التزام الحدود الأخلاقية والشرعية.',
+            },
+            complianceTag: 'EDUCATIONAL_ONLY',
+          },
+        },
+      ],
+    },
   ],
 };
