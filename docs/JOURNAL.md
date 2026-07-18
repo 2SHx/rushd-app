@@ -12,6 +12,11 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — QDR-8 paper INCUBATION tier + R4 briefs + Kimi routing ✅
+Shipped: QDR-8 in QUANT_DESIGN.md (paper-only incubation books for the 4 positive-OOS near-misses, $1M reset envelope, promotion path v2 = 63 live book-days + single FULL card, daily-target readout policy, token-economy caps, zero-cost Sharia tiers); R4 Codex briefs B1/B2/C1/D1/E1–E5 in QUANT_LAB_PLAN.md; kimi-k2.6:free as implementation fallback in models.map.json.
+Decisions: incubation supersedes "only ACCEPTED trades" for the paper tier ONLY (user-authorized per version, REJECTED cards stand unedited); no whole-market runs ever (25-name sleeve / halal top-100 caps); halal universe from published SPUS/HLAL holdings + own SEC-XBRL AAOIFI screener, no scraping, fail-closed; Kimi K3 has no free route — excluded.
+Open: A2 user action pending — reset Alpaca paper account to $1,000,000 in the dashboard, then `node scripts/verify-alpaca.mjs`; B1–E5 to be delivered by user to Codex (cold-start: QUANT_LAB_PLAN.md R4); security/i18n/design gates stay in the Claude session.
+
 ## 2026-07-19 — Exclusive Next.js workspace lifecycle guard ✅
 Shipped: Wrapped `dev`, `build`, and `start` with one atomic workspace lock that rejects concurrent Next.js writers and automatically replaces malformed or dead-PID locks, preventing cross-page `.next/vendor-chunks` corruption.
 Decisions: lazy-dev rung 3 used Node's exclusive file creation and the already-installed `tsx`; no dependency or Next.js upgrade was needed because the reproduced cause was two Antigravity-launched dev trees sharing one `.next` directory.
