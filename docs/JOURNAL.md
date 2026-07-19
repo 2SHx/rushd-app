@@ -24,6 +24,11 @@ Decisions: lazy-dev rung 2 reused allocator/engine/autoRun/executeDecision; stra
 Verify: security PASS + lint/tsc/Prisma validate/migrate-status/diff clean; focused B1 suite 54/54; full Vitest assertions 993/1001 with the same eight pre-existing failures (final run also hit transient Neon cleanup reachability in quant-eval).
 Open: B2 nightly evaluation is next; no deployment performed; production needs `CRON_SECRET` and a PARENT+ULTRA `QUANT_INCUBATION_OWNER_USER_ID`.
 
+## 2026-07-19 — C1 zero-cost verified halal universe ✅ (parallel with Codex B1)
+Shipped: src/quant/universe/** — Tier-1 loader over captured-real SPUS holdings (219 names, 2026-07-17, provenance in fixtures/SOURCES.md) + HLAL fund-level purification factors; Tier-2 AAOIFI-aligned 30/30/5 XBRL screener with STALE_FUNDAMENTALS fail-closed (550d, oldest-fact dating); fail-closed assembly + top-100 dollar-volume sleeve over PointInTimeStore; 35 tests keyless, zero network in tests.
+Decisions: i18n-fintech gate ruled Tiers 1–2 VERIFIED_COMPLIANT conditional (paper only) — Tier-1 labeled "index-provider Sharia-screened (S&P methodology)" never "AAOIFI-compliant", carries FUND_LEVEL_PURIFICATION_ONLY (QDR-8 amended 2026-07-19c); AAPL/MSFT/SWKS honestly EXCLUDED on stale non-compliant-income tags; no scraping of screening apps — their public methodology only, spot-check QA against public pages.
+Open: HLAL full holdings via SEC N-PORT still TODO; module is pure/unwired — execution stitch after Codex B1 lands (needs security gate); D1 must render نسبة التطهير per the gate's Arabic/bidi labeling rules (recorded in gate report).
+
 ## 2026-07-19 — QDR-8 amended (2026-07-19b): internal-sim $1M bankroll, no Alpaca reset ✅
 Shipped: QDR-8 + R4 preamble/B1 row/G4 status row amended — the Alpaca paper account cannot be reset (verified live: cash −$82,800.08, buying power $0), so the $1,000,000 bankroll lives in the InternalSimBroker isolated Decimal book ledgers, marked from real persisted bars with the existing cost/slippage fills; Alpaca demotes to data-only.
 Decisions: annotate-don't-delete supersession notes; the optional legacy-liquidation Alpaca-mirror pass is gated (explicit user auth + security-auditor) and explicitly OUT of B1 scope; cash-never-buying-power now binds the virtual book cash.
