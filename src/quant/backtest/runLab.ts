@@ -10,6 +10,7 @@ import { execSync } from 'node:child_process';
 import { Prisma } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../strategies/gapperOrb';
+import { bollingerV3BookPolicy, type BollingerMrLongV3Params } from '../strategies/bollingerMrLongV3';
 import {
   tsMomentumV3BookPolicy,
   type TsMomentumHalalBasketV3Params,
@@ -94,6 +95,7 @@ export function diagnosticReportOutput(rendered: string, runMode: BacktestRunMod
 export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v3',
   'ts-momentum-halal-basket-v4',
+  'bollinger-mr-long-v3',
   'dual-momentum-rotation',
   'tom-overlay',
   'g6b-linear-factor',
@@ -308,6 +310,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'ts-momentum-halal-basket-v4') {
     return tsMomentumV4BookPolicy(params as TsMomentumHalalBasketV4Params | undefined);
+  }
+  if (setupId === 'bollinger-mr-long-v3') {
+    return bollingerV3BookPolicy(params as BollingerMrLongV3Params | undefined);
   }
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
