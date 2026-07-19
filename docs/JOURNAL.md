@@ -14,6 +14,12 @@ Shipped: IncubationCockpit server component on /quant (measured $/day vs $1,000 
 Decisions: design gate PASS (3 MED skeleton/contrast/bidi fixes applied) + i18n gate PASS (promise-free framing verified in both languages; incubation label matches contract exactly; نسبة التطهير correctly belongs to a future holdings drill-down, not this book-level surface); PortfolioClient.tsx confirmed dead code — cockpit wired via quant/page.tsx.
 Open: live populated-state render unverified until the first trading-day cron (tables empty — honest empty state shows); /quant requires ULTRA so anonymous browser checks see the auth redirect; production go-live needs CRON_SECRET + QUANT_INCUBATION_OWNER_USER_ID (PARENT+ULTRA — seeded dev parent test@rushd.dev is BASIC, tier upgrade is a manual user step).
 
+## 2026-07-19 — R4-E6 multi-mode-book-v2 drawdown governor terminal verdict ✅
+Shipped: Pre-registered v2 = v1 sleeves UNCHANGED + one a-priori book-level drawdown governor (linear 1.0@≤10% DD→0.0@≥25% DD, new sizes only) attacking E3's DRAWDOWN_RISK_FAILURE; committed before any run; FULL REJECTED.
+Decisions: governor thresholds derived from the 30% gate itself (not any viewed curve), reused the engine's existing down-only drawdownExposureScalar/StrategyBookPolicy (no new engine code), frozen 3×3 plateau {8,10,12}×{20,25,30}, seed 42, no retune.
+Verify: source `a38ed59`, run `60079932-1655-449b-b4ba-859aacc6dba8`; 444 trades, OOS CAGR 15.47%, DSR 0.860/0.706, MC p95 book DD 46.40%→**40.06%**, realized maxDD 22.01%, ruin 0.10%, plateau PASS, C1 VERIFIED_COMPLIANT.
+Open: governor moved the tail the right way but not under 30% and OOS DSR still <0.95 ⇒ still two hard-gate misses; de-risking also trimmed OOS CAGR 21.46%→15.47%. Terminally closed; no admission.
+
 ## 2026-07-19 — R4-E5 time-of-day terminal verdict ✅
 Shipped: Pre-registered the 09:45 reversal / first-hour trend-lock A-B timing constraints and completed the last R4 strategy; FULL REJECTED.
 Decisions: both windows/1% thresholds/2R frozen before evidence, one outcome-neutral ET memoization only, seed 42, no tuning after the negative diagnostic.
