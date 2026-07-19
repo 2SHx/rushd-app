@@ -9,6 +9,12 @@ Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 
+## 2026-07-19 — R4-E7 nvda-focus-v1 single-stock terminal verdict ✅
+Shipped: Pre-registered (committed BEFORE any run) a single-name {NVDA} book — dual time-series momentum (252d skip-21 AND 63d, hold-both-positive, exit either ≤0), 100% single-name sizing (diversified name/vol/risk caps lifted; ADV/cash/gross + a 10%→25% book drawdown governor stay binding), C1 Tier-2 AAOIFI VERIFIED_COMPLIANT; 1Y diagnostic (0-trade, formation window) then ONE FULL run; FULL REJECTED.
+Decisions: frozen 3×3 plateau {231,252,273}×{42,63,84}, seed 42, 30% OOS, 15 bps/side, episodes counted per the dual-momentum precedent (added nvda-focus to collapseMaxOnePositionEpisodes); generalized the C1-verified fixed route to a per-setup universe map; no tuning against viewed OOS.
+Verify: source `14a4501`, run `08aa5aab-f7ea-4b3c-93dd-215a4a568481`; **42 episodes (23 OOS)**, full/OOS CAGR 15.87%/24.41%, DSR 0.856/0.533, MC book-day p95 **44.71%** (>30% at just 27.5% mean exposure), realized maxDD 23.00%, ruin 0.10%, jitter p=0.019, plateau center OOS −0.94% (FAIL), C1 VERIFIED_COMPLIANT; reasons `INSUFFICIENT_SAMPLE, DSR_FAILURE, DRAWDOWN_RISK_FAILURE, NO_PROFIT_PLATEAU_OVERFIT`.
+Open: The card's answer — one-stock focus can NOT honestly serve the daily target: a single-name daily signal cannot produce a decisive sample (42≪100) and concentration alone pushes tail DD past the breaker; focus raises variance, not expected return. Terminally closed; no admission, no retune.
+
 ## 2026-07-19 — R4-D1 daily profit cockpit + promotion-gate tests ✅
 Shipped: IncubationCockpit server component on /quant (measured $/day vs $1,000 readout + capital-needed, per-book NAV vs real SPY/SPUS, breaker/bench status, honest empty state, 31-key en/ar namespace) + read-only incubationCockpitData loader; removed DashboardClient's fabricated demoSnapshots/demoMetrics; promotion-gate tests (a) interleaved frozen-day BUY+SELL and (b) multi-day frozen chain both pin CORRECT reconstruction via priorLedgerState anchoring — test (b) exposed and fixed a real bug (priorBookCash regressing to zero after the first frozen day of a chain).
 Decisions: design gate PASS (3 MED skeleton/contrast/bidi fixes applied) + i18n gate PASS (promise-free framing verified in both languages; incubation label matches contract exactly; نسبة التطهير correctly belongs to a future holdings drill-down, not this book-level surface); PortfolioClient.tsx confirmed dead code — cockpit wired via quant/page.tsx.
