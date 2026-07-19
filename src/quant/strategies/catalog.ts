@@ -5,6 +5,7 @@ import { bollingerMrLongV2Setup } from './bollingerMrLongV2';
 import { tsMomentumHalalBasketSetup } from './tsMomentumHalalBasket';
 import { tsMomentumHalalBasketV2Setup } from './tsMomentumHalalBasketV2';
 import { tsMomentumHalalBasketV3Setup } from './tsMomentumHalalBasketV3';
+import { tsMomentumHalalBasketV4Setup } from './tsMomentumHalalBasketV4';
 import { cointStatArbLongLegSetup } from './cointStatArbLongLeg';
 import { vwapReclaimSetup } from './vwapReclaim';
 import { stopHuntReversalLongSetup } from './stopHuntReversalLong';
@@ -23,6 +24,7 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [tsMomentumHalalBasketSetup.id]: tsMomentumHalalBasketSetup,
   [tsMomentumHalalBasketV2Setup.id]: tsMomentumHalalBasketV2Setup,
   [tsMomentumHalalBasketV3Setup.id]: tsMomentumHalalBasketV3Setup,
+  [tsMomentumHalalBasketV4Setup.id]: tsMomentumHalalBasketV4Setup,
   [cointStatArbLongLegSetup.id]: cointStatArbLongLegSetup,
   [dualMomentumRotationSetup.id]: dualMomentumRotationSetup,
   [tomOverlaySetup.id]: tomOverlaySetup,

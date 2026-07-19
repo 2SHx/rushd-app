@@ -14,6 +14,7 @@ import type { Market } from '@prisma/client';
 import { registry, type ShariaScreener } from '@/services/marketData';
 import { evaluateShariaGate, isRealShariaSourceConfigured } from '../gates/sharia';
 import type { ShariaValidationState } from './reportCard';
+import type { UniverseEntry } from '../universe/types';
 
 export interface ShariaSymbolSnapshot {
   symbol: string;
@@ -64,6 +65,37 @@ export interface BuildShariaSnapshotOpts {
   /** Inject a screener (tests). Only consulted when `screened` is true; keyless never screens. */
   screener?: ShariaScreener;
   asOf?: Date;
+}
+
+/**
+ * Convert C1's fail-closed, gate-approved zero-cost universe rows into the persisted validation
+ * snapshot. Tier-1 is described exactly as index-provider screened; it is never mislabeled as a
+ * per-name AAOIFI certification and its unavailable per-name purification ratio stays explicit.
+ */
+export function buildC1ShariaRunSnapshot(
+  entries: readonly UniverseEntry[],
+  asOf: Date,
+): ShariaRunSnapshot {
+  const verdicts: ShariaSymbolSnapshot[] = [...entries]
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map((entry) => ({
+      symbol: entry.symbol,
+      compliant: true,
+      standard: entry.tier === 'index-provider-screened'
+        ? 'S&P Shariah methodology'
+        : 'RUSHD AAOIFI-aligned XBRL screen',
+      source: entry.tier,
+      reason: entry.purificationRatioBps === 'n/a — not computed'
+        ? 'FUND_LEVEL_PURIFICATION_ONLY'
+        : `purification_ratio_bps=${entry.purificationRatioBps}`,
+    }));
+  return {
+    screened: verdicts.length > 0,
+    source: 'c1-zero-cost-verified-universe',
+    state: deriveShariaState(verdicts.length > 0, verdicts),
+    verdicts,
+    asOf: asOf.toISOString(),
+  };
 }
 
 /**

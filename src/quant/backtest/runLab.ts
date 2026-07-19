@@ -14,6 +14,10 @@ import {
   tsMomentumV3BookPolicy,
   type TsMomentumHalalBasketV3Params,
 } from '../strategies/tsMomentumHalalBasketV3';
+import {
+  tsMomentumV4BookPolicy,
+  type TsMomentumHalalBasketV4Params,
+} from '../strategies/tsMomentumHalalBasketV4';
 import { DUAL_MOMENTUM_UNIVERSE } from '../strategies/dualMomentumRotation';
 import { dualMomentumRotationBookPolicy } from '../strategies/dualMomentumRotation';
 import { TOM_OVERLAY_UNIVERSE, tomOverlayBookPolicy } from '../strategies/tomOverlay';
@@ -61,6 +65,10 @@ import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence'
 import { assertWalkForward } from './walkForward';
 import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from './profitPlateau';
 import { buildShariaRunSnapshot } from './shariaSnapshot';
+import { buildC1ShariaRunSnapshot } from './shariaSnapshot';
+import { buildVerifiedUniverse } from '../universe/buildVerifiedUniverse';
+import { selectDollarVolumeSleeve } from '../universe/sleeveSelector';
+import type { UniverseEntry } from '../universe/types';
 import type { RiskLimits } from '../risk/envelope';
 
 const D = Prisma.Decimal;
@@ -85,10 +93,16 @@ export function diagnosticReportOutput(rendered: string, runMode: BacktestRunMod
 /** R3-1 may opt a strategy version into the shared route without changing any existing setup. */
 export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v3',
+  'ts-momentum-halal-basket-v4',
   'dual-momentum-rotation',
   'tom-overlay',
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
+]);
+
+const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
+  'ts-momentum-halal-basket-v4',
+  'bollinger-mr-long-v3',
 ]);
 
 export function selectDailyBacktestRoute(
@@ -291,6 +305,9 @@ export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimi
 export function strategyBookPolicyForSetup(setupId: string, params: unknown): StrategyBookPolicy | undefined {
   if (setupId === 'ts-momentum-halal-basket-v3') {
     return tsMomentumV3BookPolicy(params as TsMomentumHalalBasketV3Params | undefined);
+  }
+  if (setupId === 'ts-momentum-halal-basket-v4') {
+    return tsMomentumV4BookPolicy(params as TsMomentumHalalBasketV4Params | undefined);
   }
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
@@ -948,13 +965,29 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let sharedCalendarForPlateau: Date[] | undefined;
   let sharedBookResult: StrategyBookResult | null = null;
   let resolvedUniverseBars = 0;
+  let verifiedShariaEntries: UniverseEntry[] | null = null;
   const sharedReplayScope = {};
 
   try {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
-      if (universeCompat === 'fixed') {
+      if (C1_VERIFIED_SLEEVE_SETUP_IDS.has(setupId)) {
+        const universe = buildVerifiedUniverse();
+        const selected = await selectDollarVolumeSleeve(universe.entries, {
+          asOf: new Date(`${to}T23:59:59.999Z`),
+          maxNames: 100,
+        });
+        if (!selected.sleeve.length) {
+          throw new Error(`${setupId} requires C1 verified names with real daily bars as of ${to}`);
+        }
+        const bySymbol = new Map(universe.entries.map((entry) => [entry.symbol, entry]));
+        verifiedShariaEntries = selected.sleeve.map(({ symbol }) => bySymbol.get(symbol)!);
+        symbols = verifiedShariaEntries.map(({ symbol }) => symbol);
+        universeTag = `c1-verified:${symbols.length}`;
+        universeIsUnscreened = false;
+        console.log(`resolved C1 verified sleeve → ${symbols.length} symbol(s), top by trailing real dollar volume`);
+      } else if (universeCompat === 'fixed') {
         symbols = dailyUniverseForSetup(setupId, null)!;
       } else if (dailySelection === 'wide') {
         symbols = await listWideDailySymbols(from, to, WIDE_MIN_DAILY_BARS);
@@ -1340,7 +1373,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // ── Per-run, per-symbol Sharia snapshot. Keyless ⇒ UNSCREENED honestly (no mock verdict presented
   // as truth); a real source (Zoya, live) ⇒ VERIFIED_* from real verdicts. Intraday micro-cap lanes
   // stay execution-blocked; a candidate artifact's own screening status still takes priority.
-  const shariaSnapshot = await buildShariaRunSnapshot(symbols, 'NASDAQ');
+  const shariaSnapshot = verifiedShariaEntries
+    ? buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`))
+    : await buildShariaRunSnapshot(symbols, 'NASDAQ');
   const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
     ?? ((isIntradayUnscreened || universeIsUnscreened) ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);

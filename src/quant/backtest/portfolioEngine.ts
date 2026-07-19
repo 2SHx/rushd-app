@@ -317,6 +317,9 @@ export interface StrategyBookPolicy {
   readonly maxOpenPositions: number;
   /** Optional continuous gross ceiling; appreciation above it is trimmed at the next open. */
   readonly maxGrossFraction?: number;
+  /** Optional peak-to-trough governor: full exposure through `start`, linearly to cash at `cashAt`. */
+  readonly drawdownStartFraction?: number;
+  readonly drawdownCashFraction?: number;
   /** Strategy-declared bounded decision window; omitted means the full expanding history. */
   readonly decisionHistoryBars?: number;
 }
@@ -417,6 +420,17 @@ export function basketVolExposureScalar(
 ): number {
   if (realizedAnnualVol === null || !Number.isFinite(realizedAnnualVol) || realizedAnnualVol <= 0) return 1;
   return Math.min(1, targetAnnualVol / realizedAnnualVol);
+}
+
+/** A-priori, down-only book-drawdown governor. It never increases another risk layer's exposure. */
+export function drawdownExposureScalar(
+  drawdown: number,
+  startFraction: number,
+  cashFraction: number,
+): number {
+  if (!Number.isFinite(drawdown) || drawdown <= startFraction) return 1;
+  if (drawdown >= cashFraction) return 0;
+  return (cashFraction - drawdown) / (cashFraction - startFraction);
 }
 
 /** Compose independent down-only risk governors without allowing either to increase exposure. */
@@ -603,6 +617,15 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       || input.policy.maxGrossFraction <= 0
       || input.policy.maxGrossFraction > 1
     )) throw new Error('Strategy-book maxGrossFraction must be in (0, 1]');
+    const hasDrawdownStart = input.policy.drawdownStartFraction !== undefined;
+    const hasDrawdownCash = input.policy.drawdownCashFraction !== undefined;
+    if (hasDrawdownStart !== hasDrawdownCash || (hasDrawdownStart && (
+      !Number.isFinite(input.policy.drawdownStartFraction)
+      || !Number.isFinite(input.policy.drawdownCashFraction)
+      || input.policy.drawdownStartFraction! < 0
+      || input.policy.drawdownCashFraction! <= input.policy.drawdownStartFraction!
+      || input.policy.drawdownCashFraction! > 1
+    ))) throw new Error('Strategy-book drawdown governor requires 0 <= start < cashAt <= 1');
   }
   const series = validateSeries(input.series);
   const bySymbol = new Map(series.map((item) => [item.symbol, item]));
@@ -826,8 +849,21 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     const realizedVolAnnual = input.policy?.realizedVolLookback
       ? trailingBasketAnnualVol(navHistory, input.policy.realizedVolLookback)
       : null;
+    const currentDrawdown = peakNav.gt(0)
+      ? Number(new D(1).minus(closeNav.div(peakNav)).toString())
+      : 0;
+    const drawdownScalar = input.policy?.drawdownStartFraction !== undefined
+      ? drawdownExposureScalar(
+        Math.max(0, currentDrawdown),
+        input.policy.drawdownStartFraction,
+        input.policy.drawdownCashFraction!,
+      )
+      : 1;
     const grossExposureScalar = input.policy
-      ? strategyBookExposureScalar(realizedVolAnnual, input.policy.targetAnnualVol, input.policy.maxGrossFraction)
+      ? Math.min(
+        strategyBookExposureScalar(realizedVolAnnual, input.policy.targetAnnualVol, input.policy.maxGrossFraction),
+        drawdownScalar,
+      )
       : 1;
 
     // A falling cap actively de-risks the held book at next open; it never waits for new entries.

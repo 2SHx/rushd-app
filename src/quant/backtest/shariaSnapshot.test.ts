@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import type { ShariaScreener, ShariaVerdict } from '@/services/marketData';
-import { buildShariaRunSnapshot, deriveShariaState } from './shariaSnapshot';
+import { buildC1ShariaRunSnapshot, buildShariaRunSnapshot, deriveShariaState } from './shariaSnapshot';
 
 // Network-free: keyless never touches a screener; the configured case injects a mock screener, so no
 // Zoya HTTP call is ever made. No database is used anywhere in this suite.
@@ -73,5 +73,21 @@ describe('deriveShariaState', () => {
     // never silently promoted or misreported.
     expect(deriveShariaState(true, [{ compliant: false }, { compliant: null }])).toBe('UNSCREENED_EXECUTION_BLOCKED');
     expect(deriveShariaState(true, [{ compliant: null }])).toBe('UNSCREENED_EXECUTION_BLOCKED');
+  });
+});
+
+describe('buildC1ShariaRunSnapshot', () => {
+  it('persists the gate-approved Tier-1 label without fabricating per-name AAOIFI or purification', () => {
+    const snapshot = buildC1ShariaRunSnapshot([{
+      symbol: 'AAPL', name: 'Apple', market: 'NASDAQ', tier: 'index-provider-screened',
+      provenance: 'SPUS holdings fixture', purificationRatioBps: 'n/a — not computed',
+      reasonCodes: ['FUND_LEVEL_PURIFICATION_ONLY'], asOf: '2026-07-17',
+    }], new Date('2026-07-17T23:59:59.999Z'));
+    expect(snapshot.state).toBe('VERIFIED_COMPLIANT');
+    expect(snapshot.verdicts[0]).toMatchObject({
+      standard: 'S&P Shariah methodology',
+      source: 'index-provider-screened',
+      reason: 'FUND_LEVEL_PURIFICATION_ONLY',
+    });
   });
 });
