@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — R4-E3 multi-mode book terminal verdict ✅
+Shipped: Combined disjoint C1-screened momentum/MR/dual sleeves in one shared-cash engine using the existing allocator's frozen 20/40/40 split; FULL REJECTED.
+Decisions: parent rules unchanged, seed-42 card priors fixed before evidence, two ±5pp views only, and no post-result weight tuning.
+Verify: source `455d8ea`; FULL `8aed13a7`; 428 trades, OOS CAGR 21.46%, DSR 0.729, plateau PASS, MC p95 DD 46.40%, ruin 0.50%, C1 VERIFIED_COMPLIANT.
+Open: E4 next; combination improved DSR/sample quality but did not contain the 30% tail gate.
+
 ## 2026-07-19 — R4-E2 Bollinger breadth v3 terminal verdict ✅
 Shipped: Ran unchanged v2 mean-reversion over C1's screened top-100 sleeve in one shared-cash book; single FULL verdict REJECTED.
 Decisions: breadth was the only hypothesis change; current-holdings survivorship disclosed, five trials frozen, and no tuning followed the 1Y or FULL views.
