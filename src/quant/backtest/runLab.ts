@@ -169,7 +169,7 @@ export const WIDE_MIN_DAILY_BARS = 20;
 /** Setups whose fixed research book the CLI must never override, absent an explicit declaration. */
 const FIXED_BOOK_FALLBACK_SETUP_IDS: ReadonlySet<string> = new Set([
   'dual-momentum-rotation', 'tom-overlay',
-  'stocks-in-play-orb', 'stop-hunt-reversal-long', 'vwap-reclaim', 'gapper-orb',
+  'stocks-in-play-orb', 'stop-hunt-reversal-long', 'bagholder-bounce', 'vwap-reclaim', 'gapper-orb',
 ]);
 
 /** Resolved universe compatibility for a setup: its declaration, else the conservative fallback. */
@@ -483,7 +483,7 @@ export function shariaStateForSetup(
   candidateState?: ShariaValidationState,
 ): ShariaValidationState {
   return candidateState ?? (
-    setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long'
+    setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce'
       ? 'UNSCREENED_EXECUTION_BLOCKED'
       : 'UNVERIFIED'
   );
@@ -882,7 +882,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const startingCash = new D(100_000);
   // stocks-in-play-orb validates on the REAL Alpaca-IEX minute spine (DB), not the small committed
   // fixture set — so it defaults to --source db unless overridden.
-  const source = (options.source ?? (setupId === 'stocks-in-play-orb' ? 'db' : 'fixtures')) as 'fixtures' | 'db';
+  const source = (options.source ?? (setupId === 'stocks-in-play-orb' || setupId === 'bagholder-bounce' ? 'db' : 'fixtures')) as 'fixtures' | 'db';
 
   const cadence = setup.cadence;
 
@@ -1153,7 +1153,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       // DAY-spine liquidity/levels) on the fixed 11-name deep-minute liquid universe. stop-hunt
       // reads the book's dailyLow to derive prior-day lows PIT; the verified metrics/annualization/
       // PIT/reproducibility path below is untouched — this only routes the already-built book in.
-      const usesStocksInPlayBook = setupId === 'stocks-in-play-orb' || setupId === 'stop-hunt-reversal-long';
+      const usesStocksInPlayBook = setupId === 'stocks-in-play-orb' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce';
       symbols = candidateArtifact
         ? Array.from(candidatesBySymbol.keys()).sort()
         : usesStocksInPlayBook
@@ -1395,7 +1395,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const shariaSnapshot = verifiedShariaEntries
     ? buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`))
     : await buildShariaRunSnapshot(symbols, 'NASDAQ');
-  const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long';
+  const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
     ?? ((isIntradayUnscreened || universeIsUnscreened) ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);
 

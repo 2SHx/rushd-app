@@ -15,6 +15,7 @@ import { tomOverlaySetup } from './tomOverlay';
 import { g6bLinearFactorSetup } from './g6bLinearFactor';
 import { g6bLinearFactorWideSetup } from './g6bLinearFactorWide';
 import { multiModeBookSetup } from './multiModeBook';
+import { bagholderBounceSetup } from './bagholderBounce';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -34,4 +35,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [g6bLinearFactorSetup.id]: g6bLinearFactorSetup,
   [g6bLinearFactorWideSetup.id]: g6bLinearFactorWideSetup,
   [multiModeBookSetup.id]: multiModeBookSetup,
+  [bagholderBounceSetup.id]: bagholderBounceSetup,
 });
