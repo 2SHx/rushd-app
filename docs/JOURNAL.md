@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — R4-E1 momentum v4 terminal verdict ✅
+Shipped: Pre-registered and validated v3's unchanged signal on C1's 100-name screened sleeve with a frozen 8%-to-20% drawdown governor; single FULL verdict REJECTED.
+Decisions: lazy-dev rung 2 reused the shared engine/C1/v3 grid; no retune after the 1Y warm-up view or FULL result, and current-holdings survivorship is disclosed.
+Verify: source `d00c79b`; FULL run `9fd3f2d5`; 1,693 records, OOS CAGR 13.11%, DSR 0.428, MC p95 DD 41.49%, plateau FAIL, C1 VERIFIED_COMPLIANT.
+Open: E2 next; the restored bounded C1 daily spine is real Yahoo data, while one unsupported holding remains fail-closed excluded.
+
 ## 2026-07-19 — R4-B2 nightly incubation evaluation ✅
 Shipped: Signed after-close evaluator backfills each missing per-book B1 snapshot date, marks it against real persisted SPY/SPUS closes, and atomically upserts its `BookEvaluation`.
 Decisions: lazy-dev rung 2 reused `PortfolioSnapshot`, `BookEvaluation`, existing metrics, B1’s owner/watermark rules, and `AutoRunClaim`; drawdown or tracking-error breaches latch bench state, and only a later revalidation can clear TE state.
