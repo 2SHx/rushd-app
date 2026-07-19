@@ -162,36 +162,6 @@ export default function DashboardClient({
     },
   ], [isAr]);
 
-  const demoSnapshots = useMemo<Snapshot[]>(() => {
-    const nowTs = Date.now();
-    return Array.from({ length: 30 }, (_, i) => {
-      const day = 29 - i;
-      const date = new Date(nowTs - day * 86400000);
-      const progress = i / 29;
-      const noise = (Math.sin(i * 0.8) * 0.015 + Math.cos(i * 0.5) * 0.01);
-      const nav = 220000 + (254853.75 - 220000) * Math.pow(progress, 0.85) * (1 + noise);
-      const spus = 220000 + (242000 - 220000) * Math.pow(progress, 0.9) * (1 + noise * 0.7);
-      const spy = 220000 + (238000 - 220000) * Math.pow(progress, 0.95) * (1 + noise * 0.5);
-
-      return {
-        asOf: date.toISOString(),
-        nav: Math.round(nav * 100) / 100,
-        cashVirtual: 45000,
-        currency: 'SAR',
-        spy: Math.round(spy * 100) / 100,
-        spus: Math.round(spus * 100) / 100,
-      };
-    });
-  }, []);
-
-  const demoMetrics = useMemo(() => ({
-    sharpe: 1.85,
-    cagr: 0.158,
-    alphaVsSpus: 0.052,
-    alphaVsSpy: 0.071,
-    maxDrawdown: -0.042,
-  }), []);
-
   const demoTransactions = useMemo(() => {
     const nowTs = Date.now();
     return [
@@ -239,12 +209,14 @@ export default function DashboardClient({
   }, [isAr]);
 
   const positions = isDemoActive ? demoPositions : initialPositions;
-  const snapshots = isDemoActive ? demoSnapshots : initialSnapshots;
+  // No fabricated NAV/benchmark curve stands in for real snapshots: a demo-active account
+  // with an empty/short real series honestly falls through to the insufficient-data state below.
+  const snapshots: Snapshot[] = initialSnapshots;
   const navValue = isDemoActive ? 254853.75 : initialNAV;
   const cashVal = isDemoActive ? 45000 : initialCash;
   const effectiveCashCurrency = isDemoActive ? 'SAR' : cashCurrency;
-  const metrics = isDemoActive ? demoMetrics : initialMetrics;
-  const effectivePerformanceStatus: PerformanceStatus = isDemoActive ? 'available' : performanceStatus;
+  const metrics = initialMetrics;
+  const effectivePerformanceStatus: PerformanceStatus = performanceStatus;
 
   const formatMoney = (value: number, currency: 'SAR' | 'USD') => formatMoneyShared(value, currency, locale);
   // Alpaca's paper account snapshot never carries a persisted NAV series, so it always

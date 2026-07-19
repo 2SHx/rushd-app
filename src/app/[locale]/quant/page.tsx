@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, GraduationCap, XCircle, AlertTriangle } from 'lucide-react';
 import CommitteeClient from '@/components/quant/CommitteeClient';
+import IncubationCockpit, { IncubationCockpitFallback } from '@/components/quant/IncubationCockpit';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -202,6 +204,10 @@ export default async function QuantPage({
           </div>
         </section>
       ) : null}
+
+      <Suspense fallback={<IncubationCockpitFallback locale={locale} />}>
+        <IncubationCockpit locale={locale} />
+      </Suspense>
 
       <section id="quant-workspace" className="scroll-mt-6">
         <CommitteeClient

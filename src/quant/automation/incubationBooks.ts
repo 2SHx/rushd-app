@@ -7,6 +7,7 @@ import {
   simulateStrategyBook,
   type StrategyBookDailyPoint,
   type StrategyBookFill,
+  type StrategyBookPosition,
   type StrategyBookSeries,
 } from '../backtest/portfolioEngine';
 import { DEFAULT_BT_LIMITS } from '../backtest/engine';
@@ -104,6 +105,10 @@ export interface IncubationDependencies {
   /** Round-trips the entriesFrozen flag persisted alongside the daily allocation (security gate
    * 2026-07-19 round 2, MED) so verifyLedger can reproduce a frozen day identically on replay. */
   wasEntriesFrozen(bookId: string, asOf: Date): Promise<boolean>;
+  /** The last TRUSTED (persisted) ledger strictly before `before` — anchors frozen-day
+   * reconstruction to reality instead of the raw replay (security gate 2026-07-19 round 2,
+   * MED: multi-day chain fix). Null only when nothing has been persisted yet for this book. */
+  priorLedgerState(book: IncubationBook, ownerUserId: string, before: Date): Promise<TrustedLedgerState | null>;
   verifyLedger(book: IncubationBook, ownerUserId: string, simulation: IncubationSimulation, asOf: Date): Promise<void>;
   persistLedger(book: IncubationBook, ownerUserId: string, simulation: IncubationSimulation, asOf: Date): Promise<void>;
   execute(book: IncubationBook, ownerUserId: string, order: IncubationOrder): Promise<boolean>;
@@ -176,55 +181,98 @@ function pointForDay(simulation: IncubationSimulation, asOf: Date): StrategyBook
   return simulation.daily.find(point => dayStart(point.ts).getTime() === target) ?? null;
 }
 
+function parsePersistedPositions(value: unknown): StrategyBookPosition[] {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, Record<string, string>>).map(([symbol, p]) => ({
+    symbol, qty: new D(p.qty), price: new D(p.price), entryPrice: new D(p.costBasis),
+    entryTs: new Date(p.entryTs), entrySignalTs: new Date(p.entrySignalTs),
+  }));
+}
+
+/**
+ * Applies only a day's SELL (exit) fills on top of a trusted base ledger, in fill order,
+ * capping each sale at the real shares actually held. BUY fills (suppressed entries) are never
+ * applied, regardless of same-day interleaving with a SELL — so a phantom entry can never leak
+ * into cash/positions even when it precedes or follows a real exit fill in the raw replay
+ * (security gate 2026-07-19 round 2: interleaved-day fix, MED). A SELL against a symbol with no
+ * real held shares (i.e. one only "available" because of a suppressed same-day BUY) is a no-op.
+ */
+function applyExitOnlyFills(
+  baseCash: Prisma.Decimal,
+  basePositions: readonly StrategyBookPosition[],
+  fillsForDay: readonly StrategyBookFill[],
+): { cash: Prisma.Decimal; positions: StrategyBookPosition[] } {
+  const positions = new Map(basePositions.map(position => [position.symbol, { ...position }]));
+  let cash = baseCash;
+  for (const fill of fillsForDay) {
+    if (fill.action !== 'SELL') continue;
+    const existing = positions.get(fill.symbol);
+    const available = existing?.qty ?? ZERO;
+    const sellQty = Prisma.Decimal.min(fill.qty, available);
+    if (!sellQty.gt(0)) continue;
+    cash = cash.plus(sellQty.mul(fill.fillPrice));
+    const remaining = existing!.qty.minus(sellQty);
+    if (remaining.lte(0)) positions.delete(fill.symbol);
+    else positions.set(fill.symbol, { ...existing!, qty: remaining, price: fill.fillPrice });
+  }
+  return { cash, positions: Array.from(positions.values()) };
+}
+
+export interface TrustedLedgerState {
+  cash: Prisma.Decimal;
+  positions: readonly StrategyBookPosition[];
+}
+
 /**
  * QDR-8 clarified 2026-07-19d (security gate MED, 2026-07-19): the daily/breach breaker halts
  * NEW ENTRIES only. Post-filtering executed orders is not enough — the persisted book-of-record
- * (NAV/cash/positions) must also agree that no new position was opened. Given a day's full fills,
- * this reconstructs that day's ledger point from only the allowed (SELL) fills, or freezes at
- * yesterday's close if none of that day's fills were exits, so ledger, NAV, and audit records
- * never disagree — and so a historically frozen day can be reproduced identically on replay
- * (security gate 2026-07-19 round 2, MED).
+ * (NAV/cash/positions) must also agree that no new position was opened. This reconstructs a day's
+ * ledger point by applying only that day's SELL fills on top of the last TRUSTED (persisted)
+ * prior-day ledger — never the raw in-memory replay, which re-includes every suppressed BUY and
+ * (for a multi-day frozen chain) compounds every prior day's suppressed entries too (security
+ * gate 2026-07-19 round 2: multi-day chain fix, MED). `priorLedger` is null only when nothing has
+ * been persisted yet (the book's very first ever day), in which case the raw prior daily point is
+ * used as a best-effort bootstrap base. Pure/sync so it stays trivially unit-testable — the
+ * prisma-touching lookup lives in the injectable `priorLedgerState` dependency.
  */
 function frozenPointForDay(
   simulation: IncubationSimulation,
   day: Date,
+  priorLedger: TrustedLedgerState | null,
 ): { orders: IncubationOrder[]; point: StrategyBookDailyPoint | null } {
   const target = dayStart(day).getTime();
-  const allowedFills = simulation.fills.filter(fill => (
-    dayStart(fill.ts).getTime() === target && fill.action === 'SELL'
-  ));
-  const orders: IncubationOrder[] = allowedFills.map(fill => ({ fill, label: INCUBATION_LABEL }));
-  const priorPoint = simulation.daily.filter(p => dayStart(p.ts).getTime() < target).at(-1) ?? null;
-  const lastAllowed = allowedFills.at(-1);
-  let point: StrategyBookDailyPoint | null;
-  if (lastAllowed) {
-    const { cashAfter, positionsValueAfter, navAfter, positionsAfter } = lastAllowed;
-    // Recomputed (not carried) — LOW fix (security gate 2026-07-19 round 2): a stale
-    // pre-freeze peakNav/drawdown would silently misreport risk on a frozen day.
-    const peakNav = priorPoint && priorPoint.peakNav.gte(navAfter) ? priorPoint.peakNav : navAfter;
-    point = {
-      ts: dayStart(day), cash: cashAfter, positionsValue: positionsValueAfter, nav: navAfter,
-      peakNav, drawdown: peakNav.gt(0) ? peakNav.minus(navAfter).div(peakNav) : ZERO,
-      realizedVolAnnual: null, grossExposureScalar: 1, positions: positionsAfter,
-    };
-  } else if (priorPoint) {
-    const peakNav = priorPoint.peakNav.gte(priorPoint.nav) ? priorPoint.peakNav : priorPoint.nav;
-    point = {
-      ...priorPoint, ts: dayStart(day), peakNav,
-      drawdown: peakNav.gt(0) ? peakNav.minus(priorPoint.nav).div(peakNav) : ZERO,
-    };
-  } else {
-    point = null;
-  }
-  return { orders, point };
+  const fillsForDay = simulation.fills.filter(fill => dayStart(fill.ts).getTime() === target);
+  const orders: IncubationOrder[] = fillsForDay
+    .filter(fill => fill.action === 'SELL')
+    .map(fill => ({ fill, label: INCUBATION_LABEL }));
+
+  const rawPriorPoint = simulation.daily.filter(p => dayStart(p.ts).getTime() < target).at(-1) ?? null;
+  const baseCash = priorLedger ? priorLedger.cash : rawPriorPoint?.cash ?? null;
+  const basePositions = priorLedger ? priorLedger.positions : rawPriorPoint?.positions ?? null;
+  if (baseCash === null || basePositions === null) return { orders, point: null };
+
+  const { cash, positions } = applyExitOnlyFills(baseCash, basePositions, fillsForDay);
+  const positionsValue = positions.reduce((sum, position) => sum.plus(position.qty.mul(position.price)), ZERO);
+  const nav = cash.plus(positionsValue);
+  return {
+    orders,
+    point: {
+      ts: dayStart(day), cash, positionsValue, nav,
+      // peakNav/drawdown/realizedVolAnnual/grossExposureScalar are never persisted or compared
+      // (see persistLedger/persistedLedgerMatches) — filled in for type shape only.
+      peakNav: nav, drawdown: ZERO, realizedVolAnnual: null, grossExposureScalar: 1,
+      positions,
+    },
+  };
 }
 
 function freezeEntries(
   simulation: IncubationSimulation,
   asOf: Date,
+  priorLedger: TrustedLedgerState | null,
 ): { orders: IncubationOrder[]; simulation: IncubationSimulation } {
   const target = dayStart(asOf).getTime();
-  const { orders, point } = frozenPointForDay(simulation, asOf);
+  const { orders, point } = frozenPointForDay(simulation, asOf, priorLedger);
   const daily = [
     ...simulation.daily.filter(p => dayStart(p.ts).getTime() !== target),
     ...(point ? [point] : []),
@@ -420,6 +468,16 @@ export const defaultDependencies: IncubationDependencies = {
     if (!parsed.isFinite() || parsed.isNaN() || parsed.lt(0) || parsed.gt(INTERNAL_SIM_BANKROLL)) return ZERO;
     return parsed;
   },
+  async priorLedgerState(book, ownerUserId, before) {
+    const strategy = await ensureStrategy(book, ownerUserId);
+    const persisted = await prisma.portfolioSnapshot.findFirst({
+      where: { strategyId: strategy.id, asOf: { lt: dayStart(before) } },
+      orderBy: { asOf: 'desc' },
+      select: { cashVirtual: true, positions: true },
+    });
+    if (!persisted) return null;
+    return { cash: persisted.cashVirtual, positions: parsePersistedPositions(persisted.positions) };
+  },
   async availableCash(ownerUserId) {
     const owner = await prisma.user.findUnique({ where: { id: ownerUserId }, select: { role: true, tier: true } });
     assertIncubationOwner(owner);
@@ -508,7 +566,10 @@ export const defaultDependencies: IncubationDependencies = {
     // suppressed entries): reconstruct it in the same exit-only mode it was persisted in
     // (security gate 2026-07-19 round 2, MED) instead of comparing against the raw point.
     const expectedPrior = priorWasFrozen
-      ? frozenPointForDay(simulation, rawExpectedPrior.ts).point
+      ? frozenPointForDay(
+        simulation, rawExpectedPrior.ts,
+        await defaultDependencies.priorLedgerState(book, ownerUserId, rawExpectedPrior.ts),
+      ).point
       : rawExpectedPrior;
     if (!expectedPrior) return;
     const prior = await prisma.portfolioSnapshot.findFirst({
@@ -587,7 +648,18 @@ export async function runDailyIncubationBooks(
       // A zeroed fresh allocation must not also freeze exits of an already-open position.
       const freshBookCash = cash.mul(allocations[book.bookId] ?? '0');
       const entriesAllowed = freshBookCash.gt(0);
-      const bookCash = entriesAllowed ? freshBookCash : await deps.priorBookCash(book.bookId, asOf);
+      // `priorLedgerState` (not just `priorBookCash`) anchors a MULTI-day frozen chain: once a
+      // book is benched, every subsequent day's own persisted allocation is also zero, so
+      // `priorBookCash` alone regresses to zero after the first frozen day. The trusted ledger's
+      // own nav (cash + positions value) is what's actually deployed and must always be enough
+      // to keep surfacing exits (security gate 2026-07-19 round 2, promotion-gate condition b).
+      const priorLedger = entriesAllowed ? null : await deps.priorLedgerState(book, ownerUserId, asOf);
+      const priorLedgerNav = priorLedger
+        ? priorLedger.cash.plus(priorLedger.positions.reduce((sum, p) => sum.plus(p.qty.mul(p.price)), ZERO))
+        : ZERO;
+      const bookCash = entriesAllowed
+        ? freshBookCash
+        : Prisma.Decimal.max(await deps.priorBookCash(book.bookId, asOf), priorLedgerNav);
       if (!bookCash.gt(0)) continue;
       const rawSimulation = await deps.simulate(book, bookCash, asOf);
       await deps.verifyLedger(book, ownerUserId, rawSimulation, asOf);
@@ -595,7 +667,7 @@ export async function runDailyIncubationBooks(
       // (persisted ledger) must reflect exit-only outcomes — not just which orders execute.
       const { orders, simulation } = entriesAllowed
         ? { orders: rawSimulation.orders, simulation: rawSimulation }
-        : freezeEntries(rawSimulation, asOf);
+        : freezeEntries(rawSimulation, asOf, priorLedger);
       for (const order of orders) {
         if (await deps.halted()) {
           await deps.releaseClaim(book.bookId, asOf, lease);

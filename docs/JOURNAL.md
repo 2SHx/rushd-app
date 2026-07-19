@@ -9,6 +9,11 @@ Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 
+## 2026-07-19 — R4-D1 daily profit cockpit + promotion-gate tests ✅
+Shipped: IncubationCockpit server component on /quant (measured $/day vs $1,000 readout + capital-needed, per-book NAV vs real SPY/SPUS, breaker/bench status, honest empty state, 31-key en/ar namespace) + read-only incubationCockpitData loader; removed DashboardClient's fabricated demoSnapshots/demoMetrics; promotion-gate tests (a) interleaved frozen-day BUY+SELL and (b) multi-day frozen chain both pin CORRECT reconstruction via priorLedgerState anchoring — test (b) exposed and fixed a real bug (priorBookCash regressing to zero after the first frozen day of a chain).
+Decisions: design gate PASS (3 MED skeleton/contrast/bidi fixes applied) + i18n gate PASS (promise-free framing verified in both languages; incubation label matches contract exactly; نسبة التطهير correctly belongs to a future holdings drill-down, not this book-level surface); PortfolioClient.tsx confirmed dead code — cockpit wired via quant/page.tsx.
+Open: live populated-state render unverified until the first trading-day cron (tables empty — honest empty state shows); /quant requires ULTRA so anonymous browser checks see the auth redirect; production go-live needs CRON_SECRET + QUANT_INCUBATION_OWNER_USER_ID (PARENT+ULTRA — seeded dev parent test@rushd.dev is BASIC, tier upgrade is a manual user step).
+
 ## 2026-07-19 — R4-E5 time-of-day terminal verdict ✅
 Shipped: Pre-registered the 09:45 reversal / first-hour trend-lock A-B timing constraints and completed the last R4 strategy; FULL REJECTED.
 Decisions: both windows/1% thresholds/2R frozen before evidence, one outcome-neutral ET memoization only, seed 42, no tuning after the negative diagnostic.

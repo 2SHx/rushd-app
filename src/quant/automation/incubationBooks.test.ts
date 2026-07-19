@@ -21,6 +21,7 @@ function dependencies(overrides: Partial<IncubationDependencies> = {}): Incubati
     halted: vi.fn().mockResolvedValue(false),
     priorBookCash: vi.fn().mockResolvedValue(new D(0)),
     wasEntriesFrozen: vi.fn().mockResolvedValue(false),
+    priorLedgerState: vi.fn().mockResolvedValue(null),
     availableCash: vi.fn().mockResolvedValue(new D(1_000_000)),
     latestAsOf: vi.fn().mockResolvedValue(AS_OF),
     evaluation: vi.fn().mockResolvedValue(null),
@@ -203,27 +204,21 @@ describe('QDR-8 daily incubation books', () => {
   });
 
   it('LOW: a breachered book with an open position still exits on the next pass', async () => {
+    // Interleaved same day (also covers the interleaved-day fix, security gate 2026-07-19
+    // round 2): a suppressed BUY and an executed SELL both land on AS_OF. The reconstruction
+    // must ignore the BUY entirely and apply only the SELL against the real prior holding.
+    const priorPosition = {
+      symbol: 'AAA', qty: new D(20), price: new D(5_000), entryPrice: new D(5_000),
+      entryTs: AS_OF, entrySignalTs: AS_OF,
+    };
     const buyOrder = {
       label: INCUBATION_LABEL,
-      fill: {
-        action: 'BUY', symbol: 'AAA', ts: AS_OF,
-        cashAfter: new D(0), positionsValueAfter: new D(100_000), navAfter: new D(100_000),
-        positionsAfter: [{ symbol: 'AAA', qty: new D(20) }],
-      },
+      fill: { action: 'BUY', symbol: 'AAA', ts: AS_OF, qty: new D(5), fillPrice: new D(5_100) },
     } as unknown as IncubationOrder;
     const sellOrder = {
       label: INCUBATION_LABEL,
-      fill: {
-        action: 'SELL', symbol: 'AAA', ts: AS_OF,
-        cashAfter: new D(50_000), positionsValueAfter: new D(50_000), navAfter: new D(100_000),
-        positionsAfter: [{ symbol: 'AAA', qty: new D(10) }],
-      },
+      fill: { action: 'SELL', symbol: 'AAA', ts: AS_OF, qty: new D(8), fillPrice: new D(5_200) },
     } as unknown as IncubationOrder;
-    const originalPoint = {
-      ts: AS_OF, cash: new D(0), positionsValue: new D(100_000), nav: new D(100_000),
-      peakNav: new D(100_000), drawdown: new D(0), realizedVolAnnual: null, grossExposureScalar: 1,
-      positions: [{ symbol: 'AAA', qty: new D(20) }],
-    };
     const breachedBookId = INCUBATION_BOOKS[0].bookId;
     const deps = dependencies({
       evaluation: vi.fn(async bookId => bookId === breachedBookId ? {
@@ -231,9 +226,12 @@ describe('QDR-8 daily incubation books', () => {
         benched: false, requiresRevalidation: false,
       } : null),
       priorBookCash: vi.fn(async bookId => bookId === breachedBookId ? new D(100_000) : new D(0)),
+      priorLedgerState: vi.fn(async (book: { bookId: string }) => book.bookId === breachedBookId
+        ? { cash: new D(0), positions: [priorPosition] }
+        : null),
       simulate: vi.fn(async () => (
         {
-          orders: [buyOrder, sellOrder], daily: [originalPoint],
+          orders: [buyOrder, sellOrder], daily: [],
           fills: [buyOrder.fill, sellOrder.fill],
         } as unknown as IncubationSimulation
       )),
@@ -247,12 +245,15 @@ describe('QDR-8 daily incubation books', () => {
     expect(executedOrders).toEqual(['SELL']);
     expect(result.allocations[breachedBookId]).toBe('0');
 
-    // The persisted book of record must agree: no new position, cash reflects exits only.
+    // The persisted book of record must agree: no new position, cash reflects the real
+    // exit only (8 * 5200 = 41,600) — never the phantom BUY's effect, in either order.
     const ledgerCall = (deps.persistLedger as ReturnType<typeof vi.fn>).mock.calls
       .find(call => call[0].bookId === breachedBookId);
     const persistedPoint = ledgerCall?.[2].daily.find((p: { ts: Date }) => p.ts.getTime() === AS_OF.getTime());
-    expect(persistedPoint.cash.toString()).toBe('50000');
-    expect(persistedPoint.positions).toEqual([{ symbol: 'AAA', qty: new D(10) }]);
+    expect(persistedPoint.cash.toString()).toBe('41600');
+    expect(persistedPoint.positions).toEqual([
+      { symbol: 'AAA', qty: new D(12), price: new D(5_200), entryPrice: new D(5_000), entryTs: AS_OF, entrySignalTs: AS_OF },
+    ]);
   });
 
   it('persists each strategy-scoped close ledger only after its orders complete', async () => {
