@@ -215,7 +215,7 @@ async function executeLockedDecision(
         userId,
         amount: side === 'BUY' ? notional.negated() : notional,
         currency,
-        type: 'TRADE',
+        type: options.isolatedPaperBook ? 'INCUBATION_TRADE' : 'TRADE',
         description: `${side} ${fill.filledQty.toString()} ${decision.symbol} @ ${fill.avgFillPrice.toString()}${
           options.isolatedPaperBook ? ` [isolated:${decision.strategyId}]` : ''
         }`,

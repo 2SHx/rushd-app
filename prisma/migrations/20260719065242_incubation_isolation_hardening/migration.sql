@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "AutonomyTier" ADD VALUE 'INCUBATION_PAPER';
+
+-- AlterEnum
+ALTER TYPE "TransactionType" ADD VALUE 'INCUBATION_TRADE';

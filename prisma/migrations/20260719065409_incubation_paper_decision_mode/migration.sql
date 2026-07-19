@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "DecisionMode" ADD VALUE 'INCUBATION_PAPER';

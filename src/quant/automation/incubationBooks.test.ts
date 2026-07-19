@@ -8,16 +8,19 @@ import {
   runDailyIncubationBooks,
   type IncubationDependencies,
   type IncubationOrder,
+  type IncubationSimulation,
 } from './incubationBooks';
 
 const D = Prisma.Decimal;
 const AS_OF = new Date('2026-07-20T00:00:00.000Z');
 const order = { label: INCUBATION_LABEL, fill: {} } as IncubationOrder;
-const simulation = { orders: [order], daily: [] };
+const simulation = { orders: [order], daily: [], fills: [] };
 
 function dependencies(overrides: Partial<IncubationDependencies> = {}): IncubationDependencies {
   return {
     halted: vi.fn().mockResolvedValue(false),
+    priorBookCash: vi.fn().mockResolvedValue(new D(0)),
+    wasEntriesFrozen: vi.fn().mockResolvedValue(false),
     availableCash: vi.fn().mockResolvedValue(new D(1_000_000)),
     latestAsOf: vi.fn().mockResolvedValue(AS_OF),
     evaluation: vi.fn().mockResolvedValue(null),
@@ -133,7 +136,7 @@ describe('QDR-8 daily incubation books', () => {
     const deps = dependencies({
       simulate: vi.fn(async (_book, cash) => {
         starts.push(cash);
-        return { orders: [], daily: [] };
+        return { orders: [], daily: [], fills: [] };
       }),
     });
 
@@ -178,10 +181,78 @@ describe('QDR-8 daily incubation books', () => {
       execute,
     });
 
-    await expect(runDailyIncubationBooks(AS_OF, deps)).rejects.toThrow('transient');
+    const firstPass = await runDailyIncubationBooks(AS_OF, deps);
     expect(deps.releaseClaim).toHaveBeenCalledTimes(1);
+    expect(Object.values(firstPass.errors ?? {})).toContain('transient');
     await runDailyIncubationBooks(AS_OF, deps);
     expect(execute).toHaveBeenCalledTimes(1 + INCUBATION_BOOKS.length);
+  });
+
+  it('MED#3: a failing book does not starve the others in the same pass', async () => {
+    const simulate = vi.fn(async (book: { bookId: string }) => {
+      if (book.bookId === INCUBATION_BOOKS[1].bookId) throw new Error('book2 boom');
+      return simulation;
+    });
+    const deps = dependencies({ simulate });
+
+    const result = await runDailyIncubationBooks(AS_OF, deps);
+
+    expect(result.errors?.[INCUBATION_BOOKS[1].bookId]).toBe('book2 boom');
+    expect(deps.execute).toHaveBeenCalledTimes(INCUBATION_BOOKS.length - 1);
+    expect(result.claimed).toBe(INCUBATION_BOOKS.length - 1);
+  });
+
+  it('LOW: a breachered book with an open position still exits on the next pass', async () => {
+    const buyOrder = {
+      label: INCUBATION_LABEL,
+      fill: {
+        action: 'BUY', symbol: 'AAA', ts: AS_OF,
+        cashAfter: new D(0), positionsValueAfter: new D(100_000), navAfter: new D(100_000),
+        positionsAfter: [{ symbol: 'AAA', qty: new D(20) }],
+      },
+    } as unknown as IncubationOrder;
+    const sellOrder = {
+      label: INCUBATION_LABEL,
+      fill: {
+        action: 'SELL', symbol: 'AAA', ts: AS_OF,
+        cashAfter: new D(50_000), positionsValueAfter: new D(50_000), navAfter: new D(100_000),
+        positionsAfter: [{ symbol: 'AAA', qty: new D(10) }],
+      },
+    } as unknown as IncubationOrder;
+    const originalPoint = {
+      ts: AS_OF, cash: new D(0), positionsValue: new D(100_000), nav: new D(100_000),
+      peakNav: new D(100_000), drawdown: new D(0), realizedVolAnnual: null, grossExposureScalar: 1,
+      positions: [{ symbol: 'AAA', qty: new D(20) }],
+    };
+    const breachedBookId = INCUBATION_BOOKS[0].bookId;
+    const deps = dependencies({
+      evaluation: vi.fn(async bookId => bookId === breachedBookId ? {
+        nav: new D(97), dailyPnl: new D(-3), drawdown: new D('0.03'), trackingError: new D(0),
+        benched: false, requiresRevalidation: false,
+      } : null),
+      priorBookCash: vi.fn(async bookId => bookId === breachedBookId ? new D(100_000) : new D(0)),
+      simulate: vi.fn(async () => (
+        {
+          orders: [buyOrder, sellOrder], daily: [originalPoint],
+          fills: [buyOrder.fill, sellOrder.fill],
+        } as unknown as IncubationSimulation
+      )),
+    });
+
+    const result = await runDailyIncubationBooks(AS_OF, deps);
+
+    const executedOrders = (deps.execute as ReturnType<typeof vi.fn>).mock.calls
+      .filter(call => call[0].bookId === breachedBookId)
+      .map(call => call[2].fill.action);
+    expect(executedOrders).toEqual(['SELL']);
+    expect(result.allocations[breachedBookId]).toBe('0');
+
+    // The persisted book of record must agree: no new position, cash reflects exits only.
+    const ledgerCall = (deps.persistLedger as ReturnType<typeof vi.fn>).mock.calls
+      .find(call => call[0].bookId === breachedBookId);
+    const persistedPoint = ledgerCall?.[2].daily.find((p: { ts: Date }) => p.ts.getTime() === AS_OF.getTime());
+    expect(persistedPoint.cash.toString()).toBe('50000');
+    expect(persistedPoint.positions).toEqual([{ symbol: 'AAA', qty: new D(10) }]);
   });
 
   it('persists each strategy-scoped close ledger only after its orders complete', async () => {

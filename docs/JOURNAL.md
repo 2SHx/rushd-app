@@ -15,6 +15,11 @@ Decisions: both windows/1% thresholds/2R frozen before evidence, one outcome-neu
 Verify: params `75c2399`, FULL source `6fde71d`, run `53430eca`; 262 trades, −0.23% mean, OOS CAGR −30.28%, DSR 0.448, MC p95 DD 65.45%, ruin 47%.
 Open: E1–E5 are terminally closed; retained intraday evidence is capped at 62 real trading days/name and remains Sharia execution-blocked.
 
+## 2026-07-19 — B1.1 incubation security hardening ✅ (gate: PASS)
+Shipped: structural INCUBATION_PAPER tier (enum + generated migrations + in-place backfill) so incubation books can never enter the shared autoRun/Alpaca pool; INCUBATION_TRADE transaction type keeps the $1M virtual books out of family ledgers; per-book failure containment; breaker = entries-only with frozen-day ledger reconstruction (frozenPointForDay + wasEntriesFrozen from persisted AllocationDecision.benched) so book-of-record, audit, and next-day verifyLedger agree; 73 focused tests.
+Decisions: three security-audit rounds (initial PASS-WITH-CONDITIONS → 2 FAILs on real drift → PASS); QDR-8 clarified 2026-07-19d (breaker halts entries only, exits always allowed); AllocationDecision.benched reused as the entriesFrozen flag (no new column).
+Open: two promotion-gate conditions from the auditor before ANY book leaves incubation — (a) interleaved same-day suppressed-BUY+executed-SELL test, (b) multi-day frozen-chain test; owner backend-expert + test-engineer.
+
 ## 2026-07-19 — R4-E4 bagholder-bounce terminal verdict ✅
 Shipped: Pre-registered and ran the ≥20% gap + 5% flush + first-higher-low long-only setup; FULL REJECTED.
 Decisions: thresholds/window/2R frozen before evidence, real Alpaca-IEX only, fixed 11 names, seed 42, no tuning after the zero-trade diagnostic.

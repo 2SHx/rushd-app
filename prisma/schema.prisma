@@ -47,6 +47,7 @@ enum TransactionType {
   QUEST_REWARD
   ALLOWANCE
   PROFIT_SHARE
+  INCUBATION_TRADE
 }
 
 model User {
@@ -389,12 +390,14 @@ enum AutonomyTier {
   HUMAN_APPROVE
   AUTO_PAPER
   AUTO_REAL
+  INCUBATION_PAPER
 }
 
 enum DecisionMode {
   HUMAN_APPROVE
   AUTO_PAPER
   AUTO_REAL
+  INCUBATION_PAPER
 }
 
 enum DecisionStatus {

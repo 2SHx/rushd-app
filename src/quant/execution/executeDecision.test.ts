@@ -141,6 +141,24 @@ describe('executeDecision', () => {
     expect(h.tx.decision.update).toHaveBeenCalledTimes(1);
   });
 
+  it('MED#2: an isolated-book trade is labeled INCUBATION_TRADE, never owner-visible TRADE', async () => {
+    (prisma.decision.findUnique as any).mockResolvedValue(decision({ strategyId: 'book-strategy' }));
+    const submitOrder = vi.fn().mockResolvedValue({
+      brokerRef: 'internal-only', status: 'FILLED', filledQty: new D(10), avgFillPrice: new D('123.1845'),
+    });
+
+    await executeDecision('dec-1', OWNER, {
+      broker: { kind: 'INTERNAL_SIM', submitOrder } as any,
+      refPrice: new D(123),
+      isolatedPaperBook: true,
+    });
+
+    expect(h.tx.transaction.create.mock.calls[0][0].data.type).toBe('INCUBATION_TRADE');
+    // A family ledger sum (Prisma aggregate over type: 'TRADE') provably excludes this row.
+    const familyLedgerTypes = ['DEPOSIT', 'WITHDRAWAL', 'TRADE', 'QUEST_REWARD', 'ALLOWANCE', 'PROFIT_SHARE'];
+    expect(familyLedgerTypes).not.toContain(h.tx.transaction.create.mock.calls[0][0].data.type);
+  });
+
   it('fails closed when isolated-book execution is not strategy-scoped InternalSim', async () => {
     (prisma.decision.findUnique as any).mockResolvedValue(decision({ strategyId: null }));
     await expect(executeDecision('dec-1', OWNER, {

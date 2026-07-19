@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { Market, Strategy } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -81,6 +82,9 @@ export interface IncubationOrder {
 export interface IncubationSimulation {
   orders: IncubationOrder[];
   daily: readonly StrategyBookDailyPoint[];
+  /** Full-history fills (not day-filtered): needed to reconstruct a frozen-entries day's
+   * exit-only ledger point on replay, not just today's (security gate 2026-07-19 MED). */
+  fills: readonly StrategyBookFill[];
 }
 
 export interface IncubationDependencies {
@@ -93,6 +97,13 @@ export interface IncubationDependencies {
   claim(bookId: string, asOf: Date, claimedAt: Date): Promise<Date | null>;
   releaseClaim(bookId: string, asOf: Date, lease: Date): Promise<void>;
   simulate(book: IncubationBook, cash: Prisma.Decimal, asOf: Date): Promise<IncubationSimulation>;
+  /** QDR-8 clarified 2026-07-19d: the −3%/day breaker halts NEW ENTRIES only. When today's
+   * fresh allocation is zeroed by a breach/bench, this recovers the book's last committed
+   * capital so the replay can still surface exit fills for any open position. */
+  priorBookCash(bookId: string, asOf: Date): Promise<Prisma.Decimal>;
+  /** Round-trips the entriesFrozen flag persisted alongside the daily allocation (security gate
+   * 2026-07-19 round 2, MED) so verifyLedger can reproduce a frozen day identically on replay. */
+  wasEntriesFrozen(bookId: string, asOf: Date): Promise<boolean>;
   verifyLedger(book: IncubationBook, ownerUserId: string, simulation: IncubationSimulation, asOf: Date): Promise<void>;
   persistLedger(book: IncubationBook, ownerUserId: string, simulation: IncubationSimulation, asOf: Date): Promise<void>;
   execute(book: IncubationBook, ownerUserId: string, order: IncubationOrder): Promise<boolean>;
@@ -106,6 +117,8 @@ export interface IncubationRunResult {
   label: typeof INCUBATION_LABEL;
   allocations: Record<string, string>;
   reason?: string;
+  /** One failing book must not starve the others (security gate 2026-07-19 MED#3): keyed by bookId. */
+  errors?: Record<string, string>;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -161,6 +174,62 @@ function persistedLedgerMatches(
 function pointForDay(simulation: IncubationSimulation, asOf: Date): StrategyBookDailyPoint | null {
   const target = dayStart(asOf).getTime();
   return simulation.daily.find(point => dayStart(point.ts).getTime() === target) ?? null;
+}
+
+/**
+ * QDR-8 clarified 2026-07-19d (security gate MED, 2026-07-19): the daily/breach breaker halts
+ * NEW ENTRIES only. Post-filtering executed orders is not enough — the persisted book-of-record
+ * (NAV/cash/positions) must also agree that no new position was opened. Given a day's full fills,
+ * this reconstructs that day's ledger point from only the allowed (SELL) fills, or freezes at
+ * yesterday's close if none of that day's fills were exits, so ledger, NAV, and audit records
+ * never disagree — and so a historically frozen day can be reproduced identically on replay
+ * (security gate 2026-07-19 round 2, MED).
+ */
+function frozenPointForDay(
+  simulation: IncubationSimulation,
+  day: Date,
+): { orders: IncubationOrder[]; point: StrategyBookDailyPoint | null } {
+  const target = dayStart(day).getTime();
+  const allowedFills = simulation.fills.filter(fill => (
+    dayStart(fill.ts).getTime() === target && fill.action === 'SELL'
+  ));
+  const orders: IncubationOrder[] = allowedFills.map(fill => ({ fill, label: INCUBATION_LABEL }));
+  const priorPoint = simulation.daily.filter(p => dayStart(p.ts).getTime() < target).at(-1) ?? null;
+  const lastAllowed = allowedFills.at(-1);
+  let point: StrategyBookDailyPoint | null;
+  if (lastAllowed) {
+    const { cashAfter, positionsValueAfter, navAfter, positionsAfter } = lastAllowed;
+    // Recomputed (not carried) — LOW fix (security gate 2026-07-19 round 2): a stale
+    // pre-freeze peakNav/drawdown would silently misreport risk on a frozen day.
+    const peakNav = priorPoint && priorPoint.peakNav.gte(navAfter) ? priorPoint.peakNav : navAfter;
+    point = {
+      ts: dayStart(day), cash: cashAfter, positionsValue: positionsValueAfter, nav: navAfter,
+      peakNav, drawdown: peakNav.gt(0) ? peakNav.minus(navAfter).div(peakNav) : ZERO,
+      realizedVolAnnual: null, grossExposureScalar: 1, positions: positionsAfter,
+    };
+  } else if (priorPoint) {
+    const peakNav = priorPoint.peakNav.gte(priorPoint.nav) ? priorPoint.peakNav : priorPoint.nav;
+    point = {
+      ...priorPoint, ts: dayStart(day), peakNav,
+      drawdown: peakNav.gt(0) ? peakNav.minus(priorPoint.nav).div(peakNav) : ZERO,
+    };
+  } else {
+    point = null;
+  }
+  return { orders, point };
+}
+
+function freezeEntries(
+  simulation: IncubationSimulation,
+  asOf: Date,
+): { orders: IncubationOrder[]; simulation: IncubationSimulation } {
+  const target = dayStart(asOf).getTime();
+  const { orders, point } = frozenPointForDay(simulation, asOf);
+  const daily = [
+    ...simulation.daily.filter(p => dayStart(p.ts).getTime() !== target),
+    ...(point ? [point] : []),
+  ].sort((a, b) => a.ts.getTime() - b.ts.getTime());
+  return { orders, simulation: { orders, daily, fills: simulation.fills } };
 }
 
 function validatedAllocationMap(value: Prisma.JsonValue): Record<string, string> {
@@ -250,11 +319,11 @@ export async function simulateIncubationBook(
   startingCash: Prisma.Decimal,
   asOf: Date,
 ): Promise<IncubationSimulation> {
-  if (!startingCash.gt(0)) return { orders: [], daily: [] };
+  if (!startingCash.gt(0)) return { orders: [], daily: [], fills: [] };
   const setup = STRATEGY_SETUP_CATALOG[book.setupId] as StrategySetup<unknown>;
   const params = setup.defaultParams;
   const series = await loadSeries(book, asOf);
-  if (!series.length) return { orders: [], daily: [] };
+  if (!series.length) return { orders: [], daily: [], fills: [] };
   const replayScope = {};
   setup.prepareUniverse?.({
     symbols: series.map(item => item.symbol), replayScope,
@@ -271,16 +340,21 @@ export async function simulateIncubationBook(
   const orders: IncubationOrder[] = result.fills
     .filter(fill => dayStart(fill.ts).getTime() === activeDay)
     .map(fill => ({ fill, label: INCUBATION_LABEL }));
-  return { orders, daily: result.daily };
+  return { orders, daily: result.daily, fills: result.fills };
 }
 
-async function ensureStrategy(book: IncubationBook, ownerUserId: string): Promise<Strategy> {
+export async function ensureStrategy(book: IncubationBook, ownerUserId: string): Promise<Strategy> {
   const name = `INCUBATION:${book.bookId}`;
-  const existing = await prisma.strategy.findFirst({ where: { ownerUserId, name, autonomyTier: 'AUTO_PAPER' } });
-  if (existing) return existing;
+  const existing = await prisma.strategy.findFirst({ where: { ownerUserId, name } });
+  if (existing) {
+    if (existing.autonomyTier === 'INCUBATION_PAPER') return existing;
+    // Backfill (security gate 2026-07-19 HIGH): migrate a pre-hardening AUTO_PAPER incubation
+    // row to INCUBATION_PAPER in place instead of creating a duplicate strategy for this book.
+    return prisma.strategy.update({ where: { id: existing.id }, data: { autonomyTier: 'INCUBATION_PAPER' } });
+  }
   return prisma.strategy.create({
     data: {
-      ownerUserId, name, market: 'NASDAQ', autonomyTier: 'AUTO_PAPER', enabled: true,
+      ownerUserId, name, market: 'NASDAQ', autonomyTier: 'INCUBATION_PAPER', enabled: true,
       config: { setupId: book.setupId, paramsVersion: book.paramsVersion, label: INCUBATION_LABEL },
     },
   });
@@ -306,7 +380,7 @@ async function executeIncubationOrder(
     riskAdjustments: { source: 'simulateStrategyBook', adjustments: order.fill.envelope.adjustments, label: order.label },
     debateTranscript: { deterministic: true, zeroLlm: true, bookId: book.bookId, label: order.label },
     temperature: ZERO, seed: INCUBATION_SEED, gitSha: process.env.VERCEL_GIT_COMMIT_SHA,
-    mode: 'AUTO_PAPER' as const, status: 'APPROVED' as const, costCents: 0,
+    mode: 'INCUBATION_PAPER' as const, status: 'APPROVED' as const, costCents: 0,
   };
   const decision = await prisma.decision.upsert({
     where: { id: decisionId },
@@ -325,8 +399,27 @@ async function executeIncubationOrder(
   return result.status !== 'ALREADY_EXECUTED';
 }
 
-const defaultDependencies: IncubationDependencies = {
+export const defaultDependencies: IncubationDependencies = {
   halted: () => isHalted(),
+  async priorBookCash(bookId, asOf) {
+    const prior = await prisma.allocationDecision.findFirst({
+      where: { asOf: { lt: dayStart(asOf) } },
+      orderBy: { asOf: 'desc' },
+      select: { inputs: true },
+    });
+    const rawInputs = z.object({ bookCash: z.record(z.string()).optional() })
+      .safeParse(prior?.inputs);
+    const raw = rawInputs.success ? rawInputs.data.bookCash?.[bookId] : undefined;
+    if (typeof raw !== 'string') return ZERO;
+    let parsed: Prisma.Decimal;
+    try {
+      parsed = new D(raw);
+    } catch {
+      return ZERO;
+    }
+    if (!parsed.isFinite() || parsed.isNaN() || parsed.lt(0) || parsed.gt(INTERNAL_SIM_BANKROLL)) return ZERO;
+    return parsed;
+  },
   async availableCash(ownerUserId) {
     const owner = await prisma.user.findUnique({ where: { id: ownerUserId }, select: { role: true, tier: true } });
     assertIncubationOwner(owner);
@@ -394,12 +487,29 @@ const defaultDependencies: IncubationDependencies = {
     });
   },
   simulate: simulateIncubationBook,
+  async wasEntriesFrozen(bookId, asOf) {
+    const row = await prisma.allocationDecision.findFirst({
+      where: { asOf: dayStart(asOf) }, select: { benched: true },
+    });
+    // `benched` already carries every bookId whose fresh allocation was zeroed that day
+    // (security gate 2026-07-19 round 2, MED): this IS the entriesFrozen flag, round-tripped
+    // through the existing AllocationDecision record rather than a duplicate column.
+    return Boolean(row?.benched.includes(bookId));
+  },
   async verifyLedger(book, ownerUserId, simulation, asOf) {
     const strategy = await ensureStrategy(book, ownerUserId);
     const activeDay = dayStart(asOf).getTime();
-    const expectedPrior = [...simulation.daily]
+    const rawExpectedPrior = [...simulation.daily]
       .filter(point => dayStart(point.ts).getTime() < activeDay)
       .at(-1) ?? null;
+    if (!rawExpectedPrior) return;
+    const priorWasFrozen = await defaultDependencies.wasEntriesFrozen(book.bookId, rawExpectedPrior.ts);
+    // A historically frozen day cannot be reproduced by a raw replay (which re-simulates the
+    // suppressed entries): reconstruct it in the same exit-only mode it was persisted in
+    // (security gate 2026-07-19 round 2, MED) instead of comparing against the raw point.
+    const expectedPrior = priorWasFrozen
+      ? frozenPointForDay(simulation, rawExpectedPrior.ts).point
+      : rawExpectedPrior;
     if (!expectedPrior) return;
     const prior = await prisma.portfolioSnapshot.findFirst({
       where: { strategyId: strategy.id, asOf: { lt: dayStart(asOf) } },
@@ -467,34 +577,50 @@ export async function runDailyIncubationBooks(
 
   let claimed = 0;
   let executed = 0;
+  const errors: Record<string, string> = {};
   for (const { book } of states) {
     const lease = await deps.claim(book.bookId, asOf, now);
     if (!lease) continue;
     claimed += 1;
     try {
-      const bookCash = cash.mul(allocations[book.bookId] ?? '0');
+      // QDR-8 clarified 2026-07-19d: the −3%/day breaker/bench halts NEW ENTRIES only.
+      // A zeroed fresh allocation must not also freeze exits of an already-open position.
+      const freshBookCash = cash.mul(allocations[book.bookId] ?? '0');
+      const entriesAllowed = freshBookCash.gt(0);
+      const bookCash = entriesAllowed ? freshBookCash : await deps.priorBookCash(book.bookId, asOf);
       if (!bookCash.gt(0)) continue;
-      const simulation = await deps.simulate(book, bookCash, asOf);
-      await deps.verifyLedger(book, ownerUserId, simulation, asOf);
-      for (const order of simulation.orders) {
+      const rawSimulation = await deps.simulate(book, bookCash, asOf);
+      await deps.verifyLedger(book, ownerUserId, rawSimulation, asOf);
+      // MED (security gate 2026-07-19): when entries are frozen, the book of record itself
+      // (persisted ledger) must reflect exit-only outcomes — not just which orders execute.
+      const { orders, simulation } = entriesAllowed
+        ? { orders: rawSimulation.orders, simulation: rawSimulation }
+        : freezeEntries(rawSimulation, asOf);
+      for (const order of orders) {
         if (await deps.halted()) {
           await deps.releaseClaim(book.bookId, asOf, lease);
           claimed -= 1;
           return {
             processed: claimed > 0, asOf: asOf.toISOString(), claimed, executed,
             label: INCUBATION_LABEL, allocations, reason: 'halted',
+            ...(Object.keys(errors).length ? { errors } : {}),
           };
         }
         if (await deps.execute(book, ownerUserId, order)) executed += 1;
       }
       await deps.persistLedger(book, ownerUserId, simulation, asOf);
     } catch (error) {
+      // Per-book failure containment (security gate 2026-07-19 MED#3): release this book's
+      // claim/lease so it can retry next pass, record the error, and let the remaining books
+      // in this pass run to completion instead of aborting the whole batch.
       await deps.releaseClaim(book.bookId, asOf, lease);
-      throw error;
+      claimed -= 1;
+      errors[book.bookId] = error instanceof Error ? error.message : String(error);
     }
   }
   return {
     processed: claimed > 0, asOf: asOf.toISOString(), claimed, executed,
     label: INCUBATION_LABEL, allocations,
+    ...(Object.keys(errors).length ? { errors } : {}),
   };
 }

@@ -97,7 +97,7 @@ async function closeOnDay(symbol: 'SPY' | 'SPUS', asOf: Date): Promise<Prisma.De
 
 async function evaluateBook(bookId: string, ownerUserId: string, asOf: Date): Promise<NightlyBookEvaluation | null> {
   const strategy = await prisma.strategy.findFirst({
-    where: { ownerUserId, name: `INCUBATION:${bookId}`, autonomyTier: 'AUTO_PAPER' }, select: { id: true },
+    where: { ownerUserId, name: `INCUBATION:${bookId}`, autonomyTier: 'INCUBATION_PAPER' }, select: { id: true },
   });
   if (!strategy) return null;
   const snapshots = await prisma.portfolioSnapshot.findMany({
@@ -136,7 +136,7 @@ async function evaluateBook(bookId: string, ownerUserId: string, asOf: Date): Pr
   };
 }
 
-const defaultDependencies: IncubationEvaluationDependencies = {
+export const defaultDependencies: IncubationEvaluationDependencies = {
   halted: () => isHalted(),
   owner: ownerUserId => prisma.user.findUnique({ where: { id: ownerUserId }, select: { role: true, tier: true } }),
   async latestAsOf(now) {
@@ -152,7 +152,7 @@ const defaultDependencies: IncubationEvaluationDependencies = {
   },
   async pendingAsOf(bookId, ownerUserId, watermark) {
     const strategy = await prisma.strategy.findFirst({
-      where: { ownerUserId, name: `INCUBATION:${bookId}`, autonomyTier: 'AUTO_PAPER' }, select: { id: true },
+      where: { ownerUserId, name: `INCUBATION:${bookId}`, autonomyTier: 'INCUBATION_PAPER' }, select: { id: true },
     });
     if (!strategy) return [];
     const snapshots = await prisma.portfolioSnapshot.findMany({

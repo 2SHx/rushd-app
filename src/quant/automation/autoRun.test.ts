@@ -64,6 +64,24 @@ describe('runAutomatedStrategies', () => {
     });
   });
 
+  it('MED#1: an INCUBATION_PAPER strategy with a valid symbols config is never picked up', async () => {
+    // The mock stands in for Postgres's WHERE evaluation: the query itself is the
+    // structural discriminator (security gate 2026-07-19), not a config parse failure.
+    h.strategyFindMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      const pool = [
+        strategy({ id: 'incubation-1', autonomyTier: 'INCUBATION_PAPER', config: { symbols: ['AAPL'] } }),
+        strategy({ id: 'auto-paper-1' }),
+      ];
+      return pool.filter(s => Object.entries(where).every(([k, v]) => (s as Record<string, unknown>)[k] === v));
+    });
+    h.runCommitteePass.mockResolvedValue({ decisionId: 'd1', finalAction: 'HOLD' });
+
+    await runAutomatedStrategies();
+
+    const ranStrategyIds = h.runCommitteePass.mock.calls.map(call => call[0].strategyId);
+    expect(ranStrategyIds).not.toContain('incubation-1');
+  });
+
   it('claims each (day, strategy, symbol) unit before running the committee pass', async () => {
     h.strategyFindMany.mockResolvedValue([strategy()]);
     h.runCommitteePass.mockResolvedValue({ decisionId: 'dec-1', finalAction: 'HOLD' });

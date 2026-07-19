@@ -64,6 +64,8 @@ export async function runAutomatedStrategies(now: Date = new Date()): Promise<Au
     return { processed: false, ran: 0, executed: 0, reason: 'halted' };
   }
 
+  // Structural exclusion (QDR-8/security gate 2026-07-19): incubation strategies carry a
+  // dedicated autonomyTier so isolation does not depend on config schema parse failures.
   const strategies = await prisma.strategy.findMany({
     where: { enabled: true, autonomyTier: 'AUTO_PAPER' },
     take: MAX_STRATEGIES,
