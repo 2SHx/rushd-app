@@ -55,6 +55,7 @@ intraday ≈ 19.6%/yr Sharpe 1.33–2.4 — beating literature by 10× is a bug 
 | R4-B2 nightly incubation evaluation | backend-expert + security-auditor | ✅ DONE | Signed after-close pass backfills every unmarked strategy-book snapshot through the real SPY/SPUS watermark, writes real benchmark marks plus `BookEvaluation` NAV/daily P&L/current peak-to-trough drawdown/tracking error, and persists drawdown/TE auto-bench + revalidation flags consumed by B1; token-matched claims make same-day reruns no-ops. |
 | R4-E1 momentum v4 | quant-strategist | ✅ DONE / REJECTED | FULL `d00c79b` / `9fd3f2d5`: 1,693 records, CAGR 7.00% / OOS 13.11%, DSR 0.556 / 0.428, realized maxDD 18.31% but MC p95 DD 41.49%, plateau FAIL; C1 cleared the Sharia-verification failure. No retune/admission. |
 | R4-E2 Bollinger MR v3 | quant-strategist | ✅ DONE / REJECTED | FULL `d4814b6` / `4b2d4085`: breadth delivered 625 trades and plateau PASS, but OOS DSR 0.388, MC p95 DD 58.45%, and ruin 5.50% rejected it; C1 cleared Sharia. No retune/admission. |
+| R4-E3 multi-mode book v1 | quant-strategist | 🧪 CODIFIED / PRE-REGISTERED | One shared-cash, disjoint C1 charter; existing allocator freezes 20% momentum / 40% MR / 40% dual at seed 42, with signal-cadence rebalance and three declared trials. |
 
 ## Multi-mode doctrine (user directive 2026-07-12: "we should have many modes, not restricted to the filter")
 

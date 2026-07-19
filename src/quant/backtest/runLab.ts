@@ -27,6 +27,7 @@ import {
   g6bLinearFactorBookPolicy,
 } from '../strategies/g6bLinearFactor';
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
+import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -100,12 +101,15 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'tom-overlay',
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
+  'multi-mode-book-v1',
 ]);
 
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v4',
   'bollinger-mr-long-v3',
 ]);
+
+const C1_VERIFIED_FIXED_SETUP_IDS: ReadonlySet<string> = new Set(['multi-mode-book-v1']);
 
 export function selectDailyBacktestRoute(
   setupId: string,
@@ -317,6 +321,7 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
   if (setupId === 'g6b-linear-factor-wide') return g6bLinearFactorWideBookPolicy();
+  if (setupId === 'multi-mode-book-v1') return multiModeBookPolicy();
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -977,7 +982,16 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
-      if (C1_VERIFIED_SLEEVE_SETUP_IDS.has(setupId)) {
+      if (C1_VERIFIED_FIXED_SETUP_IDS.has(setupId)) {
+        const universe = buildVerifiedUniverse();
+        const bySymbol = new Map(universe.entries.map((entry) => [entry.symbol, entry]));
+        const missing = MULTI_MODE_UNIVERSE.filter((symbol) => !bySymbol.has(symbol));
+        if (missing.length) throw new Error(`${setupId} C1 verification missing: ${missing.join(', ')}`);
+        verifiedShariaEntries = MULTI_MODE_UNIVERSE.map((symbol) => bySymbol.get(symbol)!);
+        symbols = [...MULTI_MODE_UNIVERSE];
+        universeTag = 'c1-verified:multi-mode-16';
+        universeIsUnscreened = false;
+      } else if (C1_VERIFIED_SLEEVE_SETUP_IDS.has(setupId)) {
         const universe = buildVerifiedUniverse();
         const selected = await selectDollarVolumeSleeve(universe.entries, {
           asOf: new Date(`${to}T23:59:59.999Z`),
