@@ -696,7 +696,9 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   useEffect(() => {
     if (!selected) return;
     if (!isStrategyLearningSetupId(selected.setupId)) {
-      setLearningGateStatus('error');
+      // No learning module exists for this setup — there is nothing to complete, so the
+      // performance detail is not gated.
+      setLearningGateStatus('unlocked');
       return;
     }
 
@@ -841,12 +843,14 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
       />
 
       <div ref={selectedTeamRef} className="scroll-mt-6">
+        {isStrategyLearningSetupId(selected.setupId) ? (
         <TeamLearningGate
           team={selected}
           locale={locale}
           status={learningGateStatus}
           onRetry={() => setLearningGateRevision(revision => revision + 1)}
         />
+        ) : null}
       </div>
 
       {learningGateStatus === 'unlocked' ? (
