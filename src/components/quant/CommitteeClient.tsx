@@ -32,10 +32,9 @@ import {
 
 import { RiyalAmount, formatSARNumber } from '@/lib/currency';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
+import StrategyLeagueClient from './StrategyLeagueClient';
+import RunLabPanel from './RunLabPanel';
 import type { RunnableSetup } from './RunLabPanel';
-
-const StrategyLeagueClient = dynamic(() => import('./StrategyLeagueClient'));
-const RunLabPanel = dynamic(() => import('./RunLabPanel'));
 
 type MarketKind = 'TASI' | 'NASDAQ';
 export type Stance = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
@@ -321,8 +320,8 @@ export default function CommitteeClient({
 
   const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(null);
 
-  const [market, setMarket] = useState<MarketKind>('TASI');
-  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.TASI);
+  const [market, setMarket] = useState<MarketKind>('NASDAQ');
+  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL.NASDAQ);
 
   const [passLoading, setPassLoading] = useState(false);
   const [passError, setPassError] = useState<string | null>(null);
@@ -751,7 +750,7 @@ export default function CommitteeClient({
         {points.length > 1 && [0, points.length - 1].map((pIdx) => {
           const p = points[pIdx];
           return (
-            <text key={pIdx} x={p.x} y={h - 15} textAnchor={pIdx === 0 ? 'start' : 'end'} className="text-[8px] font-mono fill-gray-500">
+            <text key={pIdx} x={p.x} y={h - 15} textAnchor={pIdx === 0 ? 'start' : 'end'} className="text-[8px] font-mono fill-gray-500" suppressHydrationWarning>
               {new Date(p.date).toLocaleDateString(locale)}
             </text>
           );
@@ -1240,7 +1239,7 @@ export default function CommitteeClient({
                               <span>
                                 {isAr ? 'الإجراء النهائي:' : 'Action:'} <strong className="text-foreground">{dec.finalAction}</strong>
                               </span>
-                              <span>{new Date(dec.createdAt).toLocaleDateString(locale)}</span>
+                              <span suppressHydrationWarning>{new Date(dec.createdAt).toLocaleDateString(locale)}</span>
                             </div>
                             </button>
 

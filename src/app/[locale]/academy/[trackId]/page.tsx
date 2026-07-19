@@ -178,10 +178,8 @@ export default async function AcademyTrackPage({
                             <CheckCircle2 className="size-6 text-white" aria-hidden="true" />
                           ) : isCurrent ? (
                             <PlayCircle className="size-6 text-white" aria-hidden="true" />
-                          ) : isLocked ? (
-                            <Lock className="size-5 text-foreground/40" aria-hidden="true" />
                           ) : (
-                            <span>{lessonIndex + 1}</span>
+                            <span className="text-foreground/75">{lessonIndex + 1}</span>
                           )}
                         </div>
 

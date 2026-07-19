@@ -9,8 +9,8 @@ const learningLab = readFileSync(new URL('../learning/StrategyLearningLab.tsx', 
 
 describe('Quant Advisor and Strategy Teams integration', () => {
   it('uses the real strategy lab and evidence league inside the advisor workspace', () => {
-    expect(committee).toContain("dynamic(() => import('./RunLabPanel'))");
-    expect(committee).toContain("dynamic(() => import('./StrategyLeagueClient'))");
+    expect(committee).toContain("import RunLabPanel from './RunLabPanel'");
+    expect(committee).toContain("import StrategyLeagueClient from './StrategyLeagueClient'");
     expect(committee).toContain("useState<'advisor' | 'teams' | 'portfolio'>");
     expect(committee).toContain("activeTab === 'teams'");
     expect(committee).not.toContain('MavericksSquadPanel');

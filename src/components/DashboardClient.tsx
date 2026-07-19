@@ -927,26 +927,26 @@ export default function DashboardClient({
             )}
           </section>
 
-          {/* Key Metrics — the whole section is dropped when there is no persisted performance history to compute it from */}
+          {/* Key Metrics — unhidden when metrics are available or in demo mode */}
           {hasPerformanceMetrics && (
-            <section className="rounded-[1.75rem] bg-surface-card p-6 shadow-sm ring-1 ring-foreground/[0.06]">
-              <h3 className="mb-4 font-semibold text-foreground">{isAlpaca ? t('alpacaMetricsTitle') : t('metricsHeading')}</h3>
+            <section className="rounded-[1.75rem] border border-foreground/10 bg-surface-card p-6 shadow-sm">
+              <h3 className="mb-4 text-sm font-bold text-foreground">{isAlpaca ? t('alpacaMetricsTitle') : t('metricsHeading')}</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                  <span className="text-foreground/55">{t('metricSharpe')}</span>
-                  <span className="font-mono font-semibold tabular-nums text-foreground">{metrics.sharpe.toFixed(2)}</span>
+                  <span className="text-xs font-medium text-foreground/60">{t('metricSharpe')}</span>
+                  <span className="font-mono font-extrabold tabular-nums text-foreground">{metrics.sharpe.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                  <span className="text-foreground/55">{t('metricCagr')}</span>
-                  <span className="font-mono font-semibold tabular-nums text-foreground">{`${(metrics.cagr * 100).toFixed(1)}%`}</span>
+                  <span className="text-xs font-medium text-foreground/60">{t('metricCagr')}</span>
+                  <span className="font-mono font-extrabold tabular-nums text-foreground" dir="ltr">{`${(metrics.cagr * 100).toFixed(1)}%`}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-foreground/[0.06] pb-3 text-sm">
-                  <span className="text-foreground/55">{t('metricAlphaSpus')}</span>
-                  <span className="font-mono font-semibold tabular-nums text-foreground">{`${(metrics.alphaVsSpus * 100).toFixed(2)}%`}</span>
+                  <span className="text-xs font-medium text-foreground/60">{t('metricAlphaSpus')}</span>
+                  <span className="font-mono font-extrabold tabular-nums text-foreground" dir="ltr">{`${(metrics.alphaVsSpus * 100).toFixed(2)}%`}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-foreground/55">{t('metricMaxDrawdown')}</span>
-                  <span className="font-mono font-semibold tabular-nums text-down">{`${(metrics.maxDrawdown * 100).toFixed(1)}%`}</span>
+                  <span className="text-xs font-medium text-foreground/60">{t('metricMaxDrawdown')}</span>
+                  <span className="font-mono font-extrabold tabular-nums text-down" dir="ltr">{`${(metrics.maxDrawdown * 100).toFixed(1)}%`}</span>
                 </div>
               </div>
             </section>

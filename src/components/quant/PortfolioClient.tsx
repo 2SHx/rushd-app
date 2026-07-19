@@ -261,10 +261,10 @@ export default function PortfolioClient({
         <path d={createPath(p => p.navY)} fill="none" stroke="#6366F1" strokeWidth="3" />
         
         {/* Axis Labels */}
-        <text x={padding} y={h - 10} className="text-[10px] fill-gray-500">
+        <text x={padding} y={h - 10} className="text-[10px] fill-gray-500" suppressHydrationWarning>
           {new Date(minTime).toLocaleDateString(locale)}
         </text>
-        <text x={w - padding} y={h - 10} textAnchor="end" className="text-[10px] fill-gray-500">
+        <text x={w - padding} y={h - 10} textAnchor="end" className="text-[10px] fill-gray-500" suppressHydrationWarning>
           {new Date(maxTime).toLocaleDateString(locale)}
         </text>
       </svg>
@@ -595,7 +595,7 @@ export default function PortfolioClient({
                   <tbody>
                     {purification.map(entry => (
                       <tr key={entry.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-2 text-gray-400 font-mono text-xs">{new Date(entry.createdAt).toLocaleDateString(locale)}</td>
+                        <td className="py-3.5 px-2 text-gray-400 font-mono text-xs" suppressHydrationWarning>{new Date(entry.createdAt).toLocaleDateString(locale)}</td>
                         <td className="py-3.5 px-2 font-black text-emerald-400">{entry.symbol}</td>
                         <td className="py-3.5 px-2 text-end text-amber-400 font-bold font-mono">{fmtNumber(entry.amount)}</td>
                       </tr>
