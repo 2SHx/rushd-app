@@ -9,6 +9,11 @@ Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 
+## 2026-07-19 — Incubation go-live wiring: owner, env, local scheduler ✅
+Shipped: PARENT+ULTRA incubation owner via sanctioned scripts (seed-dev + new set-incubation-owner.mjs); CRON_SECRET + QUANT_INCUBATION_OWNER_USER_ID in .env; scripts/incubation-day.ts (idempotent chained runner: real keyless ingest with MARKET_DATA_MODE guard + Neon-retry → daily pass → nightly eval); purge-mock-bars.mjs cleaned 1,859 MOCK strays; real SPY/SPUS/HLAL benchmark bars restored (1200d YAHOO — this branch had zero).
+Decisions: ingest child forces MARKET_DATA_MODE=keyless (registry otherwise falls back to MOCK, which the incubation query fail-closed rejected — the guard worked); first eligible trading day is Mon 2026-07-21 (INCUBATION_START=07-19, no backdating); crontab install blocked by permission classifier — user runs one line (see session report).
+Open: user installs the crontab line; Neon free-tier connection exhaustion under concurrent FULL backtests is an operational flake (runner retries 3×30s); HLAL deep history still shallow (forward ingest only).
+
 ## 2026-07-19 — R4-E7 nvda-focus-v1 single-stock terminal verdict ✅
 Shipped: Pre-registered (committed BEFORE any run) a single-name {NVDA} book — dual time-series momentum (252d skip-21 AND 63d, hold-both-positive, exit either ≤0), 100% single-name sizing (diversified name/vol/risk caps lifted; ADV/cash/gross + a 10%→25% book drawdown governor stay binding), C1 Tier-2 AAOIFI VERIFIED_COMPLIANT; 1Y diagnostic (0-trade, formation window) then ONE FULL run; FULL REJECTED.
 Decisions: frozen 3×3 plateau {231,252,273}×{42,63,84}, seed 42, 30% OOS, 15 bps/side, episodes counted per the dual-momentum precedent (added nvda-focus to collapseMaxOnePositionEpisodes); generalized the C1-verified fixed route to a per-setup universe map; no tuning against viewed OOS.
