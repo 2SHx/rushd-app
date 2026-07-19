@@ -16,6 +16,7 @@ import { g6bLinearFactorSetup } from './g6bLinearFactor';
 import { g6bLinearFactorWideSetup } from './g6bLinearFactorWide';
 import { multiModeBookSetup } from './multiModeBook';
 import { bagholderBounceSetup } from './bagholderBounce';
+import { timeOfDaySetup } from './timeOfDay';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -36,4 +37,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [g6bLinearFactorWideSetup.id]: g6bLinearFactorWideSetup,
   [multiModeBookSetup.id]: multiModeBookSetup,
   [bagholderBounceSetup.id]: bagholderBounceSetup,
+  [timeOfDaySetup.id]: timeOfDaySetup,
 });
