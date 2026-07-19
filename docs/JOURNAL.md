@@ -8,6 +8,12 @@ Entry format:
 Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
+
+## 2026-07-19 — R4-E4 bagholder-bounce terminal verdict ✅
+Shipped: Pre-registered and ran the ≥20% gap + 5% flush + first-higher-low long-only setup; FULL REJECTED.
+Decisions: thresholds/window/2R frozen before evidence, real Alpaca-IEX only, fixed 11 names, seed 42, no tuning after the zero-trade diagnostic.
+Verify: source `cecc9d4`; FULL `b98e0145`; 247,565 minute bars, 682 symbol-days, 0 trades, DSR 0.000, Sharia execution-blocked.
+Open: E5 next; the 512 MB provider cap limits retained intraday evidence to 62 trading days/name, explicitly non-promotable.
 ```
 
 ---
