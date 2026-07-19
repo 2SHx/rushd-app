@@ -15,6 +15,7 @@ import { tomOverlaySetup } from './tomOverlay';
 import { g6bLinearFactorSetup } from './g6bLinearFactor';
 import { g6bLinearFactorWideSetup } from './g6bLinearFactorWide';
 import { multiModeBookSetup } from './multiModeBook';
+import { multiModeBookV2Setup } from './multiModeBookV2';
 import { bagholderBounceSetup } from './bagholderBounce';
 import { timeOfDaySetup } from './timeOfDay';
 
@@ -36,6 +37,7 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [g6bLinearFactorSetup.id]: g6bLinearFactorSetup,
   [g6bLinearFactorWideSetup.id]: g6bLinearFactorWideSetup,
   [multiModeBookSetup.id]: multiModeBookSetup,
+  [multiModeBookV2Setup.id]: multiModeBookV2Setup,
   [bagholderBounceSetup.id]: bagholderBounceSetup,
   [timeOfDaySetup.id]: timeOfDaySetup,
 });

@@ -28,6 +28,7 @@ import {
 } from '../strategies/g6bLinearFactor';
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
+import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -102,6 +103,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
   'multi-mode-book-v1',
+  'multi-mode-book-v2',
 ]);
 
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
@@ -109,7 +111,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'bollinger-mr-long-v3',
 ]);
 
-const C1_VERIFIED_FIXED_SETUP_IDS: ReadonlySet<string> = new Set(['multi-mode-book-v1']);
+const C1_VERIFIED_FIXED_SETUP_IDS: ReadonlySet<string> = new Set(['multi-mode-book-v1', 'multi-mode-book-v2']);
 
 export function selectDailyBacktestRoute(
   setupId: string,
@@ -322,6 +324,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
   if (setupId === 'g6b-linear-factor-wide') return g6bLinearFactorWideBookPolicy();
   if (setupId === 'multi-mode-book-v1') return multiModeBookPolicy();
+  if (setupId === 'multi-mode-book-v2') {
+    return multiModeBookV2Policy(params as MultiModeBookV2Params | undefined);
+  }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
