@@ -16,7 +16,7 @@ Next.js 14.2 App Router · TypeScript 5 · Tailwind 3.4 · Prisma 5 + PostgreSQL
 - `src/services/marketData.ts` — mock market data (pure TS, no Next imports) · `src/services/engines.ts` — XP + savings sweep, NOT yet wired
 - `prisma/schema.prisma` — User (parent↔child self-relation), GamificationProfile, PortfolioItem, Transaction, SavingsJar, QuizAttempt
 - `messages/en.json` + `messages/ar.json` — must stay key-identical
-- `mcp/rushd-market/` — project MCP server · `docs/SYSTEM_DESIGN.md` — THE implementation contract · `docs/JOURNAL.md` — session memory
+- `mcp/rushd-market/` — project MCP server · `docs/SYSTEM_DESIGN.md` — THE implementation contract · `docs/JOURNAL.md` — session memory · `docs/references/INVESTING_FOR_PROGRAMMERS.md` — Quantitative financial analysis & AI agent reference (`investing-for-programmers` skill)
 
 ## Orchestration
 Main session orchestrates; subagents implement. ALWAYS dispatch with the template in `docs/AGENTS.md` — never freehand.
