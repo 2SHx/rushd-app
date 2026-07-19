@@ -25,6 +25,16 @@ import type { StrategyCheck, StrategyPointInTimeContext, StrategySetup } from '.
 
 const D = Prisma.Decimal;
 const num = (value: Prisma.Decimal): number => Number(value.toString());
+// One immutable Date instance is revisited many times during PIT replay. Memoizing the existing
+// timezone conversion is outcome-neutral and avoids repeatedly constructing Intl formatters.
+const MINUTE_CACHE = new WeakMap<Date, number>();
+function minuteOfDay(ts: Date): number {
+  const cached = MINUTE_CACHE.get(ts);
+  if (cached !== undefined) return cached;
+  const minute = nasdaqMinuteOfDay(ts);
+  MINUTE_CACHE.set(ts, minute);
+  return minute;
+}
 
 export const TimeOfDayParamsSchema = z.object({
   version: z.literal('v1'),
@@ -83,7 +93,7 @@ export function detectTimeOfDayPattern(
   params: TimeOfDayParams,
 ): TimeOfDayPattern | null {
   if (j < 1 || j >= bars.length || bars[0].open.lte(0)) return null;
-  const minute = nasdaqMinuteOfDay(bars[j].ts);
+  const minute = minuteOfDay(bars[j].ts);
   const openingOpen = bars[0].open;
 
   if (minute >= params.reversalStartMinute && minute <= params.reversalEndMinute) {
@@ -92,14 +102,14 @@ export function detectTimeOfDayPattern(
     const droppedEnough = stopLow.lte(openingOpen.mul(new D(1).minus(params.reversalMinDropPct)));
     if (!droppedEnough || !isHigherLowReclaim(bars, j)) return null;
     for (let i = 1; i < j; i++) {
-      const candidateMinute = nasdaqMinuteOfDay(bars[i].ts);
+      const candidateMinute = minuteOfDay(bars[i].ts);
       if (candidateMinute >= params.reversalStartMinute && isHigherLowReclaim(bars, i)) return null;
     }
     return { branch: 'REVERSAL_0945', stopLow };
   }
 
   if (minute >= params.trendStartMinute && minute <= params.trendEndMinute) {
-    const firstHour = bars.filter((bar) => nasdaqMinuteOfDay(bar.ts) < params.firstHourEndMinute);
+    const firstHour = bars.filter((bar) => minuteOfDay(bar.ts) < params.firstHourEndMinute);
     if (!firstHour.length) return null;
     const firstHourReturn = firstHour.at(-1)!.close.div(openingOpen).minus(1);
     if (firstHourReturn.lt(params.trendMinReturnPct)) return null;
@@ -139,7 +149,7 @@ export const timeOfDaySetup: StrategySetup<TimeOfDayParams> = {
     if (!(STOCKS_IN_PLAY_UNIVERSE_V1 as readonly string[]).includes(ctx.symbol)) return check(false, ['symbol_not_in_liquid_universe'], []);
     const bars = sessionBars(ctx);
     if (!bars.length) return check(false, ['no_session_bars'], []);
-    const minute = nasdaqMinuteOfDay(bars.at(-1)!.ts);
+    const minute = minuteOfDay(bars.at(-1)!.ts);
     const inReversal = minute >= p.reversalStartMinute && minute <= p.reversalEndMinute;
     const inTrend = minute >= p.trendStartMinute && minute <= p.trendEndMinute;
     return check(inReversal || inTrend, inReversal || inTrend ? [] : ['outside_ab_windows'], [evidence('minute_et', minute), evidence('params_version', p.version)]);
