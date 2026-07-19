@@ -16,6 +16,7 @@ import { g6bLinearFactorSetup } from './g6bLinearFactor';
 import { g6bLinearFactorWideSetup } from './g6bLinearFactorWide';
 import { multiModeBookSetup } from './multiModeBook';
 import { multiModeBookV2Setup } from './multiModeBookV2';
+import { multiModeBookV3Setup } from './multiModeBookV3';
 import { bagholderBounceSetup } from './bagholderBounce';
 import { timeOfDaySetup } from './timeOfDay';
 import { nvdaFocusSetup } from './nvdaFocus';
@@ -39,6 +40,7 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [g6bLinearFactorWideSetup.id]: g6bLinearFactorWideSetup,
   [multiModeBookSetup.id]: multiModeBookSetup,
   [multiModeBookV2Setup.id]: multiModeBookV2Setup,
+  [multiModeBookV3Setup.id]: multiModeBookV3Setup,
   [bagholderBounceSetup.id]: bagholderBounceSetup,
   [timeOfDaySetup.id]: timeOfDaySetup,
   [nvdaFocusSetup.id]: nvdaFocusSetup,

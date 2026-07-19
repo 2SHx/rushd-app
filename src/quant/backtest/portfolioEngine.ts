@@ -322,11 +322,23 @@ export interface StrategyBookPolicy {
   readonly drawdownCashFraction?: number;
   /** Strategy-declared bounded decision window; omitted means the full expanding history. */
   readonly decisionHistoryBars?: number;
+  /**
+   * Idle-capital ballast (R4-E8): sweep the book's residual/de-risked idle cash into this book
+   * symbol at each open (same next-open fill, 15 bps/side cost, and ADV cap as any equity order),
+   * instead of holding it flat in cash. The setup NEVER trades it; the engine liquidates it FIRST
+   * (before equity entries; equity exits always run first) whenever sleeves need capital, and it is
+   * EXCLUDED from the drawdown governor's risk exposure (near-cash ballast, never governor-trimmed).
+   * Its bars must be present in the series; before its first bar idle capital fail-closes to cash.
+   */
+  readonly idleBallastSymbol?: string;
 }
 
 export interface StrategyBookResult {
   readonly daily: readonly StrategyBookDailyPoint[];
   readonly fills: readonly StrategyBookFill[];
+  /** Engine-managed idle-ballast (idleBallastSymbol) fills — kept OUT of `fills`/tradeRecords so the
+   * strategy's trade-attribution and validation samples measure only sleeve trades, never ballast. */
+  readonly ballastFills: readonly StrategyBookFill[];
   readonly riskChecks: readonly StrategyBookRiskCheck[];
   readonly tradeReturns: readonly number[];
   readonly tradeRecords: readonly TradeRecord[];
@@ -551,6 +563,17 @@ function positionValue(positions: ReadonlyMap<string, OpenPosition>): Prisma.Dec
   );
 }
 
+/** Marked value of every position EXCEPT the idle ballast — the risk exposure the governor caps. */
+function riskPositionValue(
+  positions: ReadonlyMap<string, OpenPosition>,
+  ballastSymbol: string | undefined,
+): Prisma.Decimal {
+  return Array.from(positions.values()).reduce(
+    (sum, position) => (position.symbol === ballastSymbol ? sum : sum.plus(position.qty.mul(position.markPrice))),
+    new D(0),
+  );
+}
+
 function portfolioState(
   cash: Prisma.Decimal,
   positions: ReadonlyMap<string, OpenPosition>,
@@ -629,6 +652,15 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   }
   const series = validateSeries(input.series);
   const bySymbol = new Map(series.map((item) => [item.symbol, item]));
+  const ballastSymbol = input.policy?.idleBallastSymbol;
+  if (ballastSymbol !== undefined) {
+    if (ballastSymbol !== ballastSymbol.trim().toUpperCase()) {
+      throw new Error(`Strategy-book idle ballast symbol must be canonical uppercase: ${ballastSymbol}`);
+    }
+    if (!bySymbol.has(ballastSymbol)) {
+      throw new Error(`Strategy-book idle ballast ${ballastSymbol} must be present in the series`);
+    }
+  }
   const contextBarsBySymbol = new Map(series.map((item) => [
     item.symbol,
     item.bars.map((bar) => toContextBar(item.symbol, item.market, bar)),
@@ -656,6 +688,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   const pending = new Map<string, PendingOrder>();
   const daily: StrategyBookDailyPoint[] = [];
   const fills: StrategyBookFill[] = [];
+  const ballastFills: StrategyBookFill[] = [];
   const riskChecks: StrategyBookRiskCheck[] = [];
   const tradeReturns: number[] = [];
   const tradeRecords: TradeRecord[] = [];
@@ -675,6 +708,67 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       positionsValueAfter, navAfter: cash.plus(positionsValueAfter),
       positionsAfter: positionSnapshots(positions), envelope,
     });
+  };
+
+  // Idle-ballast execution: same 15 bps/side cost and ADV cap as any equity order. These fills are
+  // engine capital-parking, NOT strategy trades — they go to `ballastFills`, never `fills`/tradeRecords.
+  const ballastFillPrice = (open: Prisma.Decimal, action: 'BUY' | 'SELL'): Prisma.Decimal => (
+    action === 'SELL'
+      ? open.minus(open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).minus(open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS))
+      : open.plus(open.mul(BOOK_SLIPPAGE_BPS).div(BOOK_BPS)).plus(open.mul(BOOK_COMMISSION_BPS).div(BOOK_BPS))
+  );
+  const recordBallastFill = (
+    action: 'BUY' | 'SELL', symbol: string, date: Date, qty: Prisma.Decimal,
+    refPrice: Prisma.Decimal, fillPrice: Prisma.Decimal,
+  ): void => {
+    const positionsValueAfter = positionValue(positions);
+    ballastFills.push({
+      ts: new Date(date), signalTs: date, symbol, action, qty, refPrice, fillPrice,
+      cashAfter: cash, positionsValueAfter, navAfter: cash.plus(positionsValueAfter),
+      positionsAfter: positionSnapshots(positions),
+      envelope: { action, qty, blocked: false, adjustments: ['idle_ballast_sweep'] } as EnvelopeResult,
+    });
+  };
+  /** Sell ballast to raise ~`notionalTarget` of cash (delta only, ADV- and holding-clamped). */
+  const sellBallast = (
+    position: OpenPosition, bar: StrategyBookBar, notionalTarget: Prisma.Decimal, date: Date,
+  ): void => {
+    const fillPrice = ballastFillPrice(bar.open, 'SELL');
+    const advCap = bar.volume.mul(new D(input.limits.liquidityAdvFraction));
+    let qty = fillPrice.gt(0) ? notionalTarget.div(fillPrice) : new D(0);
+    qty = bookMin(bookMin(qty, position.qty), advCap);
+    if (qty.lte(0)) return;
+    const proceeds = qty.mul(fillPrice);
+    cash = cash.plus(proceeds);
+    turnoverNotional = turnoverNotional.plus(proceeds);
+    position.qty = position.qty.minus(qty);
+    if (position.qty.lte(0)) positions.delete(position.symbol);
+    recordBallastFill('SELL', position.symbol, date, qty, bar.open, fillPrice);
+  };
+  /** Sweep all remaining `cash` into ballast (delta buy, ADV-capped, affordability rounded DOWN). */
+  const buyBallast = (symbol: string, bar: StrategyBookBar, date: Date): void => {
+    const fillPrice = ballastFillPrice(bar.open, 'BUY');
+    if (fillPrice.lte(0)) return;
+    const advCap = bar.volume.mul(new D(input.limits.liquidityAdvFraction));
+    let qty = cash.div(fillPrice).toDecimalPlaces(12, D.ROUND_DOWN);
+    qty = bookMin(qty, advCap);
+    if (qty.lte(0)) return;
+    const notional = qty.mul(fillPrice);
+    cash = cash.minus(notional);
+    if (cash.lt(0)) throw new Error('Strategy-book invariant violated: negative cash (ballast sweep)');
+    turnoverNotional = turnoverNotional.plus(notional);
+    const existing = positions.get(symbol);
+    if (existing) {
+      const totalQty = existing.qty.plus(qty);
+      existing.entryPrice = existing.entryPrice.mul(existing.qty).plus(fillPrice.mul(qty)).div(totalQty);
+      existing.qty = totalQty;
+      existing.markPrice = bar.open;
+    } else {
+      positions.set(symbol, {
+        symbol, qty, markPrice: bar.open, entryPrice: fillPrice, entryTs: date, entrySignalTs: date,
+      });
+    }
+    recordBallastFill('BUY', symbol, date, qty, bar.open, fillPrice);
   };
 
   for (const time of dates) {
@@ -733,8 +827,9 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     });
 
     // Shared-open ordering is binding: cash from all exits is available to canonical entries.
-    for (const action of ['SELL', 'BUY'] as const) {
-      for (const order of executable.filter((candidate) => candidate.action === action)) {
+    const executeDirectional = (order: PendingDirectionalOrder): void => {
+      {
+        const action = order.action;
         const bar = todaysBars.get(order.symbol)!;
         const pf = portfolioState(cash, positions, peakNav);
         riskChecks.push({
@@ -786,15 +881,15 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           }
         }
         const envelope = applyEnvelope({ action, qty: proposalQty }, pf, market, effectiveLimits, false);
-        if (envelope.action !== action || envelope.qty.lte(0)) continue;
+        if (envelope.action !== action || envelope.qty.lte(0)) return;
 
         const advCap = bar.volume.mul(new D(input.limits.liquidityAdvFraction));
         let qty = bookMin(envelope.qty, advCap);
         if (action === 'SELL') {
           const position = positions.get(order.symbol);
-          if (!position) continue;
+          if (!position) return;
           qty = bookMin(qty, position.qty);
-          if (qty.lte(0)) continue;
+          if (qty.lte(0)) return;
           const fillPrice = executionPrice;
           const proceeds = qty.mul(fillPrice);
           cash = cash.plus(proceeds);
@@ -813,7 +908,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           const fillPrice = executionPrice;
           // Round affordability DOWN so Decimal division precision can never overspend by a tail unit.
           qty = bookMin(qty, cash.div(fillPrice).toDecimalPlaces(12, D.ROUND_DOWN));
-          if (qty.lte(0)) continue;
+          if (qty.lte(0)) return;
           const notional = qty.mul(fillPrice);
           cash = cash.minus(notional);
           if (cash.lt(0)) throw new Error('Strategy-book invariant violated: negative cash');
@@ -833,6 +928,30 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
           recordFill(order, qty, bar.open, fillPrice, envelope);
         }
       }
+    };
+
+    // Equity exits/de-risk first (frees cash). Then, if entries need capital, the idle ballast is
+    // SOLD FIRST to fund them. Then equity entries. Finally leftover idle cash sweeps into ballast.
+    for (const order of executable.filter((candidate) => candidate.action === 'SELL')) {
+      executeDirectional(order);
+    }
+    const ballastBar = ballastSymbol !== undefined ? todaysBars.get(ballastSymbol) : undefined;
+    if (ballastSymbol !== undefined && ballastBar) {
+      const ballastPos = positions.get(ballastSymbol);
+      const desiredBuyNotional = executable
+        .filter((candidate) => candidate.action === 'BUY')
+        .reduce((sum, order) => sum.plus(order.proposalQty.mul(todaysBars.get(order.symbol)!.open)), new D(0));
+      const shortfall = desiredBuyNotional.minus(cash);
+      if (ballastPos && ballastPos.qty.gt(0) && shortfall.gt(0)) {
+        sellBallast(ballastPos, ballastBar, shortfall, date);
+      }
+    }
+    for (const order of executable.filter((candidate) => candidate.action === 'BUY')) {
+      executeDirectional(order);
+    }
+    // Pre-inception (no ballast bar today) idle capital fail-closes to cash — the honest early regime.
+    if (ballastSymbol !== undefined && ballastBar && cash.gt('0.00000001')) {
+      buyBallast(ballastSymbol, ballastBar, date);
     }
 
     // Close marks precede decisions; no future bar is ever present in a setup context.
@@ -866,10 +985,14 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       )
       : 1;
 
+    // The governor caps RISK exposure only — the idle ballast is near-cash and is never trimmed by
+    // it (freed equity re-parks in ballast on the next sweep, which is the whole E8 substitution).
+    const riskPositionsValue = riskPositionValue(positions, ballastSymbol);
     // A falling cap actively de-risks the held book at next open; it never waits for new entries.
-    if (input.policy && closePositionsValue.gt(closeNav.mul(grossExposureScalar))) {
-      const keepFraction = closeNav.mul(grossExposureScalar).div(closePositionsValue);
+    if (input.policy && riskPositionsValue.gt(closeNav.mul(grossExposureScalar))) {
+      const keepFraction = closeNav.mul(grossExposureScalar).div(riskPositionsValue);
       for (const position of Array.from(positions.values()).sort((a, b) => a.symbol.localeCompare(b.symbol))) {
+        if (position.symbol === ballastSymbol) continue;
         const item = bySymbol.get(position.symbol)!;
         const index = todayIndexes.get(item.symbol);
         if (index === undefined || index >= item.bars.length - 1) continue;
@@ -884,6 +1007,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     }
 
     for (const item of series) {
+      if (item.symbol === ballastSymbol) continue; // engine-managed ballast is never setup-traded
       const index = todayIndexes.get(item.symbol);
       if (index === undefined || index >= item.bars.length - 1) continue;
       const sliceStart = input.policy?.decisionHistoryBars
@@ -952,7 +1076,7 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   }
 
   return {
-    daily, fills, riskChecks, tradeReturns, tradeRecords, turnoverNotional,
+    daily, fills, ballastFills, riskChecks, tradeReturns, tradeRecords, turnoverNotional,
     barsProcessed: series.reduce((sum, item) => sum + item.bars.length, 0), decisionWindows,
   };
 }

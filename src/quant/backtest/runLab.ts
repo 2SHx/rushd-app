@@ -29,6 +29,7 @@ import {
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
+import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
 import { NVDA_FOCUS_UNIVERSE, nvdaFocusBookPolicy, type NvdaFocusParams } from '../strategies/nvdaFocus';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
@@ -105,7 +106,15 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor-wide',
   'multi-mode-book-v1',
   'multi-mode-book-v2',
+  'multi-mode-book-v3',
   'nvda-focus-v1',
+]);
+
+/** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
+ * traded name — the engine sweeps/liquidates them via the idleBallastSymbol policy. C1 verification,
+ * prepareUniverse, and the Sharia sleeve snapshot all cover ONLY the equity charter, not the ballast. */
+const IDLE_BALLAST_BY_SETUP_ID: ReadonlyMap<string, string> = new Map([
+  ['multi-mode-book-v3', 'SPSK'],
 ]);
 
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
@@ -117,6 +126,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
 const C1_VERIFIED_FIXED_UNIVERSES: ReadonlyMap<string, { symbols: readonly string[]; tag: string }> = new Map([
   ['multi-mode-book-v1', { symbols: MULTI_MODE_UNIVERSE, tag: 'c1-verified:multi-mode-16' }],
   ['multi-mode-book-v2', { symbols: MULTI_MODE_UNIVERSE, tag: 'c1-verified:multi-mode-16' }],
+  ['multi-mode-book-v3', { symbols: MULTI_MODE_UNIVERSE, tag: 'c1-verified:multi-mode-16+spsk-ballast' }],
   ['nvda-focus-v1', { symbols: NVDA_FOCUS_UNIVERSE, tag: 'c1-verified:nvda' }],
 ]);
 
@@ -341,6 +351,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'multi-mode-book-v1') return multiModeBookPolicy();
   if (setupId === 'multi-mode-book-v2') {
     return multiModeBookV2Policy(params as MultiModeBookV2Params | undefined);
+  }
+  if (setupId === 'multi-mode-book-v3') {
+    return multiModeBookV3Policy(params as MultiModeBookV3Params | undefined);
   }
   if (setupId === 'nvda-focus-v1') return nvdaFocusBookPolicy(params as NvdaFocusParams | undefined);
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
@@ -1103,6 +1116,19 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
         }
         }
+        // Idle-capital sukuk ballast (R4-E8): inject SPSK bars into the book AFTER prepareUniverse /
+        // C1 verification (which cover only the equity charter). The engine sweeps idle cash into it
+        // and liquidates it first; the setup never trades it. It is not in `symbols`, so it never
+        // enters the sleeve validation or the Sharia sleeve snapshot — it carries its own disclosure.
+        const ballastSymbol = IDLE_BALLAST_BY_SETUP_ID.get(setupId);
+        if (ballastSymbol && !sharedSeries.some((item) => item.symbol === ballastSymbol)) {
+          const loaded = await loadDailySymbol(ballastSymbol, from, to);
+          excludedMock += loaded.excludedMock;
+          resolvedUniverseBars += loaded.bars.length;
+          sharedSeries.push({ symbol: ballastSymbol, market: 'NASDAQ', bars: loaded.bars });
+          const firstBar = loaded.bars[0]?.ts.toISOString().slice(0, 10) ?? 'none';
+          console.log(`injected idle-capital ballast ${ballastSymbol}: ${loaded.bars.length} real bars (first ${firstBar}); pre-inception idle capital stays cash`);
+        }
         console.log(`\nprocessing ${symbols.length} symbol(s) [engine=shared, source=daily MarketBar, YAHOO/ALPACA only] …`);
         const sim = simulateStrategyBook({
           setup, params, series: sharedSeries, startingCash, limits: dailyLimits,
@@ -1485,6 +1511,22 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           drawdown: point.drawdown.toString(), realizedVolAnnual: point.realizedVolAnnual,
           grossExposureScalar: point.grossExposureScalar, positions: point.positions.length,
         })),
+      },
+    } : {}),
+    ...(IDLE_BALLAST_BY_SETUP_ID.get(setupId) ? {
+      ballast: {
+        symbol: IDLE_BALLAST_BY_SETUP_ID.get(setupId),
+        provenance: 'index-provider-screened (sukuk fund)',
+        reasonCode: 'FUND_LEVEL_PURIFICATION_ONLY',
+        shariaTier: 'Tier-1 (fund-level)',
+        status: 'paper-trading research ONLY (conditional)',
+        // i18n-fintech instrument ruling (R4-E8), recorded verbatim — no unqualified compliance claim.
+        ruling: 'RULING: SPSK admissible as idle-capital ballast, paper-trading research ONLY (conditional). Tier-1 fund-level treatment, reasonCode FUND_LEVEL_PURIFICATION_ONLY; NEVER label "AAOIFI-compliant" outright — AAOIFI governs sukuk structuring, not this ETF\'s certification. Required disclosure: RUSHD follows the AAOIFI-aligned (Gulf) reading of secondary sukuk trading; some Dow Jones Sukuk Index constituents may carry murabaha-heavy tails outside the strictest AAOIFI Standard No. 17 view (bay\' al-dayn divergence vs the Malaysian school — recorded, not silently resolved). Pre-real-money conditions: SP Funds Sharia board certificate verification (AAOIFI Std 17 scope), CMA gate, live purification disclosure, user-facing divergence note.',
+        labelEn: 'Sukuk (SPSK) — index-provider Sharia-screened (Dow Jones Sukuk methodology, AAOIFI-aligned); fund-level purification only; paper-trading research asset, not a cash/interest substitute.',
+        labelAr: 'صكوك (SPSK) — مُفحوصة شرعياً من مزوّد المؤشر (منهجية مؤشر داو جونز للصكوك، متوافقة مع معايير الأيوفي)؛ التطهير على مستوى الصندوق فقط؛ أصل بحثي للتداول التجريبي (ورقي)، وليس بديلاً نقدياً أو ربوياً.',
+        priceReturnCaveat: 'MarketBar stores RAW (unadjusted) YAHOO closes; SPSK coupon/distribution carry is NOT in the price series (raw close 20.10→17.92 over 2019-12-31..2026-07-17). Price-only ballast economics under-measure sukuk carry — recorded, not hidden.',
+        preInceptionRegime: 'Before SPSK\'s first real bar (2019-12-31) idle capital fail-closes to cash.',
+        fills: sharedBookResult?.ballastFills.length ?? 0,
       },
     } : {}),
     ...(candidateEvidence ? {
