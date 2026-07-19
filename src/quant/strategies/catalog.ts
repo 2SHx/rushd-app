@@ -18,6 +18,7 @@ import { multiModeBookSetup } from './multiModeBook';
 import { multiModeBookV2Setup } from './multiModeBookV2';
 import { bagholderBounceSetup } from './bagholderBounce';
 import { timeOfDaySetup } from './timeOfDay';
+import { nvdaFocusSetup } from './nvdaFocus';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -40,4 +41,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [multiModeBookV2Setup.id]: multiModeBookV2Setup,
   [bagholderBounceSetup.id]: bagholderBounceSetup,
   [timeOfDaySetup.id]: timeOfDaySetup,
+  [nvdaFocusSetup.id]: nvdaFocusSetup,
 });

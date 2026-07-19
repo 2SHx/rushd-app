@@ -29,6 +29,7 @@ import {
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
+import { NVDA_FOCUS_UNIVERSE, nvdaFocusBookPolicy, type NvdaFocusParams } from '../strategies/nvdaFocus';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -104,6 +105,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor-wide',
   'multi-mode-book-v1',
   'multi-mode-book-v2',
+  'nvda-focus-v1',
 ]);
 
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
@@ -111,7 +113,12 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'bollinger-mr-long-v3',
 ]);
 
-const C1_VERIFIED_FIXED_SETUP_IDS: ReadonlySet<string> = new Set(['multi-mode-book-v1', 'multi-mode-book-v2']);
+/** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
+const C1_VERIFIED_FIXED_UNIVERSES: ReadonlyMap<string, { symbols: readonly string[]; tag: string }> = new Map([
+  ['multi-mode-book-v1', { symbols: MULTI_MODE_UNIVERSE, tag: 'c1-verified:multi-mode-16' }],
+  ['multi-mode-book-v2', { symbols: MULTI_MODE_UNIVERSE, tag: 'c1-verified:multi-mode-16' }],
+  ['nvda-focus-v1', { symbols: NVDA_FOCUS_UNIVERSE, tag: 'c1-verified:nvda' }],
+]);
 
 export function selectDailyBacktestRoute(
   setupId: string,
@@ -305,6 +312,14 @@ export function dailyUniverseForSetup(setupId: string, requested: readonly strin
 
 /** Rotation is single-winner; the unchanged 25% name cap and all other envelope limits remain binding. */
 export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimits {
+  // nvda-focus is a single-name FOCUS book BY DESIGN: it holds 100% of book cash in the one name.
+  // Lift the diversified-book caps (name-weight/vol-target/per-trade-risk-budget assume a multi-name
+  // book and would clamp NVDA to ~25%, defeating the pre-registered design and masking exactly the
+  // concentration variance the run must measure). The REAL controls stay binding: liquidity (ADV),
+  // cash affordability, gross exposure, and the book drawdown governor (via policy). maxOpen = 1.
+  if (setupId === 'nvda-focus-v1') {
+    return { ...base, maxOpenPositions: 1, maxNameWeight: 1, volTargetPct: 1, maxRiskPct: 1 };
+  }
   return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
     ? { ...base, maxOpenPositions: 1 }
     : base;
@@ -327,6 +342,7 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'multi-mode-book-v2') {
     return multiModeBookV2Policy(params as MultiModeBookV2Params | undefined);
   }
+  if (setupId === 'nvda-focus-v1') return nvdaFocusBookPolicy(params as NvdaFocusParams | undefined);
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -335,7 +351,7 @@ export function validationTradeRecordsForSetup(
   setupId: string,
   records: readonly TradeRecord[],
 ): readonly TradeRecord[] {
-  return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
+  return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay' || setupId === 'nvda-focus-v1'
     ? collapseMaxOnePositionEpisodes(records)
     : records;
 }
@@ -987,14 +1003,15 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     if (cadence === 'daily') {
       // ── DAILY path: real MarketBar spine, one symbol streamed at a time, positions held across
       // days by the setup engine. MOCK rows are excluded at load and the count is asserted+printed.
-      if (C1_VERIFIED_FIXED_SETUP_IDS.has(setupId)) {
+      const c1Fixed = C1_VERIFIED_FIXED_UNIVERSES.get(setupId);
+      if (c1Fixed) {
         const universe = buildVerifiedUniverse();
         const bySymbol = new Map(universe.entries.map((entry) => [entry.symbol, entry]));
-        const missing = MULTI_MODE_UNIVERSE.filter((symbol) => !bySymbol.has(symbol));
+        const missing = c1Fixed.symbols.filter((symbol) => !bySymbol.has(symbol));
         if (missing.length) throw new Error(`${setupId} C1 verification missing: ${missing.join(', ')}`);
-        verifiedShariaEntries = MULTI_MODE_UNIVERSE.map((symbol) => bySymbol.get(symbol)!);
-        symbols = [...MULTI_MODE_UNIVERSE];
-        universeTag = 'c1-verified:multi-mode-16';
+        verifiedShariaEntries = c1Fixed.symbols.map((symbol) => bySymbol.get(symbol)!);
+        symbols = [...c1Fixed.symbols];
+        universeTag = c1Fixed.tag;
         universeIsUnscreened = false;
       } else if (C1_VERIFIED_SLEEVE_SETUP_IDS.has(setupId)) {
         const universe = buildVerifiedUniverse();
@@ -1227,6 +1244,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     : validationTradeRecordsForSetup(setupId, pooledTradeRecords);
   const validationTradeReturns = setupId === 'dual-momentum-rotation'
     || setupId === 'tom-overlay'
+    || setupId === 'nvda-focus-v1'
     || MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
     ? validationTradeRecords.map((record) => record.ret)
     : pooledTradeReturns;
@@ -1448,7 +1466,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
               : max
           ), 0),
         },
-        ...(setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay' ? {
+        ...(setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay' || setupId === 'nvda-focus-v1' ? {
           executionAudit: {
             buyEntries: sharedBookResult.fills.filter((fill) => fill.action === 'BUY').length,
             closedEpisodes: validationTradeRecords.length,
