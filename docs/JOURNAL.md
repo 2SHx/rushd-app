@@ -9,6 +9,12 @@ Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 
+## 2026-07-19 — R4-E5 time-of-day terminal verdict ✅
+Shipped: Pre-registered the 09:45 reversal / first-hour trend-lock A-B timing constraints and completed the last R4 strategy; FULL REJECTED.
+Decisions: both windows/1% thresholds/2R frozen before evidence, one outcome-neutral ET memoization only, seed 42, no tuning after the negative diagnostic.
+Verify: params `75c2399`, FULL source `6fde71d`, run `53430eca`; 262 trades, −0.23% mean, OOS CAGR −30.28%, DSR 0.448, MC p95 DD 65.45%, ruin 47%.
+Open: E1–E5 are terminally closed; retained intraday evidence is capped at 62 real trading days/name and remains Sharia execution-blocked.
+
 ## 2026-07-19 — R4-E4 bagholder-bounce terminal verdict ✅
 Shipped: Pre-registered and ran the ≥20% gap + 5% flush + first-higher-low long-only setup; FULL REJECTED.
 Decisions: thresholds/window/2R frozen before evidence, real Alpaca-IEX only, fixed 11 names, seed 42, no tuning after the zero-trade diagnostic.
