@@ -12,6 +12,12 @@ Open: <risks/next, one line>
 
 ---
 
+## 2026-07-19 — R4-E2 Bollinger breadth v3 terminal verdict ✅
+Shipped: Ran unchanged v2 mean-reversion over C1's screened top-100 sleeve in one shared-cash book; single FULL verdict REJECTED.
+Decisions: breadth was the only hypothesis change; current-holdings survivorship disclosed, five trials frozen, and no tuning followed the 1Y or FULL views.
+Verify: source `d4814b6`; FULL `4b2d4085`; 625 trades, OOS CAGR 7.97%, DSR 0.388, plateau PASS, MC p95 DD 58.45%, ruin 5.50%, C1 VERIFIED_COMPLIANT.
+Open: E3 next; breadth solved sample and plateau but worsened portfolio tail risk.
+
 ## 2026-07-19 — R4-E1 momentum v4 terminal verdict ✅
 Shipped: Pre-registered and validated v3's unchanged signal on C1's 100-name screened sleeve with a frozen 8%-to-20% drawdown governor; single FULL verdict REJECTED.
 Decisions: lazy-dev rung 2 reused the shared engine/C1/v3 grid; no retune after the 1Y warm-up view or FULL result, and current-holdings survivorship is disclosed.
