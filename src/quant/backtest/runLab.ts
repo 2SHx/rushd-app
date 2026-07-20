@@ -31,6 +31,7 @@ import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiMod
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
 import { NVDA_FOCUS_UNIVERSE, nvdaFocusBookPolicy, type NvdaFocusParams } from '../strategies/nvdaFocus';
+import { halalMarkowitzCoreBookPolicy } from '../strategies/halalMarkowitzCore';
 import {
   buildStocksInPlayBook, STOCKS_IN_PLAY_UNIVERSE_V1,
   stocksInPlayPrehistoryStart,
@@ -108,6 +109,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'multi-mode-book-v2',
   'multi-mode-book-v3',
   'nvda-focus-v1',
+  'halal-markowitz-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -120,6 +122,14 @@ const IDLE_BALLAST_BY_SETUP_ID: ReadonlyMap<string, string> = new Map([
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v4',
   'bollinger-mr-long-v3',
+  'halal-markowitz-core',
+]);
+
+/** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
+ * covariance-aware book (halal-markowitz-core) uses the PORTFOLIO_BUILD.md diversified-core spec
+ * (20–40 names) instead — a 40×40 covariance estimate is already at the edge of well-conditioned. */
+const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
+  ['halal-markowitz-core', 40],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -348,6 +358,7 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'dual-momentum-rotation') return dualMomentumRotationBookPolicy();
   if (setupId === 'tom-overlay') return tomOverlayBookPolicy();
   if (setupId === 'g6b-linear-factor-wide') return g6bLinearFactorWideBookPolicy();
+  if (setupId === 'halal-markowitz-core') return halalMarkowitzCoreBookPolicy();
   if (setupId === 'multi-mode-book-v1') return multiModeBookPolicy();
   if (setupId === 'multi-mode-book-v2') {
     return multiModeBookV2Policy(params as MultiModeBookV2Params | undefined);
@@ -379,6 +390,7 @@ export function validationTradeRecordsForSetup(
 export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
+  'halal-markowitz-core',
 ]);
 
 export function activeMonthlyBookReturnRecords(
@@ -1030,7 +1042,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         const universe = buildVerifiedUniverse();
         const selected = await selectDollarVolumeSleeve(universe.entries, {
           asOf: new Date(`${to}T23:59:59.999Z`),
-          maxNames: 100,
+          maxNames: C1_VERIFIED_SLEEVE_MAX_NAMES.get(setupId) ?? 100,
         });
         if (!selected.sleeve.length) {
           throw new Error(`${setupId} requires C1 verified names with real daily bars as of ${to}`);
