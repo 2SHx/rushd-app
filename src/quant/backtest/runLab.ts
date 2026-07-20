@@ -35,6 +35,10 @@ import {
   halalMomentumRiskParityCoreBookPolicy,
   type HalalMomentumRiskParityCoreParams,
 } from '../strategies/halalMomentumRiskParityCore';
+import {
+  halalSectorCappedRiskParityCoreBookPolicy,
+  type HalalSectorCappedRiskParityCoreParams,
+} from '../strategies/halalSectorCappedRiskParityCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -120,6 +124,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-markowitz-core',
   'halal-risk-parity-core',
   'halal-momentum-risk-parity-core',
+  'halal-sector-capped-risk-parity-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -135,6 +140,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-markowitz-core',
   'halal-risk-parity-core',
   'halal-momentum-risk-parity-core',
+  'halal-sector-capped-risk-parity-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -143,11 +149,15 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
  * at the edge of well-conditioned. Existing setups keep their unchanged 100-name behavior.
  * `halal-momentum-risk-parity-core` RANKS then SELECTS a subset (top selectionFraction by momentum)
  * before weighting, so it needs real breadth to select FROM (maxNames=60) — wider than its two
- * single-mechanism siblings — while still narrowing to a genuinely diversified ~15-30-name book. */
+ * single-mechanism siblings — while still narrowing to a genuinely diversified ~15-30-name book.
+ * `halal-sector-capped-risk-parity-core` is an ISOLATED A/B against `halal-risk-parity-core` (the
+ * sector cap is the ONLY new variable), so it MUST use the identical maxNames=40 — a different sleeve
+ * size would be a confound, not a controlled test. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
   ['halal-momentum-risk-parity-core', 60],
+  ['halal-sector-capped-risk-parity-core', 40],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -391,6 +401,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'halal-momentum-risk-parity-core') {
     return halalMomentumRiskParityCoreBookPolicy(params as HalalMomentumRiskParityCoreParams | undefined);
   }
+  if (setupId === 'halal-sector-capped-risk-parity-core') {
+    return halalSectorCappedRiskParityCoreBookPolicy(params as HalalSectorCappedRiskParityCoreParams | undefined);
+  }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -417,6 +430,7 @@ export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-markowitz-core',
   'halal-risk-parity-core',
   'halal-momentum-risk-parity-core',
+  'halal-sector-capped-risk-parity-core',
 ]);
 
 export function activeMonthlyBookReturnRecords(
