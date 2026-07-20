@@ -27,6 +27,10 @@ import {
   g6bLinearFactorBookPolicy,
 } from '../strategies/g6bLinearFactor';
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
+import {
+  halalRiskParityCoreBookPolicy,
+  type HalalRiskParityCoreParams,
+} from '../strategies/halalRiskParityCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -108,6 +112,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'multi-mode-book-v2',
   'multi-mode-book-v3',
   'nvda-focus-v1',
+  'halal-risk-parity-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -120,6 +125,14 @@ const IDLE_BALLAST_BY_SETUP_ID: ReadonlyMap<string, string> = new Map([
 const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v4',
   'bollinger-mr-long-v3',
+  'halal-risk-parity-core',
+]);
+
+/** Per-setup C1 sleeve size — most setups use the QDR-8 ~100 default; a setup with its own
+ * pre-registered smaller diversified core (e.g. halal-risk-parity-core's 20-40 name spec) overrides
+ * here. Existing setups keep their unchanged 100-name behavior. */
+const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
+  ['halal-risk-parity-core', 40],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -356,6 +369,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
     return multiModeBookV3Policy(params as MultiModeBookV3Params | undefined);
   }
   if (setupId === 'nvda-focus-v1') return nvdaFocusBookPolicy(params as NvdaFocusParams | undefined);
+  if (setupId === 'halal-risk-parity-core') {
+    return halalRiskParityCoreBookPolicy(params as HalalRiskParityCoreParams | undefined);
+  }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -379,6 +395,7 @@ export function validationTradeRecordsForSetup(
 export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
+  'halal-risk-parity-core',
 ]);
 
 export function activeMonthlyBookReturnRecords(
@@ -1030,7 +1047,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         const universe = buildVerifiedUniverse();
         const selected = await selectDollarVolumeSleeve(universe.entries, {
           asOf: new Date(`${to}T23:59:59.999Z`),
-          maxNames: 100,
+          maxNames: C1_VERIFIED_SLEEVE_MAX_NAMES.get(setupId) ?? 100,
         });
         if (!selected.sleeve.length) {
           throw new Error(`${setupId} requires C1 verified names with real daily bars as of ${to}`);
