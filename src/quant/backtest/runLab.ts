@@ -27,6 +27,10 @@ import {
   g6bLinearFactorBookPolicy,
 } from '../strategies/g6bLinearFactor';
 import { g6bLinearFactorWideBookPolicy } from '../strategies/g6bLinearFactorWide';
+import {
+  halalRiskParityCoreBookPolicy,
+  type HalalRiskParityCoreParams,
+} from '../strategies/halalRiskParityCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -110,6 +114,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'multi-mode-book-v3',
   'nvda-focus-v1',
   'halal-markowitz-core',
+  'halal-risk-parity-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -123,13 +128,16 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'ts-momentum-halal-basket-v4',
   'bollinger-mr-long-v3',
   'halal-markowitz-core',
+  'halal-risk-parity-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
- * covariance-aware book (halal-markowitz-core) uses the PORTFOLIO_BUILD.md diversified-core spec
- * (20–40 names) instead — a 40×40 covariance estimate is already at the edge of well-conditioned. */
+ * covariance-aware book (halal-markowitz-core, halal-risk-parity-core) uses the PORTFOLIO_BUILD.md
+ * diversified-core spec (20–40 names) instead — a 40×40 covariance/volatility estimate is already
+ * at the edge of well-conditioned. Existing setups keep their unchanged 100-name behavior. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
+  ['halal-risk-parity-core', 40],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -367,6 +375,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
     return multiModeBookV3Policy(params as MultiModeBookV3Params | undefined);
   }
   if (setupId === 'nvda-focus-v1') return nvdaFocusBookPolicy(params as NvdaFocusParams | undefined);
+  if (setupId === 'halal-risk-parity-core') {
+    return halalRiskParityCoreBookPolicy(params as HalalRiskParityCoreParams | undefined);
+  }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -391,6 +402,7 @@ export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor',
   'g6b-linear-factor-wide',
   'halal-markowitz-core',
+  'halal-risk-parity-core',
 ]);
 
 export function activeMonthlyBookReturnRecords(
