@@ -31,6 +31,10 @@ import {
   halalRiskParityCoreBookPolicy,
   type HalalRiskParityCoreParams,
 } from '../strategies/halalRiskParityCore';
+import {
+  halalMomentumRiskParityCoreBookPolicy,
+  type HalalMomentumRiskParityCoreParams,
+} from '../strategies/halalMomentumRiskParityCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -115,6 +119,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'nvda-focus-v1',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  'halal-momentum-risk-parity-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -129,15 +134,20 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'bollinger-mr-long-v3',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  'halal-momentum-risk-parity-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
  * covariance-aware book (halal-markowitz-core, halal-risk-parity-core) uses the PORTFOLIO_BUILD.md
  * diversified-core spec (20–40 names) instead — a 40×40 covariance/volatility estimate is already
- * at the edge of well-conditioned. Existing setups keep their unchanged 100-name behavior. */
+ * at the edge of well-conditioned. Existing setups keep their unchanged 100-name behavior.
+ * `halal-momentum-risk-parity-core` RANKS then SELECTS a subset (top selectionFraction by momentum)
+ * before weighting, so it needs real breadth to select FROM (maxNames=60) — wider than its two
+ * single-mechanism siblings — while still narrowing to a genuinely diversified ~15-30-name book. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
+  ['halal-momentum-risk-parity-core', 60],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -378,6 +388,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === 'halal-risk-parity-core') {
     return halalRiskParityCoreBookPolicy(params as HalalRiskParityCoreParams | undefined);
   }
+  if (setupId === 'halal-momentum-risk-parity-core') {
+    return halalMomentumRiskParityCoreBookPolicy(params as HalalMomentumRiskParityCoreParams | undefined);
+  }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
 
@@ -403,6 +416,7 @@ export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor-wide',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  'halal-momentum-risk-parity-core',
 ]);
 
 export function activeMonthlyBookReturnRecords(

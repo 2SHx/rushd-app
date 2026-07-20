@@ -22,6 +22,7 @@ import { timeOfDaySetup } from './timeOfDay';
 import { nvdaFocusSetup } from './nvdaFocus';
 import { halalMarkowitzCoreSetup } from './halalMarkowitzCore';
 import { halalRiskParityCoreSetup } from './halalRiskParityCore';
+import { halalMomentumRiskParityCoreSetup } from './halalMomentumRiskParityCore';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -48,4 +49,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [nvdaFocusSetup.id]: nvdaFocusSetup,
   [halalMarkowitzCoreSetup.id]: halalMarkowitzCoreSetup,
   [halalRiskParityCoreSetup.id]: halalRiskParityCoreSetup,
+  [halalMomentumRiskParityCoreSetup.id]: halalMomentumRiskParityCoreSetup,
 });
