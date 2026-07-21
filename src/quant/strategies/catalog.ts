@@ -30,6 +30,7 @@ import { halalManagedMomentumCoreSetup } from './halalManagedMomentumCore';
 import { halalMomentumMarkowitzCoreSetup } from './halalMomentumMarkowitzCore';
 import { halalTrendRiderCoreSetup } from './halalTrendRiderCore';
 import { halalFastMomentumCoreSetup } from './halalFastMomentumCore';
+import { halalResidualFastMomentumCoreSetup } from './halalResidualFastMomentumCore';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -64,4 +65,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [halalMomentumMarkowitzCoreSetup.id]: halalMomentumMarkowitzCoreSetup,
   [halalTrendRiderCoreSetup.id]: halalTrendRiderCoreSetup,
   [halalFastMomentumCoreSetup.id]: halalFastMomentumCoreSetup,
+  [halalResidualFastMomentumCoreSetup.id]: halalResidualFastMomentumCoreSetup,
 });

@@ -204,7 +204,7 @@ describe('assertPointInTimeMembershipCoverage', () => {
 
 describe('terminal C1 membership preflight', () => {
   it('pins the audited setup list and fails closed without ingested snapshots', () => {
-    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(12);
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(13);
     for (const setupId of PIT_MEMBERSHIP_REQUIRED_SETUP_IDS) {
       expect(requiresPointInTimeMembership(setupId)).toBe(true);
       expectFailure(

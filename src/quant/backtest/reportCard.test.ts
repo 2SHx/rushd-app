@@ -80,7 +80,7 @@ describe('terminal validation report card', () => {
     const trialCount = trialCountEvidence('halal-fast-momentum-core', 9);
     const rendered = renderReportCard(assembleReportCard(args({ trialCount })), false);
 
-    expect(rendered).toContain('DSR trial count:      90 family-wide (9 local plateau');
+    expect(rendered).toContain('DSR trial count:      99 family-wide (9 local plateau');
   });
 
   it('emits ACCEPTED only when every actual gate passes and explains its limited meaning', () => {

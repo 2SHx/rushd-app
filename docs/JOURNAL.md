@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-07-22 — SPUS PIT evidence lane + residual-momentum candidate ✅
+Shipped: Captured/hash-pinned three official SPUS SEC N-PORT filings with a fail-closed parser, plus codified `halal-residual-fast-momentum-core@v1` and benchmark-only SPUS/PIT liquidity seams.
+Decisions: No diagnostic or FULL was run; 105.92% remains un-beaten and invalid as a clean frontier, while the new candidate is frozen with 9 local/99 family trials and terminal PIT rejection.
+Verify: Fresh QA/Sharia PASS; focused 68/68 plus post-review 39/39, tsc, lint green; full Vitest 1,320/1,328 with the same 8 pre-existing failures; no diagnostic/FULL.
+Open: Capture the full filing inventory, authoritative suspension/delisting dates, independent historical Sharia evidence, and real bars for removed names; fresh confirmation needs the sealed 126-session forward warm-up from 2026-07-23.
+
 ## 2026-07-21 — Quant evidence governance + survivor-bias fail-closed gate ✅
 Shipped: Added research-director/validation-auditor roles, the quant-experiment-governance skill + command, atomic sealed one-diagnostic/one-FULL manifests, 90-trial-family DSR, 20d moving-block MC, and a PIT membership/Sharia hard gate for 12 affected setups.
 Decisions: The prior 105.92% OOS CAGR is reproducible but conditional on a 2026 survivor sleeve and iteratively reused OOS; it is exploratory/non-frontier, remains REJECTED, and no new residual-momentum FULL is eligible until genuine historical membership or forward-paper evidence exists.

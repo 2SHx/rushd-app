@@ -63,6 +63,10 @@ import {
   halalFastMomentumCoreBookPolicy,
   type HalalFastMomentumCoreParams,
 } from '../strategies/halalFastMomentumCore';
+import {
+  halalResidualFastMomentumCoreBookPolicy,
+  type HalalResidualFastMomentumCoreParams,
+} from '../strategies/halalResidualFastMomentumCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -107,8 +111,11 @@ import { buildHistoricalComparisonEvidence } from './historicalComparison';
 import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence';
 import { assertWalkForward } from './walkForward';
 import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from './profitPlateau';
-import { buildShariaRunSnapshot } from './shariaSnapshot';
-import { buildC1ShariaRunSnapshot } from './shariaSnapshot';
+import {
+  buildC1ShariaRunSnapshot,
+  buildCurrentSleeveResearchSnapshot,
+  buildShariaRunSnapshot,
+} from './shariaSnapshot';
 import { buildVerifiedUniverse } from '../universe/buildVerifiedUniverse';
 import { selectDollarVolumeSleeve } from '../universe/sleeveSelector';
 import {
@@ -160,6 +167,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
+  'halal-residual-fast-momentum-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -182,6 +190,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
+  'halal-residual-fast-momentum-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -484,6 +493,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-fast-momentum-core') {
     return halalFastMomentumCoreBookPolicy(params as HalalFastMomentumCoreParams | undefined);
+  }
+  if (setupId === 'halal-residual-fast-momentum-core') {
+    return halalResidualFastMomentumCoreBookPolicy(params as HalalResidualFastMomentumCoreParams | undefined);
   }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
@@ -1168,6 +1180,16 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         symbols = [...c1Fixed.symbols];
         universeTag = c1Fixed.tag;
         universeIsUnscreened = false;
+      } else if (setupId === 'halal-residual-fast-momentum-core') {
+        // This candidate owns a weekly PIT 21-session dollar-volume rank. Pass the complete
+        // currently verified source set into prepareUniverse so the harness cannot preselect names
+        // with the terminal `to` date. Terminal replay is separately blocked until genuine PIT
+        // membership exists; diagnostics remain explicitly current-sleeve/unverified.
+        const universe = buildVerifiedUniverse();
+        verifiedShariaEntries = [...universe.entries];
+        symbols = verifiedShariaEntries.map(({ symbol }) => symbol);
+        universeTag = `c1-verified-source:${symbols.length}`;
+        universeIsUnscreened = false;
       } else if (C1_VERIFIED_SLEEVE_SETUP_IDS.has(setupId)) {
         const universe = buildVerifiedUniverse();
         const selected = await selectDollarVolumeSleeve(universe.entries, {
@@ -1190,6 +1212,23 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         console.log(`resolved --universe wide → ${symbols.length} symbol(s) with ≥${WIDE_MIN_DAILY_BARS} real daily bars in ${from}..${to}`);
       } else {
         symbols = await listDailySymbols(wantSymbols, from, to);
+      }
+      // Explicit reference-only series: loaded from the same real, MOCK-filtered daily spine, but
+      // never appended to `symbols`/`sharedSeries`, never C1-screened as a holding, and never enters
+      // the engine book. The setup must PIT-slice these prepared rows through each decision close.
+      const benchmarkDailyBarsBySymbol = new Map<string, { ts: Date; close: number; volume: number }[]>();
+      for (const benchmarkSymbol of setup.benchmarkSymbols ?? []) {
+        if (symbols.includes(benchmarkSymbol)) {
+          throw new Error(`${setupId} benchmark ${benchmarkSymbol} must not be a tradable symbol`);
+        }
+        const loaded = await loadDailySymbol(benchmarkSymbol, from, to);
+        excludedMock += loaded.excludedMock;
+        if (!loaded.bars.length) {
+          throw new Error(`${setupId} requires real ${benchmarkSymbol} benchmark bars in ${from}..${to}`);
+        }
+        benchmarkDailyBarsBySymbol.set(benchmarkSymbol, loaded.bars.map((bar) => ({
+          ts: bar.ts, close: Number(bar.close), volume: Number(bar.volume),
+        })));
       }
       if (dailyRoute === 'shared') {
         const sharedSeries: StrategyBookSeries[] = [];
@@ -1217,6 +1256,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             replayScope: sharedReplayScope,
             closesBySymbol: new Map(),
             dailyBarsBySymbol,
+            benchmarkDailyBarsBySymbol,
           });
           dailyBarsBySymbol.clear();
           sharedCalendarForPlateau = Array.from(calendarTimes)
@@ -1254,6 +1294,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
               item.bars.map((bar) => ({ ts: bar.ts, close: Number(bar.close) })),
             ])),
             dailyBarsBySymbol,
+            benchmarkDailyBarsBySymbol,
           });
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
         }
@@ -1309,7 +1350,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             ts: b.ts, close: Number(b.close), volume: Number(b.volume),
           })));
         }
-        setup.prepareUniverse({ symbols, closesBySymbol, dailyBarsBySymbol });
+        setup.prepareUniverse({ symbols, closesBySymbol, dailyBarsBySymbol, benchmarkDailyBarsBySymbol });
         console.log(`prepared cross-name book for ${closesBySymbol.size} symbol(s) [pairs/cross-sectional]`);
       }
       console.log(`\nprocessing ${symbols.length} symbol(s) [source=daily MarketBar, YAHOO/ALPACA only] …`);
@@ -1584,7 +1625,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // as truth); a real source (Zoya, live) ⇒ VERIFIED_* from real verdicts. Intraday micro-cap lanes
   // stay execution-blocked; a candidate artifact's own screening status still takes priority.
   const shariaSnapshot = verifiedShariaEntries
-    ? buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`))
+    ? setupId === 'halal-residual-fast-momentum-core'
+      ? buildCurrentSleeveResearchSnapshot(verifiedShariaEntries)
+      : buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`))
     : await buildShariaRunSnapshot(symbols, 'NASDAQ');
   const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce' || setupId === 'time-of-day';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus

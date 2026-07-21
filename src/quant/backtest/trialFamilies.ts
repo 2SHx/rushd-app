@@ -14,9 +14,10 @@ const HALAL_CORE_SETUP_IDS = Object.freeze([
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
+  'halal-residual-fast-momentum-core',
 ] as const);
 
-const HALAL_CORE_REGISTERED_TRIALS = 90; // ten related setups × nine frozen plateau trials
+const HALAL_CORE_REGISTERED_TRIALS = 99; // eleven related setups × nine frozen plateau trials
 
 export interface TrialCountEvidence {
   readonly method: typeof TRIAL_FAMILY_COUNT_METHOD;

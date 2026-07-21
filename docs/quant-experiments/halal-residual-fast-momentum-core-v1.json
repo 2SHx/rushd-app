@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-residual-fast-momentum-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-residual-fast-momentum-core",
+    "from": "2020-06-01",
+    "to": "2026-07-17",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db"
+  },
+  "configHash": "66f88374c35d99aa9cf60bc4192b5aabeb689b5913a4d5444a09a48fac78cda1",
+  "state": "CODIFIED",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

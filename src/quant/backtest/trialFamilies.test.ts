@@ -15,11 +15,11 @@ function knownPositiveCurve(): EquityPoint[] {
 }
 
 describe('terminal DSR trial-family registry', () => {
-  it('uses all 90 related halal-core trials and never falls below the local plateau', () => {
-    const evidence = trialCountEvidence('halal-fast-momentum-core', 9);
+  it('uses all 99 related halal-core trials and never falls below the local plateau', () => {
+    const evidence = trialCountEvidence('halal-residual-fast-momentum-core', 9);
     const raisedPlateau = trialCountEvidence('halal-fast-momentum-core', 100);
 
-    expect(evidence.familyTrials).toBe(90);
+    expect(evidence.familyTrials).toBe(99);
     expect(evidence.familyTrials).toBeGreaterThan(evidence.plateauTrials);
     expect(raisedPlateau.familyTrials).toBe(100);
     expect(raisedPlateau.familyTrials).toBeGreaterThanOrEqual(raisedPlateau.plateauTrials);
@@ -28,7 +28,7 @@ describe('terminal DSR trial-family registry', () => {
   it('a larger related family cannot improve DSR for a known positive sample', () => {
     const curve = knownPositiveCurve();
     const local = computeMetrics(curve, { trades: 249, turnover: 1, trials: 9 });
-    const family = trialCountEvidence('halal-fast-momentum-core', 9);
+    const family = trialCountEvidence('halal-residual-fast-momentum-core', 9);
     const corrected = computeMetrics(curve, { trades: 249, turnover: 1, trials: family.familyTrials });
 
     expect(corrected.deflatedSharpe).toBeLessThanOrEqual(local.deflatedSharpe);

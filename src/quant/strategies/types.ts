@@ -57,6 +57,16 @@ export interface UniversePrepareInput {
     close: number;
     volume: number;
   }[]>;
+  /**
+   * REAL daily benchmark series loaded explicitly by the harness. These symbols are reference-only:
+   * they are never members of `symbols`, never enter the engine book, and can never receive weight.
+   * A setup must still PIT-slice the series to `<= asOf` when computing a decision.
+   */
+  readonly benchmarkDailyBarsBySymbol?: ReadonlyMap<string, readonly {
+    ts: Date;
+    close: number;
+    volume: number;
+  }[]>;
   /** Optional compact PIT aggregates for setups whose screen depends on same-day cross-section. */
   readonly stocksInPlayBook?: ReadonlyMap<string, readonly {
     date: string;
@@ -120,6 +130,8 @@ export interface StrategySetup<Params> {
   /** Declared universe-override policy for the CLI `--universe` flag (see UniverseCompatibility). */
   readonly universeCompatibility?: UniverseCompatibility;
   readonly defaultParams: Params;
+  /** Explicit non-tradable daily reference series the harness must load or fail closed. */
+  readonly benchmarkSymbols?: readonly string[];
   /**
    * Optional cross-name preload, invoked once by the CLI daily path before simulation. Cross-
    * sectional / pairs setups implement it; single-name setups omit it. Pure side effect into the

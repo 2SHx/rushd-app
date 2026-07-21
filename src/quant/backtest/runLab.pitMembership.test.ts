@@ -35,7 +35,7 @@ import {
 describe('runLab terminal PIT membership fence', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('blocks all 12 audited terminal setups before load, simulation, or persistence', async () => {
+  it('blocks every audited terminal setup before load, simulation, or persistence', async () => {
     const writeFile = vi.spyOn(fs, 'writeFileSync');
 
     for (const setup of PIT_MEMBERSHIP_REQUIRED_SETUP_IDS) {

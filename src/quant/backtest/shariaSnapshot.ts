@@ -24,6 +24,8 @@ export interface ShariaSymbolSnapshot {
   /** 'zoya' when a real verdict; 'none' when unscreened. Never the mock verdict presented as truth. */
   source: string;
   reason: string;
+  /** Source snapshot date when the verdict comes from a captured universe row. */
+  sourceAsOf?: string;
 }
 
 export interface ShariaRunSnapshot {
@@ -88,6 +90,7 @@ export function buildC1ShariaRunSnapshot(
       reason: entry.purificationRatioBps === 'n/a — not computed'
         ? 'FUND_LEVEL_PURIFICATION_ONLY'
         : `purification_ratio_bps=${entry.purificationRatioBps}`,
+      sourceAsOf: entry.asOf,
     }));
   return {
     screened: verdicts.length > 0,
@@ -95,6 +98,38 @@ export function buildC1ShariaRunSnapshot(
     state: deriveShariaState(verdicts.length > 0, verdicts),
     verdicts,
     asOf: asOf.toISOString(),
+  };
+}
+
+/**
+ * Describe the current C1 sleeve honestly when it is reused for historical research. Current
+ * membership is not proof that a name was eligible on a past decision date, so every verdict is
+ * UNKNOWN and promotion stays blocked. Per-row dates preserve the actual source evidence instead
+ * of relabeling it with the backtest end date.
+ */
+export function buildCurrentSleeveResearchSnapshot(
+  entries: readonly UniverseEntry[],
+): ShariaRunSnapshot {
+  const verdicts: ShariaSymbolSnapshot[] = [...entries]
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map((entry) => ({
+      symbol: entry.symbol,
+      compliant: null,
+      standard: entry.tier === 'index-provider-screened'
+        ? 'S&P Shariah methodology'
+        : 'RUSHD AAOIFI-aligned XBRL screen',
+      source: entry.tier,
+      reason: 'CURRENT_SLEEVE_ONLY_UNVERIFIED_HISTORICAL',
+      sourceAsOf: entry.asOf,
+    }));
+  const sourceDates = entries.map((entry) => entry.asOf).sort();
+  const latestSourceDate = sourceDates.at(-1) ?? '1970-01-01';
+  return {
+    screened: false,
+    source: 'current-c1-sleeve-research-only',
+    state: 'UNSCREENED_EXECUTION_BLOCKED',
+    verdicts,
+    asOf: new Date(`${latestSourceDate}T00:00:00.000Z`).toISOString(),
   };
 }
 

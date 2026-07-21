@@ -1,6 +1,11 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import type { ShariaScreener, ShariaVerdict } from '@/services/marketData';
-import { buildC1ShariaRunSnapshot, buildShariaRunSnapshot, deriveShariaState } from './shariaSnapshot';
+import {
+  buildC1ShariaRunSnapshot,
+  buildCurrentSleeveResearchSnapshot,
+  buildShariaRunSnapshot,
+  deriveShariaState,
+} from './shariaSnapshot';
 
 // Network-free: keyless never touches a screener; the configured case injects a mock screener, so no
 // Zoya HTTP call is ever made. No database is used anywhere in this suite.
@@ -88,6 +93,32 @@ describe('buildC1ShariaRunSnapshot', () => {
       standard: 'S&P Shariah methodology',
       source: 'index-provider-screened',
       reason: 'FUND_LEVEL_PURIFICATION_ONLY',
+      sourceAsOf: '2026-07-17',
     });
+  });
+
+  it('blocks historical promotion when only current-sleeve membership is known', () => {
+    const snapshot = buildCurrentSleeveResearchSnapshot([{
+      symbol: 'AAPL', name: 'Apple', market: 'NASDAQ', tier: 'index-provider-screened',
+      provenance: 'SPUS holdings fixture', purificationRatioBps: 'n/a — not computed',
+      reasonCodes: ['FUND_LEVEL_PURIFICATION_ONLY'], asOf: '2026-07-17',
+    }, {
+      symbol: 'MSFT', name: 'Microsoft', market: 'NASDAQ', tier: 'rushd-xbrl-screened',
+      provenance: 'SEC filing', purificationRatioBps: 12,
+      reasonCodes: [], asOf: '2026-06-30',
+    }]);
+    expect(snapshot).toMatchObject({
+      screened: false,
+      source: 'current-c1-sleeve-research-only',
+      state: 'UNSCREENED_EXECUTION_BLOCKED',
+      asOf: '2026-07-17T00:00:00.000Z',
+    });
+    expect(snapshot.verdicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ symbol: 'AAPL', compliant: null, sourceAsOf: '2026-07-17' }),
+      expect.objectContaining({ symbol: 'MSFT', compliant: null, sourceAsOf: '2026-06-30' }),
+    ]));
+    expect(snapshot.verdicts.every((verdict) => (
+      verdict.reason === 'CURRENT_SLEEVE_ONLY_UNVERIFIED_HISTORICAL'
+    ))).toBe(true);
   });
 });

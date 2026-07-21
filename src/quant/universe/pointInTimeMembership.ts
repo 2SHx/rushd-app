@@ -110,6 +110,7 @@ export const PIT_MEMBERSHIP_REQUIRED_SETUP_IDS = Object.freeze([
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
+  'halal-residual-fast-momentum-core',
 ] as const);
 
 const PIT_MEMBERSHIP_REQUIRED_SET: ReadonlySet<string> = new Set(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS);
