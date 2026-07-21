@@ -55,6 +55,10 @@ import {
   halalMomentumMarkowitzCoreBookPolicy,
   type HalalMomentumMarkowitzCoreParams,
 } from '../strategies/halalMomentumMarkowitzCore';
+import {
+  halalTrendRiderCoreBookPolicy,
+  type HalalTrendRiderCoreParams,
+} from '../strategies/halalTrendRiderCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -145,6 +149,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-concentrated-momentum-core',
   'halal-managed-momentum-core',
   'halal-momentum-markowitz-core',
+  'halal-trend-rider-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -165,6 +170,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-concentrated-momentum-core',
   'halal-managed-momentum-core',
   'halal-momentum-markowitz-core',
+  'halal-trend-rider-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -185,7 +191,10 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
  * down-only vol-target/drawdown/regime governors on top), so it needs the SAME 60-name ranking pool.
  * `halal-momentum-markowitz-core` (the momentum-selection + Markowitz-sizing SYNTHESIS) RANKS then
  * concentrates to a FIXED top-20 before the covariance-aware sizing step, so like its momentum-
- * selection siblings it needs the SAME wide 60-name pool to rank FROM. */
+ * selection siblings it needs the SAME wide 60-name pool to rank FROM.
+ * `halal-trend-rider-core` (entry/exit let-winners-run) ranks WEEKLY from the same 60-name pool before
+ * concentrating to `maxOpenSlots` (10) concurrently-held names, so it needs the SAME wide ranking pool
+ * as its momentum-selection siblings, even though held positions are never trimmed back down. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
@@ -195,6 +204,7 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-concentrated-momentum-core', 60],
   ['halal-managed-momentum-core', 60],
   ['halal-momentum-markowitz-core', 60],
+  ['halal-trend-rider-core', 60],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -452,6 +462,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-momentum-markowitz-core') {
     return halalMomentumMarkowitzCoreBookPolicy(params as HalalMomentumMarkowitzCoreParams | undefined);
+  }
+  if (setupId === 'halal-trend-rider-core') {
+    return halalTrendRiderCoreBookPolicy(params as HalalTrendRiderCoreParams | undefined);
   }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
