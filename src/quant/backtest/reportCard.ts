@@ -6,6 +6,7 @@
 import type { BacktestMetrics } from './metrics';
 import type { DailyReturnDistribution } from './distribution';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
+import type { TrialCountEvidence } from './trialFamilies';
 
 export type DataFeed = 'alpaca-iex' | 'fixtures-real' | 'yahoo-short-history' | 'yahoo-daily';
 
@@ -70,6 +71,7 @@ export interface ReportCard {
   rejectionReasonCodes: RejectionReasonCode[];
   acceptanceMeaning: 'AUTO_PAPER_ADMISSION_ONLY';
   riskOfRuinLimit: number;
+  trialCount?: TrialCountEvidence;
 }
 
 export interface AssembleArgs {
@@ -99,6 +101,7 @@ export interface AssembleArgs {
   shariaState?: ShariaValidationState;
   dataQualityPitOk?: boolean;
   reproducible?: boolean;
+  trialCount?: TrialCountEvidence;
 }
 
 export function assembleReportCard(a: AssembleArgs): ReportCard {
@@ -145,6 +148,7 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
     bootstrap: a.bootstrap, permutation: a.permutation, kellyFraction: a.kellyFraction,
     kellyClampedQty: a.kellyClampedQty, checklist, implausible, shariaState, status,
     rejectionReasonCodes, acceptanceMeaning: 'AUTO_PAPER_ADMISSION_ONLY', riskOfRuinLimit,
+    ...(a.trialCount ? { trialCount: a.trialCount } : {}),
   };
 }
 
@@ -176,6 +180,9 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  CAGR:                 ${pct(c.full.cagr)}   (OOS ${pct(c.oos.cagr)})`);
   L.push(`  Sharpe:               ${c.full.sharpe.toFixed(2)}   (OOS ${c.oos.sharpe.toFixed(2)})`);
   L.push(`  Deflated Sharpe:      ${c.full.deflatedSharpe.toFixed(3)}   (OOS ${c.oos.deflatedSharpe.toFixed(3)})`);
+  if (c.trialCount) {
+    L.push(`  DSR trial count:      ${c.trialCount.familyTrials} family-wide (${c.trialCount.plateauTrials} local plateau; ${c.trialCount.method})`);
+  }
   L.push(`  Max Drawdown:         ${pct(c.full.maxDrawdown)}   Hit-rate: ${pct(c.full.hitRate)}`);
   L.push('──── measured daily-return distribution (no promised returns) ────');
   L.push(`  Days observed:        ${c.distribution.count}`);
@@ -183,10 +190,13 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  ${paint(`P(day ≥ +5%): ${pct(c.distribution.probDayGe5pct)}`, YELLOW)}   ${paint(`P(day ≤ −5%): ${pct(c.distribution.probDayLe5pct)}`, YELLOW)}`);
   L.push('──── Monte Carlo gate (seeded) ────');
   const bootstrapUnits = c.bootstrap.observationUnit === 'book-day' ? 'book-days' : 'trades';
+  const bootstrapMethod = c.bootstrap.method ?? 'iid-legacy-unspecified';
+  const blockLabel = c.bootstrap.blockLength ? `; block length=${c.bootstrap.blockLength}` : '';
+  L.push(`  Bootstrap method:     ${bootstrapMethod}${blockLabel}`);
   L.push(`  Bootstrap resamples:  ${c.bootstrap.resamples}  (${c.bootstrap.tradesPerPath} ${bootstrapUnits}/path)`);
   L.push(`  Max DD p5/p50/p95:    ${pct(c.bootstrap.maxDrawdown.p5)} / ${pct(c.bootstrap.maxDrawdown.p50)} / ${pct(c.bootstrap.maxDrawdown.p95)}`);
   L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
-  L.push(`  Entry-jitter p-value: ${c.permutation.pValue.toFixed(3)}  (mean/trade ${pct(c.permutation.observedMean)})`);
+  L.push(`  Sign-permutation p:   ${c.permutation.pValue.toFixed(3)}  (observed mean ${pct(c.permutation.observedMean)}; method=${c.permutation.method ?? 'sign-flip-legacy-unspecified'})`);
   L.push(`  Kelly fraction:       ${c.kellyFraction.toFixed(4)}  → clamped qty ${c.kellyClampedQty.toFixed(4)}`);
   L.push('──── promotion checklist (all required) ────');
   L.push(`  walk-forward:${yn(c.checklist.walkForward)}  OOS≥20% (${pct(c.checklist.oosHoldoutPct)}):${yn(c.checklist.oosHoldoutOk)}  trades≥100:${yn(c.checklist.enoughTrades)}`);

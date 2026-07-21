@@ -1,9 +1,8 @@
 // Rushd Quant — Monte Carlo gate (QDR-6, skill backtesting-rigor / risk-management).
 //
-// Three SEEDED, deterministic tools over per-trade outcomes (same seed ⇒ byte-identical output):
-//   1. trade-outcome bootstrap → equity-curve distribution, maxDD percentiles, risk-of-ruin.
-//   2. sign-flip permutation test → the entry-jitter null (a random/jittered entry has no
-//      directional edge, so trade signs are symmetric); p = P(permuted mean ≥ observed mean).
+// Three SEEDED, deterministic tools over return outcomes (same seed ⇒ byte-identical output):
+//   1. IID trade bootstrap or moving-block book-day bootstrap → equity/maxDD/ruin distribution.
+//   2. independent sign-flip permutation test; p = P(permuted mean ≥ observed mean).
 //   3. fractional-Kelly sizing whose proposal is CLAMPED BY THE ENVELOPE — never bypassed.
 //
 // Money that reaches the envelope is Prisma.Decimal; the statistical bootstrap works in plain
@@ -12,6 +11,9 @@ import { Prisma } from '@prisma/client';
 import { applyEnvelope, type EnvelopeResult, type MarketState, type PortfolioState, type RiskLimits } from '../risk/envelope';
 
 const D = Prisma.Decimal;
+
+/** Versioned default: approximately one trading month of serial dependence per sampled block. */
+export const BOOK_DAY_MOVING_BLOCK_LENGTH_V1 = 20;
 
 /** mulberry32 — a tiny, fast, well-distributed 32-bit PRNG. Same seed ⇒ same stream. */
 export function mulberry32(seed: number): () => number {
@@ -92,6 +94,10 @@ export interface BootstrapResult {
   tradesPerPath: number;
   /** Omitted for legacy byte-stable trade bootstrap; shared books persist `book-day`. */
   observationUnit?: 'book-day';
+  /** Present on newly generated evidence; optional only so historical cards remain readable. */
+  method?: 'iid' | 'moving-block';
+  /** Effective contiguous block length; present only for moving-block evidence. */
+  blockLength?: number;
   finalEquity: { p5: number; p50: number; p95: number };
   maxDrawdown: { p5: number; p50: number; p95: number };
   riskOfRuin: number; // fraction of paths that touched ≤ ruinFraction × startEquity
@@ -105,12 +111,51 @@ export interface BootstrapOpts {
   seed: number;
   /** Shared strategy-book validation bootstraps close-to-close NAV days, not position trades. */
   observationUnit?: 'book-day';
+  /** Moving-block length for book-day observations; defaults to the versioned 20-day constant. */
+  blockLength?: number;
+}
+
+function movingBlockIndices(
+  observationCount: number,
+  sampleLength: number,
+  blockLength: number,
+  rng: () => number,
+): number[] {
+  if (observationCount === 0 || sampleLength === 0) return [];
+  const effectiveBlockLength = Math.min(blockLength, observationCount);
+  const maxStart = observationCount - effectiveBlockLength;
+  const indices: number[] = [];
+  while (indices.length < sampleLength) {
+    const start = Math.floor(rng() * (maxStart + 1));
+    for (let offset = 0; offset < effectiveBlockLength && indices.length < sampleLength; offset++) {
+      indices.push(start + offset);
+    }
+  }
+  return indices;
+}
+
+/** Exposed for deterministic structural tests; each chunk is one contiguous observed run. */
+export function movingBlockSampleIndices(
+  observationCount: number,
+  opts: { readonly seed: number; readonly sampleLength: number; readonly blockLength?: number },
+): number[] {
+  const blockLength = opts.blockLength ?? BOOK_DAY_MOVING_BLOCK_LENGTH_V1;
+  if (!Number.isInteger(observationCount) || observationCount < 0) {
+    throw new Error('observationCount must be a non-negative integer');
+  }
+  if (!Number.isInteger(opts.sampleLength) || opts.sampleLength < 0) {
+    throw new Error('sampleLength must be a non-negative integer');
+  }
+  if (!Number.isInteger(blockLength) || blockLength < 1) {
+    throw new Error('blockLength must be a positive integer');
+  }
+  return movingBlockIndices(observationCount, opts.sampleLength, blockLength, mulberry32(opts.seed));
 }
 
 /**
- * Bootstrap the equity-curve distribution by resampling observed per-trade returns WITH
- * replacement. Each path compounds `tradesPerPath` sampled returns; we collect terminal equity,
- * path max-drawdown, and whether the path was ever ruined. Percentiles summarize the fan.
+ * Bootstrap the equity-curve distribution. Trades are sampled IID for compatibility; shared-book
+ * days use overlapping moving blocks so short-range dependence survives. Each path compounds
+ * `tradesPerPath` returns and records terminal equity, max drawdown, and ruin.
  */
 export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOpts): BootstrapResult {
   const resamples = Math.max(1000, opts.resamples ?? 1000);
@@ -119,13 +164,27 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
   const ruinLevel = startEquity * (opts.ruinFraction ?? 0.5);
   const rng = mulberry32(opts.seed);
 
+  if (tradeReturns.some((value) => !Number.isFinite(value) || value < -1)) {
+    throw new Error('Bootstrap returns must be finite and no smaller than -1');
+  }
+  const method = opts.observationUnit === 'book-day' ? 'moving-block' as const : 'iid' as const;
+  const requestedBlockLength = opts.blockLength ?? BOOK_DAY_MOVING_BLOCK_LENGTH_V1;
+  if (method === 'moving-block' && (!Number.isInteger(requestedBlockLength) || requestedBlockLength < 1)) {
+    throw new Error('blockLength must be a positive integer');
+  }
+  const blockLength = method === 'moving-block' && tradeReturns.length
+    ? Math.min(requestedBlockLength, tradeReturns.length)
+    : undefined;
+
   const observationLabel = opts.observationUnit ? { observationUnit: opts.observationUnit } : {};
   const empty: BootstrapResult = {
     resamples, tradesPerPath,
+    method,
     finalEquity: { p5: startEquity, p50: startEquity, p95: startEquity },
     maxDrawdown: { p5: 0, p50: 0, p95: 0 },
     riskOfRuin: 0,
     ...observationLabel,
+    ...(blockLength ? { blockLength } : {}),
   };
   if (tradeReturns.length === 0 || tradesPerPath === 0) return empty;
 
@@ -138,8 +197,11 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
     let peak = startEquity;
     let maxDD = 0;
     let wasRuined = false;
-    for (let i = 0; i < tradesPerPath; i++) {
-      const r = tradeReturns[Math.floor(rng() * tradeReturns.length)];
+    const sampledIndices = method === 'moving-block'
+      ? movingBlockIndices(tradeReturns.length, tradesPerPath, blockLength!, rng)
+      : Array.from({ length: tradesPerPath }, () => Math.floor(rng() * tradeReturns.length));
+    for (const sampledIndex of sampledIndices) {
+      const r = tradeReturns[sampledIndex];
       equity *= 1 + r;
       if (equity > peak) peak = equity;
       const dd = peak > 0 ? (peak - equity) / peak : 0;
@@ -155,24 +217,26 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
   maxDDs.sort((a, b) => a - b);
   return {
     resamples, tradesPerPath,
+    method,
     finalEquity: { p5: percentile(finals, 5), p50: percentile(finals, 50), p95: percentile(finals, 95) },
     maxDrawdown: { p5: percentile(maxDDs, 5), p50: percentile(maxDDs, 50), p95: percentile(maxDDs, 95) },
     riskOfRuin: ruined / resamples,
     ...observationLabel,
+    ...(blockLength ? { blockLength } : {}),
   };
 }
 
 export interface PermutationResult {
   observedMean: number;
-  pValue: number; // P(permuted mean ≥ observed) — small ⇒ edge unlikely to be random entry timing
+  pValue: number; // P(permuted mean ≥ observed) under independent sign symmetry
   permutations: number;
+  /** Optional only so historical cards remain readable. */
+  method?: 'independent-sign-flip';
 }
 
 /**
- * Entry-jitter null via seeded sign-flip permutation. Under "entry timing carries no edge",
- * each trade's realized sign is a coin flip, so we flip signs independently and measure how
- * often a permuted mean matches or beats the observed mean. A high p-value means the observed
- * average is indistinguishable from random entry — i.e. no demonstrated edge.
+ * Seeded independent sign permutation. This tests sign symmetry only; it does not perturb entry
+ * timestamps or simulate alternative fills. A high p-value means no demonstrated directional edge.
  */
 export function signFlipPermutationTest(
   tradeReturns: number[],
@@ -182,7 +246,9 @@ export function signFlipPermutationTest(
   const observedMean = tradeReturns.length
     ? tradeReturns.reduce((s, v) => s + v, 0) / tradeReturns.length
     : 0;
-  if (tradeReturns.length === 0) return { observedMean: 0, pValue: 1, permutations };
+  if (tradeReturns.length === 0) {
+    return { observedMean: 0, pValue: 1, permutations, method: 'independent-sign-flip' };
+  }
 
   const rng = mulberry32(opts.seed);
   let atLeast = 0;
@@ -191,7 +257,7 @@ export function signFlipPermutationTest(
     for (const r of tradeReturns) sum += rng() < 0.5 ? -r : r;
     if (sum / tradeReturns.length >= observedMean) atLeast++;
   }
-  return { observedMean, pValue: atLeast / permutations, permutations };
+  return { observedMean, pValue: atLeast / permutations, permutations, method: 'independent-sign-flip' };
 }
 
 /**

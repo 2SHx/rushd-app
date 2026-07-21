@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BacktestMetrics } from './metrics';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type AssembleArgs } from './reportCard';
+import { trialCountEvidence } from './trialFamilies';
 
 const metrics = (override: Partial<BacktestMetrics> = {}): BacktestMetrics => ({
   cagr: 0.2,
@@ -65,10 +66,21 @@ describe('terminal validation report card', () => {
 
   it('labels shared Monte Carlo paths as book-day observations', () => {
     const rendered = renderReportCard(assembleReportCard(args({
-      bootstrap: { ...bootstrap, observationUnit: 'book-day' },
+      bootstrap: { ...bootstrap, observationUnit: 'book-day', method: 'moving-block', blockLength: 20 },
+      permutation: { ...permutation, method: 'independent-sign-flip' },
     })), false);
     expect(rendered).toContain('book-days/path');
+    expect(rendered).toContain('Bootstrap method:     moving-block; block length=20');
+    expect(rendered).toContain('Sign-permutation p:');
+    expect(rendered).not.toContain('Entry-jitter');
     expect(rendered).not.toContain('120 trades/path');
+  });
+
+  it('reports the family-wide DSR trial count separately from the local plateau', () => {
+    const trialCount = trialCountEvidence('halal-fast-momentum-core', 9);
+    const rendered = renderReportCard(assembleReportCard(args({ trialCount })), false);
+
+    expect(rendered).toContain('DSR trial count:      90 family-wide (9 local plateau');
   });
 
   it('emits ACCEPTED only when every actual gate passes and explains its limited meaning', () => {

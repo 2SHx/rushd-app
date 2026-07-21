@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
 import {
-  mulberry32, bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest,
+  BOOK_DAY_MOVING_BLOCK_LENGTH_V1, mulberry32, bootstrapMonthlyBlocks, bootstrapTradeOutcomes,
+  movingBlockSampleIndices, signFlipPermutationTest,
   fractionalKellyFraction, kellySizedDecision,
 } from './monteCarlo';
 import type { MarketState, PortfolioState, RiskLimits } from '../risk/envelope';
@@ -54,7 +55,7 @@ describe('bootstrapTradeOutcomes — seeded reproducibility', () => {
 
   it('labels shared-book daily observations without changing legacy trade output', () => {
     const legacy = bootstrapTradeOutcomes(TRADES, { resamples: 1000, seed: 7, startEquity: 100_000 });
-    const bookDays = [0.004, -0.003, 0.002, -0.001, 0.003, -0.002];
+    const bookDays = Array.from({ length: 30 }, (_, index) => index % 2 === 0 ? 0.002 : -0.001);
     const sharedA = bootstrapTradeOutcomes(bookDays, {
       resamples: 1000, seed: 7, startEquity: 100_000, observationUnit: 'book-day',
     });
@@ -63,9 +64,25 @@ describe('bootstrapTradeOutcomes — seeded reproducibility', () => {
     });
 
     expect(legacy).not.toHaveProperty('observationUnit');
+    expect(legacy.method).toBe('iid');
     expect(sharedA.observationUnit).toBe('book-day');
+    expect(sharedA.method).toBe('moving-block');
+    expect(sharedA.blockLength).toBe(BOOK_DAY_MOVING_BLOCK_LENGTH_V1);
     expect(sharedA).toEqual(sharedB);
     expect(sharedA.maxDrawdown.p95).toBeLessThan(0.1);
+  });
+
+  it('replays seeded moving blocks and preserves contiguous runs within each block', () => {
+    const opts = { seed: 81, sampleLength: 12, blockLength: 3 };
+    const first = movingBlockSampleIndices(10, opts);
+    const second = movingBlockSampleIndices(10, opts);
+
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(12);
+    for (let offset = 0; offset < first.length; offset += opts.blockLength) {
+      const block = first.slice(offset, offset + opts.blockLength);
+      expect(block.every((index, i) => i === 0 || index === block[i - 1] + 1)).toBe(true);
+    }
   });
 });
 
@@ -74,6 +91,7 @@ describe('signFlipPermutationTest — seeded', () => {
     const p1 = signFlipPermutationTest(TRADES, { permutations: 1000, seed: 3 });
     const p2 = signFlipPermutationTest(TRADES, { permutations: 1000, seed: 3 });
     expect(p1.pValue).toEqual(p2.pValue);
+    expect(p1.method).toBe('independent-sign-flip');
     expect(p1.pValue).toBeGreaterThanOrEqual(0);
     expect(p1.pValue).toBeLessThanOrEqual(1);
   });

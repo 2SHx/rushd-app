@@ -102,6 +102,7 @@ import {
   bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision,
 } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ReportCard, type ShariaValidationState } from './reportCard';
+import { trialCountEvidence } from './trialFamilies';
 import { buildHistoricalComparisonEvidence } from './historicalComparison';
 import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence';
 import { assertWalkForward } from './walkForward';
@@ -1094,7 +1095,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
   const effectiveParams = params ?? setup.defaultParams;
-  const validationTrials = validationTrialsForSetup(setupId, effectiveParams);
+  const plateauValidationTrials = validationTrialsForSetup(setupId, effectiveParams);
+  const validationTrialFamily = trialCountEvidence(setupId, plateauValidationTrials);
+  const validationTrials = validationTrialFamily.familyTrials;
   const dailyLimits = limitsForDailySetup(setupId, DEFAULT_BT_LIMITS);
   const sharedPolicy = strategyBookPolicyForSetup(setupId, params);
 
@@ -1585,6 +1588,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
       shariaState, walkForward, profitPlateau,
       dataQualityPitOk, reproducible,
+      trialCount: validationTrialFamily,
     }),
     walkForwardEvidence,
     plateau: plateauEvaluation,
@@ -1597,6 +1601,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     setupVersion: setup.version,
     effectiveParams,
     validationTrials,
+    plateauValidationTrials,
     runMode,
     engineRoute: cadence === 'daily' ? dailyRoute : 'legacy',
     ...(tomWindowValidation ? { tomWindowValidation } : {}),
