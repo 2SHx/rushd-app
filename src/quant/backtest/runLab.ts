@@ -43,6 +43,10 @@ import {
   halalSectorCappedRiskParityWideBookPolicy,
   type HalalSectorCappedRiskParityWideParams,
 } from '../strategies/halalSectorCappedRiskParityWide';
+import {
+  halalConcentratedMomentumCoreBookPolicy,
+  type HalalConcentratedMomentumCoreParams,
+} from '../strategies/halalConcentratedMomentumCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -130,6 +134,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',
+  'halal-concentrated-momentum-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -147,6 +152,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',
+  'halal-concentrated-momentum-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -160,13 +166,16 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
  * sector cap is the ONLY new variable), so it MUST use the identical maxNames=40 — a different sleeve
  * size would be a confound, not a controlled test. `halal-sector-capped-risk-parity-wide` is the
  * deliberate BREADTH follow-up to that isolated A/B — it uses the QDR-8 ceiling maxNames=100 on
- * purpose, testing whether the sector cap's marginal narrow-sleeve effect scales at real breadth. */
+ * purpose, testing whether the sector cap's marginal narrow-sleeve effect scales at real breadth.
+ * `halal-concentrated-momentum-core` (CAGR-pivot) RANKS then concentrates to a FIXED top-10, so like
+ * `halal-momentum-risk-parity-core` it needs a wide 60-name pool to rank FROM before narrowing. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
   ['halal-momentum-risk-parity-core', 60],
   ['halal-sector-capped-risk-parity-core', 40],
   ['halal-sector-capped-risk-parity-wide', 100],
+  ['halal-concentrated-momentum-core', 60],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -415,6 +424,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-sector-capped-risk-parity-wide') {
     return halalSectorCappedRiskParityWideBookPolicy(params as HalalSectorCappedRiskParityWideParams | undefined);
+  }
+  if (setupId === 'halal-concentrated-momentum-core') {
+    return halalConcentratedMomentumCoreBookPolicy(params as HalalConcentratedMomentumCoreParams | undefined);
   }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
