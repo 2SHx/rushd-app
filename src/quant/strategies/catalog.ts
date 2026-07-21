@@ -24,6 +24,7 @@ import { halalMarkowitzCoreSetup } from './halalMarkowitzCore';
 import { halalRiskParityCoreSetup } from './halalRiskParityCore';
 import { halalMomentumRiskParityCoreSetup } from './halalMomentumRiskParityCore';
 import { halalSectorCappedRiskParityCoreSetup } from './halalSectorCappedRiskParityCore';
+import { halalSectorCappedRiskParityWideSetup } from './halalSectorCappedRiskParityWide';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -52,4 +53,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [halalRiskParityCoreSetup.id]: halalRiskParityCoreSetup,
   [halalMomentumRiskParityCoreSetup.id]: halalMomentumRiskParityCoreSetup,
   [halalSectorCappedRiskParityCoreSetup.id]: halalSectorCappedRiskParityCoreSetup,
+  [halalSectorCappedRiskParityWideSetup.id]: halalSectorCappedRiskParityWideSetup,
 });
