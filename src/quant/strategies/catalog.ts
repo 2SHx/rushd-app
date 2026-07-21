@@ -28,6 +28,7 @@ import { halalSectorCappedRiskParityWideSetup } from './halalSectorCappedRiskPar
 import { halalConcentratedMomentumCoreSetup } from './halalConcentratedMomentumCore';
 import { halalManagedMomentumCoreSetup } from './halalManagedMomentumCore';
 import { halalMomentumMarkowitzCoreSetup } from './halalMomentumMarkowitzCore';
+import { halalTrendRiderCoreSetup } from './halalTrendRiderCore';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [gapperOrbSetup.id]: gapperOrbSetup,
@@ -60,4 +61,5 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [halalConcentratedMomentumCoreSetup.id]: halalConcentratedMomentumCoreSetup,
   [halalManagedMomentumCoreSetup.id]: halalManagedMomentumCoreSetup,
   [halalMomentumMarkowitzCoreSetup.id]: halalMomentumMarkowitzCoreSetup,
+  [halalTrendRiderCoreSetup.id]: halalTrendRiderCoreSetup,
 });
