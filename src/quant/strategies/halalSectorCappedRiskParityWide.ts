@@ -149,6 +149,7 @@ const SECTOR_SYMBOLS: Readonly<Record<string, readonly string[]>> = Object.freez
     // Transportation under the 2023 GICS structure):
     'BLDR', 'CHRW', 'CPRT', 'CTAS', 'EFX', 'EXPD', 'JBHT', 'LII', 'MAS', 'MMM', 'NDSN', 'ODFL',
     'ROL', 'ROP', 'UBER', 'UNP', 'UPS', 'VLTO', 'XYL',
+    'FIX', // Comfort Systems USA — Construction & Engineering (mechanical/electrical contracting)
   ],
   Energy: [
     'XOM', 'COP', 'SLB', 'HAL', 'DVN', 'EOG', 'FCX',
