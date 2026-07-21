@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quant Experiment Governance"
+  short_description: "Pre-register and audit quant experiments"
+  default_prompt: "Use $quant-experiment-governance to run one leakage-resistant quant strategy experiment."

@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   backtestRuns: new Map<string, any>(),
   claims: new Set<string>(),
   seq: { n: 0 },
+  claimWrites: { create: 0, delete: 0 },
 }));
 
 vi.mock('@/lib/authz', () => ({ requireUltraTier: () => h.requireUltraTier() }));
@@ -18,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     autoRunClaim: {
       create: async ({ data }: { data: { key: string } }) => {
+        h.claimWrites.create += 1;
         if (h.claims.has(data.key)) {
           throw new Prisma.PrismaClientKnownRequestError('unique constraint', { code: 'P2002', clientVersion: '5' });
         }
@@ -25,6 +27,7 @@ vi.mock('@/lib/prisma', () => ({
         return { key: data.key };
       },
       delete: async ({ where }: { where: { key: string } }) => {
+        h.claimWrites.delete += 1;
         h.claims.delete(where.key);
         return { key: where.key };
       },
@@ -75,6 +78,8 @@ beforeEach(() => {
   h.backtestRuns.clear();
   h.claims.clear();
   h.seq.n = 0;
+  h.claimWrites.create = 0;
+  h.claimWrites.delete = 0;
   h.requireUltraTier.mockResolvedValue({ id: 'user-1', role: 'PARENT', tier: 'ULTRA' });
 });
 
@@ -113,6 +118,28 @@ describe('POST /api/quant/lab/run', () => {
     const res = await POST(req({ setup: 'not-a-real-setup', period: '1Y' }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('unknown_setup');
+  });
+
+  it('refuses every direct API FULL before run or claim state can be opened', async () => {
+    h.runLab.mockResolvedValue({
+      card: { ...baseCard, status: 'REJECTED' },
+      outFile: null, backtestRunId: null, diagnostic: false,
+      symbols: ['AAPL'], universeTag: 'halal', periodPreset: 'FULL',
+      from: '2018-01-02', to: '2026-07-10',
+    });
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        error: 'terminal_full_requires_sealed_cli',
+        requiredAction: 'quant_experiment_full',
+      });
+    }
+    await flush();
+    expect(h.runLab).not.toHaveBeenCalled();
+    expect(h.claimWrites).toEqual({ create: 0, delete: 0 });
+    expect(h.backtestRuns.size).toBe(0);
   });
 
   it('409s a second concurrent run for the same user', async () => {
@@ -182,9 +209,9 @@ describe('POST /api/quant/lab/run', () => {
     h.runLab.mockResolvedValue({
       card: { ...baseCard, status: 'REJECTED' },
       outFile: null, backtestRunId: null, diagnostic: false,
-      symbols: ['AAPL'], universeTag: 'halal', periodPreset: 'FULL', from: '2018-01-02', to: '2026-07-10',
+      symbols: ['AAPL'], universeTag: 'halal', periodPreset: '1Y', from: '2025-07-10', to: '2026-07-10',
     });
-    const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: '1Y' }));
     expect(again.status).toBe(202);
   });
 
@@ -208,9 +235,9 @@ describe('POST /api/quant/lab/run', () => {
     h.runLab.mockResolvedValue({
       card: { ...baseCard, status: 'REJECTED' },
       outFile: null, backtestRunId: null, diagnostic: false,
-      symbols: ['AAPL'], universeTag: 'halal', periodPreset: 'FULL', from: '2018-01-02', to: '2026-07-10',
+      symbols: ['AAPL'], universeTag: 'halal', periodPreset: '1Y', from: '2025-07-10', to: '2026-07-10',
     });
-    const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    const again = await POST(req({ setup: 'bollinger-mr-long-v2', period: '1Y' }));
     expect(again.status).toBe(202);
   });
 
@@ -225,14 +252,14 @@ describe('POST /api/quant/lab/run', () => {
 
     // A newer run currently holds the claim.
     h.runLab.mockImplementation(() => new Promise(() => {}));
-    const active = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    const active = await POST(req({ setup: 'bollinger-mr-long-v2', period: '1Y' }));
     expect(active.status).toBe(202);
 
     const polled = await GET(getReq(staleId));
     expect((await polled.json()).status).toBe('FAILED_STALE');
 
     // The active run's claim survived — a concurrent start is still refused.
-    const second = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    const second = await POST(req({ setup: 'bollinger-mr-long-v2', period: '1Y' }));
     expect(second.status).toBe(409);
   });
 
@@ -240,9 +267,9 @@ describe('POST /api/quant/lab/run', () => {
     h.runLab.mockResolvedValue({
       card: { ...baseCard, status: 'REJECTED' },
       outFile: null, backtestRunId: null, diagnostic: false,
-      symbols: ['AAPL'], universeTag: 'halal', periodPreset: 'FULL', from: '2018-01-02', to: '2026-07-10',
+      symbols: ['AAPL'], universeTag: 'halal', periodPreset: '1Y', from: '2025-07-10', to: '2026-07-10',
     });
-    const started = await POST(req({ setup: 'bollinger-mr-long-v2', period: 'FULL' }));
+    const started = await POST(req({ setup: 'bollinger-mr-long-v2', period: '1Y' }));
     const { id } = await started.json();
 
     h.requireUltraTier.mockResolvedValue({ id: 'user-2', role: 'PARENT', tier: 'ULTRA' });

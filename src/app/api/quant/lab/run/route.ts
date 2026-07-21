@@ -12,10 +12,10 @@
 // dies with it and the row is stuck PENDING/RUNNING forever — so GET treats a PENDING/RUNNING row
 // older than STALE_MS as FAILED_STALE on read, which also frees the user's claim to run again.
 //
-// Bounds (QDR-5, binding): custom universe ≤ 20 symbols; universe=wide only with period=1Y (which
-// also makes period=FULL impossible with wide, satisfying "FULL only for halal|custom"); seed is
-// always 42 and is never accepted from the caller. A non-FULL run is an evidence-view only — this
-// route can never report ACCEPTED for one (the CLI's own FULL-period run is the terminal verdict).
+// Bounds (QDR-5, binding): custom universe ≤ 20 symbols; universe=wide only with period=1Y; seed is
+// always 42 and is never accepted from the caller. This API is evidence-view only. Terminal FULL is
+// fail-closed here and must use the sealed manifest lifecycle CLI, so the API cannot mint a second
+// terminal claim or accept a client-supplied filesystem manifest path.
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -159,6 +159,12 @@ export async function POST(req: Request) {
     if (!(request.setup in STRATEGY_SETUP_CATALOG)) {
       return NextResponse.json({ error: 'unknown_setup' }, { status: 400 });
     }
+    if (request.period === 'FULL') {
+      return NextResponse.json({
+        error: 'terminal_full_requires_sealed_cli',
+        requiredAction: 'quant_experiment_full',
+      }, { status: 409 });
+    }
 
     try {
       await prisma.autoRunClaim.create({ data: { key: claimKeyFor(user.id) } });
@@ -169,7 +175,7 @@ export async function POST(req: Request) {
       throw err;
     }
 
-    const evidenceView = request.period !== 'FULL';
+    const evidenceView = true; // FULL returned above; every API-created row is non-terminal evidence.
     let run;
     try {
       run = await prisma.backtestRun.create({

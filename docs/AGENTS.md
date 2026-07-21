@@ -49,6 +49,9 @@ OPEN: <risks/unknowns, max 3 bullets>
 | Prisma, API routes, engines, auth, deploy config | backend-expert | sonnet |
 | LLM endpoints, structured outputs, MCP servers | ai-features-expert | sonnet |
 | Arabic, RTL, translations, Sharia/AAOIFI content | i18n-fintech-expert | sonnet |
+| Quant hypothesis + pre-registration (read-only) | quant-research-director | opus |
+| Quant strategy implementation | quant-strategist | opus |
+| Quant pre/post terminal evidence audit (read-only) | quant-validation-auditor | opus |
 | Test authoring, vitest setup, CI workflow | test-engineer | sonnet |
 | Post-implementation verification | qa-reviewer | opus |
 | Security audit (auth/money/API-surface changes) | security-auditor | opus |

@@ -8,6 +8,7 @@
     "postinstall": "prisma generate",
     "start": "tsx scripts/next-workspace.ts start",
     "backtest": "tsx scripts/backtest.ts",
+    "quant:experiment": "tsx scripts/quant-experiment.ts",
     "lint": "next lint",
     "test": "vitest run"
   },

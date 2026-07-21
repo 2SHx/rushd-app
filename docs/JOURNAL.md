@@ -8,6 +8,13 @@ Entry format:
 Shipped: <what, one line>
 Decisions: <key choices made, one line>
 Open: <risks/next, one line>
+```
+
+## 2026-07-21 — Quant evidence governance + survivor-bias fail-closed gate ✅
+Shipped: Added research-director/validation-auditor roles, the quant-experiment-governance skill + command, atomic sealed one-diagnostic/one-FULL manifests, 90-trial-family DSR, 20d moving-block MC, and a PIT membership/Sharia hard gate for 12 affected setups.
+Decisions: The prior 105.92% OOS CAGR is reproducible but conditional on a 2026 survivor sleeve and iteratively reused OOS; it is exploratory/non-frontier, remains REJECTED, and no new residual-momentum FULL is eligible until genuine historical membership or forward-paper evidence exists.
+Verify: fresh QA + API safety PASS; 60 focused tests, tsc, lint, concurrency/role/PIT adversarial probes green; full Vitest 1,302/1,310 with the same 8 pre-existing academy/authz/portfolio/quant-eval failures; no FULL executed.
+Open: ingest immutable historical SPUS/HLAL membership + lifecycle + PIT Sharia snapshots; then preregister the residual-fast-momentum hypothesis or confirm through ≥63 forward-paper book-days.
 
 ## 2026-07-21 — halal-fast-momentum-core v1: velocity+concentration extreme (P5), pre-registered, run, REJECTED — BEATS the concentrated baseline's 69.66% OOS CAGR at a real drawdown cost ✅
 Shipped: `halal-fast-momentum-core` v1 — an ISOLATED A/B on `halal-concentrated-momentum-core` (top-10, WEEKLY, 126d/skip5, session-best 69.66% OOS CAGR): the SAME weekly ISO-week engine (`dualMomentumMetrics`/`selectTopNByMomentum`/`inverseVolatilityWeights`/`capAndRedistribute` all reused unchanged, 25% per-name cap, C1-verified 60-name sleeve) with ONLY three params changed — lookbackDays 126→63, skipRecentDays 5→2, topN 10→5, cashFloor scaled proportionally 3→2 — testing `halal-trend-rider-core`'s REJECT finding (rotation velocity, not winner-trimming, is the CAGR edge) at its sensible max. Frozen 3×3 plateau {42,63,84}×{4,5,6}. 20 new unit tests (schema, top-5 selection with hand-computable fixture, 63d/skip2 momentum formula, cash-floor-below-2, determinism, plateau). Pre-registered `000dea1` BEFORE the single FULL run; 1Y diagnostic (97 trades, non-terminal) changed zero params.

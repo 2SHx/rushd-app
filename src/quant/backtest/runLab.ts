@@ -111,6 +111,10 @@ import { buildShariaRunSnapshot } from './shariaSnapshot';
 import { buildC1ShariaRunSnapshot } from './shariaSnapshot';
 import { buildVerifiedUniverse } from '../universe/buildVerifiedUniverse';
 import { selectDollarVolumeSleeve } from '../universe/sleeveSelector';
+import {
+  assertTerminalPointInTimeMembership,
+  historicalMembershipMarker,
+} from '../universe/pointInTimeMembership';
 import type { UniverseEntry } from '../universe/types';
 import type { RiskLimits } from '../risk/envelope';
 
@@ -1035,6 +1039,12 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     throw new UsageError(`unknown setup "${setupId}". known: ${Object.keys(STRATEGY_SETUP_CATALOG).join(', ')}`);
   }
 
+  // Audited C1 sleeves cannot use today's survivors as a historical universe. This preflight is
+  // intentionally before period resolution (which may query the DB), all loaders/simulators, and
+  // result persistence. Diagnostics remain non-terminal and are marked on their eventual card.
+  assertTerminalPointInTimeMembership({ setupId, terminal: runMode === 'TERMINAL' });
+  const historicalMembership = historicalMembershipMarker(setupId, runMode === 'TERMINAL');
+
   // ── R3-3.5 period: explicit from/to wins; else a period preset anchored at the latest complete
   // MarketBar trading date. Every card + BacktestRun is tagged with the resolved preset.
   const hasExplicitDates = Boolean(options.from && options.to);
@@ -1603,6 +1613,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     validationTrials,
     plateauValidationTrials,
     runMode,
+    ...(historicalMembership ? { historicalMembership } : {}),
     engineRoute: cadence === 'daily' ? dailyRoute : 'legacy',
     ...(tomWindowValidation ? { tomWindowValidation } : {}),
     ...(sharedBookResult ? {

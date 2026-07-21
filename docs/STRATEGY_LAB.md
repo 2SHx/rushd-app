@@ -10,6 +10,25 @@ DB + `results/*.json`, NEVER in this file — headline metrics only.
 profit plateau · MC maxDD p95 within envelope. Sharpe > 3 ⇒ `implausible`, blocks promotion.
 All setups long-only cash (Sharia: no short, no margin). Every claim labeled simulated/paper.
 
+## 2026-07-21 evidence-integrity amendment (append-only)
+
+An independent audit proved that the following twelve terminal cards replay a sleeve selected from
+the 2026-07-17 SPUS fixture and terminal-date liquidity/Sharia evidence back through earlier history:
+`ts-momentum-halal-basket-v4`, `bollinger-mr-long-v3`, `halal-markowitz-core`,
+`halal-risk-parity-core`, `halal-momentum-risk-parity-core`,
+`halal-sector-capped-risk-parity-core`, `halal-sector-capped-risk-parity-wide`,
+`halal-concentrated-momentum-core`, `halal-managed-momentum-core`,
+`halal-momentum-markowitz-core`, `halal-trend-rider-core`, and `halal-fast-momentum-core`.
+Their raw artifacts and original **REJECTED** verdicts remain unchanged, but their reason sets are
+amended with `SHARIA_UNVERIFIABLE` and `DATA_QUALITY_PIT_FAILURE`. Their CAGR, DSR, curves, and
+cross-card rankings are conditional on 2026 survivors: exploratory only, **not a clean OOS frontier
+and not promotable**. The same OOS slice also informed successive mechanisms, so future DSR evidence
+uses the full related trial family (currently 90 trials for the ten halal-core mechanisms), and fresh
+confirmation requires genuine PIT membership snapshots plus never-inspected or forward-paper data.
+Terminal reruns of these twelve setups now fail before loading bars, simulation, result writes, or DB
+persistence until historical membership/lifecycle/Sharia coverage exists; diagnostics are marked
+`unverified-diagnostic-only` and may be used for wiring only.
+
 ## Active catalog
 
 | id | tier | hypothesis (one line) | params ver | status | trades | expectancy/trade (net) | dSharpe | maxDD p95 | P(day≥5%) | next action |
