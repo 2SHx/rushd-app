@@ -59,6 +59,10 @@ import {
   halalTrendRiderCoreBookPolicy,
   type HalalTrendRiderCoreParams,
 } from '../strategies/halalTrendRiderCore';
+import {
+  halalFastMomentumCoreBookPolicy,
+  type HalalFastMomentumCoreParams,
+} from '../strategies/halalFastMomentumCore';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -150,6 +154,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-managed-momentum-core',
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
+  'halal-fast-momentum-core',
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -171,6 +176,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-managed-momentum-core',
   'halal-momentum-markowitz-core',
   'halal-trend-rider-core',
+  'halal-fast-momentum-core',
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -194,7 +200,11 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
  * selection siblings it needs the SAME wide 60-name pool to rank FROM.
  * `halal-trend-rider-core` (entry/exit let-winners-run) ranks WEEKLY from the same 60-name pool before
  * concentrating to `maxOpenSlots` (10) concurrently-held names, so it needs the SAME wide ranking pool
- * as its momentum-selection siblings, even though held positions are never trimmed back down. */
+ * as its momentum-selection siblings, even though held positions are never trimmed back down.
+ * `halal-fast-momentum-core` (ISOLATED velocity+concentration A/B on `halal-concentrated-momentum-
+ * core`: 63d/skip2 momentum, fixed top-5) ranks WEEKLY from the SAME wide 60-name pool before
+ * concentrating further than any momentum-selection sibling — the isolated A/B design requires the
+ * SAME ranking-pool breadth as the baseline it is compared against, never a different confound. */
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
@@ -205,6 +215,7 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-managed-momentum-core', 60],
   ['halal-momentum-markowitz-core', 60],
   ['halal-trend-rider-core', 60],
+  ['halal-fast-momentum-core', 60],
 ]);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
@@ -465,6 +476,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-trend-rider-core') {
     return halalTrendRiderCoreBookPolicy(params as HalalTrendRiderCoreParams | undefined);
+  }
+  if (setupId === 'halal-fast-momentum-core') {
+    return halalFastMomentumCoreBookPolicy(params as HalalFastMomentumCoreParams | undefined);
   }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
