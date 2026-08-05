@@ -32,10 +32,16 @@ Never allow one agent to propose, implement, and validate the same candidate unc
 Dispatch `quant-research-director` read-only. Require one causal hypothesis, one versioned mechanism, exact frozen parameters, a 3×3 plateau, predicted metric directions, and falsification criteria. Reject proposals that merely retune a tested file or change promotion thresholds.
 
 The proposal must state why the information would have been available at each decision time and why the mechanism is distinct from prior trials.
+Its sealed manifest hash is the configuration root that every downstream dataset, split, model, and
+prediction artifact must reference.
 
 ### 3. Implement without seeing terminal results
 
 Dispatch `quant-strategist` with the frozen contract. Reuse existing pure helpers and the captured-real verified universe. Add deterministic unit tests for parameter parsing, PIT behavior, selection/weight math, replay equality, and all plateau variants.
+
+Implement in blocker order as vertical proofs. A model lane does not advance past data materialization
+until an independently supplied lineage root rejects forged self-attestation; it does not advance
+past training until the training entry point itself enforces purge and embargo.
 
 Permit at most one `--diagnostic` run for wiring/sample sufficiency. A diagnostic is non-terminal, may not persist a terminal card, and may not change frozen parameters. If it reveals a wiring defect, fix the defect; if it reveals an unattractive result, do not tune.
 
@@ -47,6 +53,8 @@ Commit the candidate implementation and its `CANDIDATE` pre-registration before 
 - setup id/version, parameters, universe, costs, seed, OOS fraction, FULL period, engine, and nine plateau trials are frozen in code and ledger;
 - real-source/PIT guards, decide-close/fill-next-open, Sharia veto, ADV/slippage/cost, and deterministic replay tests pass;
 - no terminal artifact/card already exists for this version;
+- dataset lineage, actual split assignments, runtime, and model artifacts bind the sealed manifest
+  hash rather than caller-shaped strings;
 - the exact FULL command is unambiguous.
 
 Do not run FULL unless the auditor returns `READY_TO_RUN`.
@@ -60,6 +68,9 @@ The orchestrator runs exactly the approved FULL command once. Do not retry for a
 Dispatch `quant-validation-auditor` again with the raw result artifact. Require verification of IS/OOS separation, total and OOS samples, DSR trial count, MC distribution, permutation result, plateau, Sharia/data state, reproducibility ids, and cumulative ordered rejection codes.
 
 Record exactly `ACCEPTED` or `REJECTED` in `docs/STRATEGY_LAB.md`; append a five-line `docs/JOURNAL.md` entry; never weaken a gate to promote a result. Commit the terminal evidence separately from the pre-registration commit.
+
+The journal entry must preserve enough of the role-owned path for `$learn` to explain the result:
+hypothesis, implementation mechanism, independent checks, verdict, and the decisive open risk.
 
 ## Stop conditions
 

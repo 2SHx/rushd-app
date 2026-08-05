@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-causal-tcn-alpha",
+  "version": "v1",
+  "config": {
+    "setup": "halal-causal-tcn-alpha",
+    "evidenceBoundary": "development-through-2026-07-22-iterative-only",
+    "historicalMode": "PIPELINE_ONLY_NO_PERFORMANCE",
+    "terminalEligible": false,
+    "seed": 42,
+    "runtime": {
+      "python": "3.12.4",
+      "numpy": "2.5.1",
+      "torch": "2.13.0",
+      "device": "cpu",
+      "deterministicAlgorithms": true,
+      "torchIntraOpThreads": 1,
+      "torchInterOpThreads": 1
+    },
+    "data": {
+      "lookbackSessions": 126,
+      "decisionCadence": "weekly-iso-week-end-close",
+      "benchmark": "SPUS-reference-only",
+      "featureCount": 10,
+      "features": [
+        "stock_minus_spus_log_return_1d",
+        "spus_log_return_1d",
+        "overnight_gap",
+        "intraday_return",
+        "true_range",
+        "realized_volatility_21d",
+        "downside_volatility_21d",
+        "drawdown_63d",
+        "dollar_volume_over_trailing_63d_median",
+        "pit_liquidity_percentile"
+      ],
+      "staticFeature": "beta_126_ols_intercept_clipped_0_2",
+      "missingPolicy": "reject-no-imputation",
+      "crossSectionTransform": "decision-date-winsorize-1-99-and-median-iqr"
+    },
+    "label": {
+      "horizonObservedSessions": 5,
+      "entry": "next-observed-open",
+      "exit": "fifth-subsequent-observed-close",
+      "target": "stock_log_total_return_minus_clipped_beta_times_spus_log_total_return_minus_0.003"
+    },
+    "model": {
+      "inputChannels": 10,
+      "channels": 16,
+      "projection": "10-to-16",
+      "blocks": 6,
+      "kernelSize": 3,
+      "dilations": [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32
+      ],
+      "block": "residual-depthwise-separable-conv1d-layernorm-gelu-dropout",
+      "head": "last-state-plus-beta-dense-8-gelu-scalar"
+    },
+    "training": {
+      "loss": "huber",
+      "huberDelta": 0.02,
+      "optimizer": "adamw",
+      "learningRate": 0.0003,
+      "weightDecay": 0.0001,
+      "dropout": 0.1,
+      "batchSize": 512,
+      "gradientClip": 1,
+      "maxEpochs": 64,
+      "patience": 8,
+      "minimumImprovement": 0.00001,
+      "epochSelection": "median-inner-fold-best-epoch"
+    },
+    "validation": {
+      "folds": 5,
+      "scheme": "expanding-purged-walk-forward",
+      "minimumTrainingSessions": 504,
+      "purgeLabelOverlap": true,
+      "embargoSessions": 5,
+      "validationSessions": 126,
+      "rollSessions": 126,
+      "outer": "never-inspected-forward-paper-only",
+      "outerMinimumTrades": 100,
+      "outerMinimumFraction": 0.3
+    },
+    "portfolio": {
+      "liquidityUniverse": "pit-trailing-21-session-dollar-volume-top-60",
+      "topN": 5,
+      "positivePredictionRequired": true,
+      "cashFloor": 2,
+      "weighting": "inverse-volatility-60-session",
+      "perNameCap": 0.25,
+      "grossCap": 1,
+      "longOnlyCash": true,
+      "shariaVeto": "deterministic-typescript"
+    },
+    "execution": {
+      "fill": "next-open",
+      "commissionBpsPerSide": 10,
+      "slippageBpsPerSide": 5,
+      "advParticipationCap": 0.05
+    },
+    "plateau": {
+      "learningRates": [
+        0.0002,
+        0.0003,
+        0.0004
+      ],
+      "dropouts": [
+        0.05,
+        0.1,
+        0.15
+      ],
+      "variants": 9
+    },
+    "relatedFamilyTrials": 108,
+    "performanceInspection": "forbidden-until-independent-ready-to-run"
+  },
+  "configHash": "97014858099cb6c01a36692af231ff147e495e1d75ab22a4265ff3e4bd648b17",
+  "state": "CODIFIED",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-ml-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

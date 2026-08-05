@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-06 — Governed causal-TCN lane + concise `/learn` workflow ✅
+Shipped: Added the sealed deterministic Python causal-TCN pipeline, 24 adversarial contract tests, and a validated `/learn` skill that reconstructs team results from manifests, result cards, journal, git, code, tests, and reviews.
+Decisions: The manifest hash is the downstream configuration root; REAL_PIT needs an independently supplied exact lineage root; training enforces purge plus five-session embargo; only median-of-five final retraining can promote; default learning answers stay under 180 words and expand by requested dimension.
+Verify: Python 24/24, compileall, both skill validators, manifest show, lint, TypeScript, and diff check pass; full Vitest is 1,316 passed / 11 pre-existing failures / 2 skipped (8 Neon-unreachable portfolio tests, 1 academy ownership test, 2 tier-matrix tests; quant-eval suite teardown also cannot reach Neon).
+Open: No trusted REAL_PIT materializer exists, so no diagnostic/FULL/performance run occurred; 105.92% remains un-beaten but REJECTED, survivor-conditioned, OOS-reused evidence—not a promotable frontier.
+
 ## 2026-07-22 — SPUS PIT evidence lane + residual-momentum candidate ✅
 Shipped: Captured/hash-pinned three official SPUS SEC N-PORT filings with a fail-closed parser, plus codified `halal-residual-fast-momentum-core@v1` and benchmark-only SPUS/PIT liquidity seams.
 Decisions: No diagnostic or FULL was run; 105.92% remains un-beaten and invalid as a clean frontier, while the new candidate is frozen with 9 local/99 family trials and terminal PIT rejection.

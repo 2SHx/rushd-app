@@ -9,7 +9,12 @@ A method for converging on hard tasks instead of thrashing. It has four moves �
 
 ## 1. Decompose
 
+- **Clear the decision frontier before implementation.** Separate unknown facts from unresolved
+  decisions. Dispatch facts for read-only research; put decisions to the user or contract owner.
+  Record blocking edges and do not build through unresolved fog.
 - **One testable GOAL per unit.** If you can't write a command or an observation that proves the unit is done, it isn't scoped yet — keep splitting.
+- **Prefer tracer-bullet vertical slices.** A unit should prove one narrow behavior end to end through
+  every layer it needs. Horizontal layer work is acceptable only when it is a genuine shared blocker.
 - **Split by disjoint scope, not by topic.** Two units that never touch the same files can run in parallel; two that share a file must be sequenced. Draw the dependency DAG before starting, not after a collision.
 - **Scout before you build.** Spend the cheap tier (a fast model / a read-only explorer) to gather `file:line` context *first*; hand the expensive tier a unit it can execute without re-discovering the codebase. Cheap tokens buy context; expensive tokens spend it.
 - **Never start a unit whose inputs another unit still owns.** If unit B needs the module shape B is producing, B waits — or you fix an interface contract up front so both can proceed against it.
@@ -36,7 +41,9 @@ Every unit starts cold — assume zero shared memory. A dispatch that omits cont
 - **On a blocker, fix the dispatch — don't retry it verbatim.** Report the exact failing output, then change the brief (more context, tighter fence, a corrected assumption). Re-sending the same prompt reproduces the same failure.
 - **Two failed corrections = re-plan.** Accumulated failed attempts pollute a context; a clean unit with a sharper brief beats a long thread of patches.
 - **Escalate contract contradictions; don't resolve them ad-hoc.** If the work reveals the spec is wrong, amend the spec (through whoever owns it) and proceed from the amended version — never let an implementer silently diverge.
-- **Close each milestone durably.** Append a short memory/journal note (what shipped, key decisions, open risks) and commit, so the next session cold-starts from the note instead of re-deriving state.
+- **Close each milestone durably.** Append a short memory/journal note (outcome, role-owned path,
+  executed evidence, verdict, open risk) and commit, so the next session—or `$learn`—can reconstruct
+  how the result was reached without inventing missing reasoning.
 
 ## Budget & escape valves
 

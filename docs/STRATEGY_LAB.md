@@ -23,9 +23,10 @@ Their raw artifacts and original **REJECTED** verdicts remain unchanged, but the
 amended with `SHARIA_UNVERIFIABLE` and `DATA_QUALITY_PIT_FAILURE`. Their CAGR, DSR, curves, and
 cross-card rankings are conditional on 2026 survivors: exploratory only, **not a clean OOS frontier
 and not promotable**. The same OOS slice also informed successive mechanisms, so future DSR evidence
-uses the full related trial family (currently 99 trials for eleven halal-core mechanisms), and fresh
+uses the full related trial family (currently 108 trials after registering the neural family), and fresh
 confirmation requires genuine PIT membership snapshots plus never-inspected or forward-paper data.
-The zero-run residual candidate below is the thirteenth guarded setup. Terminal runs of all thirteen
+The zero-run residual and causal-TCN candidates below are the thirteenth and fourteenth guarded setups.
+Terminal runs of all fourteen
 now fail before loading bars, simulation, result writes, or DB
 persistence until historical membership/lifecycle/Sharia coverage exists; diagnostics are marked
 `unverified-diagnostic-only` and may be used for wiring only.
@@ -42,6 +43,23 @@ evidence, and removed-name bars exist. Fresh confirmation must use never-inspect
 after the frozen 126-session warm-up beginning 2026-07-23.
 The sealed, zero-run manifest is tracked at
 `docs/quant-experiments/halal-residual-fast-momentum-core-v1.json`.
+
+## 2026-07-22 causal-TCN registration (pipeline only; no performance run)
+
+`halal-causal-tcn-alpha@v1` is a frozen, approximately 4.7K-parameter causal temporal convolutional
+network. It scores five-session beta-residual alpha from 126 sessions of decision-time price,
+volatility, drawdown, and liquidity features. The offline Python lane owns only feature contracts,
+training, and hash-pinned scores; the existing TypeScript portfolio path retains the deterministic
+Sharia veto, top-60 liquidity gate, long-only top-five sizing, 25% name cap, costs, fills, and risk
+breakers. The governed protocol is five expanding purged folds (minimum 504 training sessions,
+126-session validation/roll, five-session embargo), a 3×3 learning-rate/dropout plateau, and 108
+related-family trials. Synthetic smoke tests are explicitly non-promotable. No real dataset was
+materialized, no diagnostic or FULL run occurred, and no performance was inspected because local
+history lacks sufficient PIT membership, lifecycle, removed-name bars, and independent Sharia
+lineage. The 2026-08-06 trust-hardening pass binds data, folds, weights, artifacts, predictions,
+runtime, and the exact sealed configuration hash; 24 adversarial Python tests pass, but this remains
+pipeline evidence rather than return evidence. The sealed manifest is
+`docs/quant-experiments/halal-causal-tcn-alpha-v1.json`.
 
 ## Active catalog
 
@@ -83,6 +101,7 @@ The sealed, zero-run manifest is tracked at
 | halal-momentum-markowitz-core | T2 | P3 — PRE-REGISTERED SYNTHESIS: the one untried corner all seven prior in-session results point to — momentum SELECTION (weekly top-20, 126d/skip5, `dualMomentumMetrics`/`selectTopNByMomentum` reused unchanged, the proven CAGR engine) combined with Markowitz covariance-aware SIZING (`markowitzFrontier` tangency weighting reused unchanged, the proven best-all-round diversified sizer) over the selected subset. Tests whether a correlation-AWARE sizer applied AFTER weekly momentum selection retains most of the concentrated engine's CAGR while taming the correlated-cluster tail risk that inverse-vol sizing (every momentum-selection sibling this session) could not | v1 a-priori (`47bc0d9`; lookbackDays 126/skip5; topN 20; cashFloor 10; perNameCap 25%; maxNames 60; markowitz seed 42/portfolios 10,000/riskFreeRate 0/tradingDaysPerYear 252; frozen 3×3 {15,20,25}×{105,126,147}; 9 trials) | REJECTED | **4,499 trades** (1,464 OOS; trade-level observation unit, same precedent as the concentrated baseline) | +1.548%/trade net (permutation observed mean); CAGR **25.65%** / OOS **52.95%** | DSR **0.884 full / 0.746 OOS** | MC book-day p95 DD **60.51%** | P(day≥+5%) **1.21%** / P(day≤−5%) **1.07%** (2,145 days) | `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`; the synthesis is PARTIALLY confirmed — profit plateau **PASSED cleanly** (`plateau_confirmed`, all 8 neighbors same-sign, 2.29–5.16% OOS expectancy range) and OOS CAGR retains **~76%** of the concentrated baseline's (52.95% vs 69.66%), but the covariance sizer only trims MC p95 tail risk **modestly** (64.68%→**60.51%**, −4.17pp, a 6.4% relative reduction — far short of the diversified family's 42.26–50.78% range) — and the result lands **WORSE than `halal-markowitz-core` on all three axes simultaneously** (CAGR −3.62pp, MC p95 +9.73pp, DSR −0.153): the a-priori hope of beating it was NOT realized. Clean reproducible FULL run, gitSha `47bc0d9` / `BacktestRun 8869bef7-0be0-46f6-8338-ec54e487f01e`; no retune/admission. |
 | halal-fast-momentum-core | T2 | P5 — ISOLATED velocity+concentration A/B testing `halal-trend-rider-core`'s REJECT finding (rotation velocity, not winner-trimming, is the edge) at its sensible max: the SAME weekly ISO-week `halal-concentrated-momentum-core` engine (`dualMomentumMetrics`/`selectTopNByMomentum`/`inverseVolatilityWeights`/`capAndRedistribute` all reused UNCHANGED), with ONLY three params changed — lookbackDays 126→63 (faster signal), skipRecentDays 5→2, topN 10→5 (tighter concentration), cashFloor scaled proportionally 3→2. Tests whether MORE rotation velocity + MORE per-rotation reallocation impact beats the concentrated baseline's 69.66% OOS CAGR ceiling | v1 a-priori (`000dea1`; lookbackDays 63/skip2; topN 5; cashFloor 2; perNameCap 25%; maxNames 60; frozen 3×3 {42,63,84}×{4,5,6}; 9 trials) | REJECTED | **1,390 trades** (410 OOS; 2,727 fills audited separately; trade-level observation unit) | +12.76%/trade net (permutation observed mean); CAGR **36.99%** / OOS **105.92%** | DSR **0.928 full / 0.874 OOS** | MC book-day p95 DD **68.40%** | P(day≥+5%) **2.33%** / P(day≤−5%) **2.19%** (2,145 days) | `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`; the rotation-velocity hypothesis is CONFIRMED — OOS CAGR **105.92%** is the HIGHEST of all ten mechanisms this session, **+36.26pp (+52.1% relative)** above `halal-concentrated-momentum-core`'s 69.66% ceiling — but MC p95 **68.40%** is also the WORST of the session, **+3.72pp** above that baseline's 64.68%: max velocity + max concentration bought materially more CAGR at a materially worse tail, exactly the accepted a-priori trade. Plateau **SPIKY** (`lookbackDays=42` neighbors degrade). FULL `000dea1` / run `218716ac-f692-4f0f-91f3-81045a159a62`; no retune/admission. |
 | halal-residual-fast-momentum-core | T2 | Remove each name's SPUS common-return beta before the fast weekly rank, targeting stock-specific acceleration rather than beta-only momentum | v1 (63d/skip2 residual; beta 126; weekly PIT 21-session dollar-volume top-60 → residual top-5; 25% cap; 9 local / 99 family trials) | CODIFIED — BLOCKED, NO PERFORMANCE RUN | – | – | – | – | – | Complete historical SPUS membership, lifecycle, independent per-name Sharia evidence, and removed-name bars; then use never-inspected forward confirmation. Historical replay cannot confirm or supersede 105.92%. |
+| halal-causal-tcn-alpha | T2 | A small causal TCN distinguishes persistent stock-specific momentum from crowded beta spikes using only decision-time path, volatility, drawdown, and liquidity evidence | v1 (126 sessions; 10 channels; 6 residual dilated blocks; 5-session beta-residual label; 9 local / 108 family trials) | CODIFIED — BLOCKED, PIPELINE ONLY, NO PERFORMANCE RUN | – | – | – | – | – | Build an independently trusted REAL_PIT materializer with historical membership/lifecycle/Sharia lineage and removed-name bars; then pass fresh READY_TO_RUN review before one never-inspected forward confirmation. Synthetic artifacts cannot promote or supersede 105.92%. |
 
 ## Terminal evidence cards
 

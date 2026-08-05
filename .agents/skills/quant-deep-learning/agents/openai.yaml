@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quant Deep Learning"
+  short_description: "Leakage-safe neural strategy research"
+  default_prompt: "Use $quant-deep-learning to design and validate a deterministic neural quant experiment."

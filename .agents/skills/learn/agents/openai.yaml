@@ -1,0 +1,4 @@
+interface:
+  display_name: "Learn"
+  short_description: "Explain how a team reached a result"
+  default_prompt: "Use $learn to explain briefly how a RUSHD team reached a result and expand only if I ask."

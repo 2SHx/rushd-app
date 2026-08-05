@@ -1,0 +1,6 @@
+# Lazy-dev rungs 1-5: this governed offline lane requires deterministic tensor
+# convolution/autograd; the stdlib and existing Next.js dependencies provide neither.
+# NumPy supplies deterministic array contracts/preprocessing; PyTorch supplies the
+# frozen causal TCN and deterministic CPU autograd. Both are direct, pinned inputs.
+numpy==2.5.1
+torch==2.13.0
