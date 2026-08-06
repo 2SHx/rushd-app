@@ -6,6 +6,7 @@ import {
   runPortfolioBacktest,
   basketVolExposureScalar,
   strategyBookExposureScalar,
+  trailingBasketAnnualVol,
   collapseMaxOnePositionEpisodes,
   simulateStrategyBook,
   type StrategyBookBar,
@@ -23,6 +24,8 @@ import {
   tsMomentumV3BookPolicy,
 } from '../strategies/tsMomentumHalalBasketV3';
 import { TsMomentumHalalBasketV2ParamsSchema } from '../strategies/tsMomentumHalalBasketV2';
+import { tsMomentumV4BookPolicy } from '../strategies/tsMomentumHalalBasketV4';
+import { halalManagedMomentumCoreBookPolicy } from '../strategies/halalManagedMomentumCore';
 
 const D = Prisma.Decimal;
 const DAY = 86_400_000;
@@ -453,4 +456,133 @@ describe('deterministic shared-cash daily strategy book', () => {
     expect(v3ParseCount).toBeLessThanOrEqual(cells.length);
     expect(v2ParseCount).toBeLessThanOrEqual(2 * plateauSeries.length * 320 + cells.length);
   }, 12_000);
+});
+
+// ── B1: the realized-volatility feedback loop ────────────────────────────────────────────────────
+describe('realized-volatility source (B1 closed loop)', () => {
+  const SIGMA_U = 0.222;      // constant underlying sleeve volatility, annualized
+  const TARGET = 0.10;        // the volatility the book SELLS
+  const LOOKBACK = 63;
+  const DAYS = 900;
+  const dailyLogMove = SIGMA_U / Math.sqrt(252);
+
+  /** One symbol whose realized annualized volatility is exactly SIGMA_U, forever. */
+  function constantVolSeries(): StrategyBookSeries {
+    const seriesBars: StrategyBookBar[] = [];
+    let price = 100;
+    for (let i = 0; i < DAYS; i++) {
+      if (i > 0) price *= Math.exp(i % 2 === 0 ? dailyLogMove : -dailyLogMove);
+      const p = new D(price.toFixed(8));
+      seriesBars.push({
+        ts: new Date(BASE + i * DAY), open: p, high: p, low: p, close: p,
+        volume: new D(1_000_000_000), source: 'YAHOO',
+      });
+    }
+    return { symbol: 'VOLX', market: 'NASDAQ', bars: seriesBars };
+  }
+
+  const volSetup = setup({ entry: () => ({ matched: true, reasons: ['entry'], evidence: [] }) });
+  const volLimits: RiskLimits = { ...LIMITS, maxOpenPositions: 1 };
+  const volPolicy = (realizedVolSource?: 'book-nav' | 'unmanaged-sleeve'): StrategyBookPolicy => ({
+    realizedVolLookback: LOOKBACK,
+    targetAnnualVol: TARGET,
+    maxOpenPositions: 1,
+    maxGrossFraction: 1,
+    ...(realizedVolSource ? { realizedVolSource } : {}),
+  });
+
+  function annualizedVol(navs: readonly Prisma.Decimal[]): number {
+    const returns: number[] = [];
+    for (let i = 1; i < navs.length; i++) returns.push(Math.log(Number(navs[i].div(navs[i - 1]).toString())));
+    const mean = returns.reduce((sum, v) => sum + v, 0) / returns.length;
+    return Math.sqrt(returns.reduce((sum, v) => sum + (v - mean) ** 2, 0) / returns.length) * Math.sqrt(252);
+  }
+
+  /**
+   * PINS THE MATH, not the plumbing. Composes the engine's OWN two primitives exactly as the call
+   * site does, under continuous two-way rebalancing to the cap, and asserts the two FIXED POINTS:
+   *   closed loop (book NAV is already exposure-scaled):  e = min(1, T/(e·σu)) ⇒ e* = √(T/σu),
+   *                                                       delivered vol = e*·σu = √(T·σu) ≠ T
+   *   open loop   (estimate invariant to the scalar):     e* = T/σu, delivered vol = T ✓
+   * At T=10% and σu=22.2% that is 67.1% exposure / 14.9% delivered versus 45.1% / 10.0%. If this
+   * test ever starts passing with the two branches agreeing, the loop has been reintroduced.
+   */
+  function exposureFixedPoint(source: 'book-nav' | 'unmanaged-sleeve') {
+    const bookNavs = [new D(1)];
+    const sleeveNavs = [new D(1)];
+    let exposure = 1;
+    const exposures: number[] = [];
+    const bookReturns: number[] = [];
+    for (let t = 1; t < DAYS; t++) {
+      const sleeveReturn = Math.exp(t % 2 === 0 ? dailyLogMove : -dailyLogMove) - 1;
+      sleeveNavs.push(sleeveNavs[sleeveNavs.length - 1].mul(new D(1 + sleeveReturn)));
+      const bookReturn = exposure * sleeveReturn;
+      bookNavs.push(bookNavs[bookNavs.length - 1].mul(new D(1 + bookReturn)));
+      exposures.push(exposure);
+      bookReturns.push(Math.log(1 + bookReturn));
+      const history = source === 'book-nav' ? bookNavs : sleeveNavs;
+      exposure = strategyBookExposureScalar(
+        trailingBasketAnnualVol(history.slice(-(LOOKBACK + 1)), LOOKBACK), TARGET, 1,
+      );
+    }
+    const tailExposure = exposures.slice(-200);
+    const tailReturns = bookReturns.slice(-200);
+    const mean = tailReturns.reduce((sum, v) => sum + v, 0) / tailReturns.length;
+    return {
+      exposure: tailExposure.reduce((sum, v) => sum + v, 0) / tailExposure.length,
+      deliveredVol: Math.sqrt(
+        tailReturns.reduce((sum, v) => sum + (v - mean) ** 2, 0) / tailReturns.length,
+      ) * Math.sqrt(252),
+    };
+  }
+
+  it('book-nav converges to the WRONG fixed point sqrt(T·sigma_u); unmanaged-sleeve delivers T', () => {
+    const closed = exposureFixedPoint('book-nav');
+    const open = exposureFixedPoint('unmanaged-sleeve');
+
+    expect(closed.exposure).toBeCloseTo(Math.sqrt(TARGET / SIGMA_U), 3);   // 0.6712, not 0.4505
+    expect(closed.deliveredVol).toBeCloseTo(Math.sqrt(TARGET * SIGMA_U), 3); // 0.1490, not 0.1000
+    expect(closed.deliveredVol).toBeGreaterThan(TARGET * 1.4);
+    expect(open.exposure).toBeCloseTo(TARGET / SIGMA_U, 3);                 // 0.4505
+    expect(open.deliveredVol).toBeCloseTo(TARGET, 3);                       // 0.1000
+  });
+
+  it('the engine estimate itself is contaminated under book-nav and clean under unmanaged-sleeve', () => {
+    const closed = run([constantVolSeries()], volSetup, volLimits, volPolicy('book-nav')).daily.slice(-200);
+    const open = run([constantVolSeries()], volSetup, volLimits, volPolicy('unmanaged-sleeve')).daily.slice(-200);
+
+    // book-nav "measures" the book it already scaled: ~0.10, not the sleeve's real 22.2% risk, so
+    // its scalar drifts back toward 1.0 — it has lost sight of the risk it is supposed to govern.
+    expect(closed[closed.length - 1].realizedVolAnnual!).toBeCloseTo(TARGET, 2);
+    expect(closed[closed.length - 1].grossExposureScalar).toBeGreaterThan(0.95);
+    // unmanaged-sleeve measures the sleeve: exactly sigma_u, and the scalar sits at T/sigma_u.
+    expect(open[open.length - 1].realizedVolAnnual!).toBeCloseTo(SIGMA_U, 3);
+    expect(open[open.length - 1].grossExposureScalar).toBeCloseTo(TARGET / SIGMA_U, 3);
+    expect(annualizedVol(open.map((point) => point.nav))).toBeCloseTo(TARGET, 2);
+  });
+
+  it('defaults to book-nav so every published terminal card reproduces byte-identically', () => {
+    const bookSeries = [constantVolSeries()];
+    const byDefault = run(bookSeries, volSetup, volLimits, volPolicy());
+    const explicit = run(bookSeries, volSetup, volLimits, volPolicy('book-nav'));
+    const migrated = run(bookSeries, volSetup, volLimits, volPolicy('unmanaged-sleeve'));
+
+    expect(JSON.stringify(byDefault)).toBe(JSON.stringify(explicit));
+    expect(JSON.stringify(migrated)).not.toBe(JSON.stringify(explicit));
+    expect(() => run(bookSeries, volSetup, volLimits, {
+      ...volPolicy(), realizedVolSource: 'nav' as unknown as 'book-nav',
+    })).toThrow(/realizedVolSource/);
+  });
+
+  it('no setup with a recorded terminal card has been migrated off book-nav', () => {
+    const policies: [string, StrategyBookPolicy][] = [
+      ['halal-managed-momentum-core', halalManagedMomentumCoreBookPolicy()],
+      ['ts-momentum-halal-basket-v3', tsMomentumV3BookPolicy()],
+      ['ts-momentum-halal-basket-v4', tsMomentumV4BookPolicy()],
+    ];
+    for (const [id, policy] of policies) {
+      expect(policy.realizedVolLookback, id).toBeGreaterThan(0);
+      expect(policy.realizedVolSource, id).toBeUndefined();
+    }
+  });
 });

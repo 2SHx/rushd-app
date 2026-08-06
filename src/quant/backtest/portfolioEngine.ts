@@ -311,9 +311,21 @@ export interface StrategyBookInput<Params> {
   readonly replayScope?: object;
 }
 
+/**
+ * Which return series the realized-volatility estimate is read from (B1).
+ *  - 'book-nav' (DEFAULT): trailing BOOK NAV. Book NAV is already exposure-scaled, so this closes a
+ *    feedback loop — see the call site. Retained as the default so every setup with a published
+ *    terminal card reproduces byte-identically, with no manifest edit and no re-run.
+ *  - 'unmanaged-sleeve': the full-weight sleeve return series, which is invariant to the exposure
+ *    scalar it feeds. This is the open-loop, correct source for any NEW volatility-targeted lane.
+ * Migrating an existing setup between sources is a research decision, never an implementation one.
+ */
+export type RealizedVolSource = 'book-nav' | 'unmanaged-sleeve';
+
 export interface StrategyBookPolicy {
   readonly realizedVolLookback?: number;
   readonly targetAnnualVol?: number;
+  readonly realizedVolSource?: RealizedVolSource;
   readonly maxOpenPositions: number;
   /** Optional continuous gross ceiling; appreciation above it is trimmed at the next open. */
   readonly maxGrossFraction?: number;
@@ -627,6 +639,11 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
     if (hasVolLookback !== hasVolTarget) {
       throw new Error('Strategy-book volatility policy requires both realizedVolLookback and targetAnnualVol');
     }
+    if (input.policy.realizedVolSource !== undefined
+      && input.policy.realizedVolSource !== 'book-nav'
+      && input.policy.realizedVolSource !== 'unmanaged-sleeve') {
+      throw new Error("Strategy-book realizedVolSource must be 'book-nav' or 'unmanaged-sleeve'");
+    }
     if ((hasVolLookback && (
       !Number.isInteger(input.policy.realizedVolLookback) || input.policy.realizedVolLookback! <= 0
       || !Number.isFinite(input.policy.targetAnnualVol) || input.policy.targetAnnualVol! <= 0
@@ -693,6 +710,13 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
   const tradeReturns: number[] = [];
   const tradeRecords: TradeRecord[] = [];
   let decisionWindows = 0;
+  // Open-loop volatility source (B1): a unit-based NAV compounding the FULL-WEIGHT sleeve return.
+  // Position quantities cancel in the close/previous-close ratio, so this series is invariant to the
+  // exposure scalar that consumes it. Only ever advanced on days where every held risk name is
+  // priced on both sides — a missing price yields no observation rather than a fabricated zero.
+  const previousCloses = new Map<string, Prisma.Decimal>();
+  const unmanagedSleeveNavs: Prisma.Decimal[] = [new D(1)];
+  let unmanagedSleeveNav = new D(1);
 
   const recordFill = (
     order: PendingDirectionalOrder,
@@ -962,8 +986,37 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
 
     const closePositionsValue = positionValue(positions);
     const closeNav = cash.plus(closePositionsValue);
+
+    // B1 CLOSED LOOP: book NAV is ALREADY exposure-scaled, so reading vol from it makes exposure
+    // solve e = min(1, T/(e·σu)) ⇒ e* = √(T/σu), delivering √(T·σu) rather than the target T.
+    // The estimator feeding `strategyBookExposureScalar` must be INVARIANT to that scalar; only
+    // 'unmanaged-sleeve' satisfies that, and 'book-nav' exists solely to reproduce published cards.
+    const volSource: RealizedVolSource = input.policy?.realizedVolSource ?? 'book-nav';
+    if (volSource === 'unmanaged-sleeve') {
+      let closeValue = new D(0);
+      let previousValue = new D(0);
+      let fullyPriced = true;
+      for (const position of Array.from(positions.values())) {
+        if (position.symbol === ballastSymbol) continue;
+        const previousClose = previousCloses.get(position.symbol);
+        if (!previousClose || previousClose.lte(0) || position.markPrice.lte(0)) {
+          fullyPriced = false;
+          break;
+        }
+        closeValue = closeValue.plus(position.qty.mul(position.markPrice));
+        previousValue = previousValue.plus(position.qty.mul(previousClose));
+      }
+      if (fullyPriced && previousValue.gt(0) && closeValue.gt(0)) {
+        unmanagedSleeveNav = unmanagedSleeveNav.mul(closeValue).div(previousValue);
+        unmanagedSleeveNavs.push(unmanagedSleeveNav);
+      }
+    }
+    for (const [symbol, bar] of Array.from(todaysBars.entries())) previousCloses.set(symbol, bar.close);
+
     const navHistory = input.policy?.realizedVolLookback
-      ? [...daily.slice(-input.policy.realizedVolLookback).map((point) => point.nav), closeNav]
+      ? (volSource === 'unmanaged-sleeve'
+        ? unmanagedSleeveNavs.slice(-(input.policy.realizedVolLookback + 1))
+        : [...daily.slice(-input.policy.realizedVolLookback).map((point) => point.nav), closeNav])
       : [];
     const realizedVolAnnual = input.policy?.realizedVolLookback
       ? trailingBasketAnnualVol(navHistory, input.policy.realizedVolLookback)
