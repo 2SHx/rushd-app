@@ -301,8 +301,14 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     // The model-free falsifier: a benchmark that falls 8.8% of blocks is not any real index.
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.088 })))
       .toThrow(/BENCHMARK_MODEL_SANITY_FAILURE/);
-    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.5 })))
+    // ...and so is one that almost never rises. 0.70 sits 5.4 SE above the reference at n=104.
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.70 })))
       .toThrow(/BENCHMARK_MODEL_SANITY_FAILURE/);
+    // But 0.50 now SEALS, and that is deliberate: one SE at n=104 is 4.9pp, so 0.50 is 1.3 SE from
+    // the 43.5% reference and statistically indistinguishable from a real index at this sample size.
+    // Refusing it would repeat the drift bug's error — a threshold ignoring estimation noise.
+    expect(sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.5 })).state)
+      .toBe('SEALED');
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, benchmarkSymbol: undefined })))
       .toThrow(/benchmarkSymbol/);
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, maxAnnualTurnover: undefined })))

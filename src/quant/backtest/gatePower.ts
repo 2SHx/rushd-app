@@ -158,6 +158,30 @@ export const BETA_MAX_VOLATILITY_FALSE_ALARM = 0.05;
  */
 export const BETA_NEGATIVE_BLOCK_FRACTION_BAND: readonly [number, number] = [0.42, 0.45];
 
+/** Standard errors of slack allowed around the long-run band. Decisive, not brittle. */
+export const BETA_NEGATIVE_BLOCK_TOLERANCE_SIGMA = 3;
+
+/**
+ * The 42-45% reference is a LONG-RUN figure, but any real benchmark sample is finite and its
+ * negative-block fraction carries sampling error. Measured against real persisted SPUS bars
+ * (1,200 daily closes, 2021-10-05..2026-07-17 => 239 non-overlapping five-session blocks) the
+ * realized fraction is 40.2% — outside the raw band, yet only 0.87 SE from 43%, because one SE at
+ * n=239 is 3.20pp and the raw band is just 3pp WIDE. Gating on the raw band would refuse the real
+ * index the lane benchmarks against, which is the same class of error as the drift bug it exists to
+ * catch: a threshold set without allowing for estimation noise.
+ *
+ * So the band is widened by `BETA_NEGATIVE_BLOCK_TOLERANCE_SIGMA` standard errors at the lane's own
+ * observation count. The guard keeps essentially all of its power — the drift bug's 8.8% sits 10.7
+ * SE from the reference and stays decisively refused — while real data passes.
+ */
+export function negativeBlockFractionBand(observations: number): readonly [number, number] {
+  const [lo, hi] = BETA_NEGATIVE_BLOCK_FRACTION_BAND;
+  if (!Number.isFinite(observations) || observations < 2) return [lo, hi];
+  const centre = (lo + hi) / 2;
+  const slack = BETA_NEGATIVE_BLOCK_TOLERANCE_SIGMA * Math.sqrt((centre * (1 - centre)) / observations);
+  return [Math.max(0, lo - slack), Math.min(1, hi + slack)];
+}
+
 export interface BetaGateSpec {
   readonly productClass: 'BETA';
   readonly observations: number;
@@ -305,7 +329,7 @@ export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasib
 export function assessBetaGateFeasibility(spec: BetaGateSpec): BetaGateFeasibility {
   assertBetaGateSpec(spec);
   const achievable = volatilityBandFeasible(spec.volFloor, spec.volCeiling, spec.observations);
-  const [minBlocks, maxBlocks] = BETA_NEGATIVE_BLOCK_FRACTION_BAND;
+  const [minBlocks, maxBlocks] = negativeBlockFractionBand(spec.observations);
   const base = {
     volatilityBandAchievable: achievable,
     declaredVolatilityFalseAlarmRate: spec.declaredVolatilityFalseAlarmRate,
@@ -327,7 +351,9 @@ export function assessBetaGateFeasibility(spec: BetaGateSpec): BetaGateFeasibili
       ...base,
       verdict: 'BENCHMARK_MODEL_SANITY_FAILURE',
       detail: `calibrating benchmark falls in ${(spec.declaredNegativeBenchmarkBlockFraction * 100).toFixed(1)}% `
-        + `of non-overlapping blocks, outside the ${minBlocks * 100}-${maxBlocks * 100}% band real equities occupy; `
+        + `of non-overlapping blocks, outside the ${(minBlocks * 100).toFixed(1)}-${(maxBlocks * 100).toFixed(1)}% band `
+        + `real equities occupy at n=${spec.observations} (42-45% long-run, widened by `
+        + `${BETA_NEGATIVE_BLOCK_TOLERANCE_SIGMA} SE for sampling error); `
         + 'a benchmark that rarely falls is not any real index and every figure derived from it is void',
     };
   }

@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  assessBetaGateFeasibility,
   assessGateFeasibility,
   attainableDsr,
+  negativeBlockFractionBand,
   gateSpecFromConfig,
   inverseNormalCDF,
   minimumObservationsForDsr,
@@ -154,6 +156,51 @@ describe('manifest gate specs', () => {
     expect(gateSpecFromConfig(manifestConfig('halal-causal-tcn-alpha-v1.json'))).toBeNull();
     expect(gateSpecFromConfig(manifestConfig('halal-residual-fast-momentum-core-v1.json'))).toBeNull();
     expect(gateSpecFromConfig({ validation: null })).toBeNull();
+  });
+
+  // The 42-45% reference is LONG-RUN; a finite benchmark sample carries sampling error. Measured
+  // against the real persisted SPUS bars (1,200 daily closes 2021-10-05..2026-07-17 => 239
+  // non-overlapping five-session blocks) the realized fraction is 40.2%, which is outside the raw
+  // band but only 0.87 SE from 43% — one SE at n=239 is 3.20pp and the raw band is 3pp WIDE.
+  describe('QDR-10 negative-block falsifier tolerates sampling error', () => {
+    const betaSpec = (over: Partial<BetaGateSpec> = {}): BetaGateSpec => ({
+      productClass: 'BETA', observations: 239, observationsPerYear: 252 / 5,
+      trials: 1, fallbackTrials: 108, benchmarkSymbol: 'SPUS',
+      targetAnnualVol: 0.1, volCeiling: 0.13, volFloor: 0.06, hypothesizedBeta: 0.62,
+      maxAnnualTurnover: 4, maxAnnualCostDragBps: 60,
+      declaredVolatilityFalseAlarmRate: 0.002, declaredHalfWindowFalseAlarmRate: 0.015,
+      declaredNegativeBenchmarkBlockFraction: 0.44, ...over,
+    });
+
+    it('ACCEPTS the real SPUS realized fraction of 40.2% — gating it out would refuse the real index', () => {
+      expect(assessBetaGateFeasibility(betaSpec({ declaredNegativeBenchmarkBlockFraction: 0.402 })))
+        .toMatchObject({ verdict: 'FEASIBLE' });
+    });
+
+    it('still REFUSES the drift bug that this guard exists to catch (8.8%, 10.7 SE out)', () => {
+      expect(assessBetaGateFeasibility(betaSpec({ declaredNegativeBenchmarkBlockFraction: 0.088 })))
+        .toMatchObject({ verdict: 'BENCHMARK_MODEL_SANITY_FAILURE' });
+    });
+
+    it('accepts the corrected simulation at 46.6%', () => {
+      expect(assessBetaGateFeasibility(betaSpec({ declaredNegativeBenchmarkBlockFraction: 0.466 })))
+        .toMatchObject({ verdict: 'FEASIBLE' });
+    });
+
+    it('widens with fewer observations and tightens with more — the band tracks the noise', () => {
+      const [loSmall, hiSmall] = negativeBlockFractionBand(104);
+      const [loLarge, hiLarge] = negativeBlockFractionBand(2000);
+      expect(loSmall).toBeLessThan(loLarge);
+      expect(hiSmall).toBeGreaterThan(hiLarge);
+      // even at the widest realistic window the bug stays out
+      expect(0.088).toBeLessThan(loSmall);
+    });
+
+    it('never returns an impossible fraction band', () => {
+      const [lo, hi] = negativeBlockFractionBand(3);
+      expect(lo).toBeGreaterThanOrEqual(0);
+      expect(hi).toBeLessThanOrEqual(1);
+    });
   });
 
   it('QDR-10: reads a BETA gate block without demanding the alpha DSR keys', () => {
