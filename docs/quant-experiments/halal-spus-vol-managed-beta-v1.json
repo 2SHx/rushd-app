@@ -84,9 +84,10 @@
     "performanceInspection": "forbidden-before-504-forward-sessions-and-independent-ready-to-run"
   },
   "configHash": "3346e72bf764368cb3a4eb5868c7b72f7bff56c1c799ebb936551ae59a393470",
-  "state": "SEALED",
+  "state": "CODIFIED",
   "actors": {
-    "director": "quant-research-director"
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
   },
   "diagnosticRuns": 0,
   "fullRun": null,

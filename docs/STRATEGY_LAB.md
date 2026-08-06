@@ -61,6 +61,19 @@ runtime, and the exact sealed configuration hash; 24 adversarial Python tests pa
 pipeline evidence rather than return evidence. The sealed manifest is
 `docs/quant-experiments/halal-causal-tcn-alpha-v1.json`.
 
+## 2026-08-06 SPUS volatility-managed beta registration (forward only; no performance run)
+
+`halal-spus-vol-managed-beta@v1` isolates the strongest reusable risk lesson from the rejected
+historical studies without reusing their contaminated stock-selection OOS: hold only SPUS, measure
+population volatility from 42 close-to-close log returns every fifth completed session, and target
+`min(100%, 10% / realized annual volatility)` with the balance in non-interest-bearing cash. The
+frozen 3×3 plateau is lookback `{21,42,63}` × volatility target `{8%,10%,12%}` and the related-family
+trial count is 108. It has **no diagnostic, historical, or FULL result** and makes no CAGR claim.
+Terminal execution is hard-blocked before data access/simulation until the exact sealed manifest has
+an independent ready decision and an immutable point-in-time SPUS Sharia/fund-lifecycle evidence root
+covers the forward window. Even then, one terminal evaluation cannot occur before 504 new sessions
+and 100 non-overlapping five-session book returns after `2026-08-07T20:00:00Z`.
+
 ## Active catalog
 
 | id | tier | hypothesis (one line) | params ver | status | trades | expectancy/trade (net) | dSharpe | maxDD p95 | P(day≥5%) | next action |
@@ -102,6 +115,7 @@ pipeline evidence rather than return evidence. The sealed manifest is
 | halal-fast-momentum-core | T2 | P5 — ISOLATED velocity+concentration A/B testing `halal-trend-rider-core`'s REJECT finding (rotation velocity, not winner-trimming, is the edge) at its sensible max: the SAME weekly ISO-week `halal-concentrated-momentum-core` engine (`dualMomentumMetrics`/`selectTopNByMomentum`/`inverseVolatilityWeights`/`capAndRedistribute` all reused UNCHANGED), with ONLY three params changed — lookbackDays 126→63 (faster signal), skipRecentDays 5→2, topN 10→5 (tighter concentration), cashFloor scaled proportionally 3→2. Tests whether MORE rotation velocity + MORE per-rotation reallocation impact beats the concentrated baseline's 69.66% OOS CAGR ceiling | v1 a-priori (`000dea1`; lookbackDays 63/skip2; topN 5; cashFloor 2; perNameCap 25%; maxNames 60; frozen 3×3 {42,63,84}×{4,5,6}; 9 trials) | REJECTED | **1,390 trades** (410 OOS; 2,727 fills audited separately; trade-level observation unit) | +12.76%/trade net (permutation observed mean); CAGR **36.99%** / OOS **105.92%** | DSR **0.928 full / 0.874 OOS** | MC book-day p95 DD **68.40%** | P(day≥+5%) **2.33%** / P(day≤−5%) **2.19%** (2,145 days) | `DSR_FAILURE`, `DRAWDOWN_RISK_FAILURE`, `NO_PROFIT_PLATEAU_OVERFIT`; the rotation-velocity hypothesis is CONFIRMED — OOS CAGR **105.92%** is the HIGHEST of all ten mechanisms this session, **+36.26pp (+52.1% relative)** above `halal-concentrated-momentum-core`'s 69.66% ceiling — but MC p95 **68.40%** is also the WORST of the session, **+3.72pp** above that baseline's 64.68%: max velocity + max concentration bought materially more CAGR at a materially worse tail, exactly the accepted a-priori trade. Plateau **SPIKY** (`lookbackDays=42` neighbors degrade). FULL `000dea1` / run `218716ac-f692-4f0f-91f3-81045a159a62`; no retune/admission. |
 | halal-residual-fast-momentum-core | T2 | Remove each name's SPUS common-return beta before the fast weekly rank, targeting stock-specific acceleration rather than beta-only momentum | v1 (63d/skip2 residual; beta 126; weekly PIT 21-session dollar-volume top-60 → residual top-5; 25% cap; 9 local / 99 family trials) | CODIFIED — BLOCKED, NO PERFORMANCE RUN | – | – | – | – | – | Complete historical SPUS membership, lifecycle, independent per-name Sharia evidence, and removed-name bars; then use never-inspected forward confirmation. Historical replay cannot confirm or supersede 105.92%. |
 | halal-causal-tcn-alpha | T2 | A small causal TCN distinguishes persistent stock-specific momentum from crowded beta spikes using only decision-time path, volatility, drawdown, and liquidity evidence | v1 (126 sessions; 10 channels; 6 residual dilated blocks; 5-session beta-residual label; 9 local / 108 family trials) | CODIFIED — BLOCKED, PIPELINE ONLY, NO PERFORMANCE RUN | – | – | – | – | – | Build an independently trusted REAL_PIT materializer with historical membership/lifecycle/Sharia lineage and removed-name bars; then pass fresh READY_TO_RUN review before one never-inspected forward confirmation. Synthetic artifacts cannot promote or supersede 105.92%. |
+| halal-spus-vol-managed-beta | T2 | Scale fixed SPUS beta down when realized volatility rises, testing volatility clustering without survivor-conditioned stock selection | v1 (42 log-return sessions; 10% annual-vol target; every 5th session; 9 local / 108 family trials) | CODIFIED — BLOCKED, FORWARD ONLY, NO PERFORMANCE RUN | – | – | – | – | – | Capture immutable decision-time SPUS Sharia/fund-lifecycle evidence and independent READY_TO_RUN approval; then wait for 504 new sessions / 100 non-overlapping five-session returns. Historical inspection is forbidden and 105.92% is not superseded. |
 
 ## Terminal evidence cards
 

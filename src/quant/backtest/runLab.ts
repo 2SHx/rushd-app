@@ -67,6 +67,18 @@ import {
   halalResidualFastMomentumCoreBookPolicy,
   type HalalResidualFastMomentumCoreParams,
 } from '../strategies/halalResidualFastMomentumCore';
+import {
+  HALAL_SPUS_VOL_MANAGED_BETA_ID,
+  HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE,
+  HALAL_SPUS_FORWARD_START,
+  assertHalalSpusForwardRunAllowed,
+  assertHalalSpusTerminalEvidenceReady,
+  fiveSessionMetricCurve,
+  halalSpusVolManagedBetaBookPolicy,
+  meanOosFiveSessionBookReturn,
+  nonOverlappingFiveSessionBookReturns,
+  type HalalSpusVolManagedBetaParams,
+} from '../strategies/halalSpusVolManagedBeta';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
@@ -100,7 +112,7 @@ import {
   simulateStrategyBook,
   type StrategyBookDailyPoint, type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
 } from './portfolioEngine';
-import { computeMetrics, type EquityPoint } from './metrics';
+import { computeMetrics, type BacktestMetrics, type EquityPoint } from './metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from './distribution';
 import {
   bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision,
@@ -168,6 +180,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
+  HALAL_SPUS_VOL_MANAGED_BETA_ID,
 ]);
 
 /** Idle-capital sukuk ballast (R4-E8): SPSK bars are injected into the book but are NEVER a setup-
@@ -253,7 +266,29 @@ export function selectDailyBacktestRoute(
 export interface ValidationReturnInputs {
   riskReturns: number[];
   permutationReturns: number[];
-  observationUnit: 'book-day' | 'trade';
+  observationUnit: 'book-day' | 'five-session-book' | 'trade';
+}
+
+/** Keep daily CAGR/maxDD, but make Sharpe/DSR/hit-rate use the candidate's frozen 5-session unit. */
+export function metricsForSetup(
+  setupId: string,
+  curve: EquityPoint[],
+  opts: { trades: number; turnover: number; annualization: 'fixed' | 'calendar'; trials: number },
+): BacktestMetrics {
+  const headline = computeMetrics(curve, opts);
+  if (setupId !== HALAL_SPUS_VOL_MANAGED_BETA_ID) return headline;
+  const inference = computeMetrics(fiveSessionMetricCurve(curve), {
+    ...opts,
+    annualization: 'fixed',
+    periodsPerYear: 252 / 5,
+  });
+  return {
+    ...headline,
+    sharpe: inference.sharpe,
+    deflatedSharpe: inference.deflatedSharpe,
+    hitRate: inference.hitRate,
+    implausible: inference.implausible,
+  };
 }
 
 /** Shared risk evidence uses true book NAV; entry permutation remains position-trade based. */
@@ -261,11 +296,16 @@ export function validationReturnInputs(
   route: DailyBacktestRoute,
   sharedCurve: readonly EquityPoint[] | null,
   tradeReturns: number[],
+  setupId?: string,
 ): ValidationReturnInputs {
   if (route === 'legacy') {
     return { riskReturns: tradeReturns, permutationReturns: tradeReturns, observationUnit: 'trade' };
   }
   if (!sharedCurve) throw new Error('Shared validation requires the shared daily NAV curve');
+  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+    const riskReturns = nonOverlappingFiveSessionBookReturns(sharedCurve);
+    return { riskReturns, permutationReturns: riskReturns, observationUnit: 'five-session-book' };
+  }
   const riskReturns = sharedCurve.slice(1).map((point, index) => {
     const previous = sharedCurve[index].equity;
     return previous !== 0 ? point.equity / previous - 1 : 0;
@@ -415,12 +455,14 @@ export function dailyUniverseForSetup(setupId: string, requested: readonly strin
     ? DUAL_MOMENTUM_UNIVERSE
     : setupId === 'tom-overlay'
       ? TOM_OVERLAY_UNIVERSE
+      : setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
+        ? HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE
       : setupId === 'g6b-linear-factor'
         ? G6B_LINEAR_FACTOR_UNIVERSE
       : null;
   if (!universe) return null;
   if (requested && (requested.length !== universe.length || universe.some((symbol) => !requested.includes(symbol)))) {
-    const label = setupId === 'tom-overlay'
+    const label = setupId === 'tom-overlay' || setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
       ? 'exact SPUS universe'
       : setupId === 'g6b-linear-factor'
         ? 'exact 25-name halal research universe'
@@ -437,7 +479,7 @@ export function limitsForDailySetup(setupId: string, base: RiskLimits): RiskLimi
   // book and would clamp NVDA to ~25%, defeating the pre-registered design and masking exactly the
   // concentration variance the run must measure). The REAL controls stay binding: liquidity (ADV),
   // cash affordability, gross exposure, and the book drawdown governor (via policy). maxOpen = 1.
-  if (setupId === 'nvda-focus-v1') {
+  if (setupId === 'nvda-focus-v1' || setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
     return { ...base, maxOpenPositions: 1, maxNameWeight: 1, volTargetPct: 1, maxRiskPct: 1 };
   }
   return setupId === 'dual-momentum-rotation' || setupId === 'tom-overlay'
@@ -496,6 +538,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-residual-fast-momentum-core') {
     return halalResidualFastMomentumCoreBookPolicy(params as HalalResidualFastMomentumCoreParams | undefined);
+  }
+  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+    return halalSpusVolManagedBetaBookPolicy(params as HalalSpusVolManagedBetaParams | undefined);
   }
   return setupId === 'g6b-linear-factor' ? g6bLinearFactorBookPolicy() : undefined;
 }
@@ -1050,6 +1095,13 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   if (!setup) {
     throw new UsageError(`unknown setup "${setupId}". known: ${Object.keys(STRATEGY_SETUP_CATALOG).join(', ')}`);
   }
+  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+    assertHalalSpusForwardRunAllowed({
+      runMode, now: new Date(), from: options.from, to: options.to,
+      seed, oosFraction,
+    });
+    assertHalalSpusTerminalEvidenceReady();
+  }
 
   // Audited C1 sleeves cannot use today's survivors as a historical universe. This preflight is
   // intentionally before period resolution (which may query the DB), all loaders/simulators, and
@@ -1299,6 +1351,14 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
         }
         }
+        if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+          const completedSessions = sharedSeries.find((item) => item.symbol === 'SPUS')?.bars.length ?? 0;
+          assertHalalSpusForwardRunAllowed({
+            runMode, now: new Date(), from, to, seed, oosFraction,
+            completedSessions,
+            fiveSessionObservations: Math.floor(Math.max(0, completedSessions - 1) / 5),
+          });
+        }
         // Idle-capital sukuk ballast (R4-E8): inject SPSK bars into the book AFTER prepareUniverse /
         // C1 verification (which cover only the equity charter). The engine sweeps idle cash into it
         // and liquidates it first; the setup never trades it. It is not in `symbols`, so it never
@@ -1471,7 +1531,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // series — so it must be annualized by its OWN calendar span (trades/year), never a fixed √252.
   // Fixed √252 here treated ~28 sparse trades/year as consecutive daily returns and false-tripped
   // the Sharpe>3 implausible guard (v2 at 3.06). See computeMetrics `annualization` doc.
-  const full = computeMetrics(curve, {
+  const full = metricsForSetup(setupId, curve, {
     trades: sortedTrades.length, turnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
     trials: validationTrials,
@@ -1483,7 +1543,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const oosTurnover = sharedDailyCurve
     ? pooledTradeRecords.filter((trade) => trade.exitTs >= curve[oosStart].ts).length
     : oosTrades;
-  const oos = computeMetrics(curve.slice(oosStart), {
+  const oos = metricsForSetup(setupId, curve.slice(oosStart), {
     trades: oosTrades, turnover: oosTurnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
     trials: validationTrials,
@@ -1519,7 +1579,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   }
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
-  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, validationTradeReturns);
+  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, validationTradeReturns, setupId);
+  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
+    && validationReturns.riskReturns.length < 100) {
+    throw new Error(`${HALAL_SPUS_VOL_MANAGED_BETA_ID} requires 100 non-overlapping five-session book returns`);
+  }
   const bootstrap = bootstrapTradeOutcomes(validationReturns.riskReturns, {
     resamples: 1000, seed, startEquity: Number(startingCash),
     ...(validationReturns.observationUnit === 'book-day' ? { observationUnit: 'book-day' as const } : {}),
@@ -1583,10 +1647,13 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let plateauEvaluation: PlateauEvaluation | null = null;
   if (cadence === 'daily' && setup.plateauNeighborhood) {
     const neighborhood = setup.plateauNeighborhood(params);
-    const centerExpectancy = oosMeanTradeReturn([...validationTradeRecords]);
+    const centerExpectancy = setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
+      ? meanOosFiveSessionBookReturn(sharedDailyCurve ?? [], oosFraction)
+      : oosMeanTradeReturn([...validationTradeRecords]);
     const neighborResults: PlateauNeighborResult[] = [];
     for (const variant of neighborhood.neighbors) {
       const variantRecords: TradeRecord[] = [];
+      let variantFiveSessionExpectancy: number | null = null;
       if (dailyRoute === 'shared') {
         if (!sharedSeriesForPlateau) throw new Error('Shared plateau series unavailable');
         const sim = simulateStrategyBook({
@@ -1596,6 +1663,12 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           replayScope: sharedReplayScope,
           policy: strategyBookPolicyForSetup(setupId, variant.params),
         });
+        if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+          variantFiveSessionExpectancy = meanOosFiveSessionBookReturn(
+            sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav.toString()) })),
+            oosFraction,
+          );
+        }
         variantRecords.push(...(
           MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
             ? activeMonthlyBookReturnRecords(sim.daily)
@@ -1608,11 +1681,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           variantRecords.push(...sim.tradeRecords);
         }
       }
-      const oosExpectancy = oosMeanTradeReturn([
-        ...(MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
-          ? variantRecords
-          : validationTradeRecordsForSetup(setupId, variantRecords)),
-      ]);
+      const oosExpectancy = variantFiveSessionExpectancy ?? oosMeanTradeReturn([
+          ...(MONTHLY_BOOK_OBSERVATION_SETUP_IDS.has(setupId)
+            ? variantRecords
+            : validationTradeRecordsForSetup(setupId, variantRecords)),
+        ]);
       neighborResults.push({ label: variant.label, oosExpectancy });
       console.log(`  plateau neighbor ${variant.label}: OOS expectancy ${(oosExpectancy * 100).toFixed(4)}%`);
     }
@@ -1656,6 +1729,13 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     validationTrials,
     plateauValidationTrials,
     runMode,
+    ...(setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID ? {
+      forwardEvidence: {
+        boundary: HALAL_SPUS_FORWARD_START,
+        observationUnit: 'non-overlapping-five-session-book-return',
+        observations: validationReturns.riskReturns.length,
+      },
+    } : {}),
     ...(historicalMembership ? { historicalMembership } : {}),
     engineRoute: cadence === 'daily' ? dailyRoute : 'legacy',
     ...(tomWindowValidation ? { tomWindowValidation } : {}),

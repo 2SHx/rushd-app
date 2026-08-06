@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-06 — Forward-only SPUS volatility-managed beta lane ✅
+Shipped: Preregistered and codified `halal-spus-vol-managed-beta@v1`, a fixed-SPUS 10% volatility target with a frozen 3×3 plateau, exact five-session inference units, and 8 focused contract tests.
+Decisions: Reused the historical risk-repair lesson without survivor-conditioned stock selection; no historical/diagnostic/FULL inspection, and terminal execution fails before simulation until independent readiness plus immutable PIT fund Sharia/lifecycle evidence exist.
+Verify: Independent QA found and cleared three P1 gaps; focused 35/35, lint, TypeScript, manifest hash/state, and diff check pass; full Vitest is 1,324 passed / 11 pre-existing failures / 2 skipped (8 Neon-unreachable portfolio tests, quant-eval teardown, and 3 academy/authz assertions).
+Open: Zero ACCEPTED strategies remain; the new lane needs 504 genuinely forward sessions and 100 five-session observations, so 105.92% remains un-beaten but REJECTED/non-promotable rather than a valid target.
+
 ## 2026-08-06 — Governed causal-TCN lane + concise `/learn` workflow ✅
 Shipped: Added the sealed deterministic Python causal-TCN pipeline, 24 adversarial contract tests, and a validated `/learn` skill that reconstructs team results from manifests, result cards, journal, git, code, tests, and reviews.
 Decisions: The manifest hash is the downstream configuration root; REAL_PIT needs an independently supplied exact lineage root; training enforces purge plus five-session embargo; only median-of-five final retraining can promote; default learning answers stay under 180 words and expand by requested dimension.
