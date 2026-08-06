@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BETA_CRITERION_CODES,
   annualizedVolatility,
-  bootstrapCaptureGapP5,
+  contiguousHalves,
   evaluateBetaCriteria,
   volatilityBandFeasible,
+  volatilityLowerBound95,
   volatilityUpperBound95,
   type BetaCriteriaInput,
+  type BetaCriterionCode,
 } from './betaCriteria';
 
 const FIVE_SESSION_PERIODS_PER_YEAR = 252 / 5;
@@ -27,7 +30,6 @@ function betaInput(override: Partial<BetaCriteriaInput> = {}): BetaCriteriaInput
     volFloor: 0.06,
     upCapture: 0.71,
     downCapture: 0.635,
-    captureGapP5: 0.02,
     oosCagr: 0.06,
     benchmarkCagr: 0.09,
     betaVsBenchmark: 0.62,
@@ -68,11 +70,6 @@ describe('QDR-10 BETA criteria', () => {
       .toEqual(['VOLATILITY_BAND']);
   });
 
-  it('(c1) fails a flat capture profile and a convexity gap the bootstrap cannot separate from zero', () => {
-    expect(evaluateBetaCriteria(betaInput({ downCapture: 0.7 })).failures).toEqual(['CAPTURE_CONVEXITY']);
-    expect(evaluateBetaCriteria(betaInput({ captureGapP5: -0.01 })).failures).toEqual(['CAPTURE_CONVEXITY']);
-  });
-
   it('(c2) holds the book to beta × benchmark − 200bps, not to a positive absolute return', () => {
     // Down benchmark, negative book return, but the shortfall floor is met ⇒ NOT a failure.
     const downMarket = evaluateBetaCriteria(betaInput({ oosCagr: -0.05, benchmarkCagr: -0.06, betaVsBenchmark: 0.62 }));
@@ -93,23 +90,68 @@ describe('QDR-10 BETA criteria', () => {
 
   it('seal-time band feasibility refuses an inverted or unreachable band', () => {
     expect(volatilityBandFeasible(0.06, 0.13, 216)).toBe(true);
+    expect(volatilityBandFeasible(0.06, 0.13, 104)).toBe(true);
     expect(volatilityBandFeasible(0.13, 0.13, 216)).toBe(false);
     expect(volatilityBandFeasible(0.13, 0.06, 216)).toBe(false);
-    // A 2%-wide band is unreachable at n=20 and even at n=2000; it needs n≈3451.
+    // A 2%-wide band is unreachable at n=20 and at n=4000: the half-window bound binds too.
     expect(volatilityBandFeasible(0.1, 0.102, 20)).toBe(false);
-    expect(volatilityBandFeasible(0.1, 0.102, 2000)).toBe(false);
-    expect(volatilityBandFeasible(0.1, 0.102, 4000)).toBe(true);
+    expect(volatilityBandFeasible(0.1, 0.102, 4000)).toBe(false);
+    expect(volatilityBandFeasible(0.1, 0.102, 21000)).toBe(true);
   });
 
-  it('the capture-gap bootstrap is seeded, paired, and separates a real gap from noise', () => {
-    const benchmark = observationsWithVolatility(0.18, 200, 0.002);
-    const convex = benchmark.map((r) => (r > 0 ? r * 0.71 : r * 0.6));
-    const flat = benchmark.map((r) => r * 0.65);
+  // ── QDR-10 2026-08-06b: (c1) withdrawn, criterion (a) tightened ──────────────────────────────
+  it('(c1 WITHDRAWN) a 0.99 capture ratio PASSES when (c2) and (d) hold', () => {
+    // The exact case the withdrawn 0.95 gate would have failed. The corrected true ratio for a
+    // vol-managed book is 0.94-0.99, so gating here rejected working mechanisms for a measurement
+    // artifact. Captures are still computed and reported; they simply decide nothing.
+    const result = evaluateBetaCriteria(betaInput({ upCapture: 0.71, downCapture: 0.7029 }));
 
-    const gap = bootstrapCaptureGapP5(convex, benchmark, { seed: 42, resamples: 200 });
-    expect(gap).toBe(bootstrapCaptureGapP5(convex, benchmark, { seed: 42, resamples: 200 }));
-    expect(gap).toBeGreaterThan(0);
-    expect(bootstrapCaptureGapP5(flat, benchmark, { seed: 42, resamples: 200 })).toBeCloseTo(0, 6);
-    expect(() => bootstrapCaptureGapP5(convex.slice(1), benchmark, { seed: 42 })).toThrow(/paired/);
+    expect(result.captureRatio).toBeCloseTo(0.99, 4);
+    expect(result.failures).toEqual([]);
+    expect(BETA_CRITERION_CODES).not.toContain('CAPTURE_CONVEXITY' as never);
+    // Even a book with NO convexity at all (down/up = 1.0, or inverted) is admissible on (c).
+    expect(evaluateBetaCriteria(betaInput({ upCapture: 0.7, downCapture: 0.7 })).failures).toEqual([]);
+    expect(evaluateBetaCriteria(betaInput({ upCapture: 0.6, downCapture: 0.7 })).failures).toEqual([]);
+  });
+
+  it('CAPTURE_CONVEXITY is unconstructible at type level and unreachable at runtime', () => {
+    // @ts-expect-error — withdrawn 2026-08-06b. If this line ever COMPILES, the gate has been
+    // reintroduced and this test fails the build, which is the point of writing it this way.
+    const withdrawn: BetaCriterionCode = 'CAPTURE_CONVEXITY';
+
+    expect(BETA_CRITERION_CODES).toEqual(['VOLATILITY_BAND', 'RELATIVE_SHORTFALL', 'COST_ENVELOPE']);
+    expect(BETA_CRITERION_CODES).not.toContain(withdrawn);
+    for (const captures of [
+      { upCapture: 0.71, downCapture: 0.635 },
+      { upCapture: 0.71, downCapture: 0.7029 },
+      { upCapture: 0.7, downCapture: 0.9 },
+      { upCapture: 0, downCapture: 0.5 },
+    ]) {
+      expect(evaluateBetaCriteria(betaInput(captures)).failures).not.toContain(withdrawn);
+    }
+  });
+
+  it('(a) fails when EITHER contiguous half breaches the ceiling, even if the full window passes', () => {
+    // A dead half paired with a wild half: the pooled estimate sits inside the band, the halves do not.
+    const wild = observationsWithVolatility(0.16, 108);
+    const dead = observationsWithVolatility(0.055, 108);
+    const paired = [...wild, ...dead];
+    const full = evaluateBetaCriteria(betaInput({ observationReturns: paired }));
+
+    expect(volatilityUpperBound95(paired, FIVE_SESSION_PERIODS_PER_YEAR)).toBeLessThanOrEqual(0.13);
+    expect(contiguousHalves(paired)[0]).toHaveLength(108);
+    expect(full.halfWindowUpperBounds95[0]).toBeGreaterThan(0.13);
+    expect(full.failures).toEqual(['VOLATILITY_BAND']);
+  });
+
+  it('(a) tests the floor with a 95% LOWER bound, not the point estimate', () => {
+    // 6.4% point estimate at n=104 clears a 6% floor on the old test but not on the lower bound.
+    const series = observationsWithVolatility(0.064, 104);
+
+    expect(annualizedVolatility(series, FIVE_SESSION_PERIODS_PER_YEAR)).toBeGreaterThan(0.06);
+    expect(volatilityLowerBound95(series, FIVE_SESSION_PERIODS_PER_YEAR)).toBeLessThan(0.06);
+    expect(evaluateBetaCriteria(betaInput({ observationReturns: series })).failures).toEqual(['VOLATILITY_BAND']);
+    expect(volatilityLowerBound95(series, FIVE_SESSION_PERIODS_PER_YEAR))
+      .toBeLessThan(annualizedVolatility(series, FIVE_SESSION_PERIODS_PER_YEAR));
   });
 });

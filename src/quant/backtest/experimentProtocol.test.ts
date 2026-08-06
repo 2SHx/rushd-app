@@ -261,7 +261,7 @@ describe('seal-time gate feasibility (QDR-9)', () => {
   });
 
   const BETA_GATE = {
-    minimumOosObservations: 208,
+    minimumOosObservations: 104,
     observationsPerYear: 252 / 5,
     relatedFamilyTrials: 108,
     productClass: 'BETA',
@@ -272,7 +272,9 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     hypothesizedBeta: 0.62,
     maxAnnualTurnover: 4,
     maxAnnualCostDragBps: 60,
-    declaredConvexityPower: 0.921,
+    declaredVolatilityFalseAlarmRate: 0.002,
+    declaredHalfWindowFalseAlarmRate: 0.015,
+    declaredNegativeBenchmarkBlockFraction: 0.44,
   };
 
   it('seals a well-formed BETA preregistration', () => {
@@ -287,11 +289,20 @@ describe('seal-time gate feasibility (QDR-9)', () => {
       .toThrow(/EMPTY_BETA_VOLATILITY_BAND/);
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, volCeiling: 0.05 })))
       .toThrow(/EMPTY_BETA_VOLATILITY_BAND/);
-    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredConvexityPower: 0.84 })))
-      .toThrow(/UNDERPOWERED_BETA_CONVEXITY/);
-    // The declared power must also be consistent with the measured calibration floor of n=156.
-    expect(() => sealExperiment(draftWith({ ...BETA_GATE, minimumOosObservations: 104 })))
-      .toThrow(/UNDERPOWERED_BETA_CONVEXITY/);
+    // QDR-10 2026-08-06b: the power assertion sits on criterion (a), full window AND each half.
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredVolatilityFalseAlarmRate: 0.06 })))
+      .toThrow(/UNDERPOWERED_BETA_VOLATILITY/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredHalfWindowFalseAlarmRate: 0.06 })))
+      .toThrow(/UNDERPOWERED_BETA_VOLATILITY/);
+    // The corrected observation floor is 104, replacing the void 156; 103 is refused, 104 seals.
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, minimumOosObservations: 103 })))
+      .toThrow(/UNDERPOWERED_BETA_VOLATILITY/);
+    expect(sealExperiment(draftWith({ ...BETA_GATE, minimumOosObservations: 104 })).state).toBe('SEALED');
+    // The model-free falsifier: a benchmark that falls 8.8% of blocks is not any real index.
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.088 })))
+      .toThrow(/BENCHMARK_MODEL_SANITY_FAILURE/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredNegativeBenchmarkBlockFraction: 0.5 })))
+      .toThrow(/BENCHMARK_MODEL_SANITY_FAILURE/);
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, benchmarkSymbol: undefined })))
       .toThrow(/benchmarkSymbol/);
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, maxAnnualTurnover: undefined })))

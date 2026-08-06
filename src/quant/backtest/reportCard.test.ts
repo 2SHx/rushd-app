@@ -203,7 +203,6 @@ describe('QDR-10 BETA-class report card', () => {
     volFloor: 0.06,
     upCapture: 0.71,
     downCapture: 0.635,
-    captureGapP5: 0.02,
     oosCagr: 0.06,
     benchmarkCagr: 0.09,
     betaVsBenchmark: 0.62,
@@ -228,7 +227,6 @@ describe('QDR-10 BETA-class report card', () => {
 
   it.each([
     ['VOLATILITY_BAND', { observationReturns: observationsWithVolatility(0.16, 216) }],
-    ['CAPTURE_CONVEXITY', { downCapture: 0.7 }],
     ['RELATIVE_SHORTFALL', { oosCagr: -0.02 }],
     ['COST_ENVELOPE', { realizedAnnualCostDragBps: 90 }],
   ] as const)('rejects the identical card as REJECTED_BETA when %s alone is breached', (code, breach) => {
@@ -268,7 +266,7 @@ describe('QDR-10 BETA-class report card', () => {
 
     expect(card.status).toBe('REJECTED_BETA');
     expect(card.betaCriterionFailures)
-      .toEqual(['VOLATILITY_BAND', 'CAPTURE_CONVEXITY', 'RELATIVE_SHORTFALL', 'COST_ENVELOPE']);
+      .toEqual(['VOLATILITY_BAND', 'RELATIVE_SHORTFALL', 'COST_ENVELOPE']);
     expect(renderReportCard(card, false)).toContain('BETA evidence MISSING');
   });
 
@@ -276,10 +274,26 @@ describe('QDR-10 BETA-class report card', () => {
     const rendered = renderReportCard(assembleReportCard(betaArgs()), false);
 
     expect(rendered).toContain('productClass=BETA');
-    expect(rendered).toContain('Capture up/down:      0.710 / 0.635  (down/up 0.894; must be < 0.95)');
-    expect(rendered).toContain('this book surrenders roughly 30% of upside to buy the drawdown reduction');
+    expect(rendered).toContain('Capture up/down:      0.710 / 0.635  (down/up 0.894)');
+    expect(rendered).toContain(
+      'capture convexity is reported for transparency and is not a promotion criterion; the effect is '
+      + 'too small to resolve inside a product horizon (measured: \u226444% power at 10.3 years)',
+    );
     expect(rendered).toContain('ACCEPTED_BETA has NOT been shown to have an edge');
+    // (c1) withdrawn: an ACCEPTED_BETA must never be described as having demonstrated convexity.
+    expect(rendered).not.toContain('favorable capture convexity');
+    expect(rendered).toContain('no shortfall against its own delivered beta');
     expect(rendered).toContain('STATUS: ACCEPTED_BETA');
+  });
+
+  it('(c1 WITHDRAWN) a 0.99 capture ratio is ACCEPTED_BETA and CAPTURE_CONVEXITY is never emitted', () => {
+    const card = assembleReportCard(betaArgs({ upCapture: 0.71, downCapture: 0.7029 }));
+
+    expect(card.betaSummary!.captureRatio).toBeCloseTo(0.99, 4);
+    expect(card.status).toBe('ACCEPTED_BETA');
+    expect(card.betaCriterionFailures).toEqual([]);
+    expect(JSON.stringify(card)).not.toContain('CAPTURE_CONVEXITY');
+    expect(renderReportCard(card, false)).not.toContain('CAPTURE_CONVEXITY');
   });
 
   it('keeps every hard safety gate byte-identical for BETA', () => {

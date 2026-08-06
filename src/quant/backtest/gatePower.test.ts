@@ -158,7 +158,7 @@ describe('manifest gate specs', () => {
 
   it('QDR-10: reads a BETA gate block without demanding the alpha DSR keys', () => {
     const validation = {
-      minimumOosObservations: 208,
+      minimumOosObservations: 104,
       observationsPerYear: 252 / 5,
       relatedFamilyTrials: 108,
       productClass: 'BETA',
@@ -169,7 +169,9 @@ describe('manifest gate specs', () => {
       hypothesizedBeta: 0.62,
       maxAnnualTurnover: 4,
       maxAnnualCostDragBps: 60,
-      declaredConvexityPower: 0.921,
+      declaredVolatilityFalseAlarmRate: 0.002,
+      declaredHalfWindowFalseAlarmRate: 0.015,
+      declaredNegativeBenchmarkBlockFraction: 0.44,
     };
     const spec = gateSpecFromConfig({ validation }) as BetaGateSpec;
 
@@ -178,8 +180,10 @@ describe('manifest gate specs', () => {
     expect(assessGateFeasibility(spec)).toMatchObject({ verdict: 'FEASIBLE', volatilityBandAchievable: true });
     expect(() => productClassFromConfig({ validation: { productClass: 'GAMMA' } })).toThrow(/productClass/);
     expect(() => gateSpecFromConfig({ validation: { ...validation, volCeiling: undefined } })).toThrow(/volCeiling/);
-    expect(() => gateSpecFromConfig({ validation: { ...validation, declaredConvexityPower: undefined } }))
-      .toThrow(/declaredConvexityPower/);
+    expect(() => gateSpecFromConfig({ validation: { ...validation, declaredVolatilityFalseAlarmRate: undefined } }))
+      .toThrow(/declaredVolatilityFalseAlarmRate/);
+    expect(() => gateSpecFromConfig({ validation: { ...validation, declaredNegativeBenchmarkBlockFraction: undefined } }))
+      .toThrow(/declaredNegativeBenchmarkBlockFraction/);
   });
 
   it('throws rather than skipping when a declared gate is incomplete or malformed', () => {

@@ -142,10 +142,21 @@ export function minimumObservationsForDsr(
 /** QDR-10 product class. ABSENT ⇒ 'ALPHA' — fail-closed to the strictest gate. */
 export type ProductClass = 'ALPHA' | 'BETA';
 
-/** Measured calibration floor: n=156 ⇒ 87.1% convexity power, n=208 ⇒ 92.1% (QDR-10 Rationale). */
-export const BETA_MIN_CONVEXITY_OBSERVATIONS = 156;
-/** QDR-10 sets a HARD power gate for BETA where ALPHA deliberately has none. */
-export const BETA_MIN_CONVEXITY_POWER = 0.85;
+/**
+ * QDR-10 2026-08-06b. The old 156-observation floor rested on the withdrawn (c1) convexity
+ * criterion, whose calibration came from a benchmark-drift unit error; it is VOID. The BETA power
+ * assertion now sits on criterion (a), whose CORRECTED false-alarm rates are 1.5% at n=52 and 0.2%
+ * at n=104 — so 104 is the floor, precisely because it leaves each contiguous half at n=52.
+ */
+export const BETA_MIN_OBSERVATIONS = 104;
+/** Criterion (a) specificity target, on the full window AND on each contiguous half. */
+export const BETA_MAX_VOLATILITY_FALSE_ALARM = 0.05;
+/**
+ * The model-free sanity check that caught the original error: a benchmark model whose non-overlapping
+ * blocks fall fewer than ~42% of the time is not any real equity index. Every calibrating simulation
+ * must publish this fraction, and a value outside the band is a refusal at seal.
+ */
+export const BETA_NEGATIVE_BLOCK_FRACTION_BAND: readonly [number, number] = [0.42, 0.45];
 
 export interface BetaGateSpec {
   readonly productClass: 'BETA';
@@ -161,12 +172,18 @@ export interface BetaGateSpec {
   readonly maxAnnualTurnover: number;
   readonly maxAnnualCostDragBps: number;
   /**
-   * Power on criterion (c1) convexity at the reserved window, established by the research director's
-   * simulation under THIS lane's own benchmark model. QDR-10 forbids deriving it from the
-   * log-variance closed form (measured materially optimistic), so the seal verifies the declared
-   * figure and its consistency with the measured calibration — it does not simulate.
+   * Criterion (a) false-alarm rates at the reserved window — full window and per contiguous half —
+   * established by the research director's simulation under THIS lane's own benchmark model. QDR-10
+   * forbids deriving them from the log-variance closed form (measured materially optimistic), so the
+   * seal verifies the declared figures and their consistency with the calibration; it never simulates.
    */
-  readonly declaredConvexityPower: number;
+  readonly declaredVolatilityFalseAlarmRate: number;
+  readonly declaredHalfWindowFalseAlarmRate: number;
+  /**
+   * Fraction of NEGATIVE non-overlapping benchmark blocks in the calibrating simulation. The
+   * model-free falsifier: 8.8% is what the drift bug produced; real equities sit at 42-45%.
+   */
+  readonly declaredNegativeBenchmarkBlockFraction: number;
 }
 
 export interface GateSpec {
@@ -191,7 +208,8 @@ export type GateFeasibilityVerdict =
   | 'EMPTY_FALLBACK_ACCEPTANCE_SET'
   | 'UNDERPOWERED'
   | 'EMPTY_BETA_VOLATILITY_BAND'
-  | 'UNDERPOWERED_BETA_CONVEXITY';
+  | 'UNDERPOWERED_BETA_VOLATILITY'
+  | 'BENCHMARK_MODEL_SANITY_FAILURE';
 
 export interface GateFeasibility {
   readonly verdict: GateFeasibilityVerdict;
@@ -212,8 +230,9 @@ export interface BetaGateFeasibility {
   readonly verdict: GateFeasibilityVerdict;
   /** Is a realized outcome that satisfies criterion (a) possible at the reserved window at all? */
   readonly volatilityBandAchievable: boolean;
-  readonly declaredConvexityPower: number;
-  readonly minimumConvexityObservations: number;
+  readonly declaredVolatilityFalseAlarmRate: number;
+  readonly declaredHalfWindowFalseAlarmRate: number;
+  readonly minimumObservations: number;
   readonly detail: string;
 }
 
@@ -272,40 +291,59 @@ export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasib
 }
 
 /**
- * QDR-10 BETA seal assertions. Feasibility: a band whose ceiling is at or below its floor — or whose
- * ceiling the floor's own 95% upper bound cannot fit under at the reserved n — has a provably empty
- * acceptance set. Power: BETA carries a HARD ≥85% power gate on the binding convexity criterion.
- * The simulation that establishes that power is the research director's, per lane, under the lane's
- * own benchmark model; the seal verifies the declared figure is present, meets the bar, and is
- * consistent with the measured calibration floor (n=156 ⇒ 87.1%). It never simulates here.
+ * QDR-10 BETA seal assertions, as corrected 2026-08-06b.
+ *  FEASIBILITY — a band whose ceiling is at or below its floor, or which no realized volatility can
+ *  satisfy once the half-window upper bound and the full-window lower bound are both applied at the
+ *  reserved n, has a provably empty acceptance set.
+ *  POWER — now set on criterion (a), NOT on the withdrawn (c1): the declared false-alarm rate must
+ *  hold at <= 5% on the full window AND on each contiguous half, and the reserved window must meet
+ *  the corrected 104-observation floor (which is exactly what leaves each half at n=52 / 1.5%).
+ *  SANITY — the calibrating simulation must publish a negative-benchmark-block fraction inside
+ *  42-45%; that single number is what caught the drift bug, and a miss is a refusal, not a warning.
+ * The simulation itself is the research director's, per lane; the seal never simulates.
  */
 export function assessBetaGateFeasibility(spec: BetaGateSpec): BetaGateFeasibility {
   assertBetaGateSpec(spec);
   const achievable = volatilityBandFeasible(spec.volFloor, spec.volCeiling, spec.observations);
+  const [minBlocks, maxBlocks] = BETA_NEGATIVE_BLOCK_FRACTION_BAND;
   const base = {
     volatilityBandAchievable: achievable,
-    declaredConvexityPower: spec.declaredConvexityPower,
-    minimumConvexityObservations: BETA_MIN_CONVEXITY_OBSERVATIONS,
+    declaredVolatilityFalseAlarmRate: spec.declaredVolatilityFalseAlarmRate,
+    declaredHalfWindowFalseAlarmRate: spec.declaredHalfWindowFalseAlarmRate,
+    minimumObservations: BETA_MIN_OBSERVATIONS,
   };
   if (!achievable) {
     return {
       ...base,
       verdict: 'EMPTY_BETA_VOLATILITY_BAND',
       detail: `BETA acceptance set is empty: volFloor ${spec.volFloor} / volCeiling ${spec.volCeiling} at n=`
-        + `${spec.observations} leaves no realized volatility whose one-sided 95% upper bound fits under the ceiling`,
+        + `${spec.observations} leaves no realized volatility that clears the half-window upper bound and the `
+        + 'full-window lower bound at the same time',
     };
   }
-  if (spec.declaredConvexityPower < BETA_MIN_CONVEXITY_POWER
-    || spec.observations < BETA_MIN_CONVEXITY_OBSERVATIONS) {
+  if (spec.declaredNegativeBenchmarkBlockFraction < minBlocks
+    || spec.declaredNegativeBenchmarkBlockFraction > maxBlocks) {
     return {
       ...base,
-      verdict: 'UNDERPOWERED_BETA_CONVEXITY',
-      detail: `BETA convexity power ${spec.declaredConvexityPower} over n=${spec.observations} misses the `
-        + `>= ${BETA_MIN_CONVEXITY_POWER} gate at the measured calibration floor of `
-        + `${BETA_MIN_CONVEXITY_OBSERVATIONS} observations (n=156 ⇒ 87.1%, n=208 ⇒ 92.1%)`,
+      verdict: 'BENCHMARK_MODEL_SANITY_FAILURE',
+      detail: `calibrating benchmark falls in ${(spec.declaredNegativeBenchmarkBlockFraction * 100).toFixed(1)}% `
+        + `of non-overlapping blocks, outside the ${minBlocks * 100}-${maxBlocks * 100}% band real equities occupy; `
+        + 'a benchmark that rarely falls is not any real index and every figure derived from it is void',
     };
   }
-  return { ...base, verdict: 'FEASIBLE', detail: 'BETA volatility band achievable and convexity-powered at the reserved window' };
+  if (spec.declaredVolatilityFalseAlarmRate > BETA_MAX_VOLATILITY_FALSE_ALARM
+    || spec.declaredHalfWindowFalseAlarmRate > BETA_MAX_VOLATILITY_FALSE_ALARM
+    || spec.observations < BETA_MIN_OBSERVATIONS) {
+    return {
+      ...base,
+      verdict: 'UNDERPOWERED_BETA_VOLATILITY',
+      detail: `BETA criterion (a) false-alarm rates ${spec.declaredVolatilityFalseAlarmRate} full / `
+        + `${spec.declaredHalfWindowFalseAlarmRate} per half over n=${spec.observations} miss the `
+        + `<= ${BETA_MAX_VOLATILITY_FALSE_ALARM} bar at the corrected ${BETA_MIN_OBSERVATIONS}-observation floor `
+        + '(measured: n=52 ⇒ 1.5%, n=104 ⇒ 0.2%)',
+    };
+  }
+  return { ...base, verdict: 'FEASIBLE', detail: 'BETA volatility band achievable and specific at the reserved window' };
 }
 
 export function assertBetaGateSpec(spec: BetaGateSpec): void {
@@ -323,9 +361,13 @@ export function assertBetaGateSpec(spec: BetaGateSpec): void {
     throw new Error('maxAnnualCostDragBps must be a non-negative number');
   }
   if (!spec.benchmarkSymbol.trim()) throw new Error('benchmarkSymbol is required for a BETA preregistration');
-  if (!Number.isFinite(spec.declaredConvexityPower)
-    || spec.declaredConvexityPower <= 0 || spec.declaredConvexityPower > 1) {
-    throw new Error('declaredConvexityPower must be inside (0,1]');
+  const rates: [string, number][] = [
+    ['declaredVolatilityFalseAlarmRate', spec.declaredVolatilityFalseAlarmRate],
+    ['declaredHalfWindowFalseAlarmRate', spec.declaredHalfWindowFalseAlarmRate],
+    ['declaredNegativeBenchmarkBlockFraction', spec.declaredNegativeBenchmarkBlockFraction],
+  ];
+  for (const [key, value] of rates) {
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${key} must be inside [0,1]`);
   }
   if (!Number.isInteger(spec.observations) || spec.observations < 2) {
     throw new Error('observations must be an integer >= 2');
@@ -496,7 +538,9 @@ export function gateSpecFromConfig(config: unknown): GateSpec | BetaGateSpec | n
       hypothesizedBeta: requireNumber(validation, 'hypothesizedBeta'),
       maxAnnualTurnover: requireNumber(validation, 'maxAnnualTurnover'),
       maxAnnualCostDragBps: requireNumber(validation, 'maxAnnualCostDragBps'),
-      declaredConvexityPower: requireNumber(validation, 'declaredConvexityPower'),
+      declaredVolatilityFalseAlarmRate: requireNumber(validation, 'declaredVolatilityFalseAlarmRate'),
+      declaredHalfWindowFalseAlarmRate: requireNumber(validation, 'declaredHalfWindowFalseAlarmRate'),
+      declaredNegativeBenchmarkBlockFraction: requireNumber(validation, 'declaredNegativeBenchmarkBlockFraction'),
     };
   }
   return {
