@@ -44,11 +44,25 @@
     "validation": {
       "mode": "never-inspected-forward-only",
       "forwardStart": "2026-08-07T20:00:00.000Z",
-      "minimumTradingSessions": 504,
+      "minimumTradingSessions": 1085,
       "observationUnit": "non-overlapping-five-session-book-return",
-      "minimumOosObservations": 100,
+      "observationsPerYear": 50.4,
+      "minimumOosObservations": 216,
       "oosFraction": 1,
+      "trialTier": "CONFIRMATORY",
+      "confirmatoryTrials": 1,
+      "confirmatoryConditions": [
+        "SEALED_CONFIG_HASH_VERIFIED",
+        "FORWARD_ONLY_HISTORICAL_MODE",
+        "ZERO_DIAGNOSTIC_RUNS",
+        "FORWARD_BOUNDARY_AFTER_SEAL",
+        "OBSERVATIONS_AFTER_FORWARD_BOUNDARY",
+        "EXACTLY_ONE_TERMINAL_EVALUATION"
+      ],
+      "confirmatoryEvidenceSource": "out-of-band-manifest-and-run-receipts-verified-at-terminal-time-never-self-asserted-by-this-config",
+      "confirmatoryFallbackTier": "EXPLORATORY",
       "relatedFamilyTrials": 108,
+      "hypothesizedAnnualSharpe": 0.8,
       "minimumOosDsr": 0.95,
       "maximumMonteCarloP95Drawdown": 0.3,
       "maximumRiskOfRuin": 0.05,
@@ -77,13 +91,15 @@
     },
     "hypothesis": {
       "mechanism": "scale fixed broad halal equity beta down when realized volatility rises because volatility clusters more strongly than expected return",
+      "hypothesizedAnnualSharpe": 0.8,
       "predictedCagr": "positive-but-modest-and-lower-than-fast-momentum",
-      "predictedOosDsr": "greater-than-0.931",
-      "predictedMonteCarloP95Drawdown": "less-than-0.30"
+      "predictedOosDsr": "greater-than-0.950-at-annualized-sharpe-0.80-over-216-five-session-observations",
+      "predictedMonteCarloP95Drawdown": "less-than-0.30",
+      "powerNote": "Powered ONLY as a confirmatory (N=1) test. If any of the six structural confirmatory conditions fails, the lane deflates at 108 exploratory trials, where the declared effect size would need 1401 observations (~28y): such a run must close INSUFFICIENT_SAMPLE, not as evidence against the hypothesis."
     },
-    "performanceInspection": "forbidden-before-504-forward-sessions-and-independent-ready-to-run"
+    "performanceInspection": "forbidden-before-1085-forward-sessions-and-independent-ready-to-run"
   },
-  "configHash": "3346e72bf764368cb3a4eb5868c7b72f7bff56c1c799ebb936551ae59a393470",
+  "configHash": "e2f9fe4d20ce06b95002fffb6cf3979a96f1b514776f51b96d48b70665dd15c7",
   "state": "CODIFIED",
   "actors": {
     "director": "quant-research-director",

@@ -1,11 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_BT_LIMITS } from '../backtest/engine';
+import { stableConfigHash } from '../backtest/experimentProtocol';
+import { assessGateFeasibility, gateSpecFromConfig } from '../backtest/gatePower';
 import { simulateStrategyBook, type StrategyBookSeries } from '../backtest/portfolioEngine';
 import { STRATEGY_SETUP_CATALOG } from './catalog';
 import type { StrategyPointInTimeContext } from './types';
 import {
   HALAL_SPUS_FORWARD_START,
+  HALAL_SPUS_MANIFEST_CONFIG_HASH,
+  HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS,
+  HALAL_SPUS_MIN_FORWARD_SESSIONS,
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE,
   HALAL_SPUS_VOL_MANAGED_BETA_V1,
@@ -191,9 +198,10 @@ describe('halal-spus-vol-managed-beta v1', () => {
   it('hard-blocks diagnostics, historical/pre-boundary runs, and insufficient forward evidence', async () => {
     const eligible = {
       runMode: 'TERMINAL' as const,
-      now: new Date('2030-01-02T00:00:00.000Z'),
-      from: '2026-08-08', to: '2029-12-31', seed: 42, oosFraction: 1,
-      completedSessions: 504, fiveSessionObservations: 100,
+      now: new Date('2031-01-02T00:00:00.000Z'),
+      from: '2026-08-08', to: '2030-12-31', seed: 42, oosFraction: 1,
+      completedSessions: HALAL_SPUS_MIN_FORWARD_SESSIONS,
+      fiveSessionObservations: HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS,
     };
     expect(() => assertHalalSpusForwardRunAllowed(eligible)).not.toThrow();
     expect(() => assertHalalSpusForwardRunAllowed({ ...eligible, runMode: 'DIAGNOSTIC_NON_TERMINAL' }))
@@ -202,8 +210,12 @@ describe('halal-spus-vol-managed-beta v1', () => {
     expect(() => assertHalalSpusForwardRunAllowed({
       ...eligible, now: new Date(Date.parse(HALAL_SPUS_FORWARD_START) - 1), to: '2026-08-06',
     })).toThrow(/cannot start before/);
-    expect(() => assertHalalSpusForwardRunAllowed({ ...eligible, completedSessions: 503 })).toThrow(/504/);
-    expect(() => assertHalalSpusForwardRunAllowed({ ...eligible, fiveSessionObservations: 99 })).toThrow(/100/);
+    expect(() => assertHalalSpusForwardRunAllowed({
+      ...eligible, completedSessions: HALAL_SPUS_MIN_FORWARD_SESSIONS - 1,
+    })).toThrow(new RegExp(String(HALAL_SPUS_MIN_FORWARD_SESSIONS)));
+    expect(() => assertHalalSpusForwardRunAllowed({
+      ...eligible, fiveSessionObservations: HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS - 1,
+    })).toThrow(new RegExp(String(HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS)));
     expect(() => assertHalalSpusForwardRunAllowed({ ...eligible, seed: 7 })).toThrow(/seed=42/);
     expect(() => assertHalalSpusForwardRunAllowed({ ...eligible, oosFraction: 0.3 })).toThrow(/oosFraction=1/);
     expect(() => assertHalalSpusTerminalEvidenceReady()).toThrow(/not independently READY_TO_RUN/);
@@ -222,5 +234,49 @@ describe('halal-spus-vol-managed-beta v1', () => {
     expect(() => prepare([{ ts: new Date('2030-01-01'), close: 100 }, { ts: new Date('2030-01-01'), close: 101 }]))
       .toThrow(/chronological/);
     expect(() => prepare([{ ts: new Date('2030-01-01'), close: 0 }])).toThrow(/positive/);
+  });
+
+  /**
+   * The runtime guard and the sealed preregistration are two copies of the same commitment. This
+   * test reads BOTH and asserts they agree — it deliberately hardcodes no session/observation count,
+   * because a hardcoded pair is exactly the drift that let the guard admit a 504-session terminal
+   * run against a 1085-session preregistration.
+   */
+  it('runtime forward-evidence guard matches the sealed manifest byte-for-byte', () => {
+    const manifestPath = join(__dirname, '..', '..', '..', 'docs', 'quant-experiments', 'halal-spus-vol-managed-beta-v1.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      setupId: string;
+      configHash: string;
+      config: {
+        validation: {
+          forwardStart: string;
+          minimumTradingSessions: number;
+          minimumOosObservations: number;
+          trialTier: string;
+          confirmatoryTrials: number;
+          relatedFamilyTrials: number;
+          observationsPerYear: number;
+        };
+      };
+    };
+    const { validation } = manifest.config;
+
+    expect(manifest.setupId).toBe(HALAL_SPUS_VOL_MANAGED_BETA_ID);
+    expect(validation.forwardStart).toBe(HALAL_SPUS_FORWARD_START);
+    expect(validation.minimumTradingSessions).toBe(HALAL_SPUS_MIN_FORWARD_SESSIONS);
+    expect(validation.minimumOosObservations).toBe(HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS);
+    expect(manifest.configHash).toBe(HALAL_SPUS_MANIFEST_CONFIG_HASH);
+    // The quoted hash must also still be the hash OF the config it claims to seal.
+    expect(stableConfigHash(manifest.config as unknown as Parameters<typeof stableConfigHash>[0]))
+      .toBe(HALAL_SPUS_MANIFEST_CONFIG_HASH);
+    // The window must be able to produce the observations the preregistration demands, at the
+    // confirmatory trial count the params declare as their exploratory fallback.
+    expect(validation.minimumTradingSessions)
+      .toBeGreaterThanOrEqual(validation.minimumOosObservations * 5 + 1);
+    expect(validation.observationsPerYear).toBe(252 / 5);
+    expect(validation.trialTier).toBe('CONFIRMATORY');
+    expect(validation.confirmatoryTrials).toBe(1);
+    expect(validation.relatedFamilyTrials).toBe(HALAL_SPUS_VOL_MANAGED_BETA_V1.validationTrials);
+    expect(assessGateFeasibility(gateSpecFromConfig(manifest.config)!).verdict).toBe('FEASIBLE');
   });
 });

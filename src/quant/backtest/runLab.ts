@@ -118,7 +118,7 @@ import {
   bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision,
 } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ReportCard, type ShariaValidationState } from './reportCard';
-import { trialCountEvidence } from './trialFamilies';
+import { trialCountEvidence, type ConfirmatoryEvidenceInput } from './trialFamilies';
 import { buildHistoricalComparisonEvidence } from './historicalComparison';
 import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence';
 import { assertWalkForward } from './walkForward';
@@ -313,13 +313,27 @@ export function validationReturnInputs(
   return { riskReturns, permutationReturns: tradeReturns, observationUnit: 'book-day' };
 }
 
-export function validationTrialsForSetup(setupId: string, effectiveParams: unknown): number {
+/**
+ * Terminal DSR trial count for a setup. The declared plateau/family count is the fail-closed
+ * default: with no confirmatory evidence this returns exactly what it always has. A lane only drops
+ * to N = 1 when `trialCountEvidence` can PROVE all six structural confirmatory conditions from
+ * out-of-band evidence (QDR-9); the exploratory family floor itself is still applied downstream by
+ * `trialCountEvidence` at verdict assembly, so this function's exploratory answer is unchanged.
+ */
+export function validationTrialsForSetup(
+  setupId: string,
+  effectiveParams: unknown,
+  confirmatoryEvidence?: ConfirmatoryEvidenceInput,
+): number {
   if (!SHARED_BOOK_SETUP_IDS.has(setupId)) return 1;
   const trials = (effectiveParams as { validationTrials?: unknown } | null)?.validationTrials;
   if (!Number.isInteger(trials) || Number(trials) <= 1) {
     throw new Error(`${setupId} requires validationTrials > 1`);
   }
-  return Number(trials);
+  const declared = Number(trials);
+  if (!confirmatoryEvidence) return declared;
+  const tiered = trialCountEvidence(setupId, declared, confirmatoryEvidence);
+  return tiered.tier === 'CONFIRMATORY' ? tiered.familyTrials : declared;
 }
 
 // ── R3-3.5 first-class universe + period selection ──────────────────────────────────────────────

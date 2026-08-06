@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -217,5 +217,64 @@ describe('experiment manifest protocol', () => {
       runKind: 'ABANDONED', status: 'REJECTED', auditor: 'auditor-b',
       reasonCodes: ['REPRODUCIBILITY_FAILURE'],
     })).resolves.toMatchObject({ state: 'REJECTED', terminal: { outcome: 'ABANDONED' } });
+  });
+});
+
+describe('seal-time gate feasibility (QDR-9)', () => {
+  const GATE = {
+    minimumOosDsr: 0.95,
+    maximumPlausibleSharpe: 3,
+    observationsPerYear: 252 / 5,
+    relatedFamilyTrials: 108,
+    hypothesizedAnnualSharpe: 0.8,
+  };
+
+  function draftWith(validation: Record<string, unknown>) {
+    return createDraft({
+      setupId: 'gate-probe',
+      version: 'v1',
+      config: { validation } as unknown as Parameters<typeof createDraft>[0]['config'],
+      director: 'director-a',
+    });
+  }
+
+  it('refuses a preregistration whose acceptance set is provably empty', () => {
+    expect(() => sealExperiment(draftWith({ ...GATE, minimumOosObservations: 100 })))
+      .toThrow(/EMPTY_ACCEPTANCE_SET/);
+  });
+
+  it('refuses an underpowered preregistration with a distinguishable error and a window size', () => {
+    const underpowered = draftWith({
+      ...GATE, minimumOosObservations: 150, trialTier: 'CONFIRMATORY', confirmatoryTrials: 1,
+    });
+
+    expect(() => sealExperiment(underpowered)).toThrow(/UNDERPOWERED/);
+    expect(() => sealExperiment(underpowered)).toThrow(/n >= 216/);
+    expect(() => sealExperiment(underpowered)).not.toThrow(/EMPTY_ACCEPTANCE_SET/);
+  });
+
+  it('refuses a confirmatory lane whose exploratory fallback could never clear the gate', () => {
+    expect(() => sealExperiment(draftWith({
+      ...GATE, minimumOosObservations: 100, trialTier: 'CONFIRMATORY', confirmatoryTrials: 1,
+    }))).toThrow(/EMPTY_FALLBACK_ACCEPTANCE_SET/);
+  });
+
+  it('seals the amended SPUS lane and leaves the other sealed manifests untouched', () => {
+    const dir = join(__dirname, '..', '..', '..', 'docs', 'quant-experiments');
+    for (const file of [
+      'halal-spus-vol-managed-beta-v1.json',
+      'halal-causal-tcn-alpha-v1.json',
+      'halal-residual-fast-momentum-core-v1.json',
+    ]) {
+      const sealed = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
+        setupId: string; version: string; config: Parameters<typeof createDraft>[0]['config']; configHash: string;
+      };
+      const resealed = sealExperiment(createDraft({
+        setupId: sealed.setupId, version: sealed.version, config: sealed.config, director: 'director-a',
+      }));
+
+      expect(resealed.state).toBe('SEALED');
+      expect(resealed.configHash).toBe(sealed.configHash);
+    }
   });
 });

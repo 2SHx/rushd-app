@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-06 — QDR-9: the promotion gate had an EMPTY acceptance set ✅
+Shipped: Proved against the shipped `computeMetrics` that `halal-spus-vol-managed-beta@v1` could never be ACCEPTED (DSR>0.95 needed Sharpe 3.13; Sharpe>3.00 trips IMPLAUSIBLE_RESULT; max attainable DSR 0.9312), then landed QDR-9 two-tier DSR deflation, `gatePower.ts`, seal-time feasibility+power refusal, trial-tier rendering on the terminal card, and the amended SPUS manifest — 40h before its forward window opened.
+Decisions: Required annualized Sharpe is ≈(1.6449+C)/√(OOS years) and is INVARIANT to observation frequency, so at 99–108 family trials every one of the ~15 REJECTED runs needed OOS Sharpe 2.42 at ≤30% p95 drawdown — unreachable; EXPLORATORY keeps the full family floor unchanged while a sealed never-inspected forward test is N=1 (deflation corrects for selection, and such a test performs none), earned via six re-computable conditions that fail closed; no threshold moved and no REJECTED card was re-scored.
+Verify: tsc, lint clean; `src/quant/backtest` + `src/quant/strategies` 577 passed / 1 pre-existing Neon-unreachable quant-eval timeout; anchor test binds the closed form to the real estimator (|Δ|=0.0018); 20,000-sim power curve matches analytic within 0.4pp; drift test now fails if the strategy constants and manifest ever disagree again.
+Open: The amended SPUS lane is feasible but only ~50% powered at its declared Sharpe 0.80 (80% needs ~9.75y), so the 4.31y window is better spent on a Sharpe≈1.2 mechanism — vol-targeted risk parity (measured full DSR 0.958/Sharpe 1.13, plateau 6.3%, only drawdown unfixed at 44.95%) is out for preregistration; a 108-trial fallback run must close INSUFFICIENT_SAMPLE, not DSR_FAILURE.
+
 ## 2026-08-06 — Forward-only SPUS volatility-managed beta lane ✅
 Shipped: Preregistered and codified `halal-spus-vol-managed-beta@v1`, a fixed-SPUS 10% volatility target with a frozen 3×3 plateau, exact five-session inference units, and 8 focused contract tests.
 Decisions: Reused the historical risk-repair lesson without survivor-conditioned stock selection; no historical/diagnostic/FULL inspection, and terminal execution fails before simulation until independent readiness plus immutable PIT fund Sharia/lifecycle evidence exist.

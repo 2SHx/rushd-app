@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { assessGateFeasibility, gateSpecFromConfig } from './gatePower';
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -140,8 +141,22 @@ export function createDraft(input: DraftInput): ExperimentManifest {
   };
 }
 
+/**
+ * Refuse to seal a preregistration that cannot be won or cannot detect what it claims to predict.
+ * Fires only when `config.validation` declares a numeric DSR gate (see `gateSpecFromConfig`);
+ * manifests whose validation block describes no gate seal exactly as before.
+ */
+export function assertGateFeasibleAtSeal(manifest: ExperimentManifest): void {
+  const spec = gateSpecFromConfig(manifest.config);
+  if (!spec) return;
+  const feasibility = assessGateFeasibility(spec);
+  if (feasibility.verdict === 'FEASIBLE') return;
+  throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: ${feasibility.verdict} — ${feasibility.detail}`);
+}
+
 export function sealExperiment(manifest: ExperimentManifest): ExperimentManifest {
   assertState(manifest, 'DRAFT');
+  assertGateFeasibleAtSeal(manifest);
   const config = structuredClone(manifest.config);
   return { ...manifest, config, configHash: stableConfigHash(config), state: 'SEALED' };
 }

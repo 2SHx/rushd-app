@@ -16,9 +16,18 @@ export const HALAL_SPUS_VOL_MANAGED_BETA_ID = 'halal-spus-vol-managed-beta' as c
 export const HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE: readonly string[] = Object.freeze(['SPUS']);
 export const HALAL_SPUS_FORWARD_START = '2026-08-07T20:00:00.000Z' as const;
 export const HALAL_SPUS_FORWARD_FROM_DATE = '2026-08-08' as const;
-export const HALAL_SPUS_MIN_FORWARD_SESSIONS = 504;
-export const HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS = 100;
-export const HALAL_SPUS_MANIFEST_CONFIG_HASH = '3346e72bf764368cb3a4eb5868c7b72f7bff56c1c799ebb936551ae59a393470' as const;
+/**
+ * QDR-9 amendment (2026-08-06, before the forward window opens): the original 504-session / 100-
+ * observation window had a provably EMPTY acceptance set — clearing DSR > 0.95 there needed an
+ * annualized Sharpe of 3.13 while Sharpe > 3.00 trips the implausibility flag. The window is sized
+ * by the power solver at the declared effect size (annualized Sharpe 0.80, confirmatory N = 1):
+ * 216 non-overlapping five-session observations, i.e. 217 whole five-session blocks of sessions.
+ * These constants are cross-checked against the sealed manifest in the test file — if the
+ * preregistration moves and these do not, that test fails.
+ */
+export const HALAL_SPUS_MIN_FORWARD_SESSIONS = 1085;
+export const HALAL_SPUS_MIN_FIVE_SESSION_OBSERVATIONS = 216;
+export const HALAL_SPUS_MANIFEST_CONFIG_HASH = 'e2f9fe4d20ce06b95002fffb6cf3979a96f1b514776f51b96d48b70665dd15c7' as const;
 
 export const HalalSpusVolManagedBetaParamsSchema = z.object({
   version: z.literal('v1'),

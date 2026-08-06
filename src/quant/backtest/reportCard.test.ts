@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stableConfigHash } from './experimentProtocol';
 import type { BacktestMetrics } from './metrics';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type AssembleArgs } from './reportCard';
@@ -81,6 +82,30 @@ describe('terminal validation report card', () => {
     const rendered = renderReportCard(assembleReportCard(args({ trialCount })), false);
 
     expect(rendered).toContain('DSR trial count:      99 family-wide (9 local plateau');
+    expect(rendered).toContain('DSR trial tier:       EXPLORATORY (fail-closed) — unproved: SEALED_CONFIG_HASH_VERIFIED');
+  });
+
+  it('makes a confirmatory N=1 deflation visible next to the DSR line', () => {
+    const sealedConfig = { setup: 'halal-spus-vol-managed-beta', seed: 42 };
+    const trialCount = trialCountEvidence('halal-spus-vol-managed-beta', 108, {
+      config: sealedConfig,
+      configHash: stableConfigHash(sealedConfig),
+      historicalMode: 'FORWARD_ONLY_NO_HISTORICAL_FULL',
+      diagnosticRuns: 0,
+      sealedAt: '2026-08-06T12:00:00.000Z',
+      forwardBoundary: '2026-08-07T20:00:00.000Z',
+      earliestObservation: '2026-08-14T20:00:00.000Z',
+      terminalEvaluations: 1,
+    });
+    const card = assembleReportCard(args({ trialCount }));
+    const rendered = renderReportCard(card, false);
+
+    expect(card.trialCount).toMatchObject({ tier: 'CONFIRMATORY', familyTrials: 1 });
+    expect(rendered).toContain('DSR trial count:      1 confirmatory (108 local plateau');
+    expect(rendered).toContain('DSR trial tier:       CONFIRMATORY N=1 — all 6 structural conditions proved; exploratory fallback 108');
+    // The tier is evidence, not a gate: thresholds and reason-code ordering are untouched.
+    expect(card.checklist.deflatedSharpeOk).toBe(assembleReportCard(args()).checklist.deflatedSharpeOk);
+    expect(card.rejectionReasonCodes).toEqual(assembleReportCard(args()).rejectionReasonCodes);
   });
 
   it('emits ACCEPTED only when every actual gate passes and explains its limited meaning', () => {

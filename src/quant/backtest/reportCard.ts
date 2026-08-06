@@ -181,7 +181,17 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  Sharpe:               ${c.full.sharpe.toFixed(2)}   (OOS ${c.oos.sharpe.toFixed(2)})`);
   L.push(`  Deflated Sharpe:      ${c.full.deflatedSharpe.toFixed(3)}   (OOS ${c.oos.deflatedSharpe.toFixed(3)})`);
   if (c.trialCount) {
-    L.push(`  DSR trial count:      ${c.trialCount.familyTrials} family-wide (${c.trialCount.plateauTrials} local plateau; ${c.trialCount.method})`);
+    // QDR-9: the trial count is the single most consequential input to the DSR verdict, so the tier
+    // that produced it — and, when EXPLORATORY, exactly which structural conditions went unproved —
+    // must be readable off the card. No threshold or reason code depends on these lines.
+    const t = c.trialCount;
+    const confirmatory = t.tier === 'CONFIRMATORY';
+    const label = confirmatory ? 'confirmatory' : 'family-wide';
+    L.push(`  DSR trial count:      ${t.familyTrials} ${label} (${t.plateauTrials} local plateau; ${t.method})`);
+    L.push(paint(confirmatory
+      ? `  DSR trial tier:       CONFIRMATORY N=1 — all 6 structural conditions proved; exploratory fallback ${t.exploratoryFamilyTrials}`
+      : `  DSR trial tier:       EXPLORATORY (fail-closed) — unproved: ${t.confirmatoryFailures.join(', ') || 'none recorded'}`,
+    DIM));
   }
   L.push(`  Max Drawdown:         ${pct(c.full.maxDrawdown)}   Hit-rate: ${pct(c.full.hitRate)}`);
   L.push('──── measured daily-return distribution (no promised returns) ────');
