@@ -31,6 +31,10 @@ export {
 const D = Prisma.Decimal;
 const COMMISSION_BPS = 0.0010; // 0.10%
 const SLIPPAGE_BPS = 0.0005; // 0.05%
+/** What the engine ACTUALLY charges per side, in bps. QDR-10 criterion (d) compares a BETA lane's
+ *  sealed cost model against these — the card must report the charged cost, not the declared one. */
+export const ENGINE_COMMISSION_BPS_PER_SIDE = COMMISSION_BPS * 10_000;
+export const ENGINE_SLIPPAGE_BPS_PER_SIDE = SLIPPAGE_BPS * 10_000;
 
 export function normalizeSymbolAllowlist(
   symbolAllowlist?: readonly string[]

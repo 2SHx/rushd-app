@@ -79,7 +79,23 @@ import {
   nonOverlappingFiveSessionBookReturns,
   type HalalSpusVolManagedBetaParams,
 } from '../strategies/halalSpusVolManagedBeta';
+import {
+  alignFiveSessionBlocks,
+  annualizedFromBlocks,
+  betaGateDeclaration,
+  betaVsBenchmark,
+  realizedAnnualCostDragBps,
+  realizedAnnualTurnover,
+  sessionKey,
+} from './betaEvidence';
+import type { BetaCriteriaInput } from './betaCriteria';
+import { productClassFromConfig } from './gatePower';
+import { computeCaptureRatios } from './metrics';
+import { ENGINE_COMMISSION_BPS_PER_SIDE, ENGINE_SLIPPAGE_BPS_PER_SIDE } from './portfolioEngine';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
+
+/** QDR-10: the BETA lanes benchmark against the real, investable, VERIFIED_COMPLIANT halal fund. */
+const BETA_BENCHMARK_SYMBOL = 'SPUS';
 import { multiModeBookV2Policy, type MultiModeBookV2Params } from '../strategies/multiModeBookV2';
 import { multiModeBookV3Policy, type MultiModeBookV3Params } from '../strategies/multiModeBookV3';
 import { NVDA_FOCUS_UNIVERSE, nvdaFocusBookPolicy, type NvdaFocusParams } from '../strategies/nvdaFocus';
@@ -1566,6 +1582,10 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // Persist a truthful, compact learning comparison when both real ETF benchmark histories exist.
   // Legacy/missing data remains null; the UI must never synthesize a replacement curve.
   let comparison = null;
+  // QDR-10: the BETA criteria need benchmark closes keyed by session so blocks can be paired with
+  // the book's own. Populated only from real persisted bars — if the fetch fails this stays empty
+  // and a BETA run fails closed rather than scoring against a synthesized benchmark.
+  const benchmarkCloseBySession = new Map<string, number>();
   try {
     const { prisma } = await import('../../lib/prisma');
     const benchmarkRows = await prisma.marketBar.findMany({
@@ -1588,6 +1608,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           : []
       )),
     });
+    for (const row of benchmarkRows) {
+      if (row.symbol !== BETA_BENCHMARK_SYMBOL) continue;
+      const close = Number(row.close);
+      if (Number.isFinite(close) && close > 0) benchmarkCloseBySession.set(sessionKey(row.ts), close);
+    }
   } catch (err) {
     console.warn(`\x1b[33mHistorical benchmark comparison unavailable: ${(err as Error).message}\x1b[0m`);
   }
@@ -1720,9 +1745,57 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
     ?? ((isIntradayUnscreened || universeIsUnscreened) ? 'UNSCREENED_EXECUTION_BLOCKED' : shariaSnapshot.state);
 
+  // ── QDR-10 BETA evidence. Every figure below is MEASURED from this run's own series; the sealed
+  // config supplies only the thresholds to measure against. Absent or incomplete evidence yields
+  // `undefined`, and assembleReportCard then fails all BETA criteria closed rather than passing.
+  const productClass = productClassFromConfig(effectiveParams);
+  let betaEvidence: BetaCriteriaInput | undefined;
+  if (productClass === 'BETA') {
+    const gate = betaGateDeclaration(effectiveParams);
+    const bookPoints = sharedDailyCurve ?? [];
+    const aligned = alignFiveSessionBlocks(bookPoints, benchmarkCloseBySession);
+    if (aligned.droppedBlocks > 0) {
+      console.warn(`\x1b[33mBETA evidence: dropped ${aligned.droppedBlocks} block(s) with an incomplete benchmark — excluded from BOTH series\x1b[0m`);
+    }
+    if (gate && aligned.bookReturns.length >= 2) {
+      const captures = computeCaptureRatios(aligned.bookReturns, aligned.benchmarkReturns);
+      const years = aligned.bookReturns.length / gate.observationsPerYear;
+      const averageNav = bookPoints.length
+        ? bookPoints.reduce((sum, point) => sum + point.equity, 0) / bookPoints.length
+        : 0;
+      const turnover = realizedAnnualTurnover(
+        Number(sharedBookResult?.turnoverNotional.toString() ?? '0'), averageNav, years,
+      );
+      betaEvidence = {
+        observationReturns: validationReturns.riskReturns,
+        observationsPerYear: gate.observationsPerYear,
+        volCeiling: gate.volCeiling,
+        volFloor: gate.volFloor,
+        upCapture: captures.upCapture,
+        downCapture: captures.downCapture,
+        oosCagr: oos.cagr,
+        benchmarkCagr: annualizedFromBlocks(aligned.benchmarkReturns, gate.observationsPerYear),
+        betaVsBenchmark: betaVsBenchmark(aligned.bookReturns, aligned.benchmarkReturns),
+        sealedCostModel: gate.sealedCostModel,
+        realizedCostModel: {
+          commissionBpsPerSide: ENGINE_COMMISSION_BPS_PER_SIDE,
+          slippageBpsPerSide: ENGINE_SLIPPAGE_BPS_PER_SIDE,
+          advParticipationCap: DEFAULT_INTRADAY_LIMITS.liquidityAdvFraction,
+        },
+        realizedAnnualTurnover: turnover,
+        maxAnnualTurnover: gate.maxAnnualTurnover,
+        realizedAnnualCostDragBps: realizedAnnualCostDragBps(
+          turnover, ENGINE_COMMISSION_BPS_PER_SIDE, ENGINE_SLIPPAGE_BPS_PER_SIDE,
+        ),
+        maxAnnualCostDragBps: gate.maxAnnualCostDragBps,
+      };
+    }
+  }
+
   const card = {
     ...assembleReportCard({
       setup: setupId, symbols, universe: universeTag, periodPreset, from, to, dataFeed: feed, seed, gitSha: runGitSha,
+      productClass, ...(betaEvidence ? { betaEvidence } : {}),
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
