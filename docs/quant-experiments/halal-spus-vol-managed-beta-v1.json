@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-spus-vol-managed-beta",
+  "version": "v1",
+  "config": {
+    "setup": "halal-spus-vol-managed-beta",
+    "evidenceBoundary": "forward-only-after-2026-08-07T20:00:00.000Z",
+    "historicalMode": "FORWARD_ONLY_NO_HISTORICAL_FULL",
+    "terminalEligible": false,
+    "seed": 42,
+    "universe": {
+      "tradable": [
+        "SPUS"
+      ],
+      "reserve": "non-interest-bearing-cash",
+      "membership": "fixed-fund-no-constituent-selection",
+      "shorting": false,
+      "leverage": false,
+      "margin": false
+    },
+    "signal": {
+      "decisionCadence": "every-fifth-completed-SPUS-session-after-close",
+      "fill": "next-observed-open",
+      "volatilityEstimator": "population-stdev-close-to-close-log-returns-annualized-sqrt252",
+      "volatilityLookbackSessions": 42,
+      "targetAnnualVolatility": 0.1,
+      "targetWeight": "min(1,targetAnnualVolatility/realizedAnnualVolatility)",
+      "insufficientHistory": "100-percent-cash",
+      "zeroVolatility": "100-percent-cash"
+    },
+    "portfolio": {
+      "maxGrossFraction": 1,
+      "maxOpenPositions": 1,
+      "perFundCap": 1,
+      "longOnlyCash": true
+    },
+    "execution": {
+      "commissionBpsPerSide": 10,
+      "slippageBpsPerSide": 5,
+      "advParticipationCap": 0.05,
+      "distributionPolicy": "credit-only-when-effective-and-receip-backed",
+      "corporateActionPolicy": "split-adjustment-must-be-effective-and-receipt-backed"
+    },
+    "validation": {
+      "mode": "never-inspected-forward-only",
+      "forwardStart": "2026-08-07T20:00:00.000Z",
+      "minimumTradingSessions": 504,
+      "observationUnit": "non-overlapping-five-session-book-return",
+      "minimumOosObservations": 100,
+      "oosFraction": 1,
+      "relatedFamilyTrials": 108,
+      "minimumOosDsr": 0.95,
+      "maximumMonteCarloP95Drawdown": 0.3,
+      "maximumRiskOfRuin": 0.05,
+      "maximumPlausibleSharpe": 3,
+      "profitPlateauRequired": true,
+      "pointInTimeFundShariaRequired": true,
+      "fundLifecycleCoverageRequired": true,
+      "replayRequired": true
+    },
+    "plateau": {
+      "volatilityLookbackSessions": [
+        21,
+        42,
+        63
+      ],
+      "targetAnnualVolatility": [
+        0.08,
+        0.1,
+        0.12
+      ],
+      "center": {
+        "volatilityLookbackSessions": 42,
+        "targetAnnualVolatility": 0.1
+      },
+      "variants": 9
+    },
+    "hypothesis": {
+      "mechanism": "scale fixed broad halal equity beta down when realized volatility rises because volatility clusters more strongly than expected return",
+      "predictedCagr": "positive-but-modest-and-lower-than-fast-momentum",
+      "predictedOosDsr": "greater-than-0.931",
+      "predictedMonteCarloP95Drawdown": "less-than-0.30"
+    },
+    "performanceInspection": "forbidden-before-504-forward-sessions-and-independent-ready-to-run"
+  },
+  "configHash": "3346e72bf764368cb3a4eb5868c7b72f7bff56c1c799ebb936551ae59a393470",
+  "state": "SEALED",
+  "actors": {
+    "director": "quant-research-director"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}
