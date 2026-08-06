@@ -14,6 +14,8 @@
 // real `computeMetrics` output (agreement within 0.01 DSR) as the anchor test. If metrics.ts ever
 // exports them, delete these copies and import instead.
 
+import { volatilityBandFeasible } from './betaCriteria';
+
 /** Euler-Mascheroni gamma — identical constant to the one metrics.ts uses inside deflatedSharpe. */
 export const EULER_MASCHERONI = 0.5772156649015329;
 
@@ -137,7 +139,38 @@ export function minimumObservationsForDsr(
   return n <= searchCeiling ? n : null;
 }
 
+/** QDR-10 product class. ABSENT ⇒ 'ALPHA' — fail-closed to the strictest gate. */
+export type ProductClass = 'ALPHA' | 'BETA';
+
+/** Measured calibration floor: n=156 ⇒ 87.1% convexity power, n=208 ⇒ 92.1% (QDR-10 Rationale). */
+export const BETA_MIN_CONVEXITY_OBSERVATIONS = 156;
+/** QDR-10 sets a HARD power gate for BETA where ALPHA deliberately has none. */
+export const BETA_MIN_CONVEXITY_POWER = 0.85;
+
+export interface BetaGateSpec {
+  readonly productClass: 'BETA';
+  readonly observations: number;
+  readonly observationsPerYear: number;
+  readonly trials: number;
+  readonly fallbackTrials: number | null;
+  readonly benchmarkSymbol: string;
+  readonly targetAnnualVol: number;
+  readonly volCeiling: number;
+  readonly volFloor: number;
+  readonly hypothesizedBeta: number;
+  readonly maxAnnualTurnover: number;
+  readonly maxAnnualCostDragBps: number;
+  /**
+   * Power on criterion (c1) convexity at the reserved window, established by the research director's
+   * simulation under THIS lane's own benchmark model. QDR-10 forbids deriving it from the
+   * log-variance closed form (measured materially optimistic), so the seal verifies the declared
+   * figure and its consistency with the measured calibration — it does not simulate.
+   */
+  readonly declaredConvexityPower: number;
+}
+
 export interface GateSpec {
+  readonly productClass?: 'ALPHA';
   /** DSR the OOS evidence must strictly exceed (the frozen 0.95 gate). */
   readonly requiredDsr: number;
   /** Annualized Sharpe at/above which the run is auto-flagged implausible (the frozen 3.0). */
@@ -152,7 +185,13 @@ export interface GateSpec {
   readonly hypothesizedAnnualSharpe: number;
 }
 
-export type GateFeasibilityVerdict = 'FEASIBLE' | 'EMPTY_ACCEPTANCE_SET' | 'EMPTY_FALLBACK_ACCEPTANCE_SET' | 'UNDERPOWERED';
+export type GateFeasibilityVerdict =
+  | 'FEASIBLE'
+  | 'EMPTY_ACCEPTANCE_SET'
+  | 'EMPTY_FALLBACK_ACCEPTANCE_SET'
+  | 'UNDERPOWERED'
+  | 'EMPTY_BETA_VOLATILITY_BAND'
+  | 'UNDERPOWERED_BETA_CONVEXITY';
 
 export interface GateFeasibility {
   readonly verdict: GateFeasibilityVerdict;
@@ -166,6 +205,15 @@ export interface GateFeasibility {
   readonly requiredObservations: number | null;
   /** Annualized Sharpe the declared window needs to clear the gate at the declared tier. */
   readonly requiredAnnualSharpe: number | null;
+  readonly detail: string;
+}
+
+export interface BetaGateFeasibility {
+  readonly verdict: GateFeasibilityVerdict;
+  /** Is a realized outcome that satisfies criterion (a) possible at the reserved window at all? */
+  readonly volatilityBandAchievable: boolean;
+  readonly declaredConvexityPower: number;
+  readonly minimumConvexityObservations: number;
   readonly detail: string;
 }
 
@@ -215,7 +263,79 @@ export function assertGateSpec(spec: GateSpec): void {
  *  2. POWER — the effect size the director actually predicts must clear the gate over the declared
  *     window. If it cannot, the experiment can only "succeed" by luck or by a Sharpe nobody claims.
  */
-export function assessGateFeasibility(spec: GateSpec): GateFeasibility {
+export function assessGateFeasibility(spec: GateSpec): GateFeasibility;
+export function assessGateFeasibility(spec: BetaGateSpec): BetaGateFeasibility;
+export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasibility | BetaGateFeasibility;
+export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasibility | BetaGateFeasibility {
+  if (spec.productClass === 'BETA') return assessBetaGateFeasibility(spec);
+  return assessAlphaGateFeasibility(spec);
+}
+
+/**
+ * QDR-10 BETA seal assertions. Feasibility: a band whose ceiling is at or below its floor — or whose
+ * ceiling the floor's own 95% upper bound cannot fit under at the reserved n — has a provably empty
+ * acceptance set. Power: BETA carries a HARD ≥85% power gate on the binding convexity criterion.
+ * The simulation that establishes that power is the research director's, per lane, under the lane's
+ * own benchmark model; the seal verifies the declared figure is present, meets the bar, and is
+ * consistent with the measured calibration floor (n=156 ⇒ 87.1%). It never simulates here.
+ */
+export function assessBetaGateFeasibility(spec: BetaGateSpec): BetaGateFeasibility {
+  assertBetaGateSpec(spec);
+  const achievable = volatilityBandFeasible(spec.volFloor, spec.volCeiling, spec.observations);
+  const base = {
+    volatilityBandAchievable: achievable,
+    declaredConvexityPower: spec.declaredConvexityPower,
+    minimumConvexityObservations: BETA_MIN_CONVEXITY_OBSERVATIONS,
+  };
+  if (!achievable) {
+    return {
+      ...base,
+      verdict: 'EMPTY_BETA_VOLATILITY_BAND',
+      detail: `BETA acceptance set is empty: volFloor ${spec.volFloor} / volCeiling ${spec.volCeiling} at n=`
+        + `${spec.observations} leaves no realized volatility whose one-sided 95% upper bound fits under the ceiling`,
+    };
+  }
+  if (spec.declaredConvexityPower < BETA_MIN_CONVEXITY_POWER
+    || spec.observations < BETA_MIN_CONVEXITY_OBSERVATIONS) {
+    return {
+      ...base,
+      verdict: 'UNDERPOWERED_BETA_CONVEXITY',
+      detail: `BETA convexity power ${spec.declaredConvexityPower} over n=${spec.observations} misses the `
+        + `>= ${BETA_MIN_CONVEXITY_POWER} gate at the measured calibration floor of `
+        + `${BETA_MIN_CONVEXITY_OBSERVATIONS} observations (n=156 ⇒ 87.1%, n=208 ⇒ 92.1%)`,
+    };
+  }
+  return { ...base, verdict: 'FEASIBLE', detail: 'BETA volatility band achievable and convexity-powered at the reserved window' };
+}
+
+export function assertBetaGateSpec(spec: BetaGateSpec): void {
+  const positives: [string, number][] = [
+    ['targetAnnualVol', spec.targetAnnualVol],
+    ['volCeiling', spec.volCeiling],
+    ['volFloor', spec.volFloor],
+    ['hypothesizedBeta', spec.hypothesizedBeta],
+    ['maxAnnualTurnover', spec.maxAnnualTurnover],
+  ];
+  for (const [key, value] of positives) {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`${key} must be a positive number`);
+  }
+  if (!Number.isFinite(spec.maxAnnualCostDragBps) || spec.maxAnnualCostDragBps < 0) {
+    throw new Error('maxAnnualCostDragBps must be a non-negative number');
+  }
+  if (!spec.benchmarkSymbol.trim()) throw new Error('benchmarkSymbol is required for a BETA preregistration');
+  if (!Number.isFinite(spec.declaredConvexityPower)
+    || spec.declaredConvexityPower <= 0 || spec.declaredConvexityPower > 1) {
+    throw new Error('declaredConvexityPower must be inside (0,1]');
+  }
+  if (!Number.isInteger(spec.observations) || spec.observations < 2) {
+    throw new Error('observations must be an integer >= 2');
+  }
+  if (!Number.isFinite(spec.observationsPerYear) || spec.observationsPerYear <= 0) {
+    throw new Error('observationsPerYear must be a positive number');
+  }
+}
+
+function assessAlphaGateFeasibility(spec: GateSpec): GateFeasibility {
   assertGateSpec(spec);
   const point = {
     observations: spec.observations,
@@ -277,7 +397,11 @@ export function assessGateFeasibility(spec: GateSpec): GateFeasibility {
  * NONE appears the manifest declares no numeric gate and seals unchecked — that keeps older
  * manifests whose `validation` block only describes a fold scheme sealing exactly as before.
  */
-const GATE_KEYS = ['minimumOosDsr', 'maximumPlausibleSharpe', 'minimumOosObservations', 'hypothesizedAnnualSharpe'] as const;
+const GATE_KEYS = [
+  'minimumOosDsr', 'maximumPlausibleSharpe', 'minimumOosObservations', 'hypothesizedAnnualSharpe',
+  // QDR-10: declaring a product class (or any BETA band key) is itself a declaration of a gate.
+  'productClass', 'benchmarkSymbol', 'targetAnnualVol', 'volCeiling', 'volFloor',
+] as const;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -315,8 +439,38 @@ function trialsFromValidation(validation: Record<string, unknown>): { trials: nu
   return { trials: 1, fallbackTrials: Number(family) };
 }
 
-/** Read a GateSpec out of a free-form manifest config; null when no DSR gate is declared. */
-export function gateSpecFromConfig(config: unknown): GateSpec | null {
+/**
+ * QDR-10: the class is read from the SEALED config and absence resolves to ALPHA, the strictest
+ * gate. Because it lives in `config`, it is inside `stableConfigHash` — mutating it after seal
+ * breaks hash recomputation and fails QDR-9 confirmatory condition (a). That hash, not reviewer
+ * diligence, is the anti-gate-shopping guardrail.
+ */
+export function productClassFromConfig(config: unknown): ProductClass {
+  const root = record(config);
+  const validation = root ? record(root.validation) : null;
+  const declared = validation?.productClass;
+  if (declared === undefined || declared === null) return 'ALPHA';
+  if (declared !== 'ALPHA' && declared !== 'BETA') {
+    throw new Error("config.validation.productClass must be 'ALPHA' or 'BETA'");
+  }
+  return declared;
+}
+
+function requireString(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`config.validation.${key} must be a non-empty string when a BETA gate is declared`);
+  }
+  return value;
+}
+
+/**
+ * Read a gate spec out of a free-form manifest config; null when no gate is declared at all.
+ * A BETA block does NOT require the DSR keys: QDR-10 makes DSR a reported figure for that class,
+ * never a gate, so demanding `hypothesizedAnnualSharpe` from a lane that is forbidden to claim an
+ * edge would be incoherent. Present-but-incomplete still throws, per class.
+ */
+export function gateSpecFromConfig(config: unknown): GateSpec | BetaGateSpec | null {
   const root = record(config);
   const validation = root ? record(root.validation) : null;
   if (!validation) return null;
@@ -327,6 +481,24 @@ export function gateSpecFromConfig(config: unknown): GateSpec | null {
     throw new Error('config.validation.minimumOosObservations must be an integer >= 2 when a DSR gate is declared');
   }
   const { trials, fallbackTrials } = trialsFromValidation(validation);
+  if (productClassFromConfig(config) === 'BETA') {
+    const targetAnnualVol = requireNumber(validation, 'targetAnnualVol');
+    return {
+      productClass: 'BETA',
+      observations: Number(observations),
+      observationsPerYear: requireNumber(validation, 'observationsPerYear'),
+      trials,
+      fallbackTrials,
+      benchmarkSymbol: requireString(validation, 'benchmarkSymbol'),
+      targetAnnualVol,
+      volCeiling: requireNumber(validation, 'volCeiling'),
+      volFloor: requireNumber(validation, 'volFloor'),
+      hypothesizedBeta: requireNumber(validation, 'hypothesizedBeta'),
+      maxAnnualTurnover: requireNumber(validation, 'maxAnnualTurnover'),
+      maxAnnualCostDragBps: requireNumber(validation, 'maxAnnualCostDragBps'),
+      declaredConvexityPower: requireNumber(validation, 'declaredConvexityPower'),
+    };
+  }
   return {
     requiredDsr: requireNumber(validation, 'minimumOosDsr'),
     sharpeCeiling: requireNumber(validation, 'maximumPlausibleSharpe'),

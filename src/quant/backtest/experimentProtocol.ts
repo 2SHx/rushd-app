@@ -1,9 +1,23 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { assessGateFeasibility, gateSpecFromConfig } from './gatePower';
+import { assessGateFeasibility, gateSpecFromConfig, productClassFromConfig } from './gatePower';
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+/**
+ * QDR-10: terminal labels are class-scoped. ALPHA ends 'ACCEPTED'/'REJECTED' exactly as before;
+ * BETA ends 'ACCEPTED_BETA'/'REJECTED_BETA' and can never emit the bare labels. Still exactly two
+ * terminal outcomes per class — QDR-7's binary finalization rule is preserved verbatim.
+ */
+export const TERMINAL_STATUSES = ['ACCEPTED', 'REJECTED', 'ACCEPTED_BETA', 'REJECTED_BETA'] as const;
+export type TerminalStatus = typeof TERMINAL_STATUSES[number];
+
+const isAcceptedStatus = (status: TerminalStatus): boolean =>
+  status === 'ACCEPTED' || status === 'ACCEPTED_BETA';
+const isTerminalState = (state: string): boolean => (TERMINAL_STATUSES as readonly string[]).includes(state);
+const statusProductClass = (status: TerminalStatus): 'ALPHA' | 'BETA' =>
+  status.endsWith('_BETA') ? 'BETA' : 'ALPHA';
 
 export type ExperimentState =
   | 'DRAFT'
@@ -11,8 +25,7 @@ export type ExperimentState =
   | 'CODIFIED'
   | 'QA_PASS'
   | 'FULL_CLAIMED'
-  | 'ACCEPTED'
-  | 'REJECTED';
+  | TerminalStatus;
 
 export const EXPERIMENT_REJECTION_REASON_CODES = [
   'INSUFFICIENT_SAMPLE',
@@ -44,12 +57,12 @@ export interface ExperimentManifest {
   diagnosticRuns: number;
   fullRun: null | {
     outcome: 'FULL' | 'FAILURE';
-    status: 'ACCEPTED' | 'REJECTED';
+    status: TerminalStatus;
     reasonCodes: ExperimentRejectionReasonCode[];
     evidencePath?: string;
   };
   terminal: null | {
-    status: 'ACCEPTED' | 'REJECTED';
+    status: TerminalStatus;
     outcome: 'FULL' | 'FAILURE' | 'ABANDONED';
     reasonCodes: ExperimentRejectionReasonCode[];
     evidencePath?: string;
@@ -65,7 +78,7 @@ export interface DraftInput {
 
 export interface FinalizeExperimentInput {
   runKind: 'DIAGNOSTIC' | 'FULL' | 'FAILURE' | 'ABANDONED';
-  status: 'ACCEPTED' | 'REJECTED';
+  status: TerminalStatus;
   auditor: string;
   reasonCodes: ExperimentRejectionReasonCode[];
   evidencePath?: string;
@@ -116,7 +129,7 @@ function isExperimentManifest(value: unknown): value is ExperimentManifest {
   return candidate.schemaVersion === 1
     && typeof candidate.setupId === 'string'
     && typeof candidate.version === 'string'
-    && ['DRAFT', 'SEALED', 'CODIFIED', 'QA_PASS', 'FULL_CLAIMED', 'ACCEPTED', 'REJECTED']
+    && ['DRAFT', 'SEALED', 'CODIFIED', 'QA_PASS', 'FULL_CLAIMED', ...TERMINAL_STATUSES]
       .includes(String(candidate.state))
     && typeof candidate.actors === 'object'
     && candidate.actors !== null
@@ -152,6 +165,19 @@ export function assertGateFeasibleAtSeal(manifest: ExperimentManifest): void {
   const feasibility = assessGateFeasibility(spec);
   if (feasibility.verdict === 'FEASIBLE') return;
   throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: ${feasibility.verdict} — ${feasibility.detail}`);
+}
+
+/**
+ * QDR-10: the terminal label must match the class sealed into the config. A BETA version can never
+ * emit a bare 'ACCEPTED'/'REJECTED', and an ALPHA version can never borrow a BETA label to soften a
+ * verdict. Class is read from the sealed config (absent ⇒ ALPHA), so this is hash-anchored.
+ */
+export function assertStatusMatchesSealedClass(manifest: ExperimentManifest, status: TerminalStatus): void {
+  const sealed = productClassFromConfig(manifest.config);
+  const labelled = statusProductClass(status);
+  if (sealed !== labelled) {
+    throw new Error(`${sealed}-class experiment cannot close as ${status}`);
+  }
 }
 
 export function sealExperiment(manifest: ExperimentManifest): ExperimentManifest {
@@ -202,7 +228,7 @@ export async function readManifest(filePath: string): Promise<ExperimentManifest
 export async function claimFull(filePath: string, runner: string): Promise<ExperimentManifest> {
   const manifest = await readManifest(filePath);
   if (manifest.state !== 'QA_PASS') {
-    if (['FULL_CLAIMED', 'ACCEPTED', 'REJECTED'].includes(manifest.state)) {
+    if (manifest.state === 'FULL_CLAIMED' || isTerminalState(manifest.state)) {
       throw new Error('FULL already claimed for this setup/version');
     }
     throw new Error(`FULL claim requires QA_PASS, found ${manifest.state}`);
@@ -282,9 +308,10 @@ export async function recordFullResult(
   if (result.outcome === 'FULL' && !result.evidencePath?.trim()) {
     throw new Error('Completed FULL result requires an evidence path');
   }
-  if (result.outcome === 'FAILURE' && result.status !== 'REJECTED') {
+  if (result.outcome === 'FAILURE' && isAcceptedStatus(result.status)) {
     throw new Error('Failed FULL result must be REJECTED');
   }
+  assertStatusMatchesSealedClass(manifest, result.status);
   const receiptPath = `${filePath}.full-result`;
   let receiptHandle;
   try {
@@ -313,9 +340,10 @@ export async function finalizeExperiment(
 ): Promise<ExperimentManifest> {
   if (input.runKind === 'DIAGNOSTIC') throw new Error('Diagnostic runs cannot terminalize');
   const manifest = await readManifest(filePath);
-  if (manifest.state === 'ACCEPTED' || manifest.state === 'REJECTED') {
+  if (isTerminalState(manifest.state)) {
     throw new Error('Terminal verdict already recorded');
   }
+  assertStatusMatchesSealedClass(manifest, input.status);
   if (input.runKind === 'ABANDONED' && !['QA_PASS', 'FULL_CLAIMED'].includes(manifest.state)) {
     throw new Error(`Cannot abandon experiment from ${manifest.state}`);
   }
@@ -339,16 +367,16 @@ export async function finalizeExperiment(
       throw new Error('Auditor finalization must match the recorded FULL result');
     }
   }
-  if ((input.runKind === 'FAILURE' || input.runKind === 'ABANDONED') && input.status !== 'REJECTED') {
+  if ((input.runKind === 'FAILURE' || input.runKind === 'ABANDONED') && isAcceptedStatus(input.status)) {
     throw new Error(`${input.runKind} must close as REJECTED`);
   }
   if (input.runKind === 'FULL' && !input.evidencePath?.trim()) {
     throw new Error('FULL closure requires a terminal evidence path');
   }
-  if (input.status === 'ACCEPTED' && input.reasonCodes.length) {
+  if (isAcceptedStatus(input.status) && input.reasonCodes.length) {
     throw new Error('ACCEPTED must not have rejection reason codes');
   }
-  if (input.status === 'REJECTED' && !input.reasonCodes.length) {
+  if (!isAcceptedStatus(input.status) && !input.reasonCodes.length) {
     throw new Error('REJECTED requires at least one reason code');
   }
 

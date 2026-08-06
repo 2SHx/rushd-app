@@ -3,6 +3,8 @@
 // and renders it as a compact terminal table. Every claim carries a dataFeed label; an
 // implausible flag (Sharpe > 3 or a daily-return claim ≥ 3σ of history) prints in RED.
 // Pure formatting — no DB, no LLM, no randomness.
+import { evaluateBetaCriteria, type BetaCriteriaInput, type BetaCriteriaResult, type BetaCriterionCode, BETA_CRITERION_CODES } from './betaCriteria';
+import type { ProductClass } from './gatePower';
 import type { BacktestMetrics } from './metrics';
 import type { DailyReturnDistribution } from './distribution';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
@@ -14,7 +16,22 @@ export const MIN_TRADES_FOR_VALIDATION = 100;
 /** Versioned QDR-7 default: at most 5% of bootstrap paths may reach the ruin threshold. */
 export const DEFAULT_MAX_RISK_OF_RUIN = 0.05;
 
-export type TerminalValidationStatus = 'ACCEPTED' | 'REJECTED';
+/**
+ * QDR-10 widens the terminal labels so a beta admission can never be read as an alpha result.
+ * ALPHA keeps 'ACCEPTED'/'REJECTED' byte-identically; a BETA version can NEVER emit bare 'ACCEPTED'.
+ */
+export type TerminalValidationStatus = 'ACCEPTED' | 'REJECTED' | 'ACCEPTED_BETA' | 'REJECTED_BETA';
+
+/** QDR-10 verbatim card copy. A BETA version may make no alpha claim anywhere. */
+export const BETA_DSR_ANNOTATION = 'reported, not a gate; this version makes no edge claim';
+export const BETA_HONEST_TRADE_LINE =
+  'HONEST TRADE: this book surrenders roughly 30% of upside to buy the drawdown reduction.';
+export const BETA_NO_EDGE_DISCLAIMER =
+  'ACCEPTED_BETA has NOT been shown to have an edge: it delivers market exposure within a declared '
+  + 'volatility band, with bounded drawdown, favorable capture convexity, and honest costs.';
+export const BETA_NEGATIVE_WINDOW_LINE = 'delivered a negative return over the tested window; the benchmark did too';
+// Arabic counterparts live with the UI copy (messages/*.json) and are gated by i18n-fintech-expert
+// review per QDR-10; the terminal card is an operator artifact and stays English-only, as today.
 export type ShariaValidationState =
   | 'VERIFIED_COMPLIANT'
   | 'VERIFIED_NON_COMPLIANT'
@@ -72,6 +89,11 @@ export interface ReportCard {
   acceptanceMeaning: 'AUTO_PAPER_ADMISSION_ONLY';
   riskOfRuinLimit: number;
   trialCount?: TrialCountEvidence;
+  /** QDR-10 class this version was SEALED as; absent input resolves to 'ALPHA' (strictest). */
+  productClass: ProductClass;
+  /** BETA only: which of the four criteria failed. Empty array = all four passed. */
+  betaCriterionFailures?: BetaCriterionCode[];
+  betaSummary?: BetaCriteriaResult;
 }
 
 export interface AssembleArgs {
@@ -102,6 +124,13 @@ export interface AssembleArgs {
   dataQualityPitOk?: boolean;
   reproducible?: boolean;
   trialCount?: TrialCountEvidence;
+  /** QDR-10: absent ⇒ 'ALPHA'. Read from the SEALED config by the caller, never chosen at runtime. */
+  productClass?: ProductClass;
+  /**
+   * BETA evidence for criteria (a), (c) and (d). A BETA card WITHOUT it fails closed: all four
+   * criteria are recorded as failed rather than silently passing an unevaluated gate.
+   */
+  betaEvidence?: BetaCriteriaInput;
 }
 
 export function assembleReportCard(a: AssembleArgs): ReportCard {
@@ -126,10 +155,26 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
   };
   const implausible = a.full.implausible || a.oos.implausible;
   const shariaState = a.shariaState ?? 'UNVERIFIED';
+  // QDR-10: class is sealed, not chosen here; absence resolves to ALPHA, the strictest gate.
+  const productClass: ProductClass = a.productClass ?? 'ALPHA';
+  const isBeta = productClass === 'BETA';
+  // A BETA card with no evidence fails closed on all four criteria — never silently passes.
+  const betaSummary = isBeta && a.betaEvidence ? evaluateBetaCriteria(a.betaEvidence) : undefined;
+  const betaCriterionFailures: BetaCriterionCode[] | undefined = isBeta
+    ? (betaSummary ? [...betaSummary.failures] : [...BETA_CRITERION_CODES])
+    : undefined;
+
   const rejectionReasonCodes: RejectionReasonCode[] = [];
   if (!enoughTrades) rejectionReasonCodes.push('INSUFFICIENT_SAMPLE');
-  if (!checklist.walkForward || !checklist.oosHoldoutOk || a.oos.cagr <= 0) rejectionReasonCodes.push('OOS_FAILURE');
-  if (!checklist.deflatedSharpeOk) rejectionReasonCodes.push('DSR_FAILURE');
+  // (c3) the ABSOLUTE positive-CAGR demand does not apply to BETA — it is an alpha demand in
+  // disguise; the beta-scaled shortfall test inside the criteria replaces it. Walk-forward and the
+  // OOS holdout percentage are byte-identical for both classes.
+  const oosFailure = isBeta
+    ? !checklist.walkForward || !checklist.oosHoldoutOk || (betaCriterionFailures?.length ?? 0) > 0
+    : !checklist.walkForward || !checklist.oosHoldoutOk || a.oos.cagr <= 0;
+  if (oosFailure) rejectionReasonCodes.push('OOS_FAILURE');
+  // DSR is REPORTED for BETA and is never a gate for it; deflatedSharpeOk itself is untouched.
+  if (!isBeta && !checklist.deflatedSharpeOk) rejectionReasonCodes.push('DSR_FAILURE');
   if (!mcMaxDDWithinBreaker || !mcRiskOfRuinWithinLimit) rejectionReasonCodes.push('DRAWDOWN_RISK_FAILURE');
   if (implausible) rejectionReasonCodes.push('IMPLAUSIBLE_RESULT');
   if (!checklist.profitPlateau) rejectionReasonCodes.push('NO_PROFIT_PLATEAU_OVERFIT');
@@ -139,9 +184,15 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
   }
   if (!checklist.dataQualityPitOk) rejectionReasonCodes.push('DATA_QUALITY_PIT_FAILURE');
   if (!checklist.reproducible) rejectionReasonCodes.push('REPRODUCIBILITY_FAILURE');
-  const status: TerminalValidationStatus = rejectionReasonCodes.length === 0 ? 'ACCEPTED' : 'REJECTED';
+  const accepted = rejectionReasonCodes.length === 0;
+  const status: TerminalValidationStatus = isBeta
+    ? (accepted ? 'ACCEPTED_BETA' : 'REJECTED_BETA')
+    : (accepted ? 'ACCEPTED' : 'REJECTED');
 
   return {
+    productClass,
+    ...(betaCriterionFailures ? { betaCriterionFailures } : {}),
+    ...(betaSummary ? { betaSummary } : {}),
     setup: a.setup, symbols: a.symbols, universe: a.universe ?? 'custom',
     periodPreset: a.periodPreset ?? 'CUSTOM', from: a.from, to: a.to, dataFeed: a.dataFeed,
     seed: a.seed, gitSha: a.gitSha, full: a.full, oos: a.oos, distribution: a.distribution,
@@ -172,6 +223,9 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  ${symbolsLine}  |  ${c.from} → ${c.to}`);
   L.push(paint(`  universe=${c.universe}  periodPreset=${c.periodPreset}`, DIM));
   L.push(paint(`  dataFeed=${c.dataFeed}  seed=${c.seed}  gitSha=${c.gitSha}`, DIM));
+  if (c.productClass === 'BETA') {
+    L.push(paint('  productClass=BETA — risk-managed market exposure; this version makes no edge claim', YELLOW));
+  }
   if (c.periodPreset !== 'FULL' && c.periodPreset !== 'CUSTOM') {
     L.push(paint('  NOTE: shorter-preset run — EVIDENCE VIEW only; ACCEPTED verdicts bind to FULL period', YELLOW));
   }
@@ -180,6 +234,7 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  CAGR:                 ${pct(c.full.cagr)}   (OOS ${pct(c.oos.cagr)})`);
   L.push(`  Sharpe:               ${c.full.sharpe.toFixed(2)}   (OOS ${c.oos.sharpe.toFixed(2)})`);
   L.push(`  Deflated Sharpe:      ${c.full.deflatedSharpe.toFixed(3)}   (OOS ${c.oos.deflatedSharpe.toFixed(3)})`);
+  if (c.productClass === 'BETA') L.push(paint(`                        ${BETA_DSR_ANNOTATION}`, YELLOW));
   if (c.trialCount) {
     // QDR-9: the trial count is the single most consequential input to the DSR verdict, so the tier
     // that produced it — and, when EXPLORATORY, exactly which structural conditions went unproved —
@@ -208,6 +263,23 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
   L.push(`  Sign-permutation p:   ${c.permutation.pValue.toFixed(3)}  (observed mean ${pct(c.permutation.observedMean)}; method=${c.permutation.method ?? 'sign-flip-legacy-unspecified'})`);
   L.push(`  Kelly fraction:       ${c.kellyFraction.toFixed(4)}  → clamped qty ${c.kellyClampedQty.toFixed(4)}`);
+  if (c.productClass === 'BETA') {
+    L.push('──── QDR-10 BETA criteria (this class is NOT gated on the alpha DSR test) ────');
+    const s = c.betaSummary;
+    if (s) {
+      L.push(`  Volatility band:      realized ${pct(s.realizedAnnualVolatility)} (95% upper bound ${pct(s.volatilityUpperBound95)})`);
+      L.push(`  Capture up/down:      ${s.upCapture.toFixed(3)} / ${s.downCapture.toFixed(3)}  (down/up ${s.captureRatio.toFixed(3)}; must be < 0.95)`);
+      L.push(`  Beta-scaled floor:    OOS CAGR ${pct(c.oos.cagr)} vs required ${pct(s.requiredCagr)}`);
+      L.push(`  Cost envelope:        turnover ${(s.turnoverRatio * 100).toFixed(1)}% of assumption; drag ${s.costDragBps.toFixed(1)} bps/yr`);
+      if (s.negativeWindowWithNegativeBenchmark) L.push(paint(`  ${BETA_NEGATIVE_WINDOW_LINE}`, YELLOW));
+    } else {
+      L.push(paint('  BETA evidence MISSING — all four criteria fail closed', RED));
+    }
+    const failures = c.betaCriterionFailures ?? [];
+    L.push(`  Criteria:             ${BETA_CRITERION_CODES.map((code) => `${code}:${yn(!failures.includes(code))}`).join('  ')}`);
+    L.push(paint(`  ${BETA_HONEST_TRADE_LINE}`, YELLOW));
+    L.push(paint(`  ${BETA_NO_EDGE_DISCLAIMER}`, YELLOW));
+  }
   L.push('──── promotion checklist (all required) ────');
   L.push(`  walk-forward:${yn(c.checklist.walkForward)}  OOS≥20% (${pct(c.checklist.oosHoldoutPct)}):${yn(c.checklist.oosHoldoutOk)}  trades≥100:${yn(c.checklist.enoughTrades)}`);
   L.push(`  deflated-Sharpe:${yn(c.checklist.deflatedSharpeOk)}  profit-plateau:${yn(c.checklist.profitPlateau)}  MC-maxDD≤breaker:${yn(c.checklist.mcMaxDDWithinBreaker)}`);
@@ -218,7 +290,7 @@ export function renderReportCard(c: ReportCard, color = true): string {
     L.push(paint('  ⚠ IMPLAUSIBLE: Sharpe > 3 or daily claim ≥ 3σ — treat as overfit/bug', RED));
   }
   L.push(`  Sharia state:         ${c.shariaState}`);
-  L.push(paint(`  STATUS: ${c.status}`, c.status === 'ACCEPTED' ? GREEN : RED));
+  L.push(paint(`  STATUS: ${c.status}`, c.status.startsWith('ACCEPTED') ? GREEN : RED));
   L.push(`  Rejection reasons:    ${c.rejectionReasonCodes.length ? c.rejectionReasonCodes.join(', ') : 'none'}`);
   L.push('  ACCEPTED = admission to AUTO_PAPER only; no profit promise or AUTO_REAL permission.');
   L.push('════════════════════════════════════════════════════════════════');

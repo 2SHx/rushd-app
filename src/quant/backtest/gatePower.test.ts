@@ -7,6 +7,8 @@ import {
   gateSpecFromConfig,
   inverseNormalCDF,
   minimumObservationsForDsr,
+  productClassFromConfig,
+  type BetaGateSpec,
   type GateSpec,
 } from './gatePower';
 import { computeMetrics, type EquityPoint } from './metrics';
@@ -132,9 +134,11 @@ describe('manifest gate specs', () => {
     const config = manifestConfig('halal-spus-vol-managed-beta-v1.json') as {
       validation: { minimumOosObservations: number; minimumTradingSessions: number };
     };
-    const spec = gateSpecFromConfig(config);
-    const feasibility = assessGateFeasibility(spec!);
+    const spec = gateSpecFromConfig(config) as GateSpec;
+    const feasibility = assessGateFeasibility(spec);
 
+    // No productClass in that manifest ⇒ ALPHA, the strictest gate (QDR-10).
+    expect(productClassFromConfig(config)).toBe('ALPHA');
     expect(spec).toMatchObject({ requiredDsr: 0.95, sharpeCeiling: 3, trials: 1, fallbackTrials: 108 });
     expect(feasibility.verdict).toBe('FEASIBLE');
     expect(feasibility.maxAttainableDsr).toBeGreaterThan(0.95);
@@ -150,6 +154,32 @@ describe('manifest gate specs', () => {
     expect(gateSpecFromConfig(manifestConfig('halal-causal-tcn-alpha-v1.json'))).toBeNull();
     expect(gateSpecFromConfig(manifestConfig('halal-residual-fast-momentum-core-v1.json'))).toBeNull();
     expect(gateSpecFromConfig({ validation: null })).toBeNull();
+  });
+
+  it('QDR-10: reads a BETA gate block without demanding the alpha DSR keys', () => {
+    const validation = {
+      minimumOosObservations: 208,
+      observationsPerYear: 252 / 5,
+      relatedFamilyTrials: 108,
+      productClass: 'BETA',
+      benchmarkSymbol: 'SPUS',
+      targetAnnualVol: 0.1,
+      volCeiling: 0.13,
+      volFloor: 0.06,
+      hypothesizedBeta: 0.62,
+      maxAnnualTurnover: 4,
+      maxAnnualCostDragBps: 60,
+      declaredConvexityPower: 0.921,
+    };
+    const spec = gateSpecFromConfig({ validation }) as BetaGateSpec;
+
+    expect(productClassFromConfig({ validation })).toBe('BETA');
+    expect(spec).toMatchObject({ productClass: 'BETA', benchmarkSymbol: 'SPUS', trials: 108 });
+    expect(assessGateFeasibility(spec)).toMatchObject({ verdict: 'FEASIBLE', volatilityBandAchievable: true });
+    expect(() => productClassFromConfig({ validation: { productClass: 'GAMMA' } })).toThrow(/productClass/);
+    expect(() => gateSpecFromConfig({ validation: { ...validation, volCeiling: undefined } })).toThrow(/volCeiling/);
+    expect(() => gateSpecFromConfig({ validation: { ...validation, declaredConvexityPower: undefined } }))
+      .toThrow(/declaredConvexityPower/);
   });
 
   it('throws rather than skipping when a declared gate is incomplete or malformed', () => {

@@ -15,6 +15,7 @@ import {
   recordFullResult,
   writeManifest,
 } from './experimentProtocol';
+import { trialCountEvidence } from './trialFamilies';
 
 const backtestMocks = vi.hoisted(() => ({ runLab: vi.fn() }));
 vi.mock('./runLab', async () => ({
@@ -257,6 +258,92 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     expect(() => sealExperiment(draftWith({
       ...GATE, minimumOosObservations: 100, trialTier: 'CONFIRMATORY', confirmatoryTrials: 1,
     }))).toThrow(/EMPTY_FALLBACK_ACCEPTANCE_SET/);
+  });
+
+  const BETA_GATE = {
+    minimumOosObservations: 208,
+    observationsPerYear: 252 / 5,
+    relatedFamilyTrials: 108,
+    productClass: 'BETA',
+    benchmarkSymbol: 'SPUS',
+    targetAnnualVol: 0.1,
+    volCeiling: 0.13,
+    volFloor: 0.06,
+    hypothesizedBeta: 0.62,
+    maxAnnualTurnover: 4,
+    maxAnnualCostDragBps: 60,
+    declaredConvexityPower: 0.921,
+  };
+
+  it('seals a well-formed BETA preregistration', () => {
+    const sealed = sealExperiment(draftWith(BETA_GATE));
+
+    expect(sealed.state).toBe('SEALED');
+    expect(sealed.configHash).toBe(stableConfigHash(sealed.config));
+  });
+
+  it('refuses a BETA seal whose volatility band is empty and one that is under-powered on convexity', () => {
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, volCeiling: 0.06, volFloor: 0.06 })))
+      .toThrow(/EMPTY_BETA_VOLATILITY_BAND/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, volCeiling: 0.05 })))
+      .toThrow(/EMPTY_BETA_VOLATILITY_BAND/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, declaredConvexityPower: 0.84 })))
+      .toThrow(/UNDERPOWERED_BETA_CONVEXITY/);
+    // The declared power must also be consistent with the measured calibration floor of n=156.
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, minimumOosObservations: 104 })))
+      .toThrow(/UNDERPOWERED_BETA_CONVEXITY/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, benchmarkSymbol: undefined })))
+      .toThrow(/benchmarkSymbol/);
+    expect(() => sealExperiment(draftWith({ ...BETA_GATE, maxAnnualTurnover: undefined })))
+      .toThrow(/maxAnnualTurnover/);
+  });
+
+  it('QDR-10: a BETA version can never close under an ALPHA label, and vice versa', async () => {
+    const path = manifestPath();
+    const beta = markQaPass(markCodified(sealExperiment(createDraft({
+      setupId: 'beta-lane',
+      version: 'v1',
+      config: { validation: BETA_GATE } as unknown as Parameters<typeof createDraft>[0]['config'],
+      director: 'director-a',
+    })), 'implementer-a'), 'auditor-b');
+    await writeManifest(path, { ...beta, state: 'FULL_CLAIMED', actors: { ...beta.actors, fullRunner: 'runner-c' } });
+
+    await expect(recordFullResult(path, 'runner-c', {
+      outcome: 'FULL', status: 'ACCEPTED', reasonCodes: [], evidencePath: 'results/beta.json',
+    })).rejects.toThrow('BETA-class experiment cannot close as ACCEPTED');
+    await expect(recordFullResult(path, 'runner-c', {
+      outcome: 'FULL', status: 'ACCEPTED_BETA', reasonCodes: [], evidencePath: 'results/beta.json',
+    })).resolves.toMatchObject({ fullRun: { status: 'ACCEPTED_BETA' } });
+
+    const alphaPath = manifestPath();
+    await writeManifest(alphaPath, qaPassedManifest());
+    await expect(finalizeExperiment(alphaPath, {
+      runKind: 'ABANDONED', status: 'REJECTED_BETA', auditor: 'auditor-b', reasonCodes: ['REPRODUCIBILITY_FAILURE'],
+    })).rejects.toThrow('ALPHA-class experiment cannot close as REJECTED_BETA');
+  });
+
+  it('QDR-10: mutating productClass after seal breaks the hash and deflates to EXPLORATORY', () => {
+    const sealed = sealExperiment(draftWith(BETA_GATE));
+    const shopped = {
+      ...sealed,
+      config: { validation: { ...BETA_GATE, productClass: 'ALPHA' } } as unknown as typeof sealed.config,
+    };
+
+    expect(stableConfigHash(shopped.config)).not.toBe(sealed.configHash);
+    expect(trialCountEvidence('beta-lane', 108, {
+      config: shopped.config,
+      configHash: sealed.configHash,
+      historicalMode: 'FORWARD_ONLY_NO_HISTORICAL_FULL',
+      diagnosticRuns: 0,
+      sealedAt: '2026-08-06T12:00:00.000Z',
+      forwardBoundary: '2026-08-07T20:00:00.000Z',
+      earliestObservation: '2026-08-14T20:00:00.000Z',
+      terminalEvaluations: 1,
+    })).toMatchObject({
+      tier: 'EXPLORATORY',
+      familyTrials: 108,
+      confirmatoryFailures: ['SEALED_CONFIG_HASH_VERIFIED'],
+    });
   });
 
   it('seals the amended SPUS lane and leaves the other sealed manifests untouched', () => {
