@@ -166,24 +166,31 @@ describe('backdated Sharia evidence (the ORCL guard)', () => {
     expect(snapshot.verdicts[0].compliant).toBeNull();
   });
 
-  it('still certifies a run that begins AFTER the evidence date', () => {
+  it('never certifies a historical replay from a single-date current C1 sleeve', () => {
     const entries = [entry('ORCL', SPUS_SNAPSHOT)];
     const snapshot = buildC1ShariaRunSnapshot(entries, new Date('2026-08-01T00:00:00.000Z'), '2026-07-18');
 
     expect(backdatedShariaEvidence(entries, '2026-07-18')).toHaveLength(0);
-    expect(snapshot.state).toBe('VERIFIED_COMPLIANT');
-    expect(snapshot.verdicts[0].compliant).toBe(true);
+    expect(snapshot.state).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    // UNKNOWN is not a negative verdict: current membership cannot prove historical eligibility.
+    expect(snapshot.verdicts[0]).toMatchObject({ compliant: null, sourceAsOf: SPUS_SNAPSHOT });
   });
 
   it('treats evidence dated exactly on the first decision as valid, not backdated', () => {
     expect(backdatedShariaEvidence([entry('ORCL', '2022-03-01')], '2022-03-01')).toHaveLength(0);
   });
 
-  it('blocks the whole run when ANY single name is backdated — never partial certification', () => {
+  it('marks every current-sleeve verdict UNKNOWN in a historical replay — never partial certification', () => {
     const entries = [entry('NVDA', '2017-01-01'), entry('ORCL', SPUS_SNAPSHOT)];
     const snapshot = buildC1ShariaRunSnapshot(entries, new Date('2026-07-17T00:00:00.000Z'), '2018-01-02');
 
     expect(backdatedShariaEvidence(entries, '2018-01-02').map((v) => v.symbol)).toEqual(['ORCL']);
     expect(snapshot.state).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    expect(snapshot.verdicts.map(({ symbol, compliant, sourceAsOf }) => (
+      { symbol, compliant, sourceAsOf }
+    ))).toEqual([
+      { symbol: 'NVDA', compliant: null, sourceAsOf: '2017-01-01' },
+      { symbol: 'ORCL', compliant: null, sourceAsOf: SPUS_SNAPSHOT },
+    ]);
   });
 });

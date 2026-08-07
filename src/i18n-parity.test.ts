@@ -29,4 +29,14 @@ describe('messages/en.json <-> messages/ar.json key parity', () => {
     expect(missingInAr, `keys missing in ar.json: ${missingInAr.join(', ')}`).toEqual([]);
     expect(missingInEn, `keys missing in en.json: ${missingInEn.join(', ')}`).toEqual([]);
   });
+
+  it('keeps the QDR-10 BETA disclosure key-identical and preserves the canonical Arabic DSR annotation', () => {
+    const expectedKeys = ['captureAnnotation', 'dsrAnnotation', 'noEdgeDisclaimer', 'productClass'];
+
+    expect(Object.keys(en.Quant.betaDisclosure).sort()).toEqual(expectedKeys);
+    expect(Object.keys(ar.Quant.betaDisclosure).sort()).toEqual(expectedKeys);
+    expect(ar.Quant.betaDisclosure.dsrAnnotation).toBe(
+      'مُدرَج للعلم، وليس معيار قبول؛ هذه النسخة لا تدّعي أي أفضلية'
+    );
+  });
 });

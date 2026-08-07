@@ -216,7 +216,7 @@ describe('QDR-10 BETA-class report card', () => {
   const betaArgs = (evidence: Partial<BetaCriteriaInput> = {}, override: Partial<AssembleArgs> = {}) =>
     args({ productClass: 'BETA', betaEvidence: { ...betaEvidence, ...evidence }, ...override });
 
-  it('admits a book that meets all four criteria as ACCEPTED_BETA — never bare ACCEPTED', () => {
+  it('admits a book that meets all three promotion criteria as ACCEPTED_BETA — never bare ACCEPTED', () => {
     const card = assembleReportCard(betaArgs());
 
     expect(card.status).toBe('ACCEPTED_BETA');

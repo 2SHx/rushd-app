@@ -100,7 +100,7 @@ export interface ReportCard {
   trialCount?: TrialCountEvidence;
   /** QDR-10 class this version was SEALED as; absent input resolves to 'ALPHA' (strictest). */
   productClass: ProductClass;
-  /** BETA only: which of the four criteria failed. Empty array = all four passed. */
+  /** BETA only: which of the three promotion criteria failed. Empty array = all three passed. */
   betaCriterionFailures?: BetaCriterionCode[];
   betaSummary?: BetaCriteriaResult;
 }
@@ -136,7 +136,7 @@ export interface AssembleArgs {
   /** QDR-10: absent ⇒ 'ALPHA'. Read from the SEALED config by the caller, never chosen at runtime. */
   productClass?: ProductClass;
   /**
-   * BETA evidence for criteria (a), (c) and (d). A BETA card WITHOUT it fails closed: all four
+   * BETA evidence for the three promotion criteria. A BETA card WITHOUT it fails closed: all three
    * criteria are recorded as failed rather than silently passing an unevaluated gate.
    */
   betaEvidence?: BetaCriteriaInput;
@@ -167,7 +167,7 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
   // QDR-10: class is sealed, not chosen here; absence resolves to ALPHA, the strictest gate.
   const productClass: ProductClass = a.productClass ?? 'ALPHA';
   const isBeta = productClass === 'BETA';
-  // A BETA card with no evidence fails closed on all four criteria — never silently passes.
+  // A BETA card with no evidence fails closed on all three promotion criteria — never silently passes.
   const betaSummary = isBeta && a.betaEvidence ? evaluateBetaCriteria(a.betaEvidence) : undefined;
   const betaCriterionFailures: BetaCriterionCode[] | undefined = isBeta
     ? (betaSummary ? [...betaSummary.failures] : [...BETA_CRITERION_CODES])

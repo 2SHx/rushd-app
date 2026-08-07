@@ -557,6 +557,12 @@
     "amount": "Amount",
     "upCapture": "Up Capture",
     "downCapture": "Down Capture",
+    "betaDisclosure": {
+      "productClass": "BETA product class — risk-managed market exposure, not alpha or outperformance.",
+      "dsrAnnotation": "reported, not a gate; this version makes no edge claim",
+      "captureAnnotation": "Capture convexity is reported for transparency and is not a promotion criterion; the effect is too small to resolve inside a product horizon (measured: ≤44% power at 10.3 years).",
+      "noEdgeDisclaimer": "An ACCEPTED_BETA result has not been shown to have an edge: it delivers market exposure within a declared volatility band, with bounded drawdown, no shortfall against its own delivered beta, and honest costs."
+    },
     "shariaStatus": "Sharia Status",
     "compliant": "Compliant",
     "nonCompliant": "Non-compliant",

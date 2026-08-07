@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-07 — SHARIA-PIT + G8-CLEANUP + TEST-QUANTEVAL + I18N-BETA ✅
+Shipped: Every current/single-date C1 historical replay now resolves UNKNOWN/`UNSCREENED_EXECUTION_BLOCKED`; G8 wording matches the three live BETA gates while captures stay report-only; four reviewed en/ar BETA disclosures landed; quant-eval now finishes under 30s on an exact-range synthetic/non-promotable fixture with finite Sharpe <3.
+Decisions: Lazy-dev rung 2 reused `buildCurrentSleeveResearchSnapshot` and existing QDR-10 copy; TEST-QUANTEVAL used the smallest deterministic 102-session public-seam fixture (rung 7), retained 30% OOS/cost/look-ahead assertions, and never raised a timeout or inferred missing Sharia history.
+Verify: Independent Sharia/i18n/QA gates PASS; focused plan suites 65/65 across their final scoped runs; tsc and lint clean; full suite 1,460 pass / 9 unrelated fail.
+Open: Real historical Sharia certification still requires PIT screening timelines; full-suite failures are 7 existing academy/authz/portfolio baselines plus 2 concurrent out-of-scope PIT-sleeve tests.
+
 ## 2026-08-07 — Quant portfolio analytics restored and de-fabricated ✅
 Shipped: URL-synchronized advisor/teams/portfolio tabs; removed synthetic 375k NAV, holdings, purification, and curve fallbacks; rebuilt portfolio analytics with persisted-data states, bilingual metric targets, responsive holdings, currency-safe values, and guarded rebalance.
 Decisions: Lazy-dev rung 2 — reused the persisted portfolio view model, performance-status contract, shared SAR/USD formatter, and Quant translations; incomplete evidence is shown, never estimated, and unverified Sharia status no longer defaults to compliant.

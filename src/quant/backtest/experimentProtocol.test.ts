@@ -284,7 +284,7 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     expect(sealed.configHash).toBe(stableConfigHash(sealed.config));
   });
 
-  it('refuses a BETA seal whose volatility band is empty and one that is under-powered on convexity', () => {
+  it('refuses a BETA seal whose volatility band is empty and one that is under-powered on volatility', () => {
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, volCeiling: 0.06, volFloor: 0.06 })))
       .toThrow(/EMPTY_BETA_VOLATILITY_BAND/);
     expect(() => sealExperiment(draftWith({ ...BETA_GATE, volCeiling: 0.05 })))

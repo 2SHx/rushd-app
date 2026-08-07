@@ -239,8 +239,8 @@ function stdDev(returns: number[]): number {
 }
 
 /**
- * Up/down capture versus a benchmark. Exported for QDR-10 BETA criterion (c1) — signature and logic
- * are unchanged, and `computePortfolioMetrics` output stays byte-identical.
+ * Up/down capture versus a benchmark. Exported for QDR-10 BETA reporting (c1-report), never as a
+ * gate — signature and logic are unchanged, and `computePortfolioMetrics` output stays byte-identical.
  */
 export function computeCaptureRatios(strategyReturns: number[], benchmarkReturns: number[]): { upCapture: number; downCapture: number } {
   const upStrat: number[] = [];

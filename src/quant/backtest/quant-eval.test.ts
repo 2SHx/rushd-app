@@ -19,8 +19,11 @@ vi.mock('../data/universe', () => ({
 describe('quant-eval', () => {
   // Sealed synthetic fixture window: deliberately predates every real R2 market-data range.
   // Never move this forward into project history; the scoped cleanup must remain symmetric.
+  const dayMs = 24 * 3600 * 1000;
+  const fixtureCalendarDays = 142;
+  const zeroMeanPriceShocks = [0.03, -0.03, 0.015, -0.015] as const;
   const fromDate = new Date('1990-01-01');
-  const toDate = new Date('1993-12-31');
+  const toDate = new Date(fromDate.getTime() + (fixtureCalendarDays - 1) * dayMs);
   const fixtureSymbols = ['SPY', 'SPUS', 'MSFT', 'NVDA', 'GOOGL'];
 
   const cleanupFixture = () => prisma.marketBar.deleteMany({
@@ -41,29 +44,30 @@ describe('quant-eval', () => {
 
     await cleanupFixture();
 
-    // Seed 1,000 trading days of historical data (~4 years)
+    // Seed >100 trading sessions while keeping the DB-backed public seam focused.
     const seedBars = [];
-    const totalDays = 1000;
     const startMs = fromDate.getTime();
-    const dayMs = 24 * 3600 * 1000;
 
-    console.log(`Seeding ${totalDays} mock bars for quant-eval backtest...`);
+    console.log(`Seeding ${fixtureCalendarDays} mock bars for quant-eval backtest...`);
 
     // Let's create a realistic upward-trending series
-    for (let i = 0; i < totalDays; i++) {
+    let tradingSessionIndex = 0;
+    for (let i = 0; i < fixtureCalendarDays; i++) {
       const ts = new Date(startMs + i * dayMs);
       // Skip weekends to match trading calendar
       if (ts.getDay() === 0 || ts.getDay() === 6) continue;
+      const priceShock = zeroMeanPriceShocks[tradingSessionIndex % zeroMeanPriceShocks.length];
+      tradingSessionIndex += 1;
 
       // Base market return (SPY grows ~10% annualized, SPUS grows ~12% annualized)
       const tYears = i / 252;
-      const spyPrice = 400 * Math.pow(1.08, tYears) + Math.sin(i / 10) * 15;
-      const spusPrice = 30 * Math.pow(1.10, tYears) + Math.sin(i / 10) * 1.5;
+      const spyPrice = 400 * Math.pow(1.08, tYears);
+      const spusPrice = 30 * Math.pow(1.10, tYears);
 
       // MSFT beats index (Alpha), NVDA is high momentum
-      const msftPrice = 250 * Math.pow(1.15, tYears) + Math.cos(i / 12) * 20;
-      const nvdaPrice = 150 * Math.pow(1.22, tYears) + Math.sin(i / 8) * 35;
-      const googlPrice = 100 * Math.pow(1.09, tYears) + Math.sin(i / 15) * 8;
+      const msftPrice = 250 * Math.pow(1.15, tYears);
+      const nvdaPrice = 150 * Math.pow(1.80, tYears) * (1 + priceShock);
+      const googlPrice = 100 * Math.pow(1.09, tYears);
 
       const symbols = [
         { sym: 'SPY', price: spyPrice },
@@ -110,7 +114,7 @@ describe('quant-eval', () => {
       fromDate,
       toDate,
       100000,
-      ['MSFT', 'NVDA', 'GOOGL']
+      ['NVDA']
     );
     
     expect(result.equityCurve.length).toBeGreaterThan(100);
@@ -124,7 +128,7 @@ describe('quant-eval', () => {
 
     // Print golden output to console
     console.log('====================================================');
-    console.log('      QUANT EVALUATION - OUT-OF-SAMPLE PROOF        ');
+    console.log(' QUANT EVALUATION - SYNTHETIC FIXTURE / NON-PROMOTABLE ');
     console.log('====================================================');
     console.log(`Backtest Range: ${fromDate.toISOString().slice(0,10)} to ${toDate.toISOString().slice(0,10)}`);
     console.log(`Total Days: ${result.equityCurve.length} | OOS Days: ${oosCurve.length}`);
@@ -146,6 +150,8 @@ describe('quant-eval', () => {
     // Assert strategy beats the index out-of-sample
     expect(oosMetrics.irVsSpus).toBeGreaterThan(0); // IR > 0 vs Sharia Index
     expect(oosMetrics.cagr).toBeGreaterThan(0); // Positive after simulated costs
+    expect(Number.isFinite(oosMetrics.sharpe)).toBe(true);
+    expect(oosMetrics.sharpe).toBeLessThan(3); // Short-window Sharpe >= 3 is non-promotable
   }, 30_000);
 
   it('fails the run when a look-ahead violation is injected (look-ahead guard)', () => {

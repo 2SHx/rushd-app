@@ -105,20 +105,18 @@ export function backdatedShariaEvidence(
 export function buildC1ShariaRunSnapshot(
   entries: readonly UniverseEntry[],
   asOf: Date,
-  /** First decision date (YYYY-MM-DD). Supplied ⇒ backdated evidence cannot certify the run. */
+  /** First decision date (YYYY-MM-DD). Supplied ⇒ this is a historical replay. */
   periodStart?: string,
 ): ShariaRunSnapshot {
-  const backdated = periodStart
-    ? new Set(backdatedShariaEvidence(entries, periodStart).map((v) => v.symbol))
-    : new Set<string>();
+  // C1 is one current/single-date sleeve, not a PIT eligibility timeline. Even when its evidence
+  // predates the replay start, it cannot prove that each name remained eligible at every decision.
+  if (periodStart) return buildCurrentSleeveResearchSnapshot(entries);
+
   const verdicts: ShariaSymbolSnapshot[] = [...entries]
     .sort((a, b) => a.symbol.localeCompare(b.symbol))
     .map((entry) => ({
       symbol: entry.symbol,
-      // `null` (not `false`) — the name is not proven non-compliant, its compliance is UNKNOWN for
-      // this period. deriveShariaState maps null to UNSCREENED_EXECUTION_BLOCKED, which is the
-      // honest verdict and blocks execution rather than asserting a compliance we cannot evidence.
-      compliant: backdated.has(entry.symbol) ? null : true,
+      compliant: true,
       standard: entry.tier === 'index-provider-screened'
         ? 'S&P Shariah methodology'
         : 'RUSHD AAOIFI-aligned XBRL screen',

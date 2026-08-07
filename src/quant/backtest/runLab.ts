@@ -140,7 +140,6 @@ import { buildTradeEvidence, type AttributedTradeRecord } from './tradeEvidence'
 import { assertWalkForward } from './walkForward';
 import { evaluateProfitPlateau, type PlateauEvaluation, type PlateauNeighborResult } from './profitPlateau';
 import {
-  buildC1ShariaRunSnapshot,
   buildCurrentSleeveResearchSnapshot,
   buildShariaRunSnapshot,
 } from './shariaSnapshot';
@@ -1771,11 +1770,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // as truth); a real source (Zoya, live) ⇒ VERIFIED_* from real verdicts. Intraday micro-cap lanes
   // stay execution-blocked; a candidate artifact's own screening status still takes priority.
   const shariaSnapshot = verifiedShariaEntries
-    ? setupId === 'halal-residual-fast-momentum-core'
-      ? buildCurrentSleeveResearchSnapshot(verifiedShariaEntries)
-      // `from` is passed so evidence dated after the first decision cannot certify this run —
-      // the ORCL guard. Without it a 2026 holdings snapshot silently certifies 2018 trades.
-      : buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`), from)
+    // C1 is a current/single-date sleeve, never a PIT timeline for historical replay evidence.
+    ? buildCurrentSleeveResearchSnapshot(verifiedShariaEntries)
     : await buildShariaRunSnapshot(symbols, 'NASDAQ');
   const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce' || setupId === 'time-of-day';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus
