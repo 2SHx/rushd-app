@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-07 — Quant strategy metrics UX and Arabic RTL repair ✅
+Shipped: Always-visible bilingual metric guidance with exact targets, per-gate thresholds, mobile strategy cards, visible detail-table explanations, localized trade-ledger controls, and overflow-safe KPI values.
+Decisions: Distinguished hard promotion gates from the Sharpe 1–2 reading range; preserved exact simulated values and made every explanation available without hover.
+Verify: Focused UI/integration/i18n 7/7, tsc, lint, and diff checks pass; browser-verified Arabic desktop/mobile plus light/dark. Full suite: 1,410 pass, 2 skip, 11 known unrelated failures (Neon connectivity + academy/authz baselines).
+Open: None for this UI scope; ACCEPTED still means isolated paper testing only, not a live-performance claim.
+
 ## 2026-08-06 — QDR-10 corrected: (c1) withdrawn after a drift unit error ⚠️→✅
 Shipped: QDR-10 amended in place — criterion (c1) capture-convexity WITHDRAWN, seal floor 156→**104 observations (~2y)**, power assertion moved onto criterion (a), and every calibrating simulation must now publish and pass a model-free falsifier (negative non-overlapping benchmark blocks must land in 42–45% against persisted bars) or the seal is refused.
 Decisions: the orchestrator's own calibration was wrong — `0.50*(0.18/sqrt(252))` is a DAILY Sharpe of 0.50, i.e. annualized 7.94 and 142.9%/yr drift, a √252≈15.9× slip; it made only 8.8% of five-session benchmark blocks negative (real equities ≈42–45%), manufacturing the 0.88–0.92 capture ratio that set the 0.95 threshold. Corrected ratio is 0.99, so NO `n` satisfies (c1) — not even the SPUS lane it was designed around. (c1) dropped rather than re-thresholded: any detectable threshold sits ~0.99 (decorative), a beta-scaled relative-drawdown swap is redundant with criterion (a) (unscaled ratio 0.62–0.73 ≈ beta 0.57–0.61), and Henriksson–Merton beta asymmetry tested WORSE powered (3.7–17.7%). Removal paid for structurally, with no invented number: criterion (a) now also runs on each contiguous half, and `volFloor` uses a one-sided 95% lower bound.

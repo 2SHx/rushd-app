@@ -24,4 +24,14 @@ describe('strategy league comparison UX', () => {
     expect(chartSource).toContain('entry.comparison.end === comparison.end');
     expect(chartSource).not.toContain('entry.comparison.oosStart === comparison.oosStart');
   });
+
+  it('teaches metric direction and exact promotion thresholds without hover-only help', () => {
+    expect(leagueSource).toContain('function MetricGuide');
+    expect(leagueSource).toContain("target: '> 0%'");
+    expect(leagueSource).toContain("target: '> 0.95'");
+    expect(leagueSource).toContain("target: '≤ 30%'");
+    expect(leagueSource).toContain("target: '≥ 100'");
+    expect(leagueSource).toContain("target: t('gateTargetRuin')");
+    expect(leagueSource).not.toContain('group-hover:opacity-100 transition-opacity bg-surface-card');
+  });
 });

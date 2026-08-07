@@ -18,6 +18,7 @@ type Formatter = (value: number | null) => string;
 type MoneyFormatter = (value: number) => string;
 type DateFormatter = (value: string) => string;
 type PerformanceRow = { label: string; hint: string; full: string; oos: string };
+type PromotionGate = { label: string; target: string; value: string | null; pass: boolean; progress: number };
 
 const PLOT = { width: 720, height: 360, pad: 58 } as const;
 type LearningGateStatus = 'checking' | 'locked' | 'unlocked' | 'error';
@@ -41,6 +42,40 @@ function Disclosures({ t }: { t: TFunction }) {
         {t('shariaDisclosure')}
       </p>
     </div>
+  );
+}
+
+function MetricGuide({ t }: { t: TFunction }) {
+  const metrics = [
+    { key: 'oos', label: t('oosShort'), target: '> 0%', body: t('guideOos') },
+    { key: 'sharpe', label: t('metricSharpe'), target: '1.0–2.0', body: t('guideSharpe') },
+    { key: 'dsr', label: t('metricDsr'), target: '> 0.95', body: t('guideDsr') },
+    { key: 'drawdown', label: t('standingsMcDrawdown'), target: '≤ 30%', body: t('guideMcDrawdown') },
+    { key: 'trades', label: t('metricTrades'), target: '≥ 100', body: t('guideTrades') },
+  ] as const;
+
+  return (
+    <section className="rounded-2xl bg-surface-card p-4 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="metric-guide-title">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 rounded-full bg-accent/10 p-2 text-accent" aria-hidden="true">
+          <Info className="size-4" />
+        </span>
+        <div>
+          <h2 id="metric-guide-title" className="text-base font-semibold">{t('metricGuideTitle')}</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-foreground/60">{t('metricGuideDescription')}</p>
+        </div>
+      </div>
+      <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {metrics.map(metric => (
+          <div key={metric.key} className="rounded-xl bg-foreground/[0.035] p-4">
+            <dt className="text-xs font-medium text-foreground/65">{metric.label}</dt>
+            <dd className="mt-2 text-xl font-semibold tabular-nums text-foreground" dir="ltr">{metric.target}</dd>
+            <p className="mt-2 text-[11px] leading-relaxed text-foreground/60">{metric.body}</p>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-4 text-[11px] leading-relaxed text-foreground/55">{t('metricGuideFootnote')}</p>
+    </section>
   );
 }
 
@@ -156,59 +191,63 @@ function Standings({
         <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/60">{t('standingsDescription')}</p>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
-        <div className="min-w-[46rem]">
+      <div className="mt-5 space-y-3 md:hidden">
+        {rankedTeams.map((team, index) => {
+          const active = team.runId === selectedRunId;
+          const StatusIcon = team.status === 'ACCEPTED' ? CheckCircle2 : XCircle;
+          return (
+            <button
+              key={team.runId}
+              type="button"
+              onClick={() => onSelect(team.runId)}
+              aria-pressed={active}
+              aria-controls="selected-team-performance"
+              className={`w-full rounded-2xl bg-foreground/[0.025] p-4 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                active ? 'ring-2 ring-accent' : 'ring-1 ring-foreground/10'
+              }`}
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-[10px] text-foreground/50">{t('standingsRank')} {index + 1}</span>
+                  <span className="mt-1 block truncate font-mono text-sm font-semibold" dir="ltr">{team.setupId}</span>
+                </span>
+                <span className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium ${team.status === 'ACCEPTED' ? 'text-up' : 'text-down'}`}>
+                  <StatusIcon className="size-3.5" aria-hidden="true" />
+                  {t(team.status === 'ACCEPTED' ? 'accepted' : 'rejected')}
+                </span>
+              </span>
+              <span className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--border-color)] pt-3">
+                {[
+                  [t('oosShort'), percent(team.oos.cagr)],
+                  [t('metricSharpe'), decimal(team.oos.sharpe)],
+                  [t('metricDsr'), decimal(team.oos.deflatedSharpe)],
+                  [t('standingsMcDrawdown'), percent(team.bootstrap.maxDrawdown.p95)],
+                  [t('metricTrades'), decimal(team.full.trades)],
+                ].map(([label, value]) => (
+                  <span key={label}>
+                    <span className="block text-[10px] leading-tight text-foreground/50">{label}</span>
+                    <span className="mt-1 block font-mono text-sm font-semibold tabular-nums" dir="ltr">{value}</span>
+                  </span>
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 hidden overflow-x-auto md:block">
+        <div className="min-w-[44rem]">
           <div
-            className="grid grid-cols-[2.5rem_minmax(10rem,1.4fr)_6.5rem_6rem_5.5rem_5.5rem_7rem_5rem] gap-3 border-b border-[var(--border-color)] pb-2 text-[11px] font-medium text-foreground/60"
+            className="grid grid-cols-[2rem_minmax(8rem,1.3fr)_5rem_5.5rem_4.5rem_4.5rem_5.75rem_4.5rem] gap-2 border-b border-[var(--border-color)] pb-2 text-[11px] font-medium leading-tight text-foreground/60"
           >
             <span>{t('standingsRank')}</span>
             <span className="text-start">{t('standingsTeam')}</span>
             <span className="text-start">{t('standingsStatus')}</span>
-            <span className="text-end flex items-center justify-end gap-1">
-              {t('oosShort')}
-              <div className="group relative inline-flex items-center cursor-help">
-                <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                  {t('hintOos')}
-                </div>
-              </div>
-            </span>
-            <span className="text-end flex items-center justify-end gap-1">
-              {t('metricSharpe')}
-              <div className="group relative inline-flex items-center cursor-help">
-                <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                  {t('hintSharpe')}
-                </div>
-              </div>
-            </span>
-            <span className="text-end flex items-center justify-end gap-1">
-              {t('metricDsr')}
-              <div className="group relative inline-flex items-center cursor-help">
-                <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                  {t('hintDsr')}
-                </div>
-              </div>
-            </span>
-            <span className="text-end flex items-center justify-end gap-1">
-              {t('standingsMcDrawdown')}
-              <div className="group relative inline-flex items-center cursor-help">
-                <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                  {t('hintMcDrawdown')}
-                </div>
-              </div>
-            </span>
-            <span className="text-end flex items-center justify-end gap-1">
-              {t('metricTrades')}
-              <div className="group relative inline-flex items-center cursor-help">
-                <Info className="size-3 text-foreground/40 hover:text-foreground" />
-                <div className="absolute bottom-[125%] right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity bg-surface-card border border-[var(--border-color)] p-2.5 rounded-xl text-[10px] w-52 shadow-xl z-50 text-start leading-relaxed font-normal normal-case text-foreground whitespace-normal">
-                  {t('hintTrades')}
-                </div>
-              </div>
-            </span>
+            <span className="text-end">{t('oosShort')}</span>
+            <span className="text-end">{t('metricSharpe')}</span>
+            <span className="text-end">{t('metricDsr')}</span>
+            <span className="text-end">{t('standingsMcDrawdown')}</span>
+            <span className="text-end">{t('metricTrades')}</span>
           </div>
           <div className="divide-y divide-[var(--border-color)]">
             {rankedTeams.map((team, index) => {
@@ -221,7 +260,7 @@ function Standings({
                   onClick={() => onSelect(team.runId)}
                   aria-pressed={active}
                   aria-controls="selected-team-performance"
-                  className={`grid w-full grid-cols-[2.5rem_minmax(10rem,1.4fr)_6.5rem_6rem_5.5rem_5.5rem_7rem_5rem] items-center gap-3 py-3 text-start transition-colors duration-150 ${
+                  className={`grid w-full grid-cols-[2rem_minmax(8rem,1.3fr)_5rem_5.5rem_4.5rem_4.5rem_5.75rem_4.5rem] items-center gap-2 py-3 text-start transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
                     active ? 'bg-accent/10' : 'hover:bg-foreground/[0.04]'
                   }`}
                 >
@@ -294,21 +333,18 @@ function TeamPerformanceDetail({
     <section
       ref={detailRef}
       id="selected-team-performance"
-      className="scroll-mt-6 rounded-3xl bg-surface-card p-6 shadow-xl border border-[var(--border-color)] space-y-6 relative overflow-hidden text-start"
+      className="relative scroll-mt-6 space-y-6 overflow-hidden rounded-3xl bg-surface-card p-6 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05),0_20px_55px_rgba(0,0,0,0.08)]"
       aria-labelledby="selected-team-performance-title"
     >
-      {/* Background Accent Glow */}
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-accent/[0.06] via-transparent to-emerald-500/[0.04]" />
-
       {/* ── Top Hero Header ── */}
       <header className="flex flex-col gap-4 border-b border-[var(--border-color)] pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1.5">
-          <div className="flex items-center space-x-2 rtl:space-x-reverse flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20" dir="ltr">
               {team.setupId}
             </span>
-            <span className="text-[10px] text-foreground/50 uppercase tracking-widest font-mono">
-              Run #{team.runId.slice(0, 8)}
+            <span className="font-mono text-[10px] text-foreground/50 ltr:uppercase ltr:tracking-widest">
+              {t('runLabel', { id: team.runId.slice(0, 8) })}
             </span>
           </div>
           <h2 id="selected-team-performance-title" className="text-2xl font-black text-foreground">
@@ -319,7 +355,7 @@ function TeamPerformanceDetail({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 rtl:space-x-reverse self-start">
+        <div className="flex items-center gap-3 self-start">
           <span
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-black tracking-wide border shadow-sm ${
               team.status === 'ACCEPTED'
@@ -328,7 +364,7 @@ function TeamPerformanceDetail({
             }`}
           >
             {team.status === 'ACCEPTED' ? (
-              <CheckCircle2 className="size-4 animate-pulse" aria-hidden="true" />
+              <CheckCircle2 className="size-4" aria-hidden="true" />
             ) : (
               <XCircle className="size-4" aria-hidden="true" />
             )}
@@ -341,41 +377,41 @@ function TeamPerformanceDetail({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Out of Sample CAGR */}
         <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
-          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('oosShort')} CAGR</span>
+            <span className="text-[10px] font-semibold text-foreground/60 ltr:uppercase ltr:tracking-wider">{t('teamOosCagr')}</span>
           <div className="flex items-baseline justify-between">
             <p className={`text-2xl font-black font-mono tabular-nums ${team.oos.cagr >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
               {percent(team.oos.cagr)}
             </p>
             {team.oos.cagr >= 0 ? <TrendingUp className="w-5 h-5 text-up" /> : <TrendingDown className="w-5 h-5 text-down" />}
           </div>
-          <p className="text-[10px] text-foreground/50">Full: {percent(team.full.cagr)}</p>
+          <p className="text-[10px] text-foreground/50">{t('fullPeriod')}: <span dir="ltr">{percent(team.full.cagr)}</span></p>
         </div>
 
         {/* Sharpe Ratio */}
         <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
-          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('metricSharpe')}</span>
+          <span className="text-[10px] font-semibold text-foreground/60 ltr:uppercase ltr:tracking-wider">{t('metricSharpe')}</span>
           <p className="text-2xl font-black font-mono tabular-nums text-foreground" dir="ltr">
             {decimal(team.oos.sharpe)}
           </p>
-          <p className="text-[10px] text-foreground/50">DSR: {decimal(team.oos.deflatedSharpe)}</p>
+          <p className="text-[10px] text-foreground/50">{t('metricDsr')}: <span dir="ltr">{decimal(team.oos.deflatedSharpe)}</span></p>
         </div>
 
         {/* Max Drawdown */}
         <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
-          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">95% MC Drawdown</span>
+          <span className="text-[10px] font-semibold text-foreground/60 ltr:uppercase ltr:tracking-wider">{t('standingsMcDrawdown')}</span>
           <p className="text-2xl font-black font-mono tabular-nums text-down" dir="ltr">
             {percent(team.bootstrap.maxDrawdown.p95)}
           </p>
-          <p className="text-[10px] text-foreground/50">OOS DD: {percent(team.oos.maxDrawdown)}</p>
+          <p className="text-[10px] text-foreground/50">{t('oosDrawdownShort')}: <span dir="ltr">{percent(team.oos.maxDrawdown)}</span></p>
         </div>
 
         {/* Realized Net PnL */}
         <div className="p-4 rounded-2xl bg-foreground/[0.025] dark:bg-white/[0.025] border border-[var(--border-color)] space-y-1">
-          <span className="text-[10px] text-foreground/60 font-semibold uppercase tracking-wider">{t('realizedNetPnl')}</span>
-          <p className={`text-2xl font-black font-mono tabular-nums ${evidence && evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir="ltr">
-            {evidence ? money(evidence.totalNetPnl) : '$0.00'}
+          <span className="text-[10px] font-semibold text-foreground/60 ltr:uppercase ltr:tracking-wider">{t('realizedNetPnl')}</span>
+          <p className={`font-mono text-base font-black leading-tight tabular-nums 2xl:text-lg ${evidence === null ? 'text-foreground/45' : evidence.totalNetPnl >= 0 ? 'text-up' : 'text-down'}`} dir={evidence === null ? undefined : 'ltr'}>
+            {evidence ? money(evidence.totalNetPnl) : t('unavailable')}
           </p>
-          <p className="text-[10px] text-foreground/50">Trades: {decimal(team.full.trades)}</p>
+          <p className="text-[10px] text-foreground/50">{t('metricTrades')}: <span dir="ltr">{decimal(team.full.trades)}</span></p>
         </div>
       </div>
 
@@ -400,15 +436,10 @@ function TeamPerformanceDetail({
               <tbody className="divide-y divide-[var(--border-color)]">
                 {comparisonRows.map((row) => (
                   <tr key={row.label} className="hover:bg-foreground/[0.02] transition-colors">
-                    <th scope="row" className="px-4 py-3 text-start font-semibold text-foreground">
-                      <span className="inline-flex items-center gap-1.5">
-                        {row.label}
-                        <span className="group relative inline-flex cursor-help items-center">
-                          <Info className="size-3.5 text-foreground/40 hover:text-foreground" aria-hidden="true" />
-                          <span className="pointer-events-none absolute bottom-[125%] start-1/2 z-50 w-56 -translate-x-1/2 rounded-2xl border border-[var(--border-color)] bg-surface-card p-3 text-start text-[11px] font-normal leading-relaxed text-foreground opacity-0 shadow-2xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                            {row.hint}
-                          </span>
-                        </span>
+                    <th scope="row" className="max-w-sm px-4 py-3 text-start text-foreground">
+                      <span className="block font-semibold">{row.label}</span>
+                      <span className="mt-1 block text-[11px] font-normal leading-relaxed text-foreground/55">
+                        {row.hint}
                       </span>
                     </th>
                     <td className="px-4 py-3 text-end font-mono font-medium tabular-nums text-foreground/80" dir="ltr">
@@ -428,7 +459,7 @@ function TeamPerformanceDetail({
 
         {/* Technical Run Facts Card */}
         <aside className="rounded-2xl bg-foreground/[0.03] dark:bg-white/[0.03] p-5 space-y-4 border border-[var(--border-color)] h-fit" aria-labelledby="run-provenance-title">
-          <div className="flex items-center space-x-2 rtl:space-x-reverse border-b border-[var(--border-color)] pb-3">
+          <div className="flex items-center gap-2 border-b border-[var(--border-color)] pb-3">
             <Info className="w-4 h-4 text-accent" />
             <h3 id="run-provenance-title" className="text-sm font-extrabold text-foreground">{t('runFactsTitle')}</h3>
           </div>
@@ -461,9 +492,11 @@ function TeamPerformanceDetail({
               <dd className="mt-1 flex items-center justify-between gap-2 font-mono text-[11px] bg-foreground/5 p-2 rounded-xl border border-foreground/10" dir="ltr">
                 <span className="truncate max-w-[140px] text-foreground/80">{team.gitSha}</span>
                 <button
+                  type="button"
                   onClick={handleCopySha}
-                  className="p-1 rounded-lg hover:bg-foreground/10 text-accent transition-colors shrink-0"
-                  title="Copy Commit SHA"
+                  className="shrink-0 rounded-lg p-1 text-accent transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  title={copiedSha ? t('copied') : t('copyCommit')}
+                  aria-label={copiedSha ? t('copied') : t('copyCommit')}
                 >
                   {copiedSha ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Info className="w-3.5 h-3.5" />}
                 </button>
@@ -505,7 +538,7 @@ function TeamPerformanceDetail({
                     : 'text-foreground/60 hover:text-foreground'
                 }`}
               >
-                Stock Breakdown ({evidence.bySymbol.length})
+                {t('stockBreakdown', { count: evidence.bySymbol.length })}
               </button>
               <button
                 onClick={() => setPnlViewMode('ledger')}
@@ -515,7 +548,7 @@ function TeamPerformanceDetail({
                     : 'text-foreground/60 hover:text-foreground'
                 }`}
               >
-                Trade Ledger ({evidence.totalClosedTrades})
+                {t('exactTradeLedger', { count: evidence.totalClosedTrades })}
               </button>
             </div>
           </div>
@@ -538,13 +571,13 @@ function TeamPerformanceDetail({
                         {stock.symbol}
                       </span>
                       <span className="text-[11px] font-bold text-foreground/50">
-                        {stock.closedTrades} Trades
+                        {t('closedRecordsCount', { count: stock.closedTrades })}
                       </span>
                     </div>
 
                     {/* Realized PnL Hero Amount */}
                     <div className="space-y-0.5">
-                      <span className="text-[10px] text-foreground/50 font-bold uppercase tracking-wider">Realized PnL</span>
+                      <span className="text-[10px] font-bold text-foreground/50 ltr:uppercase ltr:tracking-wider">{t('realizedNetPnl')}</span>
                       <p className={`text-2xl font-black font-mono tabular-nums ${isProfitable ? 'text-up' : 'text-down'}`} dir="ltr">
                         {money(stock.netPnl)}
                       </p>
@@ -553,7 +586,7 @@ function TeamPerformanceDetail({
                     {/* Win Rate Meter Bar */}
                     <div className="space-y-1.5 pt-2 border-t border-[var(--border-color)] text-xs">
                       <div className="flex justify-between font-medium">
-                        <span className="text-foreground/60">Win Rate</span>
+                        <span className="text-foreground/60">{t('winRate')}</span>
                         <span className="font-mono font-bold text-foreground">{winRatePct.toFixed(0)}% ({stock.wins}/{stock.closedTrades})</span>
                       </div>
                       <div className="w-full bg-foreground/10 h-2 rounded-full overflow-hidden">
@@ -563,7 +596,7 @@ function TeamPerformanceDetail({
 
                     {/* Avg Return Tag */}
                     <div className="flex justify-between items-center text-xs pt-1">
-                      <span className="text-foreground/50">Avg Return:</span>
+                      <span className="text-foreground/50">{t('averageReturn')}:</span>
                       <span className={`font-mono font-extrabold px-2 py-0.5 rounded-lg ${
                         stock.averageReturn >= 0 ? 'bg-up/10 text-up' : 'bg-down/10 text-down'
                       }`} dir="ltr">
@@ -586,13 +619,13 @@ function TeamPerformanceDetail({
               )}
 
               {/* Trade Filter Bar */}
-              <div className="flex items-center space-x-2 rtl:space-x-reverse bg-surface-card px-3.5 py-2.5 rounded-2xl border border-[var(--border-color)] max-w-md shadow-sm">
+              <div className="flex max-w-md items-center gap-2 rounded-2xl border border-[var(--border-color)] bg-surface-card px-3.5 py-2.5 shadow-sm">
                 <Activity className="w-4 h-4 text-accent" />
                 <input
                   type="text"
                   value={tradeFilter}
                   onChange={(e) => setTradeFilter(e.target.value)}
-                  placeholder="Filter trades by symbol or exit reason..."
+                  placeholder={t('filterTrades')}
                   className="bg-transparent text-xs text-foreground placeholder:text-foreground/40 focus:outline-none w-full"
                 />
               </div>
@@ -794,23 +827,23 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
   ];
   const mcDrawdown = selected.bootstrap.maxDrawdown.p95;
   const riskOfRuin = selected.bootstrap.riskOfRuin;
-  const gates: Array<{ label: string; value: string | null; pass: boolean; progress: number }> = [
+  const gates: PromotionGate[] = [
     {
-      label: t('gateWalkForward'), value: null,
+      label: t('gateWalkForward'), target: t('gateTargetWalkForward'), value: null,
       pass: selected.checklist.walkForward, progress: selected.checklist.walkForward ? 1 : 0,
     },
     {
-      label: t('gateOosHoldout'), value: percent(selected.checklist.oosHoldoutPct),
+      label: t('gateOosHoldout'), target: t('gateTargetOosHoldout'), value: percent(selected.checklist.oosHoldoutPct),
       pass: selected.checklist.oosHoldoutOk, progress: selected.checklist.oosHoldoutOk ? 1 : 0,
     },
     {
-      label: t('gateOosReturn'), value: percent(selected.oos.cagr),
+      label: t('gateOosReturn'), target: t('gateTargetOosReturn'), value: percent(selected.oos.cagr),
       pass: selected.oos.cagr > 0, progress: selected.oos.cagr > 0 ? 1 : 0,
     },
-    { label: t('gateDsr'), value: decimal(selected.oos.deflatedSharpe), pass: selected.checklist.deflatedSharpeOk, progress: selected.checklist.deflatedSharpeOk ? 1 : 0 },
-    { label: t('gateDrawdown'), value: percent(mcDrawdown), pass: selected.checklist.mcMaxDDWithinBreaker, progress: selected.checklist.mcMaxDDWithinBreaker ? 1 : 0 },
-    { label: t('gateRuin'), value: percent(riskOfRuin), pass: selected.checklist.mcRiskOfRuinWithinLimit, progress: selected.checklist.mcRiskOfRuinWithinLimit ? 1 : 0 },
-    { label: t('gateTrades'), value: decimal(selected.full.trades), pass: selected.checklist.enoughTrades, progress: selected.checklist.enoughTrades ? 1 : 0 },
+    { label: t('gateDsr'), target: t('gateTargetDsr'), value: decimal(selected.oos.deflatedSharpe), pass: selected.checklist.deflatedSharpeOk, progress: selected.checklist.deflatedSharpeOk ? 1 : 0 },
+    { label: t('gateDrawdown'), target: t('gateTargetDrawdown'), value: percent(mcDrawdown), pass: selected.checklist.mcMaxDDWithinBreaker, progress: selected.checklist.mcMaxDDWithinBreaker ? 1 : 0 },
+    { label: t('gateRuin'), target: t('gateTargetRuin'), value: percent(riskOfRuin), pass: selected.checklist.mcRiskOfRuinWithinLimit, progress: selected.checklist.mcRiskOfRuinWithinLimit ? 1 : 0 },
+    { label: t('gateTrades'), target: t('gateTargetTrades'), value: decimal(selected.full.trades), pass: selected.checklist.enoughTrades, progress: selected.checklist.enoughTrades ? 1 : 0 },
   ];
   return (
     <section className="min-w-0 max-w-full space-y-8" aria-labelledby="strategy-league-title">
@@ -832,6 +865,8 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
       </header>
 
       <Disclosures t={t} />
+
+      <MetricGuide t={t} />
 
       <Standings
         t={t}
@@ -1004,9 +1039,12 @@ export default function StrategyLeagueClient({ teams }: StrategyLeagueClientProp
             {gates.map(gate => (
               <div key={gate.label}>
                 <div className="flex items-center justify-between gap-4 text-xs">
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    {gate.pass ? <CheckCircle2 className="size-4 text-up" /> : <XCircle className="size-4 text-down" />}
-                    {gate.label}
+                  <span className="inline-flex items-start gap-2 font-medium">
+                    {gate.pass ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-up" /> : <XCircle className="mt-0.5 size-4 shrink-0 text-down" />}
+                    <span>
+                      <span className="block">{gate.label}</span>
+                      <span className="mt-0.5 block text-[10px] font-normal text-foreground/50">{gate.target}</span>
+                    </span>
                   </span>
                   <span className={`tabular-nums ${gate.pass ? 'text-up' : 'text-down'}`} dir="ltr">
                     {gate.value ? `${gate.value} · ` : ''}{t(gate.pass ? 'passed' : 'failed')}
