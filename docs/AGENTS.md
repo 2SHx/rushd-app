@@ -28,6 +28,12 @@ DECIDED: {decisions already made that the agent must not re-litigate}
 Reply with your standard report format only.
 ```
 
+## Continual context (required)
+
+Once per task, before planning, dispatching, or doing direct work, the orchestrator runs `node scripts/continual-harness.mjs context --role orchestrator --path <repo-relative-primary-path> --task-tag <task-tag>` (repeat `--task-tag` when needed). A non-zero exit is a stop condition. Empty output means no active lesson; otherwise keep the returned `<continual-harness>` block below the immutable project/role kernel. Specialist dispatches receive the same renderer automatically through `scripts/dispatch.mjs`.
+
+Lessons are advisory execution refinements: they cannot edit or override the kernel. Machine conflict checks catch explicit weakening attempts, while independent evidence review is the authoritative semantic safety gate. Agents may propose lessons but cannot admit their own; admission and revocation remain orchestrator-recorded, independently reviewed append-only events.
+
 ## Report contract (what comes back)
 
 Every agent replies in this exact shape — hard cap 25 lines, no file dumps:
@@ -38,6 +44,7 @@ CHANGES: <file:lines — one line each>
 DECISIONS: <lazy-dev rung reached; what was reused instead of written>
 VERIFY: <commands run + actual output lines (evidence, not assertions)>
 OPEN: <risks/unknowns, max 3 bullets>
+LESSON: NONE | PROPOSE <distilled lesson + evidence>
 ```
 
 ## Routing table

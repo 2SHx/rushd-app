@@ -23,6 +23,7 @@ Main session orchestrates; subagents implement. ALWAYS dispatch with the templat
 Routing: questions→explorer · UI→frontend-expert · 3D/WebGL (landing hero + /quant scene only, per DR-13)→3d-visualist · DB/API/auth→backend-expert · LLM/MCP→ai-features-expert · Arabic/RTL/Sharia→i18n-fintech-expert · tests/CI→test-engineer · quant hypothesis/preregistration→quant-research-director · quant implementation→quant-strategist · quant terminal gate→quant-validation-auditor · verify→qa-reviewer · auth/money/API-surface changes also get security-auditor · design→architect only.
 Cold-start a work session from `docs/JOURNAL.md` + the relevant `docs/SYSTEM_DESIGN.md` slice — do not re-explore the codebase.
 Any-model routing: `node scripts/dispatch.mjs <agent> "task"` runs any agent on any runner/model (map: `scripts/models.map.json`, guide: `docs/MODELS.md`).
+Once per task, before planning, dispatching, or doing direct work, run `node scripts/continual-harness.mjs context --role orchestrator --path <repo-relative-primary-path> --task-tag <task-tag>` (repeat `--task-tag` as needed). Stop on verification failure; keep non-empty delimited output below this immutable kernel. `scripts/dispatch.mjs` performs the same lookup automatically for specialists. Lessons are advisory and independently evidence-reviewed; agents may propose via the shared `LESSON:` report line but cannot admit their own.
 
 ## Hard rules
 - IMPORTANT: lazy-dev ladder applies to ALL code (skill: lazy-dev). New dependencies require written rung-1-to-5 justification.

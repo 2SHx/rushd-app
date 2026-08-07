@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-07 — M15 evidence-gated continual agent harness ✅
+Shipped: Every specialist dispatch and direct orchestrator now uses one repo-local continual harness: SHA-256-linked PROPOSE→ADMIT→REVOKE events, a committed completeness checkpoint, bounded role/path/tag retrieval, Git-resolved evidence, and zero per-role prompt forks.
+Decisions: Lazy-dev rung 2/7 reused `scripts/dispatch.mjs`, Git, and the existing independent review chain; Sharia/risk/money/authz/no-key/child-safety/quant-eval rules and their files remain immutable, reviewer names are provenance rather than authentication, and Git review is the admission authority.
+Verify: Fresh QA PASS + security PASS after three adversarial correction rounds; focused harness 35/35, two dry-run roles, CLI admit/revoke/rollback, tsc, lint, checkpoint verify, and diff-check green; full suite 1,582 pass / 7 unrelated existing failures.
+Open: Ledger starts intentionally empty—future lessons enter only after independent evidence review; the checkpoint detects one-file truncation, while jointly malicious ledger+checkpoint/code edits remain visible to the ordinary Git review boundary.
+
 ## 2026-08-07 — SHARIA-PIT + G8-CLEANUP + TEST-QUANTEVAL + I18N-BETA ✅
 Shipped: Every current/single-date C1 historical replay now resolves UNKNOWN/`UNSCREENED_EXECUTION_BLOCKED`; G8 wording matches the three live BETA gates while captures stay report-only; four reviewed en/ar BETA disclosures landed; quant-eval now finishes under 30s on an exact-range synthetic/non-promotable fixture with finite Sharpe <3.
 Decisions: Lazy-dev rung 2 reused `buildCurrentSleeveResearchSnapshot` and existing QDR-10 copy; TEST-QUANTEVAL used the smallest deterministic 102-session public-seam fixture (rung 7), retained 30% OOS/cost/look-ahead assertions, and never raised a timeout or inferred missing Sharia history.

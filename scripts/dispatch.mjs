@@ -13,9 +13,24 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { extractDispatchScope, hasProtectedQueryPath, renderContext, verifyCheckpoint } from './continual-harness.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const map = JSON.parse(readFileSync(join(root, 'scripts/models.map.json'), 'utf8'));
+
+function loadContinualEvents() {
+  const ledger = readFileSync(join(root, '.agents/continual/events.jsonl'), 'utf8');
+  const events = ledger.split(/\r?\n/).flatMap((line, index) => {
+    if (line.trim() === '') return [];
+    try { return [JSON.parse(line)]; }
+    catch { throw new Error(`Invalid continual-harness JSON at line ${index + 1}`); }
+  });
+  let checkpoint;
+  try { checkpoint = JSON.parse(readFileSync(join(root, '.agents/continual/head.json'), 'utf8')); }
+  catch { throw new Error('Invalid or missing continual-harness checkpoint'); }
+  verifyCheckpoint(events, checkpoint);
+  return events;
+}
 
 // OpenRouter credential-file fallback (~/.config/rushd/openrouter.key, chmod 600):
 // spawned runners inherit env, so loading here covers opencode's openrouter/* models
@@ -58,9 +73,20 @@ if (!runner) {
 const md = readFileSync(join(root, '.claude/agents', `${agent}.md`), 'utf8');
 const body = md.replace(/^---[\s\S]*?\n---\n/, '').trim();
 
+let continualContext;
+try {
+  const { paths, ...scope } = extractDispatchScope(task);
+  const events = loadContinualEvents();
+  continualContext = hasProtectedQueryPath(paths) ? '' : renderContext({ events, role: agent, ...scope });
+} catch (error) {
+  console.error(`[dispatch] continual harness rejected dispatch: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
+
 const houseRules = runnerName === 'claude' ? ''
   : '\n\nHOUSE RULES: you are a guest agent in this repo — read ./AGENTS.md and obey it; never touch prisma/migrations/** or .env*; verify with `npm run lint && npx tsc --noEmit` before reporting.';
-const prompt = `${body}${houseRules}\n\n=== DISPATCH ===\n${task}`;
+const sharedReport = '\n\nSHARED REPORT CONTRACT: include exactly one final `LESSON: NONE | PROPOSE <distilled lesson + evidence>` line; proposing never admits a lesson.';
+const prompt = `${body}${houseRules}${sharedReport}\n\n=== DISPATCH ===\n${task}${continualContext ? `\n\n${continualContext}` : ''}`;
 
 // A run attempt on one runner/model. Returns the spawn result (or {missing:true} if the binary isn't on PATH).
 function runOn(rName, m, e, label) {
