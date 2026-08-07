@@ -1739,7 +1739,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const shariaSnapshot = verifiedShariaEntries
     ? setupId === 'halal-residual-fast-momentum-core'
       ? buildCurrentSleeveResearchSnapshot(verifiedShariaEntries)
-      : buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`))
+      // `from` is passed so evidence dated after the first decision cannot certify this run —
+      // the ORCL guard. Without it a 2026 holdings snapshot silently certifies 2018 trades.
+      : buildC1ShariaRunSnapshot(verifiedShariaEntries, new Date(`${to}T23:59:59.999Z`), from)
     : await buildShariaRunSnapshot(symbols, 'NASDAQ');
   const isIntradayUnscreened = setupId === 'stocks-in-play-orb' || setupId === 'vwap-reclaim' || setupId === 'stop-hunt-reversal-long' || setupId === 'bagholder-bounce' || setupId === 'time-of-day';
   const shariaState: ShariaValidationState = candidateArtifact?.shariaStatus

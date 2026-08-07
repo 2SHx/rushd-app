@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import type { ShariaScreener, ShariaVerdict } from '@/services/marketData';
+import type { UniverseEntry } from '@/quant/universe/types';
 import {
+  backdatedShariaEvidence,
   buildC1ShariaRunSnapshot,
   buildCurrentSleeveResearchSnapshot,
   buildShariaRunSnapshot,
@@ -120,5 +122,68 @@ describe('buildC1ShariaRunSnapshot', () => {
     expect(snapshot.verdicts.every((verdict) => (
       verdict.reason === 'CURRENT_SLEEVE_ONLY_UNVERIFIED_HISTORICAL'
     ))).toBe(true);
+  });
+});
+
+// ── THE ORCL REGRESSION GUARD ────────────────────────────────────────────────────────────────────
+// ORCL sits in the 2026-07-17 SPUS holdings at 0.56%. Before this guard, that single dated snapshot
+// certified every trade back to 2018 — so a name only screened compliant in 2026 was bought in 2022
+// on evidence that did not exist yet. The debt/market-cap ratio that decides ORCL moves with market
+// cap, so this is not hypothetical. Wrong even when profitable: a Sharia defect, not a stats one.
+describe('backdated Sharia evidence (the ORCL guard)', () => {
+  const entry = (symbol: string, asOf: string): UniverseEntry => ({
+    symbol,
+    name: `${symbol} Corp`,
+    market: 'NASDAQ',
+    tier: 'index-provider-screened',
+    provenance: `SPUS holdings fixture (${asOf})`,
+    purificationRatioBps: 'n/a — not computed',
+    reasonCodes: [],
+    asOf,
+  });
+
+  const SPUS_SNAPSHOT = '2026-07-17';
+
+  it('flags every name whose evidence post-dates the first decision', () => {
+    const entries = [entry('ORCL', SPUS_SNAPSHOT), entry('NVDA', SPUS_SNAPSHOT)];
+    const violations = backdatedShariaEvidence(entries, '2018-01-02');
+
+    expect(violations).toHaveLength(2);
+    expect(violations[0]).toEqual({
+      symbol: 'NVDA', evidenceAsOf: SPUS_SNAPSHOT, periodStart: '2018-01-02',
+    });
+    expect(violations.map((v) => v.symbol)).toContain('ORCL');
+  });
+
+  it('does NOT report VERIFIED_COMPLIANT when 2026 evidence is applied to a 2018 run', () => {
+    const entries = [entry('ORCL', SPUS_SNAPSHOT)];
+    const snapshot = buildC1ShariaRunSnapshot(entries, new Date('2026-07-17T23:59:59.999Z'), '2018-01-02');
+
+    // The exact failure mode: it used to say VERIFIED_COMPLIANT here.
+    expect(snapshot.state).not.toBe('VERIFIED_COMPLIANT');
+    expect(snapshot.state).toBe('UNSCREENED_EXECUTION_BLOCKED');
+    // null, not false — the name is not proven haram, its compliance is UNKNOWN for that period.
+    expect(snapshot.verdicts[0].compliant).toBeNull();
+  });
+
+  it('still certifies a run that begins AFTER the evidence date', () => {
+    const entries = [entry('ORCL', SPUS_SNAPSHOT)];
+    const snapshot = buildC1ShariaRunSnapshot(entries, new Date('2026-08-01T00:00:00.000Z'), '2026-07-18');
+
+    expect(backdatedShariaEvidence(entries, '2026-07-18')).toHaveLength(0);
+    expect(snapshot.state).toBe('VERIFIED_COMPLIANT');
+    expect(snapshot.verdicts[0].compliant).toBe(true);
+  });
+
+  it('treats evidence dated exactly on the first decision as valid, not backdated', () => {
+    expect(backdatedShariaEvidence([entry('ORCL', '2022-03-01')], '2022-03-01')).toHaveLength(0);
+  });
+
+  it('blocks the whole run when ANY single name is backdated — never partial certification', () => {
+    const entries = [entry('NVDA', '2017-01-01'), entry('ORCL', SPUS_SNAPSHOT)];
+    const snapshot = buildC1ShariaRunSnapshot(entries, new Date('2026-07-17T00:00:00.000Z'), '2018-01-02');
+
+    expect(backdatedShariaEvidence(entries, '2018-01-02').map((v) => v.symbol)).toEqual(['ORCL']);
+    expect(snapshot.state).toBe('UNSCREENED_EXECUTION_BLOCKED');
   });
 });

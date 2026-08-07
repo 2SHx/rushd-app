@@ -74,15 +74,51 @@ export interface BuildShariaSnapshotOpts {
  * snapshot. Tier-1 is described exactly as index-provider screened; it is never mislabeled as a
  * per-name AAOIFI certification and its unavailable per-name purification ratio stays explicit.
  */
+export interface BackdatedShariaEvidence {
+  readonly symbol: string;
+  /** When the underlying filing/holdings snapshot was established. */
+  readonly evidenceAsOf: string;
+  /** The first decision date the run would have traded this name on. */
+  readonly periodStart: string;
+}
+
+/**
+ * THE ORCL GUARD. A verdict may only certify decisions taken at or after the date its evidence was
+ * established. Screening a 2022 trade with a 2026 filing is evidence-after-the-fact: it silently
+ * imports today's compliance into a past date, which is how ORCL — in the 2026-07-17 SPUS holdings
+ * at 0.56% — was treated as compliant throughout 2018-2026 even though the debt/market-cap ratio
+ * that decides it moves with market cap and may well have breached 30% in between.
+ *
+ * This is a Sharia-integrity defect, not a statistical one: it is wrong even when it is profitable.
+ * Returns every name whose evidence post-dates the first decision, so callers can fail closed.
+ */
+export function backdatedShariaEvidence(
+  entries: readonly UniverseEntry[],
+  periodStart: string,
+): BackdatedShariaEvidence[] {
+  return [...entries]
+    .filter((entry) => entry.asOf > periodStart)
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map((entry) => ({ symbol: entry.symbol, evidenceAsOf: entry.asOf, periodStart }));
+}
+
 export function buildC1ShariaRunSnapshot(
   entries: readonly UniverseEntry[],
   asOf: Date,
+  /** First decision date (YYYY-MM-DD). Supplied ⇒ backdated evidence cannot certify the run. */
+  periodStart?: string,
 ): ShariaRunSnapshot {
+  const backdated = periodStart
+    ? new Set(backdatedShariaEvidence(entries, periodStart).map((v) => v.symbol))
+    : new Set<string>();
   const verdicts: ShariaSymbolSnapshot[] = [...entries]
     .sort((a, b) => a.symbol.localeCompare(b.symbol))
     .map((entry) => ({
       symbol: entry.symbol,
-      compliant: true,
+      // `null` (not `false`) — the name is not proven non-compliant, its compliance is UNKNOWN for
+      // this period. deriveShariaState maps null to UNSCREENED_EXECUTION_BLOCKED, which is the
+      // honest verdict and blocks execution rather than asserting a compliance we cannot evidence.
+      compliant: backdated.has(entry.symbol) ? null : true,
       standard: entry.tier === 'index-provider-screened'
         ? 'S&P Shariah methodology'
         : 'RUSHD AAOIFI-aligned XBRL screen',
