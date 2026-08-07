@@ -15,6 +15,7 @@ import {
   type ResolvedComparator,
 } from '../src/quant/backtest/experimentProtocol';
 import { productClassFromConfig } from '../src/quant/backtest/gatePower';
+import { historicalAnchorIndex } from '../src/quant/backtest/historicalAnchors';
 import {
   parseArgs,
   parseRunLabOptions,
@@ -85,8 +86,22 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     // QDR-11: a DIVERSIFICATION seal must resolve `comparatorVersionId` against the real sealed
     // inventory. Non-DIVERSIFICATION seals never consult it, so this scan costs them nothing.
     const inventory = await readSealedManifestInventory(dirname(manifestPath));
+    // QDR-12: a real sealed manifest ALWAYS wins. The historical-anchor registry is consulted only
+    // when none exists, so an anchor can never shadow or soften a manifest that does.
+    const anchors = historicalAnchorIndex();
     await writeManifest(manifestPath, sealExperiment(await readManifest(manifestPath), {
-      resolveComparator: (versionId) => inventory.get(versionId) ?? null,
+      resolveComparator: (versionId) => {
+        const sealed = inventory.get(versionId);
+        if (sealed) return sealed;
+        const anchor = anchors.get(versionId);
+        if (!anchor) return null;
+        console.log(
+          `comparator ${versionId} resolved to a QDR-12 HISTORICAL ANCHOR (preregistered `
+          + `${anchor.preregisteredAt} at ${anchor.preregistrationSha}, before the manifest protocol). `
+          + 'Admissible for A/B identity and isolation ONLY — it is never evidence and contributes no result.',
+        );
+        return { versionId: anchor.versionId, sealed: true, config: anchor.config };
+      },
     }));
   } else if (command === 'codified') {
     await writeManifest(manifestPath, markCodified(
