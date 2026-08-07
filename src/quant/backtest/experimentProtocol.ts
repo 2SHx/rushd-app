@@ -6,18 +6,25 @@ import { assessGateFeasibility, gateSpecFromConfig, productClassFromConfig } fro
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 /**
- * QDR-10: terminal labels are class-scoped. ALPHA ends 'ACCEPTED'/'REJECTED' exactly as before;
- * BETA ends 'ACCEPTED_BETA'/'REJECTED_BETA' and can never emit the bare labels. Still exactly two
- * terminal outcomes per class — QDR-7's binary finalization rule is preserved verbatim.
+ * QDR-10, widened by QDR-11: terminal labels are class-scoped. ALPHA ends 'ACCEPTED'/'REJECTED'
+ * exactly as before; BETA ends 'ACCEPTED_BETA'/'REJECTED_BETA'; DIVERSIFICATION ends
+ * 'ACCEPTED_DIVERSIFICATION'/'REJECTED_DIVERSIFICATION'. No class can emit another's labels. Still
+ * exactly two terminal outcomes per class — QDR-7's binary finalization rule is preserved verbatim,
+ * and its ordered rejection-reason-code list is NOT disturbed.
  */
-export const TERMINAL_STATUSES = ['ACCEPTED', 'REJECTED', 'ACCEPTED_BETA', 'REJECTED_BETA'] as const;
+export const TERMINAL_STATUSES = [
+  'ACCEPTED', 'REJECTED',
+  'ACCEPTED_BETA', 'REJECTED_BETA',
+  'ACCEPTED_DIVERSIFICATION', 'REJECTED_DIVERSIFICATION',
+] as const;
 export type TerminalStatus = typeof TERMINAL_STATUSES[number];
 
-const isAcceptedStatus = (status: TerminalStatus): boolean =>
-  status === 'ACCEPTED' || status === 'ACCEPTED_BETA';
+const isAcceptedStatus = (status: TerminalStatus): boolean => status.startsWith('ACCEPTED');
 const isTerminalState = (state: string): boolean => (TERMINAL_STATUSES as readonly string[]).includes(state);
-const statusProductClass = (status: TerminalStatus): 'ALPHA' | 'BETA' =>
-  status.endsWith('_BETA') ? 'BETA' : 'ALPHA';
+const statusProductClass = (status: TerminalStatus): 'ALPHA' | 'BETA' | 'DIVERSIFICATION' => {
+  if (status.endsWith('_DIVERSIFICATION')) return 'DIVERSIFICATION';
+  return status.endsWith('_BETA') ? 'BETA' : 'ALPHA';
+};
 
 export type ExperimentState =
   | 'DRAFT'

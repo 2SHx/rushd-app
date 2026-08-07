@@ -15,6 +15,7 @@
 // exports them, delete these copies and import instead.
 
 import { volatilityBandFeasible } from './betaCriteria';
+import { minimumDailyObservationsForVolReduction } from './diversificationCriteria';
 
 /** Euler-Mascheroni gamma — identical constant to the one metrics.ts uses inside deflatedSharpe. */
 export const EULER_MASCHERONI = 0.5772156649015329;
@@ -140,7 +141,21 @@ export function minimumObservationsForDsr(
 }
 
 /** QDR-10 product class. ABSENT ⇒ 'ALPHA' — fail-closed to the strictest gate. */
-export type ProductClass = 'ALPHA' | 'BETA';
+/**
+ * QDR-11: DIVERSIFICATION is NOT a third class competing with ALPHA and BETA on returns. ALPHA and
+ * BETA each adjudicate a claim a book makes to a USER and terminate in AUTO_PAPER admission;
+ * DIVERSIFICATION adjudicates a claim about BOOK STRUCTURE and terminates in permission to use the
+ * RULE — no capital, no allocation, no QDR-7 tournament entry, no AUTO_PAPER book.
+ */
+export type ProductClass = 'ALPHA' | 'BETA' | 'DIVERSIFICATION';
+
+/**
+ * The QDR-6 Monte Carlo p95 max-drawdown breaker, for SEAL-TIME disclosure arithmetic only. The
+ * terminal test still reads the run's own `drawdownBreakerPct` in `assembleReportCard` — this
+ * constant never enters that path and changes no gate. It exists so a DIVERSIFICATION seal can say
+ * out loud that its declared drawdown is predicted to fail, which QDR-11 requires it to.
+ */
+export const MONTE_CARLO_P95_DRAWDOWN_BREAKER = 0.30;
 
 /**
  * QDR-10 2026-08-06b. The old 156-observation floor rested on the withdrawn (c1) convexity
@@ -210,6 +225,37 @@ export interface BetaGateSpec {
   readonly declaredNegativeBenchmarkBlockFraction: number;
 }
 
+/**
+ * QDR-11 DIVERSIFICATION seal block. Every field here is declared at seal and lives inside
+ * `stableConfigHash`, so a favourable comparator cannot be chosen after the fact — the same door
+ * QDR-10 closed by hashing `benchmarkSymbol`.
+ */
+export interface DiversificationGateSpec {
+  readonly productClass: 'DIVERSIFICATION';
+  /** DAILY observations in the reserved window. QDR-11 permits the daily unit for D1/D2 only. */
+  readonly observations: number;
+  readonly observationsPerYear: number;
+  readonly trials: number;
+  readonly fallbackTrials: number | null;
+  /** The INCUMBENT rule, re-run at the same formation dates — never a hand-picked comparator. */
+  readonly comparatorUniverseRule: string;
+  /** Must name a REAL prior sealed version; `sealExperiment` throws if it resolves to none. */
+  readonly comparatorVersionId: string;
+  /** Content hash of the sector map, so a re-labeled sector cannot pose as a data update. */
+  readonly sectorMapHash: string;
+  readonly formationCadenceDays: number;
+  readonly correlationLookbackDays: number;
+  readonly minEffectiveBetsRatio: number;
+  readonly minVolatilityReduction: number;
+  readonly hypothesizedEffectiveBetsRatio: number;
+  readonly hypothesizedVolReduction: number;
+  /** Required. A declared value above the 30% breaker forces the predicted-rejection card line. */
+  readonly hypothesizedMonteCarloP95Drawdown: number;
+  readonly bootstrapBlockLength: number;
+  /** All nine named plateau cells. */
+  readonly plateauCells: readonly string[];
+}
+
 export interface GateSpec {
   readonly productClass?: 'ALPHA';
   /** DSR the OOS evidence must strictly exceed (the frozen 0.95 gate). */
@@ -233,7 +279,9 @@ export type GateFeasibilityVerdict =
   | 'UNDERPOWERED'
   | 'EMPTY_BETA_VOLATILITY_BAND'
   | 'UNDERPOWERED_BETA_VOLATILITY'
-  | 'BENCHMARK_MODEL_SANITY_FAILURE';
+  | 'BENCHMARK_MODEL_SANITY_FAILURE'
+  | 'UNDERPOWERED_DIVERSIFICATION_VOLATILITY'
+  | 'DIVERSIFICATION_COMPARATOR_MISSING';
 
 export interface GateFeasibility {
   readonly verdict: GateFeasibilityVerdict;
@@ -257,6 +305,22 @@ export interface BetaGateFeasibility {
   readonly declaredVolatilityFalseAlarmRate: number;
   readonly declaredHalfWindowFalseAlarmRate: number;
   readonly minimumObservations: number;
+  readonly detail: string;
+}
+
+export interface DiversificationGateFeasibility {
+  readonly verdict: GateFeasibilityVerdict;
+  /** DAILY observations the declared volatility reduction needs for 80% power. */
+  readonly minimumObservations: number;
+  readonly hypothesizedVolReduction: number;
+  readonly hypothesizedEffectiveBetsRatio: number;
+  /**
+   * TRUE when the lane declares an MC p95 drawdown above the 30% breaker. This does NOT refuse the
+   * seal — QDR-11 seals such a lane deliberately, to adjudicate the structural claim only — but it
+   * forces the predicted-rejection disclosure line onto the manifest and the card, and the lane may
+   * not be described as a candidate for admission anywhere while that line is live.
+   */
+  readonly predictedBreakerFailure: boolean;
   readonly detail: string;
 }
 
@@ -308,10 +372,119 @@ export function assertGateSpec(spec: GateSpec): void {
  */
 export function assessGateFeasibility(spec: GateSpec): GateFeasibility;
 export function assessGateFeasibility(spec: BetaGateSpec): BetaGateFeasibility;
-export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasibility | BetaGateFeasibility;
-export function assessGateFeasibility(spec: GateSpec | BetaGateSpec): GateFeasibility | BetaGateFeasibility {
+export function assessGateFeasibility(spec: DiversificationGateSpec): DiversificationGateFeasibility;
+export function assessGateFeasibility(spec: AnyGateSpec): AnyGateFeasibility;
+export function assessGateFeasibility(spec: AnyGateSpec): AnyGateFeasibility {
   if (spec.productClass === 'BETA') return assessBetaGateFeasibility(spec);
+  if (spec.productClass === 'DIVERSIFICATION') return assessDiversificationGateFeasibility(spec);
   return assessAlphaGateFeasibility(spec);
+}
+
+export type AnyGateSpec = GateSpec | BetaGateSpec | DiversificationGateSpec;
+export type AnyGateFeasibility = GateFeasibility | BetaGateFeasibility | DiversificationGateFeasibility;
+
+/**
+ * QDR-11 seal assertions. The power assertion sits on (D2), the binding criterion: the reserved
+ * DAILY window must be able to detect the declared volatility reduction at 80% power. (D1) has no
+ * separate power assertion — it is a comparative ratio the mechanism has already met 8/8 — but the
+ * hypothesis must be DECLARED, so a lane cannot seal on a structural claim it never stated.
+ *
+ * There is no acceptance-set emptiness check analogous to ALPHA's: D1 and D2 are comparative ratios
+ * with no implausibility ceiling above them, so no admissible outcome is excluded by construction.
+ * A predicted drawdown-breaker failure is DISCLOSED, never a refusal — QDR-11 seals such a lane on
+ * purpose, because the structural finding is separable and cheap (2.56 years) against the 89–503
+ * the return question would need.
+ */
+export function assessDiversificationGateFeasibility(
+  spec: DiversificationGateSpec,
+): DiversificationGateFeasibility {
+  assertDiversificationGateSpec(spec);
+  const minimumObservations = minimumDailyObservationsForVolReduction(spec.hypothesizedVolReduction);
+  const predictedBreakerFailure = spec.hypothesizedMonteCarloP95Drawdown > MONTE_CARLO_P95_DRAWDOWN_BREAKER;
+  const base = {
+    minimumObservations,
+    hypothesizedVolReduction: spec.hypothesizedVolReduction,
+    hypothesizedEffectiveBetsRatio: spec.hypothesizedEffectiveBetsRatio,
+    predictedBreakerFailure,
+  };
+  if (!spec.comparatorVersionId.trim() || !spec.comparatorUniverseRule.trim()) {
+    return {
+      ...base,
+      verdict: 'DIVERSIFICATION_COMPARATOR_MISSING',
+      detail: 'a DIVERSIFICATION lane must name the incumbent rule AND a real prior sealed version; '
+        + 'without both there is nothing to be a comparative claim ABOUT',
+    };
+  }
+  if (spec.observations < minimumObservations) {
+    return {
+      ...base,
+      verdict: 'UNDERPOWERED_DIVERSIFICATION_VOLATILITY',
+      detail: `a ${(spec.hypothesizedVolReduction * 100).toFixed(1)}% volatility reduction needs `
+        + `n >= ${minimumObservations} daily observations for 80% power; the reserved window holds `
+        + `${spec.observations}. A seal that declares an effect its window cannot detect is refused`,
+    };
+  }
+  return {
+    ...base,
+    verdict: 'FEASIBLE',
+    detail: `reserved window holds ${spec.observations} daily observations against the `
+      + `${minimumObservations} an ${(spec.hypothesizedVolReduction * 100).toFixed(1)}% reduction needs`
+      + (predictedBreakerFailure
+        ? `; NOTE p95 drawdown ${(spec.hypothesizedMonteCarloP95Drawdown * 100).toFixed(1)}% exceeds the `
+          + `${(MONTE_CARLO_P95_DRAWDOWN_BREAKER * 100).toFixed(0)}% breaker — this lane is predicted to `
+          + 'terminate REJECTED and is not a candidate for admission'
+        : ''),
+  };
+}
+
+export function assertDiversificationGateSpec(spec: DiversificationGateSpec): void {
+  const positives: [string, number][] = [
+    ['formationCadenceDays', spec.formationCadenceDays],
+    ['correlationLookbackDays', spec.correlationLookbackDays],
+    ['minEffectiveBetsRatio', spec.minEffectiveBetsRatio],
+    ['hypothesizedEffectiveBetsRatio', spec.hypothesizedEffectiveBetsRatio],
+    ['bootstrapBlockLength', spec.bootstrapBlockLength],
+  ];
+  for (const [key, value] of positives) {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`${key} must be a positive number`);
+  }
+  const fractions: [string, number][] = [
+    ['minVolatilityReduction', spec.minVolatilityReduction],
+    ['hypothesizedVolReduction', spec.hypothesizedVolReduction],
+    ['hypothesizedMonteCarloP95Drawdown', spec.hypothesizedMonteCarloP95Drawdown],
+  ];
+  for (const [key, value] of fractions) {
+    if (!Number.isFinite(value) || value <= 0 || value >= 1) {
+      throw new Error(`${key} must sit strictly inside (0,1)`);
+    }
+  }
+  for (const [key, value] of [
+    ['sectorMapHash', spec.sectorMapHash],
+    ['comparatorUniverseRule', spec.comparatorUniverseRule],
+    ['comparatorVersionId', spec.comparatorVersionId],
+  ] as [string, string][]) {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new Error(`${key} is required for a DIVERSIFICATION preregistration`);
+    }
+  }
+  // A ratio at or below 1.00 is not a diversification claim — it is a claim of no change or of harm.
+  if (!(spec.minEffectiveBetsRatio > 1)) throw new Error('minEffectiveBetsRatio must exceed 1');
+  if (!(spec.hypothesizedEffectiveBetsRatio >= spec.minEffectiveBetsRatio)) {
+    throw new Error('hypothesizedEffectiveBetsRatio must be at least minEffectiveBetsRatio; a lane may '
+      + 'not declare an effect smaller than the floor it is gated against');
+  }
+  if (!(spec.hypothesizedVolReduction >= spec.minVolatilityReduction)) {
+    throw new Error('hypothesizedVolReduction must be at least minVolatilityReduction');
+  }
+  if (!Number.isInteger(spec.observations) || spec.observations < 2) {
+    throw new Error('observations must be an integer >= 2');
+  }
+  if (!Number.isFinite(spec.observationsPerYear) || spec.observationsPerYear <= 0) {
+    throw new Error('observationsPerYear must be a positive number');
+  }
+  if (!Array.isArray(spec.plateauCells) || spec.plateauCells.length === 0) {
+    throw new Error('plateauCells must name every cell evaluated inside the single terminal evaluation');
+  }
 }
 
 /**
@@ -518,8 +691,8 @@ export function productClassFromConfig(config: unknown): ProductClass {
   const validation = root ? record(root.validation) : null;
   const declared = validation?.productClass;
   if (declared === undefined || declared === null) return 'ALPHA';
-  if (declared !== 'ALPHA' && declared !== 'BETA') {
-    throw new Error("config.validation.productClass must be 'ALPHA' or 'BETA'");
+  if (declared !== 'ALPHA' && declared !== 'BETA' && declared !== 'DIVERSIFICATION') {
+    throw new Error("config.validation.productClass must be 'ALPHA', 'BETA' or 'DIVERSIFICATION'");
   }
   return declared;
 }
@@ -532,13 +705,21 @@ function requireString(source: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function requireStringArray(source: Record<string, unknown>, key: string): readonly string[] {
+  const value = source[key];
+  if (!Array.isArray(value) || value.length === 0 || value.some((v) => typeof v !== 'string' || !v.trim())) {
+    throw new Error(`config.validation.${key} must be a non-empty array of strings when a DIVERSIFICATION gate is declared`);
+  }
+  return value as string[];
+}
+
 /**
  * Read a gate spec out of a free-form manifest config; null when no gate is declared at all.
  * A BETA block does NOT require the DSR keys: QDR-10 makes DSR a reported figure for that class,
  * never a gate, so demanding `hypothesizedAnnualSharpe` from a lane that is forbidden to claim an
  * edge would be incoherent. Present-but-incomplete still throws, per class.
  */
-export function gateSpecFromConfig(config: unknown): GateSpec | BetaGateSpec | null {
+export function gateSpecFromConfig(config: unknown): AnyGateSpec | null {
   const root = record(config);
   const validation = root ? record(root.validation) : null;
   if (!validation) return null;
@@ -549,7 +730,31 @@ export function gateSpecFromConfig(config: unknown): GateSpec | BetaGateSpec | n
     throw new Error('config.validation.minimumOosObservations must be an integer >= 2 when a DSR gate is declared');
   }
   const { trials, fallbackTrials } = trialsFromValidation(validation);
-  if (productClassFromConfig(config) === 'BETA') {
+  const declaredClass = productClassFromConfig(config);
+  if (declaredClass === 'DIVERSIFICATION') {
+    // Present-but-incomplete THROWS; absent entirely still seals as EXPLORATORY ALPHA. The
+    // fail-closed default is untouched — a lane cannot reach this branch without declaring the class.
+    return {
+      productClass: 'DIVERSIFICATION',
+      observations: Number(observations),
+      observationsPerYear: requireNumber(validation, 'observationsPerYear'),
+      trials,
+      fallbackTrials,
+      comparatorUniverseRule: requireString(validation, 'comparatorUniverseRule'),
+      comparatorVersionId: requireString(validation, 'comparatorVersionId'),
+      sectorMapHash: requireString(validation, 'sectorMapHash'),
+      formationCadenceDays: requireNumber(validation, 'formationCadenceDays'),
+      correlationLookbackDays: requireNumber(validation, 'correlationLookbackDays'),
+      minEffectiveBetsRatio: requireNumber(validation, 'minEffectiveBetsRatio'),
+      minVolatilityReduction: requireNumber(validation, 'minVolatilityReduction'),
+      hypothesizedEffectiveBetsRatio: requireNumber(validation, 'hypothesizedEffectiveBetsRatio'),
+      hypothesizedVolReduction: requireNumber(validation, 'hypothesizedVolReduction'),
+      hypothesizedMonteCarloP95Drawdown: requireNumber(validation, 'hypothesizedMonteCarloP95Drawdown'),
+      bootstrapBlockLength: requireNumber(validation, 'bootstrapBlockLength'),
+      plateauCells: requireStringArray(validation, 'plateauCells'),
+    };
+  }
+  if (declaredClass === 'BETA') {
     const targetAnnualVol = requireNumber(validation, 'targetAnnualVol');
     return {
       productClass: 'BETA',
