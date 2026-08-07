@@ -67,6 +67,7 @@
 //   validated by all three T2 siblings) rather than re-sweeping it.
 // AAOIFI: sleeve is C1 VERIFIED_COMPLIANT at run time (buildC1ShariaRunSnapshot). Execution remains
 // paper/simulated only per standing RUSHD policy, independent of this card's terminal verdict.
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { StrategyBookPolicy } from '../backtest/portfolioEngine';
 import { assertNoLookahead } from '../data/pointInTime';
@@ -120,6 +121,22 @@ const SECTOR_SYMBOLS: Readonly<Record<string, readonly string[]>> = Object.freez
 export const SYMBOL_SECTOR: ReadonlyMap<string, string> = new Map(
   Object.entries(SECTOR_SYMBOLS).flatMap(([sector, symbols]) => symbols.map((symbol) => [symbol, sector] as const)),
 );
+
+/**
+ * SHA-256 of the CLASSIFICATION ITSELF, canonicalized as sorted `SYMBOL:Sector` pairs — not of the
+ * source file. QDR-11 requires `sectorMapHash` inside `stableConfigHash` so a re-labeled sector
+ * cannot pose as a data update; hashing the file instead would make every unrelated edit to this
+ * module (a comment, a new export) look like a re-tuned classification, and a hash that cries wolf
+ * is a hash nobody checks. Sorting makes it invariant to declaration order, so moving a symbol
+ * between lines without changing its sector leaves the hash alone — as it should.
+ */
+export function sectorMapContentHash(): string {
+  const canonical = Array.from(SYMBOL_SECTOR.entries())
+    .map(([symbol, sector]) => `${symbol}:${sector}`)
+    .sort()
+    .join('\n');
+  return `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;
+}
 
 export const HalalSectorCappedRiskParityCoreParamsSchema = z.object({
   version: z.literal('v1'),

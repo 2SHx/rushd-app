@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-decorrelated-risk-parity-core",
+  "version": "v1",
+  "config": {
+    "seed": 42,
+    "signal": null,
+    "portfolio": {
+      "weighting": "inverse-volatility",
+      "lookbackDays": 252,
+      "perNameCap": 0.2,
+      "breadthFloor": 15,
+      "maxNames": 40,
+      "rebalance": "monthly-month-end"
+    },
+    "execution": {
+      "commissionBpsPerSide": 10,
+      "slippageBpsPerSide": 5
+    },
+    "plateau": {
+      "axes": [
+        "lookbackDays",
+        "perNameCap"
+      ],
+      "lookbackDays": [
+        231,
+        252,
+        273
+      ],
+      "perNameCap": [
+        0.15,
+        0.2,
+        0.25
+      ],
+      "trials": 9
+    },
+    "universe": {
+      "rule": "selectCorrelationBalancedSleeve",
+      "maxNames": 40,
+      "sectorCap": 0.25,
+      "poolSize": 80,
+      "correlationLookbackDays": 252,
+      "formationCadenceSessions": 252
+    },
+    "validation": {
+      "productClass": "DIVERSIFICATION",
+      "minimumOosObservations": 644,
+      "observationsPerYear": 252,
+      "trialTier": "CONFIRMATORY",
+      "relatedFamilyTrials": 108,
+      "confirmatoryTrials": 1,
+      "comparatorUniverseRule": "selectDollarVolumeSleeve",
+      "comparatorVersionId": "halal-risk-parity-core@v1",
+      "sectorMapHash": "sha256:da242a29913cadba5302606aacd42eac004057c4ffddf94fa8c4c7b249073830",
+      "formationCadenceDays": 252,
+      "correlationLookbackDays": 252,
+      "minEffectiveBetsRatio": 1.1,
+      "minVolatilityReduction": 0.05,
+      "hypothesizedEffectiveBetsRatio": 1.28,
+      "hypothesizedVolReduction": 0.116,
+      "hypothesizedMonteCarloP95Drawdown": 0.41,
+      "bootstrapBlockLength": 20,
+      "plateauCells": [
+        "sectorCap=0.25,poolSize=80",
+        "sectorCap=0.2,poolSize=60",
+        "sectorCap=0.2,poolSize=80",
+        "sectorCap=0.2,poolSize=100",
+        "sectorCap=0.25,poolSize=60",
+        "sectorCap=0.25,poolSize=100",
+        "sectorCap=0.3,poolSize=60",
+        "sectorCap=0.3,poolSize=80",
+        "sectorCap=0.3,poolSize=100"
+      ]
+    },
+    "hypothesis": {
+      "claim": "Selecting the sleeve on low pairwise correlation and sector balance, instead of on dollar volume, produces a book that holds more effective bets and whose value swings less day to day, for the same kind of market exposure.",
+      "claimAr": "اختيار السلة حسب انخفاض الارتباط الزوجي والتوازن القطاعي، بدلًا من حجم التداول، يُنتج محفظة تحتوي على عدد أكبر من الرهانات الفعّالة وتقلبها اليومي أقل، لنفس نوع التعرّض للسوق.",
+      "falsifier": "Mean effective-bet ratio below 1.10, OR any single formation cycle below 1.00, OR volatility reduction below 5%, OR a paired-bootstrap 95% upper bound on sigma_B/sigma_A above 0.95.",
+      "priorEvidence": "Walk-forward, 8 formation dates 2017-2024, trailing-252d formation and next-252d measurement: lower realized correlation in 8 of 8 out-of-sample periods, mean effective-bet ratio 1.28x.",
+      "returnClaim": "NONE. No return, Sharpe, edge, or outperformance claim is made or permitted for this version, in either direction. The return difference needs 89-503 years of data for 80% power and is beyond measurement.",
+      "predictedRejection": "this lane is predicted to fail the drawdown breaker and is therefore predicted to terminate REJECTED; it is sealed to adjudicate the structural claim only and is not a candidate for admission",
+      "predictedRejectionAr": "يُتوقَّع أن تُخفق هذه التجربة في حدّ الانخفاض الأقصى وأن تنتهي بالرفض؛ خُتمت للفصل في الادعاء البنيوي فقط وليست مرشّحة للقبول",
+      "predictedCagrGiveUp": -0.041
+    }
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "director": "quant-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

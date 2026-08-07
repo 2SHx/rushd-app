@@ -104,6 +104,11 @@ export const PIT_MEMBERSHIP_REQUIRED_SETUP_IDS = Object.freeze([
   'bollinger-mr-long-v3',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  // QDR-11 lane. Its SLEEVE re-forms on a genuine rolling PIT schedule (G9-PIT), but that is a
+  // different guarantee from historical MEMBERSHIP and point-in-time Sharia evidence, which still do
+  // not exist. Fail closed: diagnostics run, terminal replay is blocked until they do. A lane that
+  // measures diversification honestly must not certify holdings it cannot screen at each decision.
+  'halal-decorrelated-risk-parity-core',
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',

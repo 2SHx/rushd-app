@@ -21,6 +21,7 @@ import { bagholderBounceSetup } from './bagholderBounce';
 import { timeOfDaySetup } from './timeOfDay';
 import { nvdaFocusSetup } from './nvdaFocus';
 import { halalMarkowitzCoreSetup } from './halalMarkowitzCore';
+import { halalDecorrelatedRiskParityCoreSetup } from './halalDecorrelatedRiskParityCore';
 import { halalRiskParityCoreSetup } from './halalRiskParityCore';
 import { halalMomentumRiskParityCoreSetup } from './halalMomentumRiskParityCore';
 import { halalSectorCappedRiskParityCoreSetup } from './halalSectorCappedRiskParityCore';
@@ -58,6 +59,7 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [nvdaFocusSetup.id]: nvdaFocusSetup,
   [halalMarkowitzCoreSetup.id]: halalMarkowitzCoreSetup,
   [halalRiskParityCoreSetup.id]: halalRiskParityCoreSetup,
+  [halalDecorrelatedRiskParityCoreSetup.id]: halalDecorrelatedRiskParityCoreSetup,
   [halalMomentumRiskParityCoreSetup.id]: halalMomentumRiskParityCoreSetup,
   [halalSectorCappedRiskParityCoreSetup.id]: halalSectorCappedRiskParityCoreSetup,
   [halalSectorCappedRiskParityWideSetup.id]: halalSectorCappedRiskParityWideSetup,

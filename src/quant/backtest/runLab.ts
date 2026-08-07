@@ -31,6 +31,7 @@ import {
   halalRiskParityCoreBookPolicy,
   type HalalRiskParityCoreParams,
 } from '../strategies/halalRiskParityCore';
+import { halalDecorrelatedRiskParityCoreBookPolicy } from '../strategies/halalDecorrelatedRiskParityCore';
 import {
   halalMomentumRiskParityCoreBookPolicy,
   type HalalMomentumRiskParityCoreParams,
@@ -205,6 +206,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'nvda-focus-v1',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  'halal-decorrelated-risk-parity-core',
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',
@@ -229,6 +231,7 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'bollinger-mr-long-v3',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  'halal-decorrelated-risk-parity-core',
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',
@@ -269,6 +272,8 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
 const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-markowitz-core', 40],
   ['halal-risk-parity-core', 40],
+  // QDR-11: both arms capped at the SAME K. A different sleeve size would be a confound, not a result.
+  ['halal-decorrelated-risk-parity-core', 40],
   ['halal-momentum-risk-parity-core', 60],
   ['halal-sector-capped-risk-parity-core', 40],
   ['halal-sector-capped-risk-parity-wide', 100],
@@ -293,7 +298,9 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
  * balanced selection produced lower realized correlation in 8 of 8 out-of-sample periods, a mean
  * effective-bet ratio of 1.28x, and an implied Sharpe multiplier of 1.13x.
  */
-const CORRELATION_BALANCED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set<string>([]);
+const CORRELATION_BALANCED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set<string>([
+  'halal-decorrelated-risk-parity-core',
+]);
 
 /**
  * Calendar start for the rolling PIT sleeve schedule's session lookup. The FIRST sleeve must be
@@ -585,6 +592,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
     return multiModeBookV3Policy(params as MultiModeBookV3Params | undefined);
   }
   if (setupId === 'nvda-focus-v1') return nvdaFocusBookPolicy(params as NvdaFocusParams | undefined);
+  if (setupId === 'halal-decorrelated-risk-parity-core') {
+    return halalDecorrelatedRiskParityCoreBookPolicy(params as HalalRiskParityCoreParams | undefined);
+  }
   if (setupId === 'halal-risk-parity-core') {
     return halalRiskParityCoreBookPolicy(params as HalalRiskParityCoreParams | undefined);
   }
@@ -643,6 +653,9 @@ export const MONTHLY_BOOK_OBSERVATION_SETUP_IDS: ReadonlySet<string> = new Set([
   'g6b-linear-factor-wide',
   'halal-markowitz-core',
   'halal-risk-parity-core',
+  // Same monthly month-end book as its incumbent: the observation unit is a book-MONTH, because
+  // consecutive daily returns inside one month are correlated and would pseudo-replicate the sample.
+  'halal-decorrelated-risk-parity-core',
   'halal-momentum-risk-parity-core',
   'halal-sector-capped-risk-parity-core',
   'halal-sector-capped-risk-parity-wide',

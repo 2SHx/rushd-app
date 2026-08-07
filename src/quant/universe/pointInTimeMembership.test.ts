@@ -204,7 +204,11 @@ describe('assertPointInTimeMembershipCoverage', () => {
 
 describe('terminal C1 membership preflight', () => {
   it('pins the audited setup list and fails closed without ingested snapshots', () => {
-    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(13);
+    // 14 since the QDR-11 lane joined: `halal-decorrelated-risk-parity-core` re-forms its SLEEVE on
+    // a genuine rolling PIT schedule, which is a DIFFERENT guarantee from historical membership and
+    // point-in-time Sharia evidence — neither of which exists yet. It is fenced here on purpose.
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(14);
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-decorrelated-risk-parity-core');
     for (const setupId of PIT_MEMBERSHIP_REQUIRED_SETUP_IDS) {
       expect(requiresPointInTimeMembership(setupId)).toBe(true);
       expectFailure(
