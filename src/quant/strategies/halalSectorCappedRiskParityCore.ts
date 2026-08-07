@@ -116,7 +116,8 @@ const SECTOR_SYMBOLS: Readonly<Record<string, readonly string[]>> = Object.freez
   'Real Estate': ['PLD', 'WELL', 'MAA', 'EQIX'],
 });
 
-const SYMBOL_SECTOR: ReadonlyMap<string, string> = new Map(
+/** Exported for correlation-aware sleeve selection (decorrelatedSleeve); classification unchanged. */
+export const SYMBOL_SECTOR: ReadonlyMap<string, string> = new Map(
   Object.entries(SECTOR_SYMBOLS).flatMap(([sector, symbols]) => symbols.map((symbol) => [symbol, sector] as const)),
 );
 
