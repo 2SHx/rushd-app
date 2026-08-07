@@ -119,15 +119,6 @@ export default async function QuantPage({
   }[performanceStatus];
 
   const initialPositions = portfolio?.initialPositions ?? [];
-  const committeePositions = initialPositions.every(
-    position => position.costBasis !== null && position.weight !== null,
-  )
-    ? initialPositions.map(position => ({
-        ...position,
-        costBasis: position.costBasis as number,
-        weight: position.weight as number,
-      }))
-    : [];
   const canRenderCommittee = true;
   const unpricedSymbols = portfolio?.unpricedSymbols ?? [];
   const readinessMessages = [
@@ -212,12 +203,14 @@ export default async function QuantPage({
       <section id="quant-workspace" className="scroll-mt-6">
         <CommitteeClient
           locale={locale}
-          initialNAV={portfolio?.initialNAV ?? 100000}
-          initialCash={portfolio?.initialCash ?? 100000}
-          initialPositions={committeePositions}
+          initialNAV={portfolio?.initialNAV ?? null}
+          initialCash={portfolio?.initialCash ?? 0}
+          initialCashCurrency={portfolio?.cashCurrency ?? null}
+          initialPositions={initialPositions}
           initialSnapshots={portfolio?.initialSnapshots ?? []}
           initialPurification={initialPurification}
           initialMetrics={portfolio?.initialMetrics}
+          initialPerformanceStatus={performanceStatus}
           initialTrades={initialTrades}
           initialDecisions={initialDecisions}
           initialAutonomyTier={initialAutonomyTier as any}

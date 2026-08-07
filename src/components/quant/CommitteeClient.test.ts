@@ -39,6 +39,26 @@ describe('CommitteeClient safety boundary', () => {
     expect(source).not.toContain('generateMockDecisions');
     expect(source).not.toContain('mock-dec-');
     expect(source).not.toContain('simulated compound growth');
+    expect(source).not.toContain('DEFAULT_MOCK_NAV');
+    expect(source).not.toContain('DEFAULT_MOCK_CASH');
+    expect(source).not.toContain('DEFAULT_MOCK_POSITIONS');
+    expect(source).not.toContain('DEFAULT_MOCK_SNAPSHOTS');
+    expect(source).not.toContain('DEFAULT_MOCK_PURIFICATION');
+  });
+
+  it('keeps the selected workspace section in the URL and browser history', () => {
+    expect(source).toContain("import { usePathname, useRouter } from 'next/navigation'");
+    expect(source).toContain('router.push(');
+    expect(source).toContain('?section=${tab}#quant-workspace');
+    expect(source).toContain('setActiveTab(initialSection)');
+  });
+
+  it('localizes the portfolio analytics surface instead of shipping inline English UI', () => {
+    expect(source).not.toContain('>AI Strategy<');
+    expect(source).not.toContain('>US Equities<');
+    expect(source).not.toContain('>Saudi Equities<');
+    expect(source).not.toContain('>Portfolio Share<');
+    expect(source).toContain("t('portfolioPerformanceNoSnapshots')");
   });
 
   it('keeps Alpaca paper results in the canonical Portfolio view', () => {

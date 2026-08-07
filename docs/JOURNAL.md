@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-07 — Quant portfolio analytics restored and de-fabricated ✅
+Shipped: URL-synchronized advisor/teams/portfolio tabs; removed synthetic 375k NAV, holdings, purification, and curve fallbacks; rebuilt portfolio analytics with persisted-data states, bilingual metric targets, responsive holdings, currency-safe values, and guarded rebalance.
+Decisions: Lazy-dev rung 2 — reused the persisted portfolio view model, performance-status contract, shared SAR/USD formatter, and Quant translations; incomplete evidence is shown, never estimated, and unverified Sharia status no longer defaults to compliant.
+Verify: Browser reproduced red then green; portfolio deep-link survives reload/back, teams deep-link restores league, fake values absent; Arabic desktop/mobile and light/dark checked; 15 focused tests, tsc, lint, i18n parity, and diff checks pass.
+Open: Full suite remains at the known unrelated baseline: 1,413 pass, 2 skip, 11 fail (Neon connectivity plus academy/authz assertions).
+
 ## 2026-08-07 — Quant strategy metrics UX and Arabic RTL repair ✅
 Shipped: Always-visible bilingual metric guidance with exact targets, per-gate thresholds, mobile strategy cards, visible detail-table explanations, localized trade-ledger controls, and overflow-safe KPI values.
 Decisions: Distinguished hard promotion gates from the Sharpe 1–2 reading range; preserved exact simulated values and made every explanation available without hover.

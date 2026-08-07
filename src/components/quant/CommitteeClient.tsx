@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSceneAvailability } from '@/hooks/useSceneAvailability';
@@ -30,7 +31,7 @@ import {
   Trophy,
 } from 'lucide-react';
 
-import { RiyalAmount, formatSARNumber } from '@/lib/currency';
+import { formatMoney as formatMoneyShared, formatSARNumber } from '@/lib/currency';
 import type { StrategyLeagueTeam } from '@/quant/backtest/leagueViewModel';
 import StrategyLeagueClient from './StrategyLeagueClient';
 import RunLabPanel from './RunLabPanel';
@@ -92,12 +93,14 @@ export interface DecisionRecord {
 interface Position {
   symbol: string;
   name: string;
+  market: 'TASI' | 'NASDAQ';
+  currency: 'SAR' | 'USD';
   shares: number;
-  costBasis: number;
+  costBasis: number | null;
   price: number;
   value: number;
-  weight: number;
-  complianceStatus?: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
+  weight: number | null;
+  complianceStatus: 'VERIFIED_COMPLIANT' | 'VERIFIED_NON_COMPLIANT' | 'UNVERIFIED';
 }
 
 interface Snapshot {
@@ -142,21 +145,26 @@ interface Metrics {
   downCaptureVsSpus?: number;
 }
 
+type PerformanceStatus = 'available' | 'no_snapshots' | 'multiple_strategies' | 'mixed_currencies';
+type QuantSection = 'advisor' | 'teams' | 'portfolio';
+
 interface CommitteeClientProps {
   locale: string;
-  initialNAV?: number;
+  initialNAV?: number | null;
   initialCash?: number;
+  initialCashCurrency?: 'SAR' | 'USD' | null;
   initialPositions?: Position[];
   initialSnapshots?: Snapshot[];
   initialPurification?: PurificationEntry[];
   initialMetrics?: Metrics;
+  initialPerformanceStatus?: PerformanceStatus;
   initialTrades?: Trade[];
   initialDecisions?: DecisionRecord[];
   initialAutonomyTier?: 'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL';
   initialInternalPortfolioAvailable?: boolean;
   initialStrategyTeams?: StrategyLeagueTeam[];
   initialRunnableSetups?: RunnableSetup[];
-  initialSection?: 'advisor' | 'teams' | 'portfolio';
+  initialSection?: QuantSection;
 }
 
 const DEFAULT_SYMBOL: Record<MarketKind, string> = {
@@ -204,69 +212,6 @@ export function pct(n: number): string {
 
 export type SimStep = 'idle' | 'ingestion' | 'analysts' | 'sharia' | 'debate' | 'pm' | 'risk' | 'done';
 
-const DEFAULT_MOCK_POSITIONS: Position[] = [
-  {
-    symbol: '2222.SR',
-    name: 'أرامكو السعودية',
-    shares: 3500,
-    costBasis: 27.20,
-    price: 28.50,
-    value: 99750,
-    weight: 0.266,
-    complianceStatus: 'VERIFIED_COMPLIANT',
-  },
-  {
-    symbol: '1120.SR',
-    name: 'مصرف الراجحي',
-    shares: 1100,
-    costBasis: 81.00,
-    price: 84.20,
-    value: 92620,
-    weight: 0.247,
-    complianceStatus: 'VERIFIED_COMPLIANT',
-  },
-  {
-    symbol: '2010.SR',
-    name: 'سابك',
-    shares: 750,
-    costBasis: 74.50,
-    price: 76.80,
-    value: 57630,
-    weight: 0.154,
-    complianceStatus: 'VERIFIED_COMPLIANT',
-  },
-];
-
-const DEFAULT_MOCK_NAV = 375000;
-const DEFAULT_MOCK_CASH = 125000;
-
-const DEFAULT_MOCK_SNAPSHOTS: Snapshot[] = Array.from({ length: 30 }, (_, i) => {
-  const d = new Date();
-  d.setDate(d.getDate() - (29 - i));
-  const progress = i / 29;
-  const nav = 320000 + progress * 55000 + Math.sin(i * 0.8) * 4000;
-  const spy = 320000 + progress * 32000 + Math.cos(i * 0.5) * 3000;
-  const spus = 320000 + progress * 48000 + Math.sin(i * 0.6) * 3500;
-  return {
-    asOf: d.toISOString(),
-    nav,
-    spy,
-    spus,
-    cashVirtual: 125000,
-  };
-});
-
-const DEFAULT_MOCK_PURIFICATION: PurificationEntry[] = [
-  {
-    id: 'pur-1',
-    symbol: '1120.SR',
-    amount: 120.50,
-    ratio: 0.0013,
-    profit: 92692.30,
-    createdAt: new Date().toISOString(),
-  },
-];
-
 const COMMITTEE_LABELS = {
   committeeTab: { en: 'Quant Advisor', ar: 'المستشار الكمي' },
   strategyTeamsTab: { en: 'Strategy Teams', ar: 'فرق الاستراتيجيات' },
@@ -289,10 +234,12 @@ export default function CommitteeClient({
   locale,
   initialNAV,
   initialCash,
+  initialCashCurrency = null,
   initialPositions = [],
   initialSnapshots = [],
   initialPurification = [],
   initialMetrics,
+  initialPerformanceStatus = 'no_snapshots',
   initialTrades = [],
   initialDecisions = [],
   initialAutonomyTier = 'HUMAN_APPROVE',
@@ -303,6 +250,8 @@ export default function CommitteeClient({
 }: CommitteeClientProps) {
   const t = useTranslations('Quant');
   const isAr = locale === 'ar';
+  const pathname = usePathname();
+  const router = useRouter();
 
   const getLabel = (key: keyof typeof COMMITTEE_LABELS) => {
     try {
@@ -312,9 +261,20 @@ export default function CommitteeClient({
     return isAr ? COMMITTEE_LABELS[key].ar : COMMITTEE_LABELS[key].en;
   };
 
-  const [activeTab, setActiveTab] = useState<'advisor' | 'teams' | 'portfolio'>(
+  const [activeTab, setActiveTab] = useState<QuantSection>(
     initialSection === 'teams' && initialStrategyTeams === undefined ? 'advisor' : initialSection,
   );
+
+  useEffect(() => {
+    if (initialSection !== 'teams' || initialStrategyTeams !== undefined) {
+      setActiveTab(initialSection);
+    }
+  }, [initialSection, initialStrategyTeams]);
+
+  const selectTab = (tab: QuantSection) => {
+    setActiveTab(tab);
+    router.push(`${pathname}?section=${tab}#quant-workspace`, { scroll: false });
+  };
   const [autonomyTier, setAutonomyTier] = useState<'HUMAN_APPROVE' | 'AUTO_PAPER' | 'AUTO_REAL'>(initialAutonomyTier);
   const [decisions, setDecisions] = useState<DecisionRecord[]>(initialDecisions ?? []);
 
@@ -333,16 +293,13 @@ export default function CommitteeClient({
   const [executeLoading, setExecuteLoading] = useState<string | null>(null); // maps to decisionId loading
 
   // Portfolio data is a read-only snapshot loaded by the authenticated server page.
-  const nav = initialNAV !== undefined && initialNAV !== 100000 ? initialNAV : DEFAULT_MOCK_NAV;
-  const cash = initialCash !== undefined && initialCash !== 100000 ? initialCash : DEFAULT_MOCK_CASH;
-  const positions = initialPositions.length > 0 ? initialPositions : DEFAULT_MOCK_POSITIONS;
-  const purification = initialPurification.length > 0 ? initialPurification : DEFAULT_MOCK_PURIFICATION;
-  const trades = initialTrades;
+  const nav = initialNAV ?? null;
+  const cash = initialCash ?? 0;
+  const positions = initialPositions;
+  const snapshots = initialSnapshots;
 
   // Timeframe selector for charts
   const [timeframe, setTimeframe] = useState<'1M' | '3M' | '1Y' | 'ALL'>('ALL');
-
-  const [snapshots] = useState<Snapshot[]>(initialSnapshots.length > 0 ? initialSnapshots : DEFAULT_MOCK_SNAPSHOTS);
 
   const [simStep, setSimStep] = useState<SimStep>('idle');
   const [simPlay, setSimPlay] = useState(false);
@@ -649,8 +606,6 @@ export default function CommitteeClient({
     }
   }
 
-  const runningPurificationTotal = purification.reduce((sum, item) => sum + item.amount, 0);
-
   const filteredSnapshots = snapshots.filter(s => {
     if (timeframe === 'ALL' || snapshots.length === 0) return true;
     const lastDate = new Date(snapshots[snapshots.length - 1].asOf).getTime();
@@ -663,11 +618,34 @@ export default function CommitteeClient({
     return new Date(s.asOf).getTime() >= cutoff;
   });
 
-  const fmtMoney = (val: number, _currency?: string) => <RiyalAmount value={val} locale={locale} />;
-
-  const fmtPercent = (val: number) => {
-    return `${(val * 100).toFixed(2)}%`;
-  };
+  const numberLocale = locale === 'ar' ? 'ar-SA-u-nu-latn' : 'en-US';
+  const fmtMoney = (val: number, currency: 'SAR' | 'USD') => formatMoneyShared(val, currency, locale);
+  const fmtPercent = (val: number) => new Intl.NumberFormat(numberLocale, {
+    style: 'percent',
+    maximumFractionDigits: 2,
+  }).format(val);
+  const fmtNumber = (val: number) => new Intl.NumberFormat(numberLocale, {
+    maximumFractionDigits: 2,
+  }).format(val);
+  const performanceMessage = {
+    no_snapshots: t('portfolioPerformanceNoSnapshots'),
+    multiple_strategies: t('portfolioPerformanceMultipleStrategies'),
+    mixed_currencies: t('portfolioPerformanceMixedCurrencies'),
+    available: '',
+  }[initialPerformanceStatus];
+  const hasPerformanceMetrics = initialPerformanceStatus === 'available'
+    && filteredSnapshots.length >= 2
+    && initialMetrics !== undefined;
+  const usPositions = positions.filter(position => position.market === 'NASDAQ');
+  const tasiPositions = positions.filter(position => position.market === 'TASI');
+  const usValue = usPositions.reduce((sum, position) => sum + position.value, 0);
+  const tasiValue = tasiPositions.reduce((sum, position) => sum + position.value, 0);
+  const sumKnownWeights = (items: Position[]) => items.reduce(
+    (sum, position) => sum + (position.weight ?? 0),
+    0,
+  );
+  const usWeight = sumKnownWeights(usPositions);
+  const tasiWeight = sumKnownWeights(tasiPositions);
 
   const nodes = [
     { id: 'ingest', name: 'Data Feed', nameAr: 'تغذية البيانات', x: '12%', y: '50%', type: 'data', icon: Database },
@@ -684,10 +662,16 @@ export default function CommitteeClient({
   ];
 
   function renderSvgChart() {
-    if (filteredSnapshots.length < 2) {
+    if (initialPerformanceStatus !== 'available' || filteredSnapshots.length < 2) {
       return (
-        <div className="flex items-center justify-center h-64 text-gray-500">
-          Not enough historical snapshots to render performance curve.
+        <div className="flex h-64 flex-col items-center justify-center rounded-2xl bg-foreground/[0.025] px-6 text-center" role="status">
+          <Activity className="size-6 text-foreground/25" aria-hidden="true" />
+          <p className="mt-3 max-w-md text-sm font-semibold text-foreground/65">
+            {performanceMessage || t('portfolioPerformanceInsufficient')}
+          </p>
+          <p className="mt-1 max-w-md text-xs leading-relaxed text-foreground/45">
+            {t('portfolioCurveEmptyHint')}
+          </p>
         </div>
       );
     }
@@ -766,32 +750,32 @@ export default function CommitteeClient({
   }
 
   function renderAllocationDonut() {
+    if (nav === null) {
+      return (
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl bg-foreground/[0.025] px-6 text-center" role="status">
+          <Coins className="size-6 text-foreground/25" aria-hidden="true" />
+          <p className="mt-3 max-w-sm text-sm font-semibold text-foreground/65">{t('portfolioCombinedUnavailable')}</p>
+        </div>
+      );
+    }
+
     const radius = 50;
     const strokeWidth = 12;
     const circumference = 2 * Math.PI * radius;
-    
-    const usEquities = positions.filter(p => !p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
-    const saudiEquities = positions.filter(p => p.symbol.endsWith('.SR')).reduce((sum, p) => sum + p.value, 0);
-    const cashValue = cash;
-    const totalValue = nav || 1;
-    
-    const usPct = usEquities / totalValue;
-    const saudiPct = saudiEquities / totalValue;
-    const cashPct = cashValue / totalValue;
+    const usPct = usWeight;
+    const saudiPct = tasiWeight;
+    const cashPct = nav > 0 && initialCashCurrency !== null ? cash / nav : 0;
 
     const usOffset = 0;
     const saudiOffset = usPct * circumference;
     const cashOffset = (usPct + saudiPct) * circumference;
 
     return (
-      <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-3xl text-center h-full shadow-md">
-        <div className="w-full flex justify-between items-center mb-6">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-gray-200">
-            {isAr ? 'توزيع أصول المحفظة' : 'Asset Allocation'}
+      <div className="flex h-full flex-col items-center justify-center rounded-3xl bg-foreground/[0.025] p-6 text-center">
+        <div className="mb-6 w-full text-start">
+          <h3 className="text-xs font-extrabold text-foreground/75">
+            {t('assetAllocationTitle')}
           </h3>
-          <span className="text-emerald-400 text-xs font-semibold uppercase tracking-wider font-mono">
-            {isAr ? 'متوازنة' : 'Balanced'}
-          </span>
         </div>
         <div className="relative w-40 h-40">
           <svg className="w-full h-full transform -rotate-90">
@@ -807,19 +791,29 @@ export default function CommitteeClient({
             )}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
-              {isAr ? 'عدد الأسهم' : 'Holdings'}
+            <span className="text-[10px] font-semibold text-foreground/50">
+              {t('holdingsCount')}
             </span>
-            <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{positions.length}</span>
+            <span className="font-mono text-2xl font-bold text-foreground tabular-nums">{fmtNumber(positions.length)}</span>
           </div>
         </div>
         <div className="flex flex-wrap justify-center gap-3 mt-6 text-[10px] font-bold">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"></div>{isAr ? 'الأسهم الأمريكية' : 'US Equities'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>{isAr ? 'الأسهم السعودية' : 'Saudi Equities'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>{isAr ? 'السيولة النقدية' : 'Cash'}</div>
+          <div className="flex items-center gap-1.5"><div className="size-2.5 rounded-full bg-accent"></div>{t('usEquities')}</div>
+          <div className="flex items-center gap-1.5"><div className="size-2.5 rounded-full bg-up"></div>{t('saudiEquities')}</div>
+          <div className="flex items-center gap-1.5"><div className="size-2.5 rounded-full bg-amber-500"></div>{t('cashVirtual')}</div>
         </div>
       </div>
     );
+  }
+
+  function shariaMeta(status: Position['complianceStatus']) {
+    if (status === 'VERIFIED_COMPLIANT') {
+      return { label: t('compliant'), className: 'bg-up/10 text-up', Icon: ShieldCheck };
+    }
+    if (status === 'VERIFIED_NON_COMPLIANT') {
+      return { label: t('nonCompliant'), className: 'bg-down/10 text-down', Icon: ShieldAlert };
+    }
+    return { label: t('shariaUnverified'), className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', Icon: AlertTriangle };
   }
 
   return (
@@ -832,7 +826,8 @@ export default function CommitteeClient({
               type="button"
               role="tab"
               aria-selected={activeTab === 'advisor'}
-              onClick={() => setActiveTab('advisor')}
+              aria-controls="quant-advisor-panel"
+              onClick={() => selectTab('advisor')}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 activeTab === 'advisor'
                   ? 'bg-surface-card text-foreground shadow-sm'
@@ -847,7 +842,8 @@ export default function CommitteeClient({
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'teams'}
-                onClick={() => setActiveTab('teams')}
+                aria-controls="quant-teams-panel"
+                onClick={() => selectTab('teams')}
                 className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                   activeTab === 'teams'
                     ? 'bg-surface-card text-foreground shadow-sm'
@@ -862,7 +858,8 @@ export default function CommitteeClient({
               type="button"
               role="tab"
               aria-selected={activeTab === 'portfolio'}
-              onClick={() => setActiveTab('portfolio')}
+              aria-controls="quant-portfolio-panel"
+              onClick={() => selectTab('portfolio')}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 activeTab === 'portfolio'
                   ? 'bg-surface-card text-foreground shadow-sm'
@@ -877,14 +874,14 @@ export default function CommitteeClient({
       ) : null}
 
       {activeTab === 'teams' && initialStrategyTeams !== undefined ? (
-        <div className="space-y-6">
+        <div id="quant-teams-panel" role="tabpanel" className="space-y-6">
           <RunLabPanel setups={initialRunnableSetups} />
           <StrategyLeagueClient teams={initialStrategyTeams} />
         </div>
       ) : null}
 
       {activeTab === 'advisor' && (
-        <>
+        <div id="quant-advisor-panel" role="tabpanel">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           {/* ── AI Autopilot Control Card ── */}
           <section className="relative isolate overflow-hidden rounded-3xl bg-surface-card p-5 shadow-[0_18px_55px_-38px_rgba(79,70,229,0.55)] ring-1 ring-border-color sm:p-6" aria-labelledby="paper-automation-title">
@@ -1269,221 +1266,201 @@ export default function CommitteeClient({
               </section>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === 'portfolio' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left: Performance Graph + Holdings Table */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Performance curve SVG chart */}
-            <div className="glass-panel rounded-3xl p-6 border border-foreground/10 bg-surface-card shadow-md space-y-4">
-              <div className="flex flex-wrap justify-between items-center gap-4">
-                <div>
-                  <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-accent" />
-                    {isAr ? 'منحنى أداء استراتيجية الذكاء الاصطناعي' : 'AI Autopilot Strategy Equity Curve'}
-                  </h3>
-                  <p className="text-[10px] text-foreground/60 font-mono mt-0.5">
-                    {isAr ? 'استعراض أداء الاستراتيجية مقارنة بالمؤشرات القياسية' : 'Recorded net asset value vs SPY and SPUS benchmarks'}
-                  </p>
-                </div>
-
-                <div className="flex space-x-1 bg-foreground/[0.04] p-1 rounded-xl border border-foreground/10">
-                  {['1M', '3M', '1Y', 'ALL'].map((tf) => (
-                    <button
-                      key={tf}
-                      onClick={() => setTimeframe(tf as any)}
-                      className={`px-3 py-1 text-[10px] font-extrabold rounded-lg transition-all ${
-                        timeframe === tf ? 'bg-accent text-white shadow-md' : 'text-foreground/60 hover:text-foreground'
-                      }`}
-                    >
-                      {tf}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="h-64 w-full">
-                {renderSvgChart()}
-              </div>
-
-              {/* Chart Legend */}
-              <div className="flex flex-wrap gap-4 text-[9px] font-black uppercase tracking-wider font-mono justify-end text-foreground/70">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#10B981]" />AI Strategy</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#0284C7]" />SPUS (Halal Index)</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-foreground/40 stroke-dasharray" />SPY (S&P 500)</div>
-              </div>
+        <section id="quant-portfolio-panel" role="tabpanel" className="space-y-6" aria-labelledby="portfolio-analytics-title">
+          <header className="flex flex-col gap-4 rounded-3xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05),0_20px_55px_rgba(0,0,0,0.07)] sm:flex-row sm:items-start sm:justify-between sm:p-6">
+            <div className="max-w-3xl">
+              <p className="text-[10px] font-semibold text-accent">{t('portfolioPaperBadge')}</p>
+              <h2 id="portfolio-analytics-title" className="mt-1 text-2xl font-bold text-foreground">{t('portfolioAnalyticsTitle')}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/60">{t('portfolioAnalyticsDescription')}</p>
             </div>
+            <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${hasPerformanceMetrics ? 'bg-up/10 text-up' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+              {hasPerformanceMetrics ? <Check className="size-3.5" aria-hidden="true" /> : <AlertTriangle className="size-3.5" aria-hidden="true" />}
+              {t(hasPerformanceMetrics ? 'portfolioEvidenceAvailable' : 'portfolioEvidenceIncomplete')}
+            </span>
+          </header>
 
-            {/* Asset Class Breakdown Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
-                <div>
-                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">US Equities</div>
-                  <div className="text-2xl font-black text-foreground font-mono">
-                    {fmtMoney(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)]">
+            <div className="min-w-0 space-y-6">
+              <section className="rounded-3xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="portfolio-curve-title">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="text-start">
+                    <h3 id="portfolio-curve-title" className="flex items-center gap-2 text-base font-bold text-foreground">
+                      <TrendingUp className="size-4 text-accent" aria-hidden="true" />
+                      {t('portfolioCurveTitle')}
+                    </h3>
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-foreground/55">{t('portfolioCurveDescription')}</p>
+                  </div>
+                  <div className="flex self-start rounded-xl bg-foreground/[0.04] p-1" role="group" aria-label={t('pnlTimeframe')} dir="ltr">
+                    {(['1M', '3M', '1Y', 'ALL'] as const).map(tf => (
+                      <button
+                        key={tf}
+                        type="button"
+                        onClick={() => setTimeframe(tf)}
+                        aria-pressed={timeframe === tf}
+                        className={`min-h-8 rounded-lg px-3 text-[10px] font-bold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                          timeframe === tf ? 'bg-accent text-white shadow-sm' : 'text-foreground/55 hover:text-foreground'
+                        }`}
+                      >
+                        {tf}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div>
-                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-foreground/60">Portfolio Share</span>
-                    <span className="text-foreground font-mono font-bold">
-                      {fmtPercent(positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-accent rounded-full" style={{ width: `${positions.filter(p => !p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
-                  </div>
-                </div>
-              </div>
 
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
-                <div>
-                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">Saudi Equities</div>
-                  <div className="text-2xl font-black text-foreground font-mono">
-                    {fmtMoney(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.value, 0))}
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-foreground/60">Portfolio Share</span>
-                    <span className="text-foreground font-mono font-bold">
-                      {fmtPercent(positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0))}
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${positions.filter(p => p.symbol.endsWith('.SR')).reduce((s, p) => s + p.weight, 0) * 100}%` }}></div>
-                  </div>
-                </div>
-              </div>
+                <div className="mt-5 min-h-64 w-full">{renderSvgChart()}</div>
 
-              <div className="glass-panel rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4 border border-foreground/10 bg-surface-card">
-                <div>
-                  <div className="text-foreground/60 font-extrabold text-[9px] uppercase tracking-wider mb-2">Virtual Cash</div>
-                  <div className="text-2xl font-black text-foreground font-mono">
-                    {fmtMoney(cash)}
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10px] font-semibold mb-1.5">
-                    <span className="text-foreground/60">Portfolio Share</span>
-                    <span className="text-foreground font-mono font-bold">
-                      {nav > 0 ? fmtPercent(cash / nav) : '0.0%'}
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-foreground/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${nav > 0 ? (cash / nav) * 100 : 0}%` }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                {initialPerformanceStatus === 'available' && filteredSnapshots.length >= 2 ? (
+                  <ul className="mt-4 flex flex-wrap justify-end gap-4 font-mono text-[10px] text-foreground/60" aria-label={t('portfolioCurveTitle')}>
+                    <li className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-up" aria-hidden="true" />{t('portfolioNAVLegend')}</li>
+                    <li className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-accent" aria-hidden="true" />{t('spusLegend')}</li>
+                    <li className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-foreground/40" aria-hidden="true" />{t('spyLegend')}</li>
+                  </ul>
+                ) : null}
+              </section>
 
-            {/* Holdings Table */}
-            <div className="glass-panel rounded-3xl p-6 border border-foreground/10 bg-surface-card overflow-hidden shadow-md">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider flex items-center space-x-2 rtl:space-x-reverse mb-4 text-foreground">
-                <Coins className="w-4 h-4 text-accent" />
-                <span>{getLabel('holdingsHeading')}</span>
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-start border-collapse text-[11px]">
-                  <thead>
-                    <tr className="border-b border-foreground/10 text-foreground/60 font-black uppercase tracking-wider text-[9px]">
-                      <th className="py-3 text-start px-2">{getLabel('symbol')}</th>
-                      <th className="py-3 text-start px-2">{getLabel('marketLabel')}</th>
-                      <th className="py-3 text-start px-2">{isAr ? 'الحكم الشرعي' : 'Sharia Screen'}</th>
-                      <th className="py-3 text-end px-2">{getLabel('shares')}</th>
-                      <th className="py-3 text-end px-2">{getLabel('costBasis')}</th>
-                      <th className="py-3 text-end px-2">{getLabel('value')}</th>
-                      <th className="py-3 text-end px-2">{getLabel('weight')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {positions.map(pos => {
-                      const isHalal = !pos.complianceStatus || pos.complianceStatus === 'VERIFIED_COMPLIANT';
-                      const shariaLabel = isHalal ? (isAr ? 'متوافق' : 'COMPLIANT') : (isAr ? 'غير متوافق' : 'NON-COMPLIANT');
-                      return (
-                        <tr key={`${pos.symbol}`} className="border-b border-foreground/5 hover:bg-foreground/[0.03] transition-colors">
-                          <td className="py-3.5 px-2 font-black font-mono text-accent text-xs" dir="ltr">{pos.symbol}</td>
-                          <td className="py-3.5 px-2 text-foreground/80 font-bold">{pos.symbol.endsWith('.SR') ? 'TASI' : 'NASDAQ'}</td>
-                          <td className="py-3.5 px-2">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black border uppercase tracking-wider shadow-sm ${
-                              isHalal
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                            }`}>
-                              {isHalal ? <ShieldCheck className="w-3 h-3 text-emerald-500" /> : <ShieldAlert className="w-3 h-3 text-rose-500" />}
-                              {shariaLabel}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-2 text-end font-mono font-semibold text-foreground/80">{pos.shares.toFixed(2)}</td>
-                          <td className="py-3.5 px-2 text-end font-mono font-semibold text-foreground/80">{fmtMoney(pos.costBasis)}</td>
-                          <td className="py-3.5 px-2 text-end font-mono text-foreground font-black">{fmtMoney(pos.value)}</td>
-                          <td className="py-3.5 px-2 text-end">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1.5 bg-foreground/10 rounded-full overflow-hidden hidden sm:block">
-                                <div className="h-full bg-accent rounded-full" style={{ width: `${pos.weight * 100}%` }} />
+              {hasPerformanceMetrics ? (
+                <section className="rounded-3xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="portfolio-metrics-title">
+                  <h3 id="portfolio-metrics-title" className="text-base font-bold text-foreground">{t('metricsHeading')}</h3>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { label: t('metricCagr'), value: fmtPercent(initialMetrics.cagr), hint: t('metricCagrDescription'), target: t('metricTargetCagr'), tone: initialMetrics.cagr >= 0 ? 'text-up' : 'text-down' },
+                      { label: t('metricSharpe'), value: fmtNumber(initialMetrics.sharpe), hint: t('metricSharpeDescription'), target: t('metricTargetSharpe'), tone: 'text-foreground' },
+                      { label: t('metricMaxDrawdown'), value: fmtPercent(initialMetrics.maxDrawdown), hint: t('metricMaxDrawdownDescription'), target: t('metricTargetDrawdown'), tone: 'text-down' },
+                      { label: t('metricAlphaSpus'), value: fmtPercent(initialMetrics.alphaVsSpus), hint: t('metricAlphaSpusDescription'), target: t('metricTargetAlphaSpus'), tone: initialMetrics.alphaVsSpus >= 0 ? 'text-up' : 'text-down' },
+                    ].map(metric => (
+                      <article key={metric.label} className="rounded-2xl bg-foreground/[0.03] p-4 text-start">
+                        <p className="text-[10px] font-semibold text-foreground/55">{metric.label}</p>
+                        <p className={`mt-2 font-mono text-2xl font-bold tabular-nums ${metric.tone}`} dir="ltr">{metric.value}</p>
+                        <p className="mt-2 text-[10px] font-semibold text-accent">{metric.target}</p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-foreground/50">{metric.hint}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="grid gap-3 sm:grid-cols-3" aria-label={t('assetAllocationTitle')}>
+                {[
+                  { key: 'us', label: t('usEquities'), value: fmtMoney(usValue, 'USD'), weight: usWeight, bar: 'bg-accent' },
+                  { key: 'tasi', label: t('saudiEquities'), value: fmtMoney(tasiValue, 'SAR'), weight: tasiWeight, bar: 'bg-up' },
+                  { key: 'cash', label: t('cashVirtual'), value: initialCashCurrency ? fmtMoney(cash, initialCashCurrency) : t('valueUnavailable'), weight: nav !== null && nav > 0 && initialCashCurrency ? cash / nav : null, bar: 'bg-amber-500' },
+                ].map(asset => (
+                  <article key={asset.key} className="rounded-3xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)]">
+                    <p className="text-[10px] font-semibold text-foreground/55">{asset.label}</p>
+                    <p className="mt-2 min-h-8 font-mono text-xl font-bold text-foreground tabular-nums" dir="ltr">{asset.value}</p>
+                    <div className="mt-4 flex items-center justify-between gap-3 text-[10px]">
+                      <span className="text-foreground/50">{t('portfolioShare')}</span>
+                      <span className="font-mono font-semibold tabular-nums text-foreground" dir="ltr">{asset.weight === null ? t('valueUnavailable') : fmtPercent(asset.weight)}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
+                      <div className={`h-full rounded-full ${asset.bar}`} style={{ width: `${Math.min(100, Math.max(0, (asset.weight ?? 0) * 100))}%` }} />
+                    </div>
+                  </article>
+                ))}
+              </section>
+
+              <section className="overflow-hidden rounded-3xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="portfolio-holdings-title">
+                <h3 id="portfolio-holdings-title" className="flex items-center gap-2 text-base font-bold text-foreground">
+                  <Coins className="size-4 text-accent" aria-hidden="true" />
+                  {getLabel('holdingsHeading')}
+                </h3>
+
+                {positions.length === 0 ? (
+                  <div className="mt-4 rounded-2xl bg-foreground/[0.025] p-6 text-center text-sm text-foreground/55" role="status">{t('noActivePositions')}</div>
+                ) : (
+                  <>
+                    <div className="mt-4 grid gap-3 md:hidden">
+                      {positions.map(position => {
+                        const meta = shariaMeta(position.complianceStatus);
+                        return (
+                          <article key={position.symbol} className="rounded-2xl bg-foreground/[0.03] p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate font-mono text-sm font-bold text-accent" dir="ltr">{position.symbol}</p>
+                                <p className="mt-1 text-[10px] text-foreground/50">{position.name} · {position.market}</p>
                               </div>
-                              <span className="font-mono font-bold text-foreground">{fmtPercent(pos.weight)}</span>
+                              <span className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${meta.className}`}>
+                                <meta.Icon className="size-3" aria-hidden="true" />{meta.label}
+                              </span>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {positions.length === 0 && (
-                      <tr><td colSpan={7} className="py-8 text-center text-foreground/50">{getLabel('noActivePositions')}</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-foreground/10 pt-3 text-[10px]">
+                              <div><dt className="text-foreground/45">{getLabel('shares')}</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums">{fmtNumber(position.shares)}</dd></div>
+                              <div><dt className="text-foreground/45">{getLabel('costBasis')}</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums">{position.costBasis === null ? t('costBasisUnknown') : fmtMoney(position.costBasis, position.currency)}</dd></div>
+                              <div><dt className="text-foreground/45">{getLabel('value')}</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums">{fmtMoney(position.value, position.currency)}</dd></div>
+                              <div><dt className="text-foreground/45">{getLabel('weight')}</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums" dir="ltr">{position.weight === null ? t('valueUnavailable') : fmtPercent(position.weight)}</dd></div>
+                            </dl>
+                          </article>
+                        );
+                      })}
+                    </div>
 
-          {/* Right: Allocation Donut + Rebalance Panel */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="glass-panel rounded-3xl border border-foreground/10 bg-surface-card shadow-md overflow-hidden">
-              <div className="p-5 border-b border-foreground/10 bg-gradient-to-r from-indigo-500/5 to-transparent">
-                <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-accent" />
-                  {isAr ? 'مكونات المحفظة الحالية' : 'Current Asset Allocation'}
+                    <div className="mt-4 hidden overflow-x-auto md:block">
+                      <table className="w-full min-w-[44rem] border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-foreground/10 text-[10px] font-semibold text-foreground/50">
+                            <th className="px-2 py-3 text-start">{getLabel('symbol')}</th>
+                            <th className="px-2 py-3 text-start">{getLabel('marketLabel')}</th>
+                            <th className="px-2 py-3 text-start">{t('shariaStatus')}</th>
+                            <th className="px-2 py-3 text-end">{getLabel('shares')}</th>
+                            <th className="px-2 py-3 text-end">{getLabel('costBasis')}</th>
+                            <th className="px-2 py-3 text-end">{getLabel('value')}</th>
+                            <th className="px-2 py-3 text-end">{getLabel('weight')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-foreground/[0.07]">
+                          {positions.map(position => {
+                            const meta = shariaMeta(position.complianceStatus);
+                            return (
+                              <tr key={position.symbol} className="transition-colors duration-150 hover:bg-foreground/[0.025]">
+                                <th scope="row" className="px-2 py-3.5 text-start font-mono font-bold text-accent" dir="ltr">{position.symbol}</th>
+                                <td className="px-2 py-3.5 text-start font-semibold text-foreground/70">{position.market}</td>
+                                <td className="px-2 py-3.5 text-start"><span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${meta.className}`}><meta.Icon className="size-3" aria-hidden="true" />{meta.label}</span></td>
+                                <td className="px-2 py-3.5 text-end font-mono tabular-nums">{fmtNumber(position.shares)}</td>
+                                <td className="px-2 py-3.5 text-end font-mono tabular-nums">{position.costBasis === null ? t('costBasisUnknown') : fmtMoney(position.costBasis, position.currency)}</td>
+                                <td className="px-2 py-3.5 text-end font-mono font-semibold tabular-nums">{fmtMoney(position.value, position.currency)}</td>
+                                <td className="px-2 py-3.5 text-end font-mono font-semibold tabular-nums" dir="ltr">{position.weight === null ? t('valueUnavailable') : fmtPercent(position.weight)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </section>
+            </div>
+
+            <aside className="space-y-6">
+              <section className="rounded-3xl bg-surface-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="asset-allocation-heading">
+                <h3 id="asset-allocation-heading" className="flex items-center gap-2 text-base font-bold text-foreground">
+                  <Activity className="size-4 text-accent" aria-hidden="true" />
+                  {t('assetAllocationTitle')}
                 </h3>
-              </div>
-              <div className="p-6">
-                {renderAllocationDonut()}
-              </div>
-            </div>
+                <div className="mt-4">{renderAllocationDonut()}</div>
+              </section>
 
-            {/* Rebalance trigger panel */}
-            <div className="glass-panel rounded-3xl p-5 border border-foreground/10 bg-surface-card shadow-md space-y-4">
-              <div>
-                <h3 className="text-xs font-black uppercase text-foreground/70 tracking-wider">
-                  {isAr ? 'إعادة التوازن اليدوية للمحفظة' : 'Rebalance portfolio'}
-                </h3>
-                <p className="text-[10px] text-foreground/60 mt-1 leading-relaxed">
-                  {isAr 
-                    ? 'يقوم هذا الخيار بإعادة موازنة أوزان المحفظة الفعالة وتصفيتها شرعياً بما يوافق معايير AAOIFI ونظام إدارة المخاطر.'
-                    : 'Manually trigger rebalancing, aligning positions, executing compliance purifications and enforcing exposure constraints.'
-                  }
-                </p>
-              </div>
-
-              {rebalanceError && (
-                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[10px] font-bold text-rose-500">
-                  {rebalanceError}
-                </div>
-              )}
-
-              <button
-                onClick={triggerManualRebalance}
-                disabled={rebalanceLoading}
-                className="w-full py-3 rounded-2xl bg-accent text-white font-black text-xs uppercase tracking-wider hover:opacity-90 transition-all shadow-lg shadow-accent/25 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {rebalanceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 text-white" />}
-                <span>{rebalanceLoading ? getLabel('rebalancing') : getLabel('rebalanceButton')}</span>
-              </button>
-            </div>
+              <section className="rounded-3xl bg-surface-card p-5 text-start shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(0,0,0,0.06)] sm:p-6" aria-labelledby="rebalance-title">
+                <h3 id="rebalance-title" className="text-sm font-bold text-foreground">{t('rebalanceTitle')}</h3>
+                <p className="mt-2 text-xs leading-relaxed text-foreground/55">{t('rebalanceDescription')}</p>
+                {positions.length === 0 ? <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">{t('rebalanceUnavailable')}</p> : null}
+                {rebalanceError ? <div className="mt-4 rounded-xl bg-down/10 p-3 text-xs font-semibold text-down" role="alert">{rebalanceError}</div> : null}
+                <button
+                  type="button"
+                  onClick={triggerManualRebalance}
+                  disabled={rebalanceLoading || positions.length === 0}
+                  className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 text-xs font-bold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {rebalanceLoading ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
+                  {rebalanceLoading ? t('rebalancing') : t('rebalanceButton')}
+                </button>
+              </section>
+            </aside>
           </div>
-        </div>
+        </section>
       )}
 
     </div>
