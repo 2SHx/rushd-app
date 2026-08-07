@@ -84,6 +84,15 @@ export async function selectDollarVolumeSleeve(
 //
 // OPT-IN ONLY. Existing setups keep calling selectDollarVolumeSleeve and stay byte-identical —
 // changing a sealed setup's universe is a research decision, never an implementation one.
+//
+// ⚠ LOOK-AHEAD HAZARD — read before wiring any setup to this.
+// runLab currently resolves the sleeve ONCE at the run's `to` date and replays it backwards. For
+// dollar-volume ranking that is ordinary survivor bias. For CORRELATION selection it is DIRECT
+// LOOK-AHEAD ON THE EXACT STATISTIC BEING CLAIMED: the sleeve would be chosen for having been
+// decorrelated over the very window whose decorrelation is the result. Any such run earns
+// DATA_QUALITY_PIT_FAILURE and its diversification numbers are void.
+// A setup opting in MUST re-form the sleeve on a rolling PIT schedule (annual, trailing 252
+// trading days — the protocol the 8/8 walk-forward validated), never once at the terminal date.
 
 /** Trading days of trailing returns used to estimate correlation. */
 export const DECORRELATED_CORRELATION_LOOKBACK_DAYS = 252;
@@ -95,31 +104,55 @@ export interface SelectDecorrelatedOptions extends SelectSleeveOptions {
   sectorCap?: number;
   /** Sector lookup; unclassified names are fail-closed excluded, never guessed. */
   sectorOf: (symbol: string) => string | null;
+  /**
+   * Breadth floor. A binding sector cap legitimately returns a SHORT sleeve, but a strategy that
+   * declares a 15-name floor must not silently run on 9 — that is a risk-envelope breach wearing a
+   * selection result's clothing. Throws rather than returning an under-broad sleeve.
+   */
+  minNames?: number;
 }
 
 export async function selectCorrelationBalancedSleeve(
   entries: readonly UniverseEntry[],
   options: SelectDecorrelatedOptions,
 ): Promise<SleeveSelectionResult & { averageCorrelation: number; effectiveBets: number }> {
-  const { asOf, maxNames = 40, sectorCap = 0.25, sectorOf } = options;
+  const { asOf, maxNames = 40, sectorCap = 0.25, sectorOf, minNames } = options;
   const poolSize = options.poolSize ?? maxNames * 3;
   const store = options.store ?? new PointInTimeStore('DAY');
 
   // 1) Liquidity GATE — the pool is everything we could actually trade.
   const pool = await selectDollarVolumeSleeve(entries, { ...options, store, maxNames: poolSize });
   const excluded = [...pool.excluded];
+  const marketOf = new Map(entries.map((entry) => [entry.symbol, entry.market]));
 
   // 2) Trailing returns for the pool only, PIT-safe: bars at or before `asOf`, nothing after.
   const candidates = await Promise.all(pool.sleeve.map(async (entry) => {
-    const bars = await store.bars(entry.symbol, 'NASDAQ', asOf, DECORRELATED_CORRELATION_LOOKBACK_DAYS * 2);
+    // `PointInTimeStore.bars` takes CALENDAR days; ~365 calendar ≈ 252 trading. Over-fetch, then
+    // TRUNCATE to exactly the last 252 returns. Without the truncation this estimated correlation
+    // over ~347 trading days — a different protocol from the one the 8/8 walk-forward validated,
+    // and a silently different mechanism from the one being claimed.
+    const market = marketOf.get(entry.symbol)!;
+    const bars = await store.bars(entry.symbol, market, asOf, Math.ceil(DECORRELATED_CORRELATION_LOOKBACK_DAYS * 1.6));
     const closes = bars.map((b) => Number(b.close)).filter((c) => Number.isFinite(c) && c > 0);
     const returns: number[] = [];
     for (let i = 1; i < closes.length; i++) returns.push(closes[i] / closes[i - 1] - 1);
-    return { symbol: entry.symbol, sector: sectorOf(entry.symbol), returns };
+    return {
+      symbol: entry.symbol,
+      sector: sectorOf(entry.symbol),
+      returns: returns.slice(-DECORRELATED_CORRELATION_LOOKBACK_DAYS),
+    };
   }));
 
   const picked = selectDecorrelatedSleeve(candidates, { maxNames, sectorCap });
   for (const drop of picked.excluded) excluded.push({ symbol: drop.symbol, reasonCode: drop.reasonCode });
+
+  if (minNames !== undefined && picked.sleeve.length < minNames) {
+    throw new Error(
+      `correlation-balanced sleeve resolved ${picked.sleeve.length} names, below the declared breadth floor of `
+      + `${minNames} (sectorCap ${sectorCap}, poolSize ${poolSize}). Loosen the cap or widen the pool — running `
+      + 'an under-broad sleeve would breach the risk envelope the floor exists to hold.',
+    );
+  }
 
   const bySymbol = new Map(pool.sleeve.map((e) => [e.symbol, e]));
   return {
