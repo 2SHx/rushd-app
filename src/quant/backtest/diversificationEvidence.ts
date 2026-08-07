@@ -161,6 +161,65 @@ export function buildDiversificationCycles(
   });
 }
 
+// ── Plateau stability, in this claim's own unit ──────────────────────────────────────────────────
+// QDR-11's plateau gates a DIFFERENT QUANTITY from the profit-plateau machinery every other class
+// uses: "all 9 cells must show a mean effective-bet ratio >= 1.00", not an expectancy. Effective
+// bets are computed from SELECTIONS plus realized returns, so a cell needs its own formation
+// schedule but NO engine run at all — nine sleeve selections, not nine books. That is both far
+// cheaper and the literal reading of the record.
+//
+// All nine are computed inside the SINGLE terminal evaluation, so QDR-9 condition (f) holds; and
+// because the sealed cell was named before any OOS contact, the other eight can only FAIL the run,
+// never rescue it — so no selection occurs and no trial-count inflation follows.
+
+export interface DiversificationPlateauCellSpec {
+  readonly label: string;
+  readonly sectorCap: number;
+  readonly poolSize: number;
+}
+
+/**
+ * Parse a sealed plateau-cell label. STRICT by design: the labels live inside `stableConfigHash`, so
+ * they are the seal's own record of which grid was named, and a parser that guessed at a malformed
+ * one would let the hashed grid and the evaluated grid quietly disagree.
+ */
+export function parsePlateauCellLabel(label: string): DiversificationPlateauCellSpec {
+  const match = /^sectorCap=(0?\.\d+|\d+(?:\.\d+)?),poolSize=(\d+)$/.exec(label.trim());
+  if (!match) {
+    throw new Error(
+      `plateau cell label "${label}" is not of the sealed form "sectorCap=<number>,poolSize=<integer>"; `
+      + 'the labels are hashed into the seal, so a guessed parse would let the hashed grid and the '
+      + 'evaluated grid disagree',
+    );
+  }
+  const sectorCap = Number(match[1]);
+  const poolSize = Number(match[2]);
+  if (!(sectorCap > 0 && sectorCap <= 1)) throw new Error(`plateau cell "${label}": sectorCap must sit in (0,1]`);
+  if (!Number.isInteger(poolSize) || poolSize <= 0) throw new Error(`plateau cell "${label}": poolSize must be a positive integer`);
+  return { label, sectorCap, poolSize };
+}
+
+export interface PlateauCellResult {
+  readonly label: string;
+  readonly sealed: boolean;
+  readonly meanEffectiveBetsRatio: number;
+}
+
+/**
+ * Mean effective-bet ratio for one cell against the shared comparator arm. The comparator does not
+ * vary across cells — it has no `sectorCap`/`poolSize` — so it is measured once and reused, which is
+ * also what keeps every cell comparable to the same incumbent rather than to nine slightly different
+ * ones.
+ */
+export function plateauCellRatio(
+  cellSchedule: PitSleeveSchedule,
+  comparator: ArmEvidenceInput,
+  closesBySymbol: ReadonlyMap<string, readonly SymbolCloses[]>,
+): number {
+  const cycles = buildDiversificationCycles({ schedule: cellSchedule, closesBySymbol }, comparator);
+  return cycles.reduce((sum, c) => sum + c.treatmentEffectiveBets / c.comparatorEffectiveBets, 0) / cycles.length;
+}
+
 /**
  * D2 requires the arms index-aligned on the SAME sessions — the pairing is what makes the test
  * powerful. Both curves come from the same engine over the same dates, so a length mismatch means a

@@ -158,6 +158,9 @@ import {
   buildDiversificationCycles,
   navCagr,
   pairedArmReturns,
+  parsePlateauCellLabel,
+  plateauCellRatio,
+  type DiversificationPlateauCellSpec,
   type SymbolCloses,
 } from './diversificationEvidence';
 import { SYMBOL_SECTOR } from '../strategies/halalSectorCappedRiskParityCore';
@@ -1316,6 +1319,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   /** QDR-11: the INCUMBENT rule under the identical PIT schedule — the only admissible comparator. */
   let comparatorSleeveSchedule: PitSleeveSchedule | null = null;
   let comparatorDailyCurve: EquityPoint[] | null = null;
+  /** One formation schedule per SEALED plateau cell; the cells change sleeve SELECTION. */
+  const plateauCellSchedules: { cell: DiversificationPlateauCellSpec; schedule: PitSleeveSchedule }[] = [];
   const sharedReplayScope = {};
 
   try {
@@ -1403,6 +1408,38 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           assertRollingFormation(pitSleeveSchedule, tradedSessions.length);
           assertRollingFormation(comparatorSleeveSchedule, tradedSessions.length);
           assertComparableArms(pitSleeveSchedule, comparatorSleeveSchedule);
+
+          // QDR-11 plateau stability: one formation schedule per SEALED cell. The cells vary
+          // sectorCap/poolSize, which change sleeve SELECTION, so a shared schedule would make the
+          // plateau vacuous. They need no engine run — the gated quantity is an effective-bet ratio,
+          // computed from selections plus realized returns — so this is nine selections, not nine
+          // books. All nine sit inside the SINGLE terminal evaluation (QDR-9 condition (f)).
+          const declaredCells = gateSpecFromConfig(effectiveParams);
+          if (declaredCells?.productClass === 'DIVERSIFICATION') {
+            for (const label of declaredCells.plateauCells) {
+              const cell = parsePlateauCellLabel(label);
+              plateauCellSchedules.push({
+                cell,
+                schedule: await buildPitSleeveSchedule({
+                  rule: 'correlation-balanced',
+                  sessions: sessionWindow,
+                  tradeFrom: tradedSessions[0],
+                  formationCadenceSessions: DEFAULT_FORMATION_CADENCE_SESSIONS,
+                  form: async (formationAt) => {
+                    const picked = await selectCorrelationBalancedSleeve(universe.entries, {
+                      asOf: formationAt,
+                      maxNames: sleeveMaxNames,
+                      sectorCap: cell.sectorCap,
+                      poolSize: cell.poolSize,
+                      sectorOf: (symbol: string) => SYMBOL_SECTOR.get(symbol) ?? null,
+                    });
+                    return { symbols: picked.sleeve.map(({ symbol }) => symbol) };
+                  },
+                }),
+              });
+            }
+            console.log(`  plateau: ${plateauCellSchedules.length} sealed cell(s) formed on the same schedule`);
+          }
 
           // The union is what gets LOADED; this is what may be HELD, session by session. Without it
           // the union would silently become the traded universe — every name ever selected, held
@@ -1875,15 +1912,20 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     // no right one: run the cells on the loaded UNION (every name ever selected, held all run — the
     // exact survivor bias the schedule removes), or run them on the CENTER cell's sleeve (which
     // makes a plateau over sectorCap/poolSize meaningless, since those parameters change selection
-    // itself). QDR-11 requires all nine cells inside the single terminal evaluation, so each cell
-    // needs its OWN rolling schedule — that is G9's plateau criterion, not this row's. Until it
-    // lands, refuse rather than publish a plateau computed under a protocol the card would misstate.
+    // itself).
+    //
+    // A DIVERSIFICATION lane does not need this path at all: QDR-11's plateau gates a mean
+    // EFFECTIVE-BET RATIO, not an expectancy, and that is computed from per-cell SELECTIONS above —
+    // nine sleeve formations, no engine runs. So such a lane must simply not declare a profit-
+    // plateau neighborhood, and one that does is refused rather than served a plateau measured in
+    // the wrong unit and reported under a protocol it did not use.
     if (pitSleeveSchedule) {
       throw new Error(
-        `${setupId} runs a rolling PIT sleeve and declares a plateau neighborhood, but each plateau `
-        + 'cell needs its own PIT formation schedule (its parameters change sleeve selection). '
-        + 'Blocked pending QDR-11 G9 per-cell schedules — a plateau run on the center cell\'s sleeve '
-        + 'or on the loaded union would be reported under a protocol it did not use.',
+        `${setupId} runs a rolling PIT sleeve and declares a profit-plateau neighborhood. Each cell `
+        + 'would need its own PIT formation schedule, and running them on the center cell\'s sleeve or '
+        + 'on the loaded union would report a protocol the run did not use. A DIVERSIFICATION lane '
+        + 'should declare its plateau as sealed `plateauCells` instead — that grid IS evaluated, in '
+        + 'effective-bet ratios, which is the unit QDR-11 gates.',
       );
     }
     const neighborhood = setup.plateauNeighborhood(params);
@@ -2019,6 +2061,23 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       const sealedCellRatio = cycles.reduce(
         (sum, c) => sum + c.treatmentEffectiveBets / c.comparatorEffectiveBets, 0,
       ) / cycles.length;
+
+      // The SEALED cell is the one that gates D1/D2; the other eight can only FAIL the run, never
+      // rescue it, because the sealed cell was named before any OOS contact. `plateauCells[0]` is
+      // the sealed cell by the manifest's own ordering, and a run whose cells were never formed
+      // falls back to the sealed cell alone — which then fails PLATEAU_INSTABILITY closed if the
+      // grid was declared but not evaluated, rather than passing an unevaluated guardrail.
+      const comparatorArm = { schedule: comparatorSleeveSchedule, closesBySymbol };
+      const plateauCells = plateauCellSchedules.length > 0
+        ? plateauCellSchedules.map(({ cell, schedule }, index) => ({
+          label: cell.label,
+          sealed: index === 0,
+          meanEffectiveBetsRatio: plateauCellRatio(schedule, comparatorArm, closesBySymbol),
+        }))
+        : [{ label: spec.plateauCells[0], sealed: true, meanEffectiveBetsRatio: sealedCellRatio }];
+      for (const cell of plateauCells) {
+        console.log(`  plateau ${cell.label}${cell.sealed ? ' [SEALED]' : ''}: mean effective-bet ratio ${cell.meanEffectiveBetsRatio.toFixed(3)}`);
+      }
       diversificationEvidence = {
         cycles,
         comparatorDailyReturns: paired.comparator,
@@ -2029,11 +2088,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         // The plateau path is refused upstream for rolling-PIT setups pending per-cell schedules, so
         // only the SEALED cell exists here — named before any OOS contact, which is what stops any
         // other cell from ever rescuing a run. A seal is not reachable until that refusal lifts.
-        plateauCells: [{
-          label: spec.plateauCells[0],
-          sealed: true,
-          meanEffectiveBetsRatio: sealedCellRatio,
-        }],
+        plateauCells,
         minEffectiveBetsRatio: spec.minEffectiveBetsRatio,
         minVolatilityReduction: spec.minVolatilityReduction,
         comparatorCagr: navCagr(comparatorDailyCurve),

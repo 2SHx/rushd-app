@@ -1,5 +1,7 @@
 // Version-scoped experiment lifecycle CLI. FULL execution delegates to scripts/backtest.ts;
 // this file owns only manifest transitions and never duplicates simulation math.
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   createDraft,
@@ -10,13 +12,48 @@ import {
   readManifest,
   sealExperiment,
   writeManifest,
+  type ResolvedComparator,
 } from '../src/quant/backtest/experimentProtocol';
+import { productClassFromConfig } from '../src/quant/backtest/gatePower';
 import {
   parseArgs,
   parseRunLabOptions,
   protocolConfigForOptions,
   runBacktestCli,
 } from './backtest';
+
+/**
+ * Every manifest in the experiments directory, keyed `setupId@version`, with whether it ever reached
+ * SEALED. A DRAFT is deliberately reported as `sealed: false` rather than omitted: "exists but was
+ * never sealed" and "does not exist" are both refusals, and reporting the distinction makes the
+ * error message tell the truth about which one happened.
+ */
+async function readSealedManifestInventory(directory: string): Promise<Map<string, ResolvedComparator>> {
+  const inventory = new Map<string, ResolvedComparator>();
+  let entries: string[];
+  try {
+    entries = await readdir(directory);
+  } catch {
+    return inventory; // no inventory ⇒ nothing resolves ⇒ a DIVERSIFICATION seal is refused
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    try {
+      const parsed: unknown = JSON.parse(await readFile(join(directory, entry), 'utf8'));
+      const manifest = parsed as { setupId?: unknown; version?: unknown; state?: unknown; config?: unknown };
+      if (typeof manifest.setupId !== 'string' || typeof manifest.version !== 'string') continue;
+      inventory.set(`${manifest.setupId}@${manifest.version}`, {
+        versionId: `${manifest.setupId}@${manifest.version}`,
+        sealed: manifest.state !== 'DRAFT',
+        config: (manifest.config ?? null) as ResolvedComparator['config'],
+      });
+    } catch {
+      // An unreadable manifest must not silently become a missing one; it also must not abort every
+      // other seal. It stays absent from the inventory, so anything naming it is refused.
+    }
+  }
+  return inventory;
+}
 
 function required(args: Record<string, string>, key: string): string {
   const value = args[key]?.trim();
@@ -45,7 +82,12 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   }
 
   if (command === 'seal') {
-    await writeManifest(manifestPath, sealExperiment(await readManifest(manifestPath)));
+    // QDR-11: a DIVERSIFICATION seal must resolve `comparatorVersionId` against the real sealed
+    // inventory. Non-DIVERSIFICATION seals never consult it, so this scan costs them nothing.
+    const inventory = await readSealedManifestInventory(dirname(manifestPath));
+    await writeManifest(manifestPath, sealExperiment(await readManifest(manifestPath), {
+      resolveComparator: (versionId) => inventory.get(versionId) ?? null,
+    }));
   } else if (command === 'codified') {
     await writeManifest(manifestPath, markCodified(
       await readManifest(manifestPath), required(lifecycleArgs, 'implementer'),
@@ -79,9 +121,18 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     if (!isExperimentRejectionReasonCode(requestedReason)) {
       throw new Error('--reason must be a QDR-7 rejection reason code');
     }
+    // The terminal label is CLASS-SCOPED: `assertStatusMatchesSealedClass` refuses a bare 'REJECTED'
+    // on a BETA or DIVERSIFICATION manifest, so hardcoding it made those classes unabandonable — a
+    // lane could be started and then never closed. The class is read from the SEALED config, so the
+    // label is hash-anchored and cannot be softened by choosing a different one here.
+    const abandoned = await readManifest(manifestPath);
+    const abandonedClass = productClassFromConfig(abandoned.config);
+    const abandonStatus = abandonedClass === 'DIVERSIFICATION'
+      ? 'REJECTED_DIVERSIFICATION' as const
+      : abandonedClass === 'BETA' ? 'REJECTED_BETA' as const : 'REJECTED' as const;
     await finalizeExperiment(manifestPath, {
       runKind: 'ABANDONED',
-      status: 'REJECTED',
+      status: abandonStatus,
       auditor: required(lifecycleArgs, 'auditor'),
       reasonCodes: [requestedReason],
     });

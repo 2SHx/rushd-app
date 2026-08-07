@@ -187,9 +187,91 @@ export function assertStatusMatchesSealedClass(manifest: ExperimentManifest, sta
   }
 }
 
-export function sealExperiment(manifest: ExperimentManifest): ExperimentManifest {
+/** A prior sealed manifest, as the comparator resolver reports it. */
+export interface ResolvedComparator {
+  readonly versionId: string;
+  /** False for a DRAFT or otherwise never-sealed manifest — which may not anchor a comparison. */
+  readonly sealed: boolean;
+  readonly config: JsonValue;
+}
+
+/** Resolves `comparatorVersionId` against the sealed-manifest inventory; null when none exists. */
+export type ComparatorResolver = (versionId: string) => ResolvedComparator | null;
+
+/**
+ * Config blocks that MAY differ between the two arms of a DIVERSIFICATION A/B.
+ *  - `universe` is THE one variable under test.
+ *  - `validation` carries the class-specific gate block, which necessarily differs by class.
+ *  - the rest are per-version lifecycle metadata and prose, not mechanism.
+ * Everything else — `signal`, `portfolio`, `execution`, `plateau`, `seed` — must be byte-identical,
+ * because a second changed variable turns an isolated A/B into an uncontrolled comparison.
+ */
+const DIVERSIFICATION_AB_VARIABLE_BLOCKS = new Set([
+  'universe', 'validation', 'hypothesis', 'evidenceBoundary', 'historicalMode',
+  'terminalEligible', 'setup', 'performanceInspection',
+]);
+
+/**
+ * QDR-11 A/B isolation, as a seal-time REFUSAL rather than a review note: exactly one variable,
+ * against a NAMED prior SEALED version. A novel strategy therefore cannot enter as DIVERSIFICATION,
+ * and a comparator cannot be a strawman constructed for the occasion.
+ *
+ * Fail-closed on the resolver itself: a caller that forgets to wire one cannot seal a
+ * DIVERSIFICATION lane, because "no resolver" is indistinguishable from "no comparator exists".
+ */
+export function assertDiversificationComparator(
+  manifest: ExperimentManifest,
+  resolveComparator?: ComparatorResolver,
+): void {
+  if (productClassFromConfig(manifest.config) !== 'DIVERSIFICATION') return;
+  // `gateSpecFromConfig` throws by itself on an incomplete block (`productClass` is a GATE_KEY, so
+  // declaring the class IS declaring a gate), naming the missing field. This guard therefore only
+  // fires if it and `productClassFromConfig` ever disagree about the class — a gatePower bug, not a
+  // manifest one. Kept deliberately: the two must not be able to drift apart silently.
+  const spec = gateSpecFromConfig(manifest.config);
+  if (spec?.productClass !== 'DIVERSIFICATION') {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: productClass resolved `
+      + 'DIVERSIFICATION but the gate block did not — gatePower disagrees with itself');
+  }
+  if (!resolveComparator) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: a DIVERSIFICATION seal must `
+      + `resolve comparatorVersionId "${spec.comparatorVersionId}" against the sealed-manifest inventory, `
+      + 'and no resolver was supplied. Sealing without one would let a comparative claim name a '
+      + 'comparator that does not exist');
+  }
+  const comparator = resolveComparator(spec.comparatorVersionId);
+  if (!comparator || !comparator.sealed) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: comparatorVersionId `
+      + `"${spec.comparatorVersionId}" resolves to no SEALED manifest. QDR-11 requires the comparator to `
+      + 'be a real prior sealed version, never a strawman constructed for the occasion. If the incumbent '
+      + 'was never preregistered under this protocol, the comparator definition needs its own design '
+      + 'record before any such seal — see QDR-11 Revisit-when');
+  }
+
+  const mine = manifest.config as Record<string, JsonValue> | null;
+  const theirs = comparator.config as Record<string, JsonValue> | null;
+  if (!mine || typeof mine !== 'object' || !theirs || typeof theirs !== 'object') {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: both arms need object configs to diff`);
+  }
+  const differing = Array.from(new Set([...Object.keys(mine), ...Object.keys(theirs)]))
+    .filter((key) => !DIVERSIFICATION_AB_VARIABLE_BLOCKS.has(key))
+    // The same canonicalizer `stableConfigHash` uses, so "identical" means identical in exactly the
+    // sense the hash means it — key order and formatting cannot make two arms look different.
+    .filter((key) => canonicalJson(mine[key] ?? null) !== canonicalJson(theirs[key] ?? null));
+  if (differing.length > 0) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: the two arms differ in more than `
+      + `the universe block — ${differing.join(', ')}. An isolated A/B permits exactly one variable; a `
+      + 'second one makes the measured difference unattributable to the universe rule');
+  }
+}
+
+export function sealExperiment(
+  manifest: ExperimentManifest,
+  options?: { readonly resolveComparator?: ComparatorResolver },
+): ExperimentManifest {
   assertState(manifest, 'DRAFT');
   assertGateFeasibleAtSeal(manifest);
+  assertDiversificationComparator(manifest, options?.resolveComparator);
   const config = structuredClone(manifest.config);
   return { ...manifest, config, configHash: stableConfigHash(config), state: 'SEALED' };
 }

@@ -5,6 +5,8 @@ import {
   navCagr,
   navDailyReturns,
   pairedArmReturns,
+  parsePlateauCellLabel,
+  plateauCellRatio,
   realizedEffectiveBets,
   type SymbolCloses,
 } from './diversificationEvidence';
@@ -198,5 +200,46 @@ describe('pairedArmReturns', () => {
     const t = SESSIONS.slice(0, 5).map((ts, i) => ({ ts, equity: 100 + i }));
     const c = SESSIONS.slice(1, 6).map((ts, i) => ({ ts, equity: 100 + i }));
     expect(() => pairedArmReturns(t, c)).toThrow(/diverge at index 0/);
+  });
+});
+
+describe('plateau cells — nine SELECTIONS, not nine books', () => {
+  it('parses the sealed label form and rejects anything else', () => {
+    expect(parsePlateauCellLabel('sectorCap=0.25,poolSize=80'))
+      .toEqual({ label: 'sectorCap=0.25,poolSize=80', sectorCap: 0.25, poolSize: 80 });
+    expect(parsePlateauCellLabel(' sectorCap=.2,poolSize=60 ').sectorCap).toBe(0.2);
+
+    for (const bad of [
+      'sectorCap=0.25', 'poolSize=80', 'sectorCap=0.25;poolSize=80',
+      'sectorCap=0.25,poolSize=80.5', 'sector_cap=0.25,poolSize=80', '',
+    ]) {
+      expect(() => parsePlateauCellLabel(bad)).toThrow(/sealed form|positive integer/);
+    }
+  });
+
+  it('refuses an out-of-range sectorCap rather than clamping it', () => {
+    expect(() => parsePlateauCellLabel('sectorCap=1.5,poolSize=80')).toThrow(/sectorCap must sit/);
+  });
+
+  it('scores a cell against the SHARED comparator, so every cell faces the same incumbent', async () => {
+    const comparator = await schedule(['MEGA1', 'MEGA2', 'MEGA3', 'MEGA4']);
+    const comparatorArm = { schedule: comparator, closesBySymbol: CLOSES };
+
+    const decorrelatedCell = await schedule(['CORR1', 'CORR2', 'CORR3', 'CORR4']);
+    const correlatedCell = await schedule(['MEGA1', 'MEGA2', 'MEGA3', 'MEGA4']);
+
+    const good = plateauCellRatio(decorrelatedCell, comparatorArm, CLOSES);
+    const flat = plateauCellRatio(correlatedCell, comparatorArm, CLOSES);
+
+    expect(good).toBeGreaterThan(1);
+    // a cell that reproduces the comparator's own sleeve must score exactly 1.00, not "about" 1
+    expect(flat).toBeCloseTo(1, 12);
+  });
+
+  it('a cell that diversifies WORSE scores below 1.00 and would fail the guardrail', async () => {
+    const comparator = await schedule(['CORR1', 'CORR2', 'CORR3', 'CORR4']);
+    const worseCell = await schedule(['MEGA1', 'MEGA2', 'MEGA3', 'MEGA4']);
+    expect(plateauCellRatio(worseCell, { schedule: comparator, closesBySymbol: CLOSES }, CLOSES))
+      .toBeLessThan(1);
   });
 });
