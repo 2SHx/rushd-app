@@ -145,6 +145,13 @@ import {
 } from './shariaSnapshot';
 import { buildVerifiedUniverse } from '../universe/buildVerifiedUniverse';
 import { selectCorrelationBalancedSleeve, selectDollarVolumeSleeve, type SleeveSelectionResult } from '../universe/sleeveSelector';
+import {
+  assertRollingFormation,
+  buildPitSleeveSchedule,
+  DEFAULT_FORMATION_CADENCE_SESSIONS,
+  sleeveMembershipResolver,
+  type PitSleeveSchedule,
+} from '../universe/pitSleeveSchedule';
 import { SYMBOL_SECTOR } from '../strategies/halalSectorCappedRiskParityCore';
 import {
   assertTerminalPointInTimeMembership,
@@ -276,6 +283,18 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
  * effective-bet ratio of 1.28x, and an implied Sharpe multiplier of 1.13x.
  */
 const CORRELATION_BALANCED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set<string>([]);
+
+/**
+ * Calendar start for the rolling PIT sleeve schedule's session lookup. The FIRST sleeve must be
+ * formed on the last session strictly BEFORE the run's first traded session, so the calendar has to
+ * reach back past `from`. 30 calendar days clears any exchange holiday run with room to spare.
+ *
+ * This widens only the SESSION CALENDAR, never the price window the engine simulates: `from`/`to`
+ * still bound every bar the book sees. Knowing which days the exchange was open is not tradeable
+ * information; which names to hold is, and that stays behind `formationAt`.
+ */
+const SLEEVE_FORMATION_WARMUP_FROM = (from: string): string =>
+  new Date(new Date(`${from}T00:00:00.000Z`).getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
 
 /** Fixed-charter setups whose EXACT symbol list is C1-verified (Tier-1/2) before it can execute. */
 const C1_VERIFIED_FIXED_UNIVERSES: ReadonlyMap<string, { symbols: readonly string[]; tag: string }> = new Map([
@@ -1028,6 +1047,24 @@ async function listWideDailySymbols(from: string, to: string, minBars: number): 
     .sort();
 }
 
+/**
+ * The REAL NASDAQ trading calendar in [from,to] — distinct bar timestamps, MOCK excluded at source.
+ * Same `distinct` accessor already used for symbols, applied to the other column; no new query
+ * pattern. The rolling PIT sleeve schedule (QDR-11, G9-PIT) counts formation cycles in trading
+ * SESSIONS, never calendar days, so it needs the actual calendar rather than an assumed one.
+ */
+async function listTradingSessions(from: string, to: string): Promise<Date[]> {
+  const { prisma } = await import('../../lib/prisma');
+  const rows = await prisma.marketBar.findMany({
+    where: {
+      market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] },
+      ts: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T23:59:59.999Z`) },
+    },
+    distinct: ['ts'], select: { ts: true }, orderBy: { ts: 'asc' },
+  });
+  return rows.map((r) => r.ts);
+}
+
 /** Distinct NASDAQ-halal symbols with REAL daily bars in [from,to] (MOCK excluded at source). */
 async function listDailySymbols(want: string[] | null, from: string, to: string): Promise<string[]> {
   const { prisma } = await import('../../lib/prisma');
@@ -1219,7 +1256,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   const validationTrialFamily = trialCountEvidence(setupId, plateauValidationTrials);
   const validationTrials = validationTrialFamily.familyTrials;
   const dailyLimits = limitsForDailySetup(setupId, DEFAULT_BT_LIMITS);
-  const sharedPolicy = strategyBookPolicyForSetup(setupId, params);
+  const basePolicy = strategyBookPolicyForSetup(setupId, params);
+  // Rebound after the sleeve is resolved: a rolling PIT schedule (QDR-11, G9-PIT) contributes the
+  // per-session membership set the engine enforces. `let` only because the schedule is not known
+  // until the universe branch below runs; every setup without one keeps `basePolicy` untouched.
+  let sharedPolicy = basePolicy;
 
   let candidateArtifact: ParsedCandidateArtifact | null = null;
   let candidateEvidence: CandidateArtifactEvidence | null = null;
@@ -1262,6 +1303,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let sharedBookResult: StrategyBookResult | null = null;
   let resolvedUniverseBars = 0;
   let verifiedShariaEntries: UniverseEntry[] | null = null;
+  /** Set only for CORRELATION_BALANCED_SLEEVE_SETUP_IDS; null keeps every other setup byte-identical. */
+  let pitSleeveSchedule: PitSleeveSchedule | null = null;
   const sharedReplayScope = {};
 
   try {
@@ -1292,33 +1335,85 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         const universe = buildVerifiedUniverse();
         const sleeveAsOf = new Date(`${to}T23:59:59.999Z`);
         const sleeveMaxNames = C1_VERIFIED_SLEEVE_MAX_NAMES.get(setupId) ?? 100;
-        let sleeveCorrelation: { averageCorrelation: number; effectiveBets: number } | null = null;
-        let selected: SleeveSelectionResult;
-        if (CORRELATION_BALANCED_SLEEVE_SETUP_IDS.has(setupId)) {
-          const balanced = await selectCorrelationBalancedSleeve(universe.entries, {
-            asOf: sleeveAsOf,
-            maxNames: sleeveMaxNames,
-            sectorOf: (symbol: string) => SYMBOL_SECTOR.get(symbol) ?? null,
-          });
-          sleeveCorrelation = {
-            averageCorrelation: balanced.averageCorrelation,
-            effectiveBets: balanced.effectiveBets,
-          };
-          selected = balanced;
-        } else {
-          selected = await selectDollarVolumeSleeve(universe.entries, { asOf: sleeveAsOf, maxNames: sleeveMaxNames });
-        }
-        if (!selected.sleeve.length) {
-          throw new Error(`${setupId} requires C1 verified names with real daily bars as of ${to}`);
-        }
-        if (sleeveCorrelation) {
-          console.log(`  sleeve correlation ρ=${sleeveCorrelation.averageCorrelation.toFixed(3)} → ${sleeveCorrelation.effectiveBets.toFixed(1)} effective bets`);
-        }
         const bySymbol = new Map(universe.entries.map((entry) => [entry.symbol, entry]));
-        verifiedShariaEntries = selected.sleeve.map(({ symbol }) => bySymbol.get(symbol)!);
-        symbols = verifiedShariaEntries.map(({ symbol }) => symbol);
-        universeTag = `c1-verified:${symbols.length}`;
-        universeIsUnscreened = false;
+
+        if (CORRELATION_BALANCED_SLEEVE_SETUP_IDS.has(setupId)) {
+          // QDR-11 (G9-PIT): a correlation-selected sleeve resolved once at `to` is DIRECT
+          // LOOK-AHEAD ON THE CLAIMED STATISTIC — the sleeve would be chosen for having been
+          // decorrelated over the very window whose decorrelation is the result. So this branch
+          // re-forms ANNUALLY on a trailing 252-session window (the protocol the 8/8 walk-forward
+          // validated) and the engine is handed a per-session membership set. `symbols` becomes the
+          // UNION of every epoch — what must be LOADED — while what may be HELD stays per-epoch.
+          const sessionWindow = await listTradingSessions(SLEEVE_FORMATION_WARMUP_FROM(from), to);
+          const tradedSessions = sessionWindow.filter((ts) => ts >= new Date(`${from}T00:00:00.000Z`));
+          if (!tradedSessions.length) {
+            throw new Error(`${setupId} requires real NASDAQ trading sessions in ${from}..${to}`);
+          }
+          pitSleeveSchedule = await buildPitSleeveSchedule({
+            rule: 'correlation-balanced',
+            sessions: sessionWindow,
+            tradeFrom: tradedSessions[0],
+            formationCadenceSessions: DEFAULT_FORMATION_CADENCE_SESSIONS,
+            form: async (formationAt) => {
+              const balanced = await selectCorrelationBalancedSleeve(universe.entries, {
+                asOf: formationAt,
+                maxNames: sleeveMaxNames,
+                sectorOf: (symbol: string) => SYMBOL_SECTOR.get(symbol) ?? null,
+              });
+              return {
+                symbols: balanced.sleeve.map(({ symbol }) => symbol),
+                diagnostics: {
+                  averageCorrelation: balanced.averageCorrelation,
+                  effectiveBets: balanced.effectiveBets,
+                },
+              };
+            },
+          });
+          // The void condition as code: a single-shot sleeve over this window is refused here.
+          assertRollingFormation(pitSleeveSchedule, tradedSessions.length);
+
+          // The union is what gets LOADED; this is what may be HELD, session by session. Without it
+          // the union would silently become the traded universe — every name ever selected, held
+          // for the whole run — which is precisely the survivor bias the schedule exists to remove.
+          if (!basePolicy) {
+            throw new Error(
+              `${setupId} declares a rolling PIT sleeve but has no strategy-book policy; the membership `
+              + 'set would have nowhere to attach and the run would silently trade the union',
+            );
+          }
+          sharedPolicy = { ...basePolicy, sleeveMembership: sleeveMembershipResolver(pitSleeveSchedule) };
+
+          symbols = [...pitSleeveSchedule.unionSymbols];
+          verifiedShariaEntries = symbols.map((symbol) => bySymbol.get(symbol)!);
+          universeTag = `c1-verified-pit:${symbols.length}@${pitSleeveSchedule.epochs.length}cyc`;
+          universeIsUnscreened = false;
+          console.log(
+            `resolved C1 verified sleeve → rolling PIT, ${pitSleeveSchedule.epochs.length} formation cycle(s), `
+            + `${symbols.length} name(s) in the union`,
+          );
+          for (const epoch of pitSleeveSchedule.epochs) {
+            // Formation-window correlation is REPORTED, never gated (QDR-11 D1): it is the quantity
+            // the greedy selector explicitly minimized, so gating it would certify an optimizer
+            // against its own objective function.
+            const rho = epoch.diagnostics?.averageCorrelation;
+            console.log(
+              `  cycle ${epoch.index} formed ${epoch.formationAt.toISOString().slice(0, 10)} `
+              + `→ effective ${epoch.effectiveFrom.toISOString().slice(0, 10)}, ${epoch.symbols.length} name(s)`
+              + (rho === undefined ? '' : `, formation ρ=${rho.toFixed(3)} (reported, not gated)`),
+            );
+          }
+        } else {
+          const selected: SleeveSelectionResult = await selectDollarVolumeSleeve(
+            universe.entries, { asOf: sleeveAsOf, maxNames: sleeveMaxNames },
+          );
+          if (!selected.sleeve.length) {
+            throw new Error(`${setupId} requires C1 verified names with real daily bars as of ${to}`);
+          }
+          verifiedShariaEntries = selected.sleeve.map(({ symbol }) => bySymbol.get(symbol)!);
+          symbols = verifiedShariaEntries.map(({ symbol }) => symbol);
+          universeTag = `c1-verified:${symbols.length}`;
+          universeIsUnscreened = false;
+        }
         console.log(`resolved C1 verified sleeve → ${symbols.length} symbol(s), top by trailing real dollar volume`);
       } else if (universeCompat === 'fixed') {
         symbols = dailyUniverseForSetup(setupId, null)!;
@@ -1718,6 +1813,22 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let profitPlateau: boolean | undefined;
   let plateauEvaluation: PlateauEvaluation | null = null;
   if (cadence === 'daily' && setup.plateauNeighborhood) {
+    // A plateau cell gets its policy from `strategyBookPolicyForSetup(setupId, variant.params)`,
+    // which carries no sleeve schedule. Under a rolling PIT sleeve that leaves two wrong options and
+    // no right one: run the cells on the loaded UNION (every name ever selected, held all run — the
+    // exact survivor bias the schedule removes), or run them on the CENTER cell's sleeve (which
+    // makes a plateau over sectorCap/poolSize meaningless, since those parameters change selection
+    // itself). QDR-11 requires all nine cells inside the single terminal evaluation, so each cell
+    // needs its OWN rolling schedule — that is G9's plateau criterion, not this row's. Until it
+    // lands, refuse rather than publish a plateau computed under a protocol the card would misstate.
+    if (pitSleeveSchedule) {
+      throw new Error(
+        `${setupId} runs a rolling PIT sleeve and declares a plateau neighborhood, but each plateau `
+        + 'cell needs its own PIT formation schedule (its parameters change sleeve selection). '
+        + 'Blocked pending QDR-11 G9 per-cell schedules — a plateau run on the center cell\'s sleeve '
+        + 'or on the loaded union would be reported under a protocol it did not use.',
+      );
+    }
     const neighborhood = setup.plateauNeighborhood(params);
     const centerExpectancy = setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
       ? meanOosFiveSessionBookReturn(sharedDailyCurve ?? [], oosFraction)

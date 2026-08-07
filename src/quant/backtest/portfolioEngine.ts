@@ -347,6 +347,21 @@ export interface StrategyBookPolicy {
    * Its bars must be present in the series; before its first bar idle capital fail-closes to cash.
    */
   readonly idleBallastSymbol?: string;
+  /**
+   * Rolling point-in-time sleeve membership (QDR-11, G9-PIT). Given a decision session, returns the
+   * names eligible to be HELD in that session. A name outside the set is never offered to the setup
+   * and any existing position in it is liquidated at the next open — so a sleeve that drops a name
+   * at a re-formation date actually exits it, rather than the book quietly carrying a holding its
+   * own universe rule no longer selects.
+   *
+   * OPT-IN. Absent (every setup with a published terminal card) the engine is byte-identical: the
+   * eligibility branch is skipped entirely, not evaluated against an all-symbols set. Which sleeve
+   * schedule a setup runs under is a research decision recorded in its preregistration, never an
+   * implementation default — the same rule that made `realizedVolSource` opt-in.
+   *
+   * The ballast symbol is engine-managed and is never subject to this filter.
+   */
+  readonly sleeveMembership?: (ts: Date) => ReadonlySet<string>;
 }
 
 export interface StrategyBookResult {
@@ -1063,10 +1078,34 @@ export function simulateStrategyBook<Params>(input: StrategyBookInput<Params>): 
       }
     }
 
+    // Rolling PIT sleeve membership is resolved ONCE per session, not once per name.
+    const eligibleToday = input.policy?.sleeveMembership?.(date);
+
     for (const item of series) {
       if (item.symbol === ballastSymbol) continue; // engine-managed ballast is never setup-traded
       const index = todayIndexes.get(item.symbol);
       if (index === undefined || index >= item.bars.length - 1) continue;
+      if (eligibleToday && !eligibleToday.has(item.symbol)) {
+        // Out of sleeve this epoch. The setup is not consulted at all — an ineligible name must not
+        // be able to influence the book even by declining to trade — and any inherited position is
+        // exited at the next open. Without this the union-of-epochs load set would silently become
+        // the traded universe, which is the survivor bias the rolling schedule exists to remove.
+        const position = positions.get(item.symbol);
+        if (position) {
+          const next = item.bars[index + 1];
+          const slice = item.bars.slice(0, index + 1);
+          pending.set(item.symbol, input.setup.targetWeight
+            ? {
+              action: 'TARGET', symbol: item.symbol, signalTs: date, fillTs: next.ts,
+              targetWeight: 0, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+            }
+            : {
+              action: 'SELL', symbol: item.symbol, signalTs: date, fillTs: next.ts,
+              proposalQty: position.qty, atr: bookAtr(slice), adv: bookAvgVolume(slice), grossExposureScalar,
+            });
+        }
+        continue;
+      }
       const sliceStart = input.policy?.decisionHistoryBars
         ? Math.max(0, index + 1 - input.policy.decisionHistoryBars)
         : 0;

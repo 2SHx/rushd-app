@@ -69,6 +69,8 @@ export interface DataQualityPitEvidence {
   readonly snapshotId?: string;
   readonly symbol?: string;
   readonly field?: string;
+  /** Formation-cycle index, for the rolling PIT sleeve schedule (see `pitSleeveSchedule.ts`). */
+  readonly epoch?: string;
 }
 
 export class DataQualityPitError extends Error {
