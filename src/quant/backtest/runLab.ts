@@ -89,7 +89,8 @@ import {
   sessionKey,
 } from './betaEvidence';
 import type { BetaCriteriaInput } from './betaCriteria';
-import { productClassFromConfig } from './gatePower';
+import type { DiversificationCriteriaInput } from './diversificationCriteria';
+import { gateSpecFromConfig, MONTE_CARLO_P95_DRAWDOWN_BREAKER, productClassFromConfig } from './gatePower';
 import { computeCaptureRatios } from './metrics';
 import { ENGINE_COMMISSION_BPS_PER_SIDE, ENGINE_SLIPPAGE_BPS_PER_SIDE } from './portfolioEngine';
 import { MULTI_MODE_UNIVERSE, multiModeBookPolicy } from '../strategies/multiModeBook';
@@ -152,6 +153,13 @@ import {
   sleeveMembershipResolver,
   type PitSleeveSchedule,
 } from '../universe/pitSleeveSchedule';
+import {
+  assertComparableArms,
+  buildDiversificationCycles,
+  navCagr,
+  pairedArmReturns,
+  type SymbolCloses,
+} from './diversificationEvidence';
 import { SYMBOL_SECTOR } from '../strategies/halalSectorCappedRiskParityCore';
 import {
   assertTerminalPointInTimeMembership,
@@ -1305,6 +1313,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let verifiedShariaEntries: UniverseEntry[] | null = null;
   /** Set only for CORRELATION_BALANCED_SLEEVE_SETUP_IDS; null keeps every other setup byte-identical. */
   let pitSleeveSchedule: PitSleeveSchedule | null = null;
+  /** QDR-11: the INCUMBENT rule under the identical PIT schedule — the only admissible comparator. */
+  let comparatorSleeveSchedule: PitSleeveSchedule | null = null;
+  let comparatorDailyCurve: EquityPoint[] | null = null;
   const sharedReplayScope = {};
 
   try {
@@ -1369,8 +1380,29 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
               };
             },
           });
+          // ── QDR-11: the COMPARATOR arm's schedule — the INCUMBENT dollar-volume rule, re-formed on
+          // the SAME dates at the SAME sleeve size. The incumbent is far less sensitive to rolling
+          // re-formation than correlation selection is, and it is re-formed anyway: comparing a
+          // PIT-re-formed treatment against a once-resolved comparator would compare INFORMATION
+          // SETS, not rules, and the whole claim is a claim about rules.
+          comparatorSleeveSchedule = await buildPitSleeveSchedule({
+            rule: 'dollar-volume',
+            sessions: sessionWindow,
+            tradeFrom: tradedSessions[0],
+            formationCadenceSessions: DEFAULT_FORMATION_CADENCE_SESSIONS,
+            form: async (formationAt) => {
+              const incumbent = await selectDollarVolumeSleeve(universe.entries, {
+                asOf: formationAt, maxNames: sleeveMaxNames,
+              });
+              return { symbols: incumbent.sleeve.map(({ symbol }) => symbol) };
+            },
+          });
+
           // The void condition as code: a single-shot sleeve over this window is refused here.
+          // BOTH arms are held to it — QDR-11 voids a run whose EITHER arm is formed once.
           assertRollingFormation(pitSleeveSchedule, tradedSessions.length);
+          assertRollingFormation(comparatorSleeveSchedule, tradedSessions.length);
+          assertComparableArms(pitSleeveSchedule, comparatorSleeveSchedule);
 
           // The union is what gets LOADED; this is what may be HELD, session by session. Without it
           // the union would silently become the traded universe — every name ever selected, held
@@ -1383,7 +1415,13 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           }
           sharedPolicy = { ...basePolicy, sleeveMembership: sleeveMembershipResolver(pitSleeveSchedule) };
 
-          symbols = [...pitSleeveSchedule.unionSymbols];
+          // The LOAD set is the union of BOTH arms across every epoch: the comparator runs through
+          // the same engine on the same series, so a name it holds must have bars even when the
+          // treatment never selects it. Membership — what may be HELD — stays per-arm, per-epoch.
+          symbols = Array.from(new Set([
+            ...pitSleeveSchedule.unionSymbols,
+            ...comparatorSleeveSchedule.unionSymbols,
+          ])).sort();
           verifiedShariaEntries = symbols.map((symbol) => bySymbol.get(symbol)!);
           universeTag = `c1-verified-pit:${symbols.length}@${pitSleeveSchedule.epochs.length}cyc`;
           universeIsUnscreened = false;
@@ -1552,6 +1590,25 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
         })));
         sharedDailyCurve = sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
         pooledDailyReturns.push(...toDailyReturns(sharedDailyCurve, nasdaqDateKey));
+
+        // ── QDR-11 (D2): the COMPARATOR arm. The incumbent universe rule re-run under the IDENTICAL
+        // PIT schedule, on the same series, with byte-identical config except the universe block —
+        // never the incumbent's sealed card, which was produced without rolling re-formation and
+        // would compare INFORMATION SETS rather than rules. Same engine, same dates, same params,
+        // same policy: the only difference is which membership resolver the policy carries.
+        if (comparatorSleeveSchedule && pitSleeveSchedule && basePolicy) {
+          const comparatorSim = simulateStrategyBook({
+            setup, params, series: sharedSeries, startingCash, limits: dailyLimits,
+            calendar: sharedCalendarForPlateau,
+            // A FRESH replay scope: sharing the treatment arm's would let one arm's memoized
+            // decisions leak into the other, which is the one contamination a paired test cannot
+            // survive — it is exactly the pairing that makes D2 powerful.
+            replayScope: {},
+            policy: { ...basePolicy, sleeveMembership: sleeveMembershipResolver(comparatorSleeveSchedule) },
+          });
+          comparatorDailyCurve = comparatorSim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav) }));
+          console.log(`comparator arm (${comparatorSleeveSchedule.rule}) → ${comparatorSim.fills.length} fills / ${comparatorSim.tradeRecords.length} closed trades`);
+        }
         console.log(`${resolvedUniverseBars || sim.barsProcessed} resolved real bars / ${sim.barsProcessed} engine bars → ${sim.fills.length} fills / ${sim.tradeRecords.length} closed trades`);
       } else {
       // Cross-name preload (pairs/cross-sectional setups): hand the setup every symbol's REAL daily
@@ -1935,10 +1992,62 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     }
   }
 
+  // ── QDR-11 DIVERSIFICATION evidence. Absent or incomplete, assembleReportCard fails all three
+  // criteria closed rather than passing an unevaluated gate — the same rule BETA follows.
+  let diversificationEvidence: DiversificationCriteriaInput | undefined;
+  let predictedBreakerFailure = false;
+  if (productClass === 'DIVERSIFICATION') {
+    const gate = gateSpecFromConfig(effectiveParams);
+    const spec = gate?.productClass === 'DIVERSIFICATION' ? gate : null;
+    if (spec) predictedBreakerFailure = spec.hypothesizedMonteCarloP95Drawdown > MONTE_CARLO_P95_DRAWDOWN_BREAKER;
+    if (!spec || !pitSleeveSchedule || !comparatorSleeveSchedule || !comparatorDailyCurve || !sharedDailyCurve) {
+      // Loud, not silent: a DIVERSIFICATION run that reached here without both arms produced no
+      // comparative evidence at all, and the card must show that as a closed failure.
+      console.warn('\x1b[33mDIVERSIFICATION evidence incomplete — both arms are required; every criterion fails closed\x1b[0m');
+    } else {
+      const closesBySymbol = new Map<string, readonly SymbolCloses[]>(
+        (sharedSeriesForPlateau ?? []).map((item) => [
+          item.symbol,
+          item.bars.map((bar) => ({ ts: bar.ts, close: Number(bar.close.toString()) })),
+        ]),
+      );
+      const paired = pairedArmReturns(sharedDailyCurve, comparatorDailyCurve);
+      const cycles = buildDiversificationCycles(
+        { schedule: pitSleeveSchedule, closesBySymbol },
+        { schedule: comparatorSleeveSchedule, closesBySymbol },
+      );
+      const sealedCellRatio = cycles.reduce(
+        (sum, c) => sum + c.treatmentEffectiveBets / c.comparatorEffectiveBets, 0,
+      ) / cycles.length;
+      diversificationEvidence = {
+        cycles,
+        comparatorDailyReturns: paired.comparator,
+        treatmentDailyReturns: paired.treatment,
+        bootstrapSeed: seed,
+        bootstrapBlockLength: spec.bootstrapBlockLength,
+        // QDR-11 requires all nine cells inside the SINGLE terminal evaluation (QDR-9 condition (f)).
+        // The plateau path is refused upstream for rolling-PIT setups pending per-cell schedules, so
+        // only the SEALED cell exists here — named before any OOS contact, which is what stops any
+        // other cell from ever rescuing a run. A seal is not reachable until that refusal lifts.
+        plateauCells: [{
+          label: spec.plateauCells[0],
+          sealed: true,
+          meanEffectiveBetsRatio: sealedCellRatio,
+        }],
+        minEffectiveBetsRatio: spec.minEffectiveBetsRatio,
+        minVolatilityReduction: spec.minVolatilityReduction,
+        comparatorCagr: navCagr(comparatorDailyCurve),
+        treatmentCagr: navCagr(sharedDailyCurve),
+      };
+    }
+  }
+
   const card = {
     ...assembleReportCard({
       setup: setupId, symbols, universe: universeTag, periodPreset, from, to, dataFeed: feed, seed, gitSha: runGitSha,
       productClass, ...(betaEvidence ? { betaEvidence } : {}),
+      ...(diversificationEvidence ? { diversificationEvidence } : {}),
+      ...(predictedBreakerFailure ? { predictedBreakerFailure } : {}),
       full, oos, distribution, bootstrap, permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
