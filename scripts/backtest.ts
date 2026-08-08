@@ -101,7 +101,12 @@ export function protocolConfigForOptions(options: RunLabOptions): JsonValue {
  * identical to pre-G10 behavior. Returns the manifest so the caller can thread `config.validation`
  * into `RunLabOptions.gateConfig` — provably part of the SAME hash-verified artifact just matched.
  */
-async function assertFrozenCliConfig(manifestPath: string, options: RunLabOptions): Promise<ExperimentManifest> {
+/**
+ * Exported so the G10 regression test pins the REAL comparison against the real CLI-shaped manifest.
+ * It previously reconstructed this hash logic inline, so a future change to the comparison here
+ * would not have been caught against `halal-residual-fast-momentum-core-v1.json` (found at QA review).
+ */
+export async function assertFrozenCliConfig(manifestPath: string, options: RunLabOptions): Promise<ExperimentManifest> {
   const manifest = await readManifest(manifestPath);
   const declaredRunConfig = recordConfig(manifest.config)?.runConfig ?? manifest.config;
   if (manifest.setupId !== options.setup

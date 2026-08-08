@@ -205,6 +205,17 @@ export function assertRunConfigPairedWithGate(manifest: ExperimentManifest): voi
       + '`assertFrozenCliConfig` narrows to — or the seal is refused: a gate block with no declared way to '
       + 'ever run under it is refused at the door, not sealed into a manifest that can never terminate');
   }
+  // A PRESENT runConfig is not a RUNNABLE one. `runConfig: {}` is a plain object and used to seal
+  // cleanly, yet `stableConfigHash({})` can never equal the hash of any real CLI invocation — the
+  // manifest was sealed unrunnable, which is the exact outcome the check above exists to prevent
+  // (found at QA review). `setup` is the one field every invocation carries and which must name THIS
+  // experiment, so it is checkable at seal without predicting the rest of the command line.
+  const declaredSetup = root.runConfig.setup;
+  if (typeof declaredSetup !== 'string' || declaredSetup !== manifest.setupId) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: config.runConfig.setup must be `
+      + `"${manifest.setupId}", found ${JSON.stringify(declaredSetup) ?? 'nothing'}. A runConfig that cannot `
+      + 'match any real invocation is a gate block with no way to run under it — present, but not paired');
+  }
 }
 
 /**
