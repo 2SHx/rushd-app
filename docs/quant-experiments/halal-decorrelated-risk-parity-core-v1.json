@@ -42,6 +42,16 @@
       "correlationLookbackDays": 252,
       "formationCadenceSessions": 252
     },
+    "runConfig": {
+      "setup": "halal-decorrelated-risk-parity-core",
+      "from": "2016-01-04",
+      "to": "2026-07-17",
+      "symbols": null,
+      "confirmFull": false,
+      "seed": 42,
+      "oosFraction": 0.3,
+      "engine": "shared"
+    },
     "validation": {
       "productClass": "DIVERSIFICATION",
       "minimumOosObservations": 644,

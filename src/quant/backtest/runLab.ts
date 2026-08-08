@@ -1170,6 +1170,16 @@ export interface RunLabOptions {
   writeResultsFile?: boolean;
   /** Default true (CLI parity). The API passes false and updates its own pre-claimed row instead. */
   persistRun?: boolean;
+  /**
+   * QDR-13 (G10): the sealed manifest's `config.validation` gate block — NOT a raw CLI arg. Set by
+   * `runBacktestCli` immediately after `assertFrozenCliConfig` proves this run matches the sealed
+   * manifest, so this is provably read from the SAME hash-verified artifact, never from
+   * `effectiveParams`/`setup.defaultParams` (a strategy-tuning object that was never itself hashed as
+   * sealed). Absent (no `--manifest`, or a manifest with no declared gate) resolves every
+   * classification read below to its fail-closed ALPHA/null default, byte-identical to pre-G10
+   * behavior for every setup that has never carried a gate block.
+   */
+  gateConfig?: unknown;
 }
 
 export interface RunLabResult {
@@ -1280,6 +1290,15 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // calibration (minCumVolume rescaled from the consolidated tape); every other case keeps v1.
   const params = setupId === 'gapper-orb' && feed === 'alpaca-iex' ? GAPPER_ORB_V1_IEX : undefined;
   const effectiveParams = params ?? setup.defaultParams;
+  // QDR-13 (G10): classification (`productClass`/BETA-DIVERSIFICATION gate specs) is read from the
+  // SEALED manifest's gate block via `options.gateConfig`, never from `effectiveParams` — a strategy-
+  // tuning object (lookback windows, target vol) that only coincidentally shares field names and was
+  // never itself hashed as sealed. Wrapped to the shape `productClassFromConfig`/`gateSpecFromConfig`/
+  // `betaGateDeclaration` already expect (a root object carrying `.validation`) — the same shape they
+  // read `manifest.config` as at seal time — so no change to those functions is needed. Absent
+  // `gateConfig`, this wraps to `{ validation: undefined }`, which resolves identically to the old
+  // `effectiveParams`-fed reads for every setup that never declared a gate: fail-closed to ALPHA/null.
+  const gateConfigRoot: unknown = { validation: options.gateConfig };
   const plateauValidationTrials = validationTrialsForSetup(setupId, effectiveParams);
   const validationTrialFamily = trialCountEvidence(setupId, plateauValidationTrials);
   const validationTrials = validationTrialFamily.familyTrials;
@@ -1387,7 +1406,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           // 0.25, poolSize = maxNames x 3 = 120) while the manifest declared poolSize 80 — the book
           // measured was not the book sealed. Deriving both from plateauCells[0] makes that class of
           // divergence unconstructible rather than merely asserted against: there is one source.
-          const sealedSpec = gateSpecFromConfig(effectiveParams);
+          const sealedSpec = gateSpecFromConfig(gateConfigRoot);
           const sealedCell = sealedSpec?.productClass === 'DIVERSIFICATION'
             ? parsePlateauCellLabel(sealedSpec.plateauCells[0])
             : null;
@@ -1452,7 +1471,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           // plateau vacuous. They need no engine run — the gated quantity is an effective-bet ratio,
           // computed from selections plus realized returns — so this is nine selections, not nine
           // books. All nine sit inside the SINGLE terminal evaluation (QDR-9 condition (f)).
-          const declaredCells = gateSpecFromConfig(effectiveParams);
+          const declaredCells = gateSpecFromConfig(gateConfigRoot);
           if (declaredCells?.productClass === 'DIVERSIFICATION') {
             for (const label of declaredCells.plateauCells) {
               const cell = parsePlateauCellLabel(label);
@@ -2039,10 +2058,10 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // ── QDR-10 BETA evidence. Every figure below is MEASURED from this run's own series; the sealed
   // config supplies only the thresholds to measure against. Absent or incomplete evidence yields
   // `undefined`, and assembleReportCard then fails all BETA criteria closed rather than passing.
-  const productClass = productClassFromConfig(effectiveParams);
+  const productClass = productClassFromConfig(gateConfigRoot);
   let betaEvidence: BetaCriteriaInput | undefined;
   if (productClass === 'BETA') {
-    const gate = betaGateDeclaration(effectiveParams);
+    const gate = betaGateDeclaration(gateConfigRoot);
     const bookPoints = sharedDailyCurve ?? [];
     const aligned = alignFiveSessionBlocks(bookPoints, benchmarkCloseBySession);
     if (aligned.droppedBlocks > 0) {
@@ -2088,7 +2107,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   let diversificationEvidence: DiversificationCriteriaInput | undefined;
   let predictedBreakerFailure = false;
   if (productClass === 'DIVERSIFICATION') {
-    const gate = gateSpecFromConfig(effectiveParams);
+    const gate = gateSpecFromConfig(gateConfigRoot);
     const spec = gate?.productClass === 'DIVERSIFICATION' ? gate : null;
     if (spec) predictedBreakerFailure = spec.hypothesizedMonteCarloP95Drawdown > MONTE_CARLO_P95_DRAWDOWN_BREAKER;
     if (!spec || !pitSleeveSchedule || !comparatorSleeveSchedule || !comparatorDailyCurve || !sharedDailyCurve) {

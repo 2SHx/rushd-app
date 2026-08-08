@@ -234,7 +234,10 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     return createDraft({
       setupId: 'gate-probe',
       version: 'v1',
-      config: { validation } as unknown as Parameters<typeof createDraft>[0]['config'],
+      // QDR-13 (G10): a BETA/DIVERSIFICATION `validation` block requires a paired `runConfig` sibling
+      // to seal at all (`assertRunConfigPairedWithGate`). Harmless for the plain-ALPHA `GATE` fixture
+      // below, which never reads it.
+      config: { validation, runConfig: { setup: 'gate-probe', seed: 42 } } as unknown as Parameters<typeof createDraft>[0]['config'],
       director: 'director-a',
     });
   }
@@ -320,7 +323,7 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     const beta = markQaPass(markCodified(sealExperiment(createDraft({
       setupId: 'beta-lane',
       version: 'v1',
-      config: { validation: BETA_GATE } as unknown as Parameters<typeof createDraft>[0]['config'],
+      config: { validation: BETA_GATE, runConfig: { setup: 'beta-lane', seed: 42 } } as unknown as Parameters<typeof createDraft>[0]['config'],
       director: 'director-a',
     })), 'implementer-a'), 'auditor-b');
     await writeManifest(path, { ...beta, state: 'FULL_CLAIMED', actors: { ...beta.actors, fullRunner: 'runner-c' } });

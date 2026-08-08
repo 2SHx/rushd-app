@@ -174,6 +174,39 @@ export function assertGateFeasibleAtSeal(manifest: ExperimentManifest): void {
   throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: ${feasibility.verdict} — ${feasibility.detail}`);
 }
 
+function isPlainObject(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * QDR-13 (G10): a sealed `validation` block that declares a BETA or DIVERSIFICATION gate — the two
+ * classes `runLab.ts` actually reads through `RunLabOptions.gateConfig` at run time — is worthless
+ * without a declared way to ever run under it: `assertFrozenCliConfig` (`scripts/backtest.ts`)
+ * narrows its CLI-shape comparison to `config.runConfig`, so a gate-bearing manifest with no
+ * `runConfig` can never pass it and can never reach `FULL_CLAIMED`. Refused HERE, at the seal, rather
+ * than sealed into a manifest that can never terminate — QDR-9's "present-but-incomplete throws,
+ * absent seals unchanged" grammar, applied one level up.
+ *
+ * Scoped to BETA/DIVERSIFICATION only, deliberately: a plain ALPHA DSR gate (`minimumOosDsr` etc,
+ * declaring no `productClass`) never reads through `gateConfig` at all — `productClassFromConfig`
+ * already resolves it `ALPHA` by the fail-closed default, and `assertFrozenCliConfig` already falls
+ * back to the WHOLE sealed config when `runConfig` is absent, which is exactly today's (pre-G10)
+ * behavior for a CLI-shaped ALPHA manifest. Demanding a `runConfig` from every DSR-gated ALPHA
+ * manifest — including every one already sealed before this record — would be a new, retroactive
+ * requirement this record does not make.
+ */
+export function assertRunConfigPairedWithGate(manifest: ExperimentManifest): void {
+  const spec = gateSpecFromConfig(manifest.config);
+  if (!spec || (spec.productClass !== 'BETA' && spec.productClass !== 'DIVERSIFICATION')) return;
+  const root = isPlainObject(manifest.config) ? manifest.config : null;
+  if (!root || !isPlainObject(root.runConfig)) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: a ${spec.productClass} gate block `
+      + '("config.validation") requires a paired config.runConfig (a plain object) — the CLI-shaped echo '
+      + '`assertFrozenCliConfig` narrows to — or the seal is refused: a gate block with no declared way to '
+      + 'ever run under it is refused at the door, not sealed into a manifest that can never terminate');
+  }
+}
+
 /**
  * QDR-10: the terminal label must match the class sealed into the config. A BETA version can never
  * emit a bare 'ACCEPTED'/'REJECTED', and an ALPHA version can never borrow a BETA label to soften a
@@ -209,6 +242,11 @@ export type ComparatorResolver = (versionId: string) => ResolvedComparator | nul
 const DIVERSIFICATION_AB_VARIABLE_BLOCKS = new Set([
   'universe', 'validation', 'hypothesis', 'evidenceBoundary', 'historicalMode',
   'terminalEligible', 'setup', 'performanceInspection',
+  // QDR-13 (G10): per-version operational metadata, not mechanism — same reasoning as `setup`/
+  // `evidenceBoundary` above. A historical anchor reconstruction (QDR-12) was never authored with a
+  // `runConfig` field at all; without this exclusion the diff would wrongly refuse every
+  // DIVERSIFICATION seal against an anchor as "differing in more than the universe block".
+  'runConfig',
 ]);
 
 /**
@@ -271,6 +309,7 @@ export function sealExperiment(
 ): ExperimentManifest {
   assertState(manifest, 'DRAFT');
   assertGateFeasibleAtSeal(manifest);
+  assertRunConfigPairedWithGate(manifest);
   assertDiversificationComparator(manifest, options?.resolveComparator);
   const config = structuredClone(manifest.config);
   return { ...manifest, config, configHash: stableConfigHash(config), state: 'SEALED' };

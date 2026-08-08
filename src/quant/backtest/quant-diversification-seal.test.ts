@@ -47,6 +47,11 @@ const MECHANISM = {
   portfolio: { weighting: 'inverse-volatility', lookbackDays: 252, perNameCap: 0.20, breadthFloor: 15 },
   execution: { commissionBpsPerSide: 10, slippageBpsPerSide: 5 },
   plateau: { cells: 9 },
+  // QDR-13 (G10): a DIVERSIFICATION `validation` block requires a paired `runConfig` sibling to seal
+  // at all (`assertRunConfigPairedWithGate`). `runConfig` is also excluded from the A/B isolation
+  // diff (`DIVERSIFICATION_AB_VARIABLE_BLOCKS`), so its presence here never trips the "differs in
+  // more than the universe block" refusal against `INCUMBENT_CONFIG` or a historical anchor.
+  runConfig: { setup: 'halal-decorrelated-risk-parity-core', seed: 42 },
 };
 
 function draft(config: Record<string, unknown>): ExperimentManifest {

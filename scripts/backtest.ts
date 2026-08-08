@@ -22,8 +22,14 @@ import {
   recordDiagnostic,
   recordFullResult,
   stableConfigHash,
+  type ExperimentManifest,
   type JsonValue,
 } from '../src/quant/backtest/experimentProtocol';
+
+/** A JSON object, never an array/primitive — the shape both `config` and `config.runConfig` need. */
+function recordConfig(value: JsonValue | undefined): Record<string, JsonValue> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
 
 // Re-export the pure helpers for existing unit tests (src/quant/**/*.test.ts import them from here).
 export * from '../src/quant/backtest/runLab';
@@ -84,11 +90,25 @@ export function protocolConfigForOptions(options: RunLabOptions): JsonValue {
   })) as JsonValue;
 }
 
-async function assertFrozenCliConfig(manifestPath: string, options: RunLabOptions): Promise<void> {
+/**
+ * QDR-13 (G10): narrowed from "the whole sealed config" to a declared `runConfig` sub-object — a
+ * sibling of `validation` inside the SAME sealed `manifest.config` — so one sealed, hashed object can
+ * carry both an operational CLI-args echo and a gate block. `declaredRunConfig` falls back to the
+ * whole config when no `runConfig` is declared, which for every manifest sealed today (none carries
+ * `runConfig`) reduces algebraically to the OLD check: `readManifest` already proved
+ * `stableConfigHash(manifest.config) === manifest.configHash` via `assertSealedConfig`, so comparing
+ * `stableConfigHash(declaredRunConfig)` there is comparing `manifest.configHash` itself, byte-
+ * identical to pre-G10 behavior. Returns the manifest so the caller can thread `config.validation`
+ * into `RunLabOptions.gateConfig` — provably part of the SAME hash-verified artifact just matched.
+ */
+async function assertFrozenCliConfig(manifestPath: string, options: RunLabOptions): Promise<ExperimentManifest> {
   const manifest = await readManifest(manifestPath);
-  if (manifest.setupId !== options.setup || manifest.configHash !== stableConfigHash(protocolConfigForOptions(options))) {
+  const declaredRunConfig = recordConfig(manifest.config)?.runConfig ?? manifest.config;
+  if (manifest.setupId !== options.setup
+    || stableConfigHash(declaredRunConfig) !== stableConfigHash(protocolConfigForOptions(options))) {
     throw new Error('CLI config does not match the sealed experiment manifest');
   }
+  return manifest;
 }
 
 export async function runBacktestCli(argv: string[]): Promise<RunLabResult> {
@@ -99,7 +119,8 @@ export async function runBacktestCli(argv: string[]): Promise<RunLabResult> {
   if (options.diagnostic) {
     if (!manifestPath) return runLab(options);
     if (!args.implementer) throw new UsageError('--implementer is required with a diagnostic manifest');
-    await assertFrozenCliConfig(manifestPath, options);
+    const manifest = await assertFrozenCliConfig(manifestPath, options);
+    options.gateConfig = recordConfig(manifest.config)?.validation;
     await recordDiagnostic(manifestPath, args.implementer);
     return runLab(options);
   }
@@ -107,7 +128,8 @@ export async function runBacktestCli(argv: string[]): Promise<RunLabResult> {
   if (!manifestPath || !args.runner) {
     throw new UsageError('Terminal FULL runs require --manifest <path> and --runner <identity>');
   }
-  await assertFrozenCliConfig(manifestPath, options);
+  const manifest = await assertFrozenCliConfig(manifestPath, options);
+  options.gateConfig = recordConfig(manifest.config)?.validation;
   await claimFull(manifestPath, args.runner);
 
   try {
