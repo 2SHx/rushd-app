@@ -24,6 +24,23 @@ interface XbrlFact {
   fp?: string;
 }
 
+/**
+ * The exact us-gaap/dei concept names this module screens on, exported so
+ * `src/quant/data/pitFundamentalsBackfill.ts` (the point-in-time filing-HISTORY backfill, which
+ * needs every annual fact per concept, not just the latest) reuses the same mapping instead of
+ * re-deriving it. Do not add a concept here without also checking `computeAaoifiScreen`'s inputs.
+ */
+export const TIER2_CONCEPT_KEYS = {
+  longTermDebt: ['LongTermDebt'],
+  debtCurrent: ['DebtCurrent'],
+  cash: ['CashAndCashEquivalentsAtCarryingValue'],
+  shortTermSecurities: ['MarketableSecuritiesCurrent', 'ShortTermInvestments'],
+  revenue: ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues'],
+  nonCompliantIncome: ['InterestIncomeOther', 'InvestmentIncomeInterest', 'InvestmentIncomeInterestAndDividend'],
+  sharesDei: ['EntityCommonStockSharesOutstanding'],
+  sharesGaap: ['CommonStockSharesOutstanding'],
+} as const;
+
 function pickLatestAnnual(list: XbrlFact[] | undefined): XbrlFact | null {
   if (!Array.isArray(list)) return null;
   const annual = list.filter((x) => x.form?.startsWith('10-K') && (!x.fp || x.fp === 'FY'));
@@ -80,18 +97,14 @@ export async function fetchTier2XbrlInputs(
     const gaap = facts.facts?.['us-gaap'] ?? {};
     const dei = facts.facts?.dei ?? {};
 
-    const longTermDebt = pickFirstConcept(gaap, ['LongTermDebt']);
-    const debtCurrent = pickFirstConcept(gaap, ['DebtCurrent']);
-    const cash = pickFirstConcept(gaap, ['CashAndCashEquivalentsAtCarryingValue']);
-    const shortTermSecurities = pickFirstConcept(gaap, ['MarketableSecuritiesCurrent', 'ShortTermInvestments']);
-    const revenue = pickFirstConcept(gaap, ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues']);
-    const nonCompliantIncome = pickFirstConcept(gaap, [
-      'InterestIncomeOther',
-      'InvestmentIncomeInterest',
-      'InvestmentIncomeInterestAndDividend',
-    ]);
-    const sharesDei = pickFirstConcept(dei, ['EntityCommonStockSharesOutstanding'], 'shares');
-    const sharesGaap = pickFirstConcept(gaap, ['CommonStockSharesOutstanding'], 'shares');
+    const longTermDebt = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.longTermDebt]);
+    const debtCurrent = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.debtCurrent]);
+    const cash = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.cash]);
+    const shortTermSecurities = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.shortTermSecurities]);
+    const revenue = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.revenue]);
+    const nonCompliantIncome = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.nonCompliantIncome]);
+    const sharesDei = pickFirstConcept(dei, [...TIER2_CONCEPT_KEYS.sharesDei], 'shares');
+    const sharesGaap = pickFirstConcept(gaap, [...TIER2_CONCEPT_KEYS.sharesGaap], 'shares');
 
     const debtParts = [longTermDebt?.val, debtCurrent?.val].filter((v): v is number => typeof v === 'number');
     const cashParts = [cash?.val, shortTermSecurities?.val].filter((v): v is number => typeof v === 'number');
@@ -121,4 +134,5 @@ export async function fetchTier2XbrlInputs(
   }
 }
 
-export { excludedSicCategory };
+export { excludedSicCategory, SEC_HEADERS, fetchJson };
+export type { XbrlFact };
