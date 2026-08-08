@@ -88,6 +88,48 @@ describe('PointInTimeStore.bars', () => {
   });
 });
 
+describe('PointInTimeStore.fundamentals — deterministic tie-break — acceptance #3', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves a releasedAt collision by latest fiscal `asOf`, and repeated reads agree', async () => {
+    // Two distinct fiscal-year filings (WAT FY2016, FY2017) that both became public the same day
+    // — a real, confirmed collision. `releasedAt desc` alone leaves the winner to undefined DB
+    // row order; `asOf desc` as the documented secondary key makes it a total order.
+    const rows = [
+      { id: 'fy2016', symbol: 'WAT', market: 'NASDAQ', asOf: new Date('2016-12-31'), releasedAt: new Date('2019-02-26') },
+      { id: 'fy2017', symbol: 'WAT', market: 'NASDAQ', asOf: new Date('2017-12-31'), releasedAt: new Date('2019-02-26') },
+    ];
+    // Mock emulates a real DB: filters by `where`, sorts by the exact `orderBy` array passed in,
+    // and returns the first row — so this test exercises the actual tie-break contract, not just
+    // that some `orderBy` was passed.
+    (prisma.fundamentals.findFirst as any).mockImplementation(async (args: any) => {
+      const cutoff = (args.where.releasedAt.lte as Date).getTime();
+      const filtered = rows.filter((r) => r.releasedAt.getTime() <= cutoff);
+      const sorted = [...filtered].sort((a, b) => {
+        for (const clause of args.orderBy as Array<Record<string, 'asc' | 'desc'>>) {
+          const [key, dir] = Object.entries(clause)[0] as [keyof typeof a, 'asc' | 'desc'];
+          const diff = (a[key] as Date).getTime() - (b[key] as Date).getTime();
+          if (diff !== 0) return dir === 'desc' ? -diff : diff;
+        }
+        return 0;
+      });
+      return sorted[0] ?? null;
+    });
+
+    const store = new PointInTimeStore();
+    const queryAsOf = new Date('2020-01-01');
+    const first = await store.fundamentals('WAT', 'NASDAQ' as any, queryAsOf);
+    const second = await store.fundamentals('WAT', 'NASDAQ' as any, queryAsOf);
+
+    expect(first?.id).toBe('fy2017'); // the more recently completed fiscal year wins the tie
+    expect(second?.id).toBe('fy2017'); // repeated reads agree — no undefined-DB-order flakiness
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].orderBy).toEqual([
+      { releasedAt: 'desc' },
+      { asOf: 'desc' },
+    ]);
+  });
+});
+
 describe('loadPointInTimeContext (sync view)', () => {
   beforeEach(() => vi.clearAllMocks());
 

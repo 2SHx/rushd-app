@@ -19,9 +19,30 @@ async function fetchJson(url: string, timeoutMs = 20_000): Promise<any> {
 interface XbrlFact {
   val: number;
   end: string;
+  /**
+   * ISO period-start date, present on DURATION facts (income-statement concepts like revenue or
+   * interest income) and ABSENT on INSTANT facts (balance-sheet concepts like debt or cash,
+   * reported "as of" `end` with no span). `pitFundamentalsBackfill.ts` uses this to reject
+   * duration facts whose (end - start) span is not annual-length — SEC's `fp` field is a
+   * FILING-level tag (the 10-K's own DocumentFiscalPeriodFocus), not a per-fact one, so a 10-K's
+   * embedded "selected quarterly data" comparative facts still carry `fp: 'FY', form: '10-K'`
+   * even though they cover a single quarter; only the actual start/end span distinguishes them.
+   */
+  start?: string;
   filed?: string;
   form?: string;
   fp?: string;
+  /**
+   * SEC's own calendar-alignment label (e.g. "CY2016" for a full year, "CY2016Q4I" for an
+   * instant balance at a Q4/FY-end, "CY2012Q2I" for an instant balance mid-year, "CY2012Q2" for a
+   * quarter-duration). When present, a `frame` ending in a bare Q1/Q2/Q3 (optionally with an "I"
+   * instant or "YTD" suffix) is SEC's own confirmation that the fact is a sub-annual period —
+   * used by `pitFundamentalsBackfill.ts` as a second, independent signal alongside the start/end
+   * span check (duration facts) to catch INSTANT balance-sheet facts (debt/cash — no `start` to
+   * measure a span from) that a 10-K embeds as quarterly comparatives, e.g. a real fact observed
+   * for ON Semiconductor: `{end:"2012-03-31", form:"10-K", fp:"FY", frame:"CY2012Q1I"}`.
+   */
+  frame?: string;
 }
 
 /**

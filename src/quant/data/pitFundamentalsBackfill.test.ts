@@ -105,6 +105,140 @@ describe('selectAnnualFundamentalsHistory — point-in-time contract', () => {
     expect(filings[0].metrics.totalRevenueUsd).toBe(1_000);
   });
 
+  it('rejects a form=10-K duration fact with ABSENT fp and a mid-year end — acceptance #1', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: {
+              USD: [
+                { val: 250, end: '2022-06-30', filed: '2022-08-01', form: '10-K' }, // no fp at all
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings, skips } = selectAnnualFundamentalsHistory('FRAG', companyFacts, { sic: null });
+    expect(filings).toEqual([]);
+    expect(skips).toEqual([{ symbol: 'FRAG', reasonCode: 'no_annual_10k_facts' }]);
+  });
+
+  it('rejects a form=10-K, fp=FY duration fact whose start..end span is a quarter — acceptance #1 (real-shape defect)', () => {
+    // Confirmed against live SEC EDGAR (WAT/Waters Corp): a 10-K's XBRL exhibit embeds prior-
+    // quarter comparative duration facts (a "selected quarterly financial data" footnote) that
+    // STILL carry form:'10-K', fp:'FY' — both are FILING-level tags, not per-fact ones. E.g. the
+    // real fact `{start:"2009-04-05", end:"2009-07-04", val:595000, form:"10-K", fp:"FY",
+    // filed:"2011-02-25"}` is a 3-month span, not a fiscal year, yet passes any fp/form-only
+    // filter. Only the start..end SPAN (~90 days here, well outside the 350-380-day annual
+    // window) actually distinguishes it from a genuine FY fact — this is the real leak acceptance
+    // #1 must close, not merely the absent-fp case above.
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          InterestIncomeOther: {
+            units: {
+              USD: [
+                { val: 595_000, start: '2009-04-05', end: '2009-07-04', filed: '2011-02-25', form: '10-K', fp: 'FY' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings, skips } = selectAnnualFundamentalsHistory('QFRG', companyFacts, { sic: null });
+    expect(filings).toEqual([]);
+    expect(skips).toEqual([{ symbol: 'QFRG', reasonCode: 'no_annual_10k_facts' }]);
+  });
+
+  it('rejects an INSTANT (no-start) form=10-K, fp=FY fact whose frame is a Q1/Q2/Q3 sub-period — acceptance #1 (instant contamination)', () => {
+    // Confirmed against live SEC EDGAR (ON Semiconductor): a 10-K embeds quarterly cash balances
+    // as a "selected quarterly data" note — instant facts have no `start` to span-check, but SEC
+    // itself labels them `frame: "CY2012Q1I"` etc. The real fact:
+    // `{end:"2012-03-31", val:580100000, form:"10-K", fp:"FY", frame:"CY2012Q1I"}`.
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          CashAndCashEquivalentsAtCarryingValue: {
+            units: {
+              USD: [
+                { val: 580_100_000, end: '2012-03-31', filed: '2013-02-26', form: '10-K', fp: 'FY', frame: 'CY2012Q1I' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings, skips } = selectAnnualFundamentalsHistory('IFRG', companyFacts, { sic: null });
+    expect(filings).toEqual([]);
+    expect(skips).toEqual([{ symbol: 'IFRG', reasonCode: 'no_annual_10k_facts' }]);
+  });
+
+  it('admits an INSTANT form=10-K, fp=FY fact whose frame is a genuine FY-end (Q4I) balance', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          CashAndCashEquivalentsAtCarryingValue: {
+            units: {
+              USD: [
+                { val: 486_900_000, end: '2012-12-31', filed: '2013-02-26', form: '10-K', fp: 'FY', frame: 'CY2012Q4I' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings } = selectAnnualFundamentalsHistory('IOKF', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].metrics.cashAndInterestSecuritiesUsd).toBe(486_900_000);
+  });
+
+  it('admits a form=10-K, fp=FY duration fact whose span is a genuine 52/53-week fiscal year', () => {
+    // Guard against over-restriction: a real annual span (364 days here) must NOT be rejected by
+    // the same window that rejects the ~90-day quarter fragment above.
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: {
+              USD: [
+                { val: 2_167_423_000, start: '2016-01-01', end: '2016-12-31', filed: '2017-02-24', form: '10-K', fp: 'FY' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings } = selectAnnualFundamentalsHistory('OKFY', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].asOf).toBe('2016-12-31');
+    expect(filings[0].metrics.totalRevenueUsd).toBe(2_167_423_000);
+  });
+
+  it('cross-tag ties resolve by earliest filed, never by tag preference/listing order — acceptance #2', () => {
+    // TIER2_CONCEPT_KEYS.revenue = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues']
+    // — the NEWER ASC-606 tag is listed FIRST. If it were also filed later (a post-transition
+    // restatement of the same FY), tag-preference order would wrongly attribute the newer figure
+    // to whichever date happens to win by list position. Earliest-filed-wins must pick the
+    // legacy `Revenues` tag's earlier `filed` date instead, regardless of key order.
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          RevenueFromContractWithCustomerExcludingAssessedTax: {
+            units: { USD: [gaapFact(1_050, '2017-12-31', '2019-02-26')] }, // restated, filed LATER
+          },
+          Revenues: {
+            units: { USD: [gaapFact(1_000, '2017-12-31', '2018-02-20')] }, // original, filed EARLIER
+          },
+        },
+      },
+    };
+    const { filings } = selectAnnualFundamentalsHistory('XTAG', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].releasedAt).toBe('2018-02-20'); // earliest filed, not the first-listed tag
+    expect(filings[0].metrics.totalRevenueUsd).toBe(1_000); // the figure actually public on that date
+  });
+
   it('excludes 10-Q (non-annual) facts, never mixing quarterly figures into the annual history', () => {
     const companyFacts = {
       facts: {

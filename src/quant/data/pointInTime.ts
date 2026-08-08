@@ -55,10 +55,22 @@ export class PointInTimeStore {
     return assertNoLookahead(rows, asOf, 'ts') as MarketBar[];
   }
 
+  /**
+   * Latest fundamentals row public at-or-before `asOf`. `releasedAt` alone does not uniquely
+   * order rows: two distinct fiscal-period filings can share the same `releasedAt` (e.g. a
+   * catch-up filing day, or one `Fundamentals.releasedAt = max(filed)` landing on the same date
+   * for two adjacent fiscal years). Deterministic secondary key: `asOf` (the fiscal period end)
+   * descending. Because `@@unique([symbol, market, asOf])` guarantees no two rows share a
+   * `(symbol, market, asOf)`, this two-key order is a total order — repeated reads over the same
+   * data always return the same row (reproducibility, QUANT_DESIGN.md §2.2). The winner is the
+   * row describing the MOST RECENTLY COMPLETED fiscal period among those that became public
+   * simultaneously — the most current annual figure a decision-maker actually had in hand at
+   * `asOf`, never an older, superseded fiscal year's row.
+   */
   async fundamentals(symbol: string, market: Market, asOf: Date): Promise<Fundamentals | null> {
     const f = await prisma.fundamentals.findFirst({
       where: { symbol, market, releasedAt: { lte: asOf } },
-      orderBy: { releasedAt: 'desc' },
+      orderBy: [{ releasedAt: 'desc' }, { asOf: 'desc' }],
     });
     if (f) assertNoLookahead([f], asOf, 'releasedAt');
     return f;
