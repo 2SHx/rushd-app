@@ -287,11 +287,15 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
 /**
  * Setups that resolve their sleeve on CORRELATION + SECTOR BALANCE instead of dollar volume.
  *
- * Deliberately EMPTY. Every id above already has a published terminal card produced under
- * dollar-volume selection, and silently changing a sealed setup's universe would break the
- * reproducibility those cards rest on — the same rule that made B1's realizedVolSource opt-in.
- * Which selector a setup uses is a research decision recorded in its preregistration, never an
- * implementation default. A new preregistered setup opts in by adding its id here.
+ * OPT-IN, and every id above is deliberately NOT here. Each of them already has a published terminal
+ * card produced under dollar-volume selection, and silently changing a sealed setup's universe would
+ * break the reproducibility those cards rest on — the same rule that made B1's realizedVolSource
+ * opt-in. Which selector a setup uses is a research decision recorded in its preregistration, never
+ * an implementation default; a new preregistered setup opts in by adding its id here.
+ *
+ * `halal-decorrelated-risk-parity-core` is the first and currently only member (QDR-11, added
+ * 82ec4d3). It has NO published card — its manifest is a DRAFT — so nothing is being changed
+ * retroactively. Its sectorCap/poolSize come from the sealed plateauCells[0], never from defaults.
  *
  * Rationale for the mechanism (walk-forward, 8 formation dates 2017-2024): dollar-volume ranking
  * yields average pairwise correlation 0.326 over 98 names, i.e. ~3.0 effective bets. Correlation-
@@ -1378,6 +1382,25 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           if (!tradedSessions.length) {
             throw new Error(`${setupId} requires real NASDAQ trading sessions in ${from}..${to}`);
           }
+          // THE SEALED CELL *IS* THE TREATMENT CONFIGURATION. Previously the treatment arm passed
+          // neither sectorCap nor poolSize, so it silently ran the selector's DEFAULTS (sectorCap
+          // 0.25, poolSize = maxNames x 3 = 120) while the manifest declared poolSize 80 — the book
+          // measured was not the book sealed. Deriving both from plateauCells[0] makes that class of
+          // divergence unconstructible rather than merely asserted against: there is one source.
+          const sealedSpec = gateSpecFromConfig(effectiveParams);
+          const sealedCell = sealedSpec?.productClass === 'DIVERSIFICATION'
+            ? parsePlateauCellLabel(sealedSpec.plateauCells[0])
+            : null;
+          if (!sealedCell) {
+            throw new Error(
+              `${setupId} resolves a correlation-balanced sleeve but declares no DIVERSIFICATION gate `
+              + 'block, so its sectorCap/poolSize are undeclared. Running on selector defaults would '
+              + 'measure a book nobody sealed.',
+            );
+          }
+          const treatmentSectorCap = sealedCell.sectorCap;
+          const treatmentPoolSize = sealedCell.poolSize;
+
           pitSleeveSchedule = await buildPitSleeveSchedule({
             rule: 'correlation-balanced',
             sessions: sessionWindow,
@@ -1387,6 +1410,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
               const balanced = await selectCorrelationBalancedSleeve(universe.entries, {
                 asOf: formationAt,
                 maxNames: sleeveMaxNames,
+                sectorCap: treatmentSectorCap,
+                poolSize: treatmentPoolSize,
                 sectorOf: (symbol: string) => SYMBOL_SECTOR.get(symbol) ?? null,
               });
               return {
@@ -1451,7 +1476,18 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
                 }),
               });
             }
-            console.log(`  plateau: ${plateauCellSchedules.length} sealed cell(s) formed on the same schedule`);
+            // Each cell schedule is held to the void condition IN ITS OWN RIGHT. They share the
+            // session window and cadence with the treatment arm, so they were rolling already — but
+            // by an unenforced invariant, and QDR-11 voids a run whose EITHER arm is formed once.
+            // A guarantee that holds only because two call sites happen to agree is not a guarantee.
+            for (const { cell, schedule } of plateauCellSchedules) {
+              try {
+                assertRollingFormation(schedule, tradedSessions.length);
+              } catch (error) {
+                throw new Error(`plateau cell ${cell.label}: ${(error as Error).message}`);
+              }
+            }
+            console.log(`  plateau: ${plateauCellSchedules.length} cell(s), each rolling-verified`);
           }
 
           // The union is what gets LOADED; this is what may be HELD, session by session. Without it

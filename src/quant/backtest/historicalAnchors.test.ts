@@ -1,5 +1,6 @@
 // QDR-12. The load-bearing property is CLOSURE: the anchor set is admissible by a date that already
 // happened, so it can never grow. These tests exist to make that true rather than aspirational.
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   assertAnchorAdmissible,
@@ -9,6 +10,14 @@ import {
   type HistoricalComparatorAnchor,
 } from './historicalAnchors';
 import { assertDiversificationComparator, createDraft, type JsonValue } from './experimentProtocol';
+
+/** QDR-11's sealed 3x3 grid, gating cell first. */
+const PLATEAU_GRID = (() => {
+  // QDR-11's full 3x3 grid, sealed cell FIRST. A 1-cell fixture used to seal here — the gap QA
+  // found — and assertDiversificationGateSpec now refuses it.
+  const all = [0.20, 0.25, 0.30].flatMap((c) => [60, 80, 100].map((p) => `sectorCap=${c},poolSize=${p}`));
+  return ['sectorCap=0.25,poolSize=80', ...all.filter((c) => c !== 'sectorCap=0.25,poolSize=80')];
+})();
 
 const ANCHOR = HISTORICAL_COMPARATOR_ANCHORS[0];
 
@@ -43,6 +52,35 @@ describe('the set is closed by a date that already happened', () => {
     // The set is closed. A new entry means QDR-12 was reopened; this assertion is where that shows up.
     expect(HISTORICAL_COMPARATOR_ANCHORS).toHaveLength(1);
     expect(HISTORICAL_COMPARATOR_ANCHORS.map((a) => a.versionId)).toEqual(['halal-risk-parity-core@v1']);
+  });
+});
+
+describe('closure is GIT-VERIFIED, not self-declared', () => {
+  // Found at director review: assertAnchorAdmissible only string-compares a SELF-DECLARED
+  // preregisteredAt. A fabricated date before the epoch plus any non-empty SHA would pass it, so
+  // "refused by arithmetic" was an overclaim — enforcement was really code review. This test closes
+  // that by asking git for the SHA's ACTUAL commit date, which the registry cannot forge.
+  const commitDate = (sha: string): string =>
+    execFileSync('git', ['show', '-s', '--format=%ad', '--date=short', sha], { encoding: 'utf8' }).trim();
+
+  it('every anchor\'s DECLARED date matches its commit\'s REAL date', () => {
+    for (const anchor of HISTORICAL_COMPARATOR_ANCHORS) {
+      expect(commitDate(anchor.preregistrationSha)).toBe(anchor.preregisteredAt);
+    }
+  });
+
+  it('every anchor\'s REAL commit date precedes the manifest-protocol epoch', () => {
+    for (const anchor of HISTORICAL_COMPARATOR_ANCHORS) {
+      expect(commitDate(anchor.preregistrationSha) < MANIFEST_PROTOCOL_EPOCH).toBe(true);
+    }
+  });
+
+  it('the epoch constant matches the commit that actually introduced the protocol', () => {
+    const introduced = execFileSync('git', [
+      'log', '--diff-filter=A', '--format=%ad', '--date=short',
+      '--', 'src/quant/backtest/experimentProtocol.ts',
+    ], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).pop();
+    expect(introduced).toBe(MANIFEST_PROTOCOL_EPOCH);
   });
 });
 
@@ -94,7 +132,7 @@ describe('the anchor carries identity and isolation, never evidence', () => {
     hypothesizedVolReduction: 0.116,
     hypothesizedMonteCarloP95Drawdown: 0.41,
     bootstrapBlockLength: 20,
-    plateauCells: ['sectorCap=0.25,poolSize=80'],
+    plateauCells: PLATEAU_GRID,
   };
 
   /** The treatment arm: the anchor's config with ONLY the universe block changed. */
@@ -150,6 +188,18 @@ describe('the anchor carries identity and isolation, never evidence', () => {
     });
     expect(() => assertDiversificationComparator(orphan, resolveViaAnchor))
       .toThrow(/resolves to no SEALED manifest/);
+  });
+
+  it('the RESOLVER strips terminal metadata — it never leaves the registry', () => {
+    // Director review flagged terminalRunId/ledgerRow as an attractive nuisance: a future card
+    // renderer could join them against real metrics. The resolution path already returns only
+    // {versionId, sealed, config}; this pins that so the shape cannot widen unnoticed.
+    const anchor = historicalAnchorIndex().get('halal-risk-parity-core@v1')!;
+    const resolved = { versionId: anchor.versionId, sealed: true, config: anchor.config };
+    expect(Object.keys(resolved).sort()).toEqual(['config', 'sealed', 'versionId']);
+    expect(resolved).not.toHaveProperty('terminalRunId');
+    expect(resolved).not.toHaveProperty('terminalStatus');
+    expect(resolved).not.toHaveProperty('ledgerRow');
   });
 
   it('the anchor config carries a RULE, and no result of any kind', () => {

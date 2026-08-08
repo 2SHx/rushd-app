@@ -43,6 +43,11 @@ export const MIN_VOLATILITY_REDUCTION = 0.05;
 export const MAX_VOLATILITY_RATIO_UPPER_BOUND_95 = 0.95;
 /** Plateau stability: all nine cells, not only the sealed one. */
 export const MIN_PLATEAU_EFFECTIVE_BETS_RATIO = 1.00;
+/**
+ * QDR-11's sealed grid: {sectorCap 0.20|0.25|0.30} x {poolSize 60|80|100}. Asserted at seal, because
+ * a non-empty check alone let a lane declare ONE cell and skip the guardrail while looking compliant.
+ */
+export const DIVERSIFICATION_PLATEAU_CELL_COUNT = 9;
 
 export const DIVERSIFICATION_BOOTSTRAP_RESAMPLES = 2000;
 const TRADING_DAYS_PER_YEAR = 252;

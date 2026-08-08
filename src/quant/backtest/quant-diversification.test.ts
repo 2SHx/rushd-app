@@ -368,7 +368,11 @@ describe('a hard safety gate is terminal regardless of D1/D2', () => {
   });
 });
 
-// ── (5) mutating productClass after seal breaks configHash recomputation ─────────────────────────
+// ── (5) the class is sealed and absence resolves to ALPHA ───────────────────────────────────────
+// NOTE (corrected at QA review): this section does NOT test that mutating `productClass` after seal
+// breaks `configHash` recomputation — its header used to claim that and did not do it. That property
+// holds and is proven in experimentProtocol.test.ts against a BETA fixture; `stableConfigHash` is
+// class-agnostic, so it covers DIVERSIFICATION identically. The claim is not re-made here.
 
 describe('the class is sealed, and absence still resolves to ALPHA', () => {
   it('absent productClass resolves ALPHA, unchanged and fail-closed', () => {

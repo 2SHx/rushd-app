@@ -15,7 +15,10 @@
 // exports them, delete these copies and import instead.
 
 import { volatilityBandFeasible } from './betaCriteria';
-import { minimumDailyObservationsForVolReduction } from './diversificationCriteria';
+import {
+  DIVERSIFICATION_PLATEAU_CELL_COUNT,
+  minimumDailyObservationsForVolReduction,
+} from './diversificationCriteria';
 
 /** Euler-Mascheroni gamma — identical constant to the one metrics.ts uses inside deflatedSharpe. */
 export const EULER_MASCHERONI = 0.5772156649015329;
@@ -482,8 +485,19 @@ export function assertDiversificationGateSpec(spec: DiversificationGateSpec): vo
   if (!Number.isFinite(spec.observationsPerYear) || spec.observationsPerYear <= 0) {
     throw new Error('observationsPerYear must be a positive number');
   }
-  if (!Array.isArray(spec.plateauCells) || spec.plateauCells.length === 0) {
-    throw new Error('plateauCells must name every cell evaluated inside the single terminal evaluation');
+  // QDR-11 names a 3x3 grid — {sectorCap 0.20|0.25|0.30} x {poolSize 60|80|100} = 9 cells. A
+  // non-empty check alone let a lane seal with ONE cell and skip the plateau guardrail entirely
+  // while looking compliant, which is the whole point of the guardrail (found at review).
+  if (!Array.isArray(spec.plateauCells) || spec.plateauCells.length !== DIVERSIFICATION_PLATEAU_CELL_COUNT) {
+    throw new Error(
+      `plateauCells must name all ${DIVERSIFICATION_PLATEAU_CELL_COUNT} cells evaluated inside the single `
+      + `terminal evaluation, found ${Array.isArray(spec.plateauCells) ? spec.plateauCells.length : 'none'}. `
+      + 'A shorter grid is not a smaller plateau — it is no plateau, wearing one\'s clothes',
+    );
+  }
+  if (new Set(spec.plateauCells).size !== spec.plateauCells.length) {
+    // Duplicates would let a grid reach the required count while covering fewer real cells.
+    throw new Error('plateauCells must be distinct; a duplicated cell inflates the count without widening the grid');
   }
 }
 

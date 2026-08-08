@@ -12,6 +12,14 @@ import {
   type JsonValue,
 } from './experimentProtocol';
 
+/** QDR-11's sealed 3x3 grid, gating cell first. */
+const PLATEAU_GRID = (() => {
+  // QDR-11's full 3x3 grid, sealed cell FIRST. A 1-cell fixture used to seal here — the gap QA
+  // found — and assertDiversificationGateSpec now refuses it.
+  const all = [0.20, 0.25, 0.30].flatMap((c) => [60, 80, 100].map((p) => `sectorCap=${c},poolSize=${p}`));
+  return ['sectorCap=0.25,poolSize=80', ...all.filter((c) => c !== 'sectorCap=0.25,poolSize=80')];
+})();
+
 const GATE = {
   productClass: 'DIVERSIFICATION',
   minimumOosObservations: 644,
@@ -30,7 +38,7 @@ const GATE = {
   hypothesizedVolReduction: 0.116,
   hypothesizedMonteCarloP95Drawdown: 0.41,
   bootstrapBlockLength: 20,
-  plateauCells: ['sectorCap=0.25,poolSize=80'],
+  plateauCells: PLATEAU_GRID,
 };
 
 const MECHANISM = {
