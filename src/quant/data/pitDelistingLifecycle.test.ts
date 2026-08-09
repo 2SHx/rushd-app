@@ -84,6 +84,32 @@ const TEL_NYSE_SHARES_XML = `<?xml version="1.0"?>
     </signatureData>
 </notificationOfRemoval>`;
 
+// Real live document, Expedia, Inc., CIK 0001324424, accession 0001354457-09-000105 (illustrative
+// accession number), filed 2009-02-04 — Nasdaq, but the description CONTAINS the substring
+// "common stock" without itself being a common-stock removal: it is a WARRANT. Proves the
+// anchored-prefix regex fix (a naive substring match would wrongly classify this as delisting
+// evidence for EXPE common stock).
+const EXPE_NASDAQ_WARRANT_XML = `<?xml version="1.0"?>
+<notificationOfRemoval>
+    <schemaVersion>X0203</schemaVersion>
+    <exchange>
+        <cik>0001354457</cik>
+        <entityName>NASDAQ Stock Market LLC</entityName>
+    </exchange>
+    <issuer>
+        <cik>0001324424</cik>
+        <entityName>Expedia, Inc.</entityName>
+        <fileNumber>000-51447</fileNumber>
+    </issuer>
+    <descriptionClassSecurity>Warrant to purchase one half of one share of Expedia common stock</descriptionClassSecurity>
+    <ruleProvision>17 CFR 240.12d2-2(a)(1)</ruleProvision>
+    <signatureData>
+        <signatureName>Tara Petta</signatureName>
+        <signatureTitle>Director</signatureTitle>
+        <signatureDate>2009-02-04</signatureDate>
+    </signatureData>
+</notificationOfRemoval>`;
+
 // Real live document (HTML, truncated to the load-bearing fragment), W.W. Grainger, CIK
 // 0000277135, accession 0000277135-14-000035, filed 2014-12-22 — legacy pre-XML Form 25 with NO
 // structured backing document; only free text says "THE CHICAGO STOCK EXCHANGE, INC." This module
@@ -133,6 +159,18 @@ describe('parseForm25Document + isConfirmedNasdaqCommonStockDelisting — the fa
     expect(doc.format).toBe('legacy-unparsed');
     expect(doc.exchangeEntityName).toBeNull();
     expect(isConfirmedNasdaqCommonStockDelisting(doc)).toBe(false);
+  });
+
+  it('rejects a Nasdaq WARRANT removal (EXPE) whose description merely CONTAINS "common stock" as a substring', () => {
+    const doc = parseForm25Document(EXPE_NASDAQ_WARRANT_XML);
+    expect(doc.exchangeEntityName).toMatch(/nasdaq/i);
+    expect(doc.securityClassDescription).toContain('common stock'); // substring present...
+    expect(isConfirmedNasdaqCommonStockDelisting(doc)).toBe(false); // ...but correctly rejected: not the class itself
+  });
+
+  it('captures ruleProvision on every structured-xml document, for future disambiguation work', () => {
+    expect(parseForm25Document(ADVERUM_NASDAQ_COMMON_STOCK_XML).ruleProvision).toBe('17 CFR 240.12d2-2(a)(3)');
+    expect(parseForm25Document(GWW_LEGACY_HTML).ruleProvision).toBeNull();
   });
 });
 

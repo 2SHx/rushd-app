@@ -62,6 +62,8 @@ async function main() {
 
     const { filings, coverage } = await fetchForm25History(symbol, cik);
     totalForm25Filings += filings.length;
+    const qualifying = filings.filter((f) => isConfirmedNasdaqCommonStockDelisting(f.document));
+    totalQualifyingNasdaqCommonStockFilings += qualifying.length;
     if (filings.length > 0) symbolsWithAnyForm25 += 1;
     if (coverage.complete) symbolsCoverageComplete += 1;
     else {
@@ -83,9 +85,12 @@ async function main() {
     if (resolved.reasonCode === 'delisting_filed_not_yet_effective') pendingNotYetEffectiveCount += 1;
 
     console.log(
-      `  ${symbol}: cik=${cik} form25Filings=${filings.length} coverage=${coverage.complete ? 'complete' : 'INCOMPLETE'}` +
+      `  ${symbol}: cik=${cik} form25Filings=${filings.length} qualifyingNasdaqCommonStock=${qualifying.length}` +
+      ` coverage=${coverage.complete ? 'complete' : `INCOMPLETE(${coverage.incompleteReason})`}` +
       ` lifecycleToday=${resolved.lifecycle}` +
-      (filings.length ? ` (${filings.map((f) => `${f.formType}@${f.filingDate}`).join(', ')})` : ''),
+      (filings.length
+        ? ` (${filings.map((f) => `${f.formType}@${f.filingDate}:${f.document.format === 'structured-xml' ? f.document.securityClassDescription : 'UNPARSED'}@${f.document.exchangeEntityName ?? '?'}`).join(', ')})`
+        : ''),
     );
 
     await sleep(delayMs);
@@ -97,7 +102,8 @@ async function main() {
   console.log(`Symbols with COMPLETE filing-history coverage: ${symbolsCoverageComplete} (incomplete: ${symbolsCoverageIncomplete})`);
   if (incompleteSymbols.length) console.log(`Incomplete-coverage symbols: ${incompleteSymbols.join(', ')}`);
   console.log(`Symbols with >=1 Form 25/25-NSE filing anywhere in history: ${symbolsWithAnyForm25}`);
-  console.log(`Total Form 25/25-NSE filings found: ${totalForm25Filings}`);
+  console.log(`Total Form 25/25-NSE filings found (any exchange/security class): ${totalForm25Filings}`);
+  console.log(`Total filings CONFIRMED Nasdaq common-stock delisting evidence (exchange+class gate passed): ${totalQualifyingNasdaqCommonStockFilings}`);
   console.log(`Observed filing-history date range across all examined symbols: ${observedFromMin ?? 'n/a'} .. ${observedToMax ?? 'n/a'}`);
   console.log(`Symbols resolved DELISTED as of ${asOfIso}: ${delistedCount}${delistedSymbols.length ? ` (${delistedSymbols.join(', ')})` : ''}`);
   console.log(`Symbols with a filing pending effect (announced, 10-day clock running): ${pendingNotYetEffectiveCount}`);

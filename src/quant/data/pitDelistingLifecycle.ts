@@ -34,6 +34,29 @@
 // structurally classified makes that SYMBOL's coverage incomplete (fail-closed to UNKNOWN, per
 // acceptance #3), rather than either trusting it blindly or silently discarding it.
 //
+// RESIDUAL AMBIGUITY (measured, not fixed — read before treating a DELISTED verdict as "this
+// company left the market"): even after the exchange+class gate, Form 25's `ruleProvision`
+// checkbox 17 CFR 240.12d2-2(a)(3) — "securities have come to evidence, by operation of law or
+// otherwise, OTHER securities in substitution therefor" — covers BOTH a genuine
+// acquisition/merger removal (the issuer ceases separate existence) AND a same-company CUSIP
+// substitution (a stock split re-certificated under a new CUSIP, or a legal NAME CHANGE) where
+// trading is continuous and uninterrupted. Live-data proof: Ulta Beauty, Inc. (formerly "Ulta
+// Salon, Cosmetics & Fragrance, Inc.") filed a Nasdaq Common Stock Form 25-NSE, ruleProvision
+// (a)(3), 2017-01-30, accession 0001354457-17-000026 — coinciding with its 2017 corporate rename;
+// ULTA trades on Nasdaq without interruption today. Monster Beverage Corp similarly filed a
+// Nasdaq Common Stock Form 25-NSE, ruleProvision (a)(3), 2015-06-12, accession
+// 0001354457-15-000105 — consistent with a stock-split CUSIP change; MNST trades on Nasdaq without
+// interruption today. Form 25's structured XML has no field distinguishing these two cases from a
+// genuine M&A-driven exit; disambiguating would require cross-referencing the issuer's Form 8-A
+// listing-application history or entity-name change history, which is out of scope for this
+// module (`ruleProvision` is captured on `Form25DocumentEvidence` for a future dispatch to use).
+// CONSEQUENCE: this module's DELISTED verdict should be read precisely as "Nasdaq confirmed a
+// common-stock registration was struck under this exact issuer CIK", which is always literally
+// true, but is NOT always equivalent to "this operating company stopped trading on Nasdaq that
+// day" — any wiring dispatch building `lifecycleCoverage.delisted: true` on top of this module
+// should treat a DELISTED verdict as a strong candidate requiring confirmation for symbols where a
+// contemporaneous entity-name change is otherwise known, not an unconditionally final answer.
+//
 // THE TIMESTAMP THAT MATTERS — filing date vs. effective date:
 //   `filingDate` = when the Form 25 became public on EDGAR (the PIT availability gate: a decision
 //   at D can only see filings with filingDate <= D — see acceptance test below).
@@ -93,6 +116,12 @@ export interface Form25FilingCandidate {
 export interface Form25DocumentEvidence {
   readonly exchangeEntityName: string | null;
   readonly securityClassDescription: string | null;
+  /** The checked 17 CFR 240.12d2-2 rule paragraph, e.g. "17 CFR 240.12d2-2(a)(3)" — captured for
+   * transparency/future refinement (see RESIDUAL AMBIGUITY note in the file header: paragraph
+   * (a)(3) covers both genuine M&A-driven removals AND same-company CUSIP/name-change
+   * substitutions, and this module does not currently disambiguate between them). Not used to gate
+   * `isConfirmedNasdaqCommonStockDelisting` below. */
+  readonly ruleProvision: string | null;
   /** 'structured-xml' = the modern `<notificationOfRemoval>` EDGAR XML form, both fields reliably
    * machine-readable. 'legacy-unparsed' = an older filing with no structured document at all; this
    * module never attempts to guess its content from free text. */
@@ -109,7 +138,11 @@ export interface Form25Filing extends Form25FilingCandidate {
 export function isConfirmedNasdaqCommonStockDelisting(doc: Form25DocumentEvidence): boolean {
   if (doc.format !== 'structured-xml') return false;
   const exchangeOk = !!doc.exchangeEntityName && /nasdaq/i.test(doc.exchangeEntityName);
-  const classOk = !!doc.securityClassDescription && /common stock/i.test(doc.securityClassDescription);
+  // Anchored to the START of the (trimmed) description, not a bare substring search: a real
+  // observed EDGAR value — Expedia's warrant removal, "Warrant to purchase one half of one share
+  // of Expedia common stock" — CONTAINS "common stock" without itself BEING a common-stock removal.
+  // "Common Stock of Pentair, Inc." style values still match correctly (they start with it).
+  const classOk = !!doc.securityClassDescription && /^common stock\b/i.test(doc.securityClassDescription);
   return exchangeOk && classOk;
 }
 
@@ -120,13 +153,14 @@ export function isConfirmedNasdaqCommonStockDelisting(doc: Form25DocumentEvidenc
 export function parseForm25Document(rawText: string): Form25DocumentEvidence {
   const rootMatch = /<notificationOfRemoval[\s\S]*?<\/notificationOfRemoval>/i.exec(rawText);
   if (!rootMatch) {
-    return { exchangeEntityName: null, securityClassDescription: null, format: 'legacy-unparsed' };
+    return { exchangeEntityName: null, securityClassDescription: null, ruleProvision: null, format: 'legacy-unparsed' };
   }
   const body = rootMatch[0];
   const exchangeBlock = /<exchange>([\s\S]*?)<\/exchange>/i.exec(body)?.[1] ?? '';
   const exchangeEntityName = /<entityName>([\s\S]*?)<\/entityName>/i.exec(exchangeBlock)?.[1]?.trim() || null;
   const securityClassDescription = /<descriptionClassSecurity>([\s\S]*?)<\/descriptionClassSecurity>/i.exec(body)?.[1]?.trim() || null;
-  return { exchangeEntityName, securityClassDescription, format: 'structured-xml' };
+  const ruleProvision = /<ruleProvision>([\s\S]*?)<\/ruleProvision>/i.exec(body)?.[1]?.trim() || null;
+  return { exchangeEntityName, securityClassDescription, ruleProvision, format: 'structured-xml' };
 }
 
 /** Honesty declaration for one symbol's filing-history fetch: "complete" must mean the ENTIRE SEC
@@ -360,7 +394,7 @@ export function applyDocumentClassification(
   const filings: Form25Filing[] = candidates.map((candidate) => {
     const text = documentTexts.get(candidate.accessionNumber);
     const document = text === undefined
-      ? { exchangeEntityName: null, securityClassDescription: null, format: 'legacy-unparsed' as const }
+      ? { exchangeEntityName: null, securityClassDescription: null, ruleProvision: null, format: 'legacy-unparsed' as const }
       : parseForm25Document(text);
     return { ...candidate, document };
   });
