@@ -76,6 +76,150 @@ export const SPUS_NPORT_FILINGS: readonly SpusNportFilingReference[] = Object.fr
       '0001145549-21-004631-index-headers.html',
     ),
   },
+  {
+    accession: '0001387131-23-012885',
+    reportDate: '2023-08-31',
+    acceptedAt: '2023-10-30T13:02:03-04:00',
+    primaryDocumentSha256: '25afeec12f2b93e1737078ac09a7e34dbb1f5718f1a7ee10cf46d40d38693036',
+    headerDocumentSha256: 'e9f7f810dffd5b7b95ab620f30db3a2af59f3ef754e61d0acfa93957cc2f64de',
+    primaryDocumentUrl: archiveUrl('0001387131-23-012885', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0001387131-23-012885',
+      '0001387131-23-012885-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-24-000218',
+    reportDate: '2023-11-30',
+    acceptedAt: '2024-01-29T15:44:49-05:00',
+    primaryDocumentSha256: 'd030ddc0dedc54cb67fc240b8189680a8700e3385cfee97e862fc7fbd45559a2',
+    headerDocumentSha256: '6dd1dcde7df36a270a7a4299405d3577a55bac3d16c8240f6fa84c3a45bbb540',
+    primaryDocumentUrl: archiveUrl('0002000324-24-000218', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-24-000218',
+      '0002000324-24-000218-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-24-001338',
+    reportDate: '2024-02-29',
+    acceptedAt: '2024-04-26T15:37:49-04:00',
+    primaryDocumentSha256: 'b60c6c9d5c4cd01119c83e1720bbbe328034453a21e014647b012a73ce58b6ca',
+    headerDocumentSha256: '6a31c669f2c3a1aed72b24d4e1a3967a4d739d8e9a8107951d0b4e9a4cea45ea',
+    primaryDocumentUrl: archiveUrl('0002000324-24-001338', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-24-001338',
+      '0002000324-24-001338-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-24-001962',
+    reportDate: '2024-05-31',
+    acceptedAt: '2024-07-26T12:20:33-04:00',
+    primaryDocumentSha256: '120b74100e9e39fa89f6d364cc680eeee1c1e2a07baf2edc474875ec1da69726',
+    headerDocumentSha256: '02d27a96d8ee377a9b3f4a4dd64ed86ade95a33e8124f449ebaea1a72b59e834',
+    primaryDocumentUrl: archiveUrl('0002000324-24-001962', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-24-001962',
+      '0002000324-24-001962-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-24-003031',
+    reportDate: '2024-08-31',
+    acceptedAt: '2024-10-25T13:17:39-04:00',
+    primaryDocumentSha256: '852d9586d8d0a5b5048c1e8cfd2a4f7750de504976ef0a482858d0b0e6439131',
+    headerDocumentSha256: '82d5b9495fc0552ad66d01d88bab97a4a210e5345d94f09055f346785ba95eae',
+    primaryDocumentUrl: archiveUrl('0002000324-24-003031', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-24-003031',
+      '0002000324-24-003031-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-25-000189',
+    reportDate: '2024-11-30',
+    acceptedAt: '2025-01-29T14:40:05-05:00',
+    primaryDocumentSha256: 'ff9a105a658de3b0fe7ab80bbfd0ad147861874596c28a60d9cd848675171fb7',
+    headerDocumentSha256: '666390cb95baaf8082f528faaaf5e332e66f508e17fd95ba242b6f658842e02b',
+    primaryDocumentUrl: archiveUrl('0002000324-25-000189', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-25-000189',
+      '0002000324-25-000189-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-25-001560',
+    reportDate: '2025-02-28',
+    acceptedAt: '2025-04-29T12:04:54-04:00',
+    primaryDocumentSha256: 'e8abcf0f2ecbf52bb1d116d2c817754f30bb09318ada7e1f6add5a4abdfad2aa',
+    headerDocumentSha256: '543102db5bb27d0bf7f0e87707271ec05d0666989d47dfef521b7e2196ef62ce',
+    primaryDocumentUrl: archiveUrl('0002000324-25-001560', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-25-001560',
+      '0002000324-25-001560-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-25-002489',
+    reportDate: '2025-05-31',
+    acceptedAt: '2025-07-29T10:04:01-04:00',
+    primaryDocumentSha256: '5695de6a3f5483254780255e066fc332af1697028d86049cb0930dc5c0fc9cc4',
+    headerDocumentSha256: 'a2470d764fcf06c37a9d495ef61dec500f8277d315f8082178e30c34261ce2e9',
+    primaryDocumentUrl: archiveUrl('0002000324-25-002489', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-25-002489',
+      '0002000324-25-002489-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-25-004070',
+    reportDate: '2025-08-31',
+    acceptedAt: '2025-10-29T10:52:28-04:00',
+    primaryDocumentSha256: 'cc825c8fdad03c442d24b549da1a20e2c2ddc100225f5cbe33976b3103d6f698',
+    headerDocumentSha256: 'b89af07c632f7e0f8ef417737f8404366eccb9c00d06ecfba460a9732121fb46',
+    primaryDocumentUrl: archiveUrl('0002000324-25-004070', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-25-004070',
+      '0002000324-25-004070-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-26-000257',
+    reportDate: '2025-11-30',
+    acceptedAt: '2026-01-28T13:48:50-05:00',
+    primaryDocumentSha256: '0a454820b48a8314478d73c2b8e36fdb4075312023edbcceeaf513312b62cc59',
+    headerDocumentSha256: 'd9f7b5b261bd4222f89c65b706a237ee2bb1519560cdee323d967e010392a0ae',
+    primaryDocumentUrl: archiveUrl('0002000324-26-000257', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-26-000257',
+      '0002000324-26-000257-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-26-001717',
+    reportDate: '2026-02-28',
+    acceptedAt: '2026-04-27T14:11:42-04:00',
+    primaryDocumentSha256: 'c999e563b342723ed9f0d15d2c4be5679958608e968bb5c32793e8d22016aacb',
+    headerDocumentSha256: 'ac45538f727ef6066499285ef4c4a66564136e73d3ae07615f75f53ff8b9997e',
+    primaryDocumentUrl: archiveUrl('0002000324-26-001717', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-26-001717',
+      '0002000324-26-001717-index-headers.html',
+    ),
+  },
+  {
+    accession: '0002000324-26-003242',
+    reportDate: '2026-05-31',
+    acceptedAt: '2026-07-29T15:21:24-04:00',
+    primaryDocumentSha256: 'a17d9ff488d8802b8afe944999306146b296eead2fcc99e35933e182663dd55c',
+    headerDocumentSha256: '4dfb5245f6c122f619c6f7e950ab9a5bb8d807106a2c0f14c49c16a98db672ec',
+    primaryDocumentUrl: archiveUrl('0002000324-26-003242', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl(
+      '0002000324-26-003242',
+      '0002000324-26-003242-index-headers.html',
+    ),
+  },
 ]);
 
 export interface SpusNportHolding {
@@ -86,6 +230,20 @@ export interface SpusNportHolding {
   /** Exact SEC decimal text; never coerced through binary floating point. */
   readonly balance: string;
   readonly valueUsd: string;
+  readonly assetCategory: string;
+  readonly issuerCategory: string;
+}
+
+/**
+ * A row the filer itself marked as carrying no tradable security identifier
+ * (cusip literal "N/A", no ticker, valUSD "0" — e.g. a merger contingent-value-right).
+ * Kept for provenance; never contributes to universe membership.
+ */
+export interface SpusNportUnidentifiedHolding {
+  readonly name: string;
+  readonly title: string;
+  readonly cusip: string;
+  readonly balance: string;
   readonly assetCategory: string;
   readonly issuerCategory: string;
 }
@@ -102,6 +260,7 @@ export interface SpusNportSnapshot {
   readonly primaryDocumentHash: string;
   readonly headerDocumentHash: string;
   readonly holdings: readonly SpusNportHolding[];
+  readonly unidentifiedHoldings: readonly SpusNportUnidentifiedHolding[];
 }
 
 export class SpusNportParseError extends Error {
@@ -170,6 +329,20 @@ function oneSelfClosingAttribute(
   return decodeXml(attributes[0][1], `${context}.${tag}.${attribute}`).trim();
 }
 
+function zeroOrOneSelfClosingAttribute(
+  xml: string,
+  tag: string,
+  attribute: string,
+  context: string,
+): string | null {
+  const elements = Array.from(xml.matchAll(new RegExp(`<${tag}\\b([^>]*)\\/>`, 'g')));
+  if (elements.length === 0) return null;
+  if (elements.length !== 1) fail(`${context}: expected zero or one <${tag}/>, found ${elements.length}`);
+  const attributes = Array.from(elements[0][1].matchAll(new RegExp(`\\b${attribute}="([^"]*)"`, 'g')));
+  if (attributes.length !== 1) fail(`${context}: expected exactly one ${tag}.${attribute}`);
+  return decodeXml(attributes[0][1], `${context}.${tag}.${attribute}`).trim();
+}
+
 function headerValue(headerHtml: string, key: string): string {
   const matches = Array.from(headerHtml.matchAll(new RegExp(`<${key}>([^\\r\\n<]+)`, 'g')));
   if (matches.length !== 1) fail(`SEC header: expected exactly one ${key}, found ${matches.length}`);
@@ -230,26 +403,55 @@ export function parseSpusNportDocuments(
   const holdingBlocks = blocks(holdingsRoot, 'invstOrSec');
   if (holdingBlocks.length === 0) fail(`${reference.accession}: filing contains no holdings`);
   const seen = new Set<string>();
-  const holdings = holdingBlocks.map((holding, index): SpusNportHolding => {
+  const unidentified: SpusNportUnidentifiedHolding[] = [];
+  const holdings = holdingBlocks.flatMap((holding, index): SpusNportHolding[] => {
     const context = `${reference.accession}.holding[${index}]`;
     const identifiers = oneBlock(holding, 'identifiers', context);
-    const symbol = oneSelfClosingAttribute(identifiers, 'ticker', 'value', context).toUpperCase();
+    const tickerValue = zeroOrOneSelfClosingAttribute(identifiers, 'ticker', 'value', context);
+    const cusipRaw = oneText(holding, 'cusip', context).toUpperCase();
+    const valueRaw = oneText(holding, 'valUSD', context);
+
+    // A tiny, real, recurring SEC artifact: a merger contingent-value-right (e.g. ABIOMED, TPG
+    // CVRs) is filed with valUSD "0" and either no ticker at all or a non-market internal code
+    // in the ticker field (the filer's own explicit "worthless stub, not an investable position"
+    // signal) — not ambiguous or malformed data. A $0 line item can never carry point-in-time
+    // universe-membership meaning, so it is captured separately and excluded from `holdings`
+    // instead of aborting the whole snapshot. Any nonzero-value holding still fails closed below.
+    if (valueRaw === '0') {
+      unidentified.push(Object.freeze({
+        name: oneText(holding, 'name', context),
+        title: oneText(holding, 'title', context),
+        cusip: cusipRaw,
+        balance: oneText(holding, 'balance', context),
+        assetCategory: oneText(holding, 'assetCat', context),
+        issuerCategory: oneText(holding, 'issuerCat', context),
+      }));
+      return [];
+    }
+    if (tickerValue === null) {
+      fail(`${context}: missing ticker for an identifiable holding (cusip ${cusipRaw}, valUSD ${valueRaw})`);
+    }
+
+    const symbol = tickerValue.toUpperCase();
     if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol)) fail(`${context}: invalid ticker ${symbol}`);
     if (seen.has(symbol)) fail(`${context}: duplicate ticker ${symbol}`);
     seen.add(symbol);
-    const cusip = oneText(holding, 'cusip', context).toUpperCase();
-    if (!/^[0-9A-Z*@#]{9}$/.test(cusip)) fail(`${context}: invalid CUSIP ${cusip}`);
-    return Object.freeze({
+    // Foreign-domiciled issuers legitimately have no CUSIP and file the literal sentinel "N/A"
+    // instead (alongside an ISIN, which this parser does not need for symbol identity since a
+    // valid ticker is already present). Any other non-conforming CUSIP still fails closed.
+    if (cusipRaw !== 'N/A' && !/^[0-9A-Z*@#]{9}$/.test(cusipRaw)) fail(`${context}: invalid CUSIP ${cusipRaw}`);
+    return [Object.freeze({
       symbol,
       name: oneText(holding, 'name', context),
       title: oneText(holding, 'title', context),
-      cusip,
+      cusip: cusipRaw,
       balance: positiveDecimal(oneText(holding, 'balance', context), `${context}.balance`),
-      valueUsd: positiveDecimal(oneText(holding, 'valUSD', context), `${context}.valUSD`),
+      valueUsd: positiveDecimal(valueRaw, `${context}.valUSD`),
       assetCategory: oneText(holding, 'assetCat', context),
       issuerCategory: oneText(holding, 'issuerCat', context),
-    });
+    })];
   });
+  if (holdings.length === 0) fail(`${reference.accession}: filing contains no identified holdings`);
 
   return Object.freeze({
     accession: reference.accession,
@@ -263,6 +465,7 @@ export function parseSpusNportDocuments(
     primaryDocumentHash: `sha256:${xmlHash}`,
     headerDocumentHash: `sha256:${headerHash}`,
     holdings: Object.freeze(holdings),
+    unidentifiedHoldings: Object.freeze(unidentified),
   });
 }
 
