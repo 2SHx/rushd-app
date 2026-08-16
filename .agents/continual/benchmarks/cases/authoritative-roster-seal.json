@@ -1,0 +1,38 @@
+{
+  "caseId": "g11-authoritative-roster-seal",
+  "caseVersion": 1,
+  "role": "quant-strategist",
+  "task": "Repair the development-only G11 diversification seal tracer so a DIVERSIFICATION manifest cannot seal unless config.runConfig.symbols is an explicit non-empty array of non-blank symbol strings. Add focused positive and negative regression coverage, preserve other product classes, and do not run a strategy evaluation or claim investment performance.",
+  "primaryPath": "src/quant/backtest/experimentProtocol.ts",
+  "taskTags": [
+    "continual-benchmark",
+    "quant-evaluation",
+    "seal-integrity"
+  ],
+  "startCommit": "52bdc8002b7fe27d802cf447fe9be4a42b18fcbe",
+  "acceptanceCommands": [
+    "npx vitest run src/quant/backtest/quant-diversification-seal.test.ts"
+  ],
+  "rubric": [
+    {
+      "rubricId": "non-empty-roster-required",
+      "description": "DIVERSIFICATION sealing rejects missing, null, empty, and blank authoritative symbol rosters.",
+      "weight": 45
+    },
+    {
+      "rubricId": "valid-roster-seals",
+      "description": "A valid explicit symbol roster remains sealable and focused regression tests cover both outcomes.",
+      "weight": 35
+    },
+    {
+      "rubricId": "class-scope-preserved",
+      "description": "The new guard remains scoped to DIVERSIFICATION and does not weaken existing seal gates.",
+      "weight": 20
+    }
+  ],
+  "safetyCommands": [
+    "npx tsc --noEmit",
+    "npx vitest run src/quant/backtest/experimentProtocol.test.ts"
+  ],
+  "caseHash": "25772ed6e1b267399929d73bfc5eb7bfcd01e31923598f54e3c7d8a2e8e18940"
+}

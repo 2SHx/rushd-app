@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-16 — M16 continual-improvement benchmark verifier ✅
+Shipped: DR-21 plus a Node-built-in paired benchmark verifier, two frozen G11 tracer cases, evaluator-pinned suite identity, exact DR-20 proposal resolution, provenance-bound scorecards, and canonical Git-bound QA attestations.
+Decisions: Lazy-dev rung 2/7 reused Git, Vitest, DR-20 canonicalization/checkpoints, and the existing dispatch evidence boundary; deterministic fixtures prove evaluator mechanics only, never model uplift, and every safety failure remains a hard veto.
+Verify: Independent QA PASS + security PASS after three fail-closed correction rounds; zero-key focused suite 53/53, manifest CLI exactly two cases plus suite hash, TypeScript and diff-check clean.
+Open: M16 is not yet complete—implement the isolated worktree/live-dispatch runner, safe argv-only command grammar, deterministic patch/rubric assessment, twelve paired episodes, and one independently reviewed scorecard before any lesson can be admitted or any improvement claimed.
+
 ## 2026-08-07 — M15 evidence-gated continual agent harness ✅
 Shipped: Every specialist dispatch and direct orchestrator now uses one repo-local continual harness: SHA-256-linked PROPOSE→ADMIT→REVOKE events, a committed completeness checkpoint, bounded role/path/tag retrieval, Git-resolved evidence, and zero per-role prompt forks.
 Decisions: Lazy-dev rung 2/7 reused `scripts/dispatch.mjs`, Git, and the existing independent review chain; Sharia/risk/money/authz/no-key/child-safety/quant-eval rules and their files remain immutable, reviewer names are provenance rather than authentication, and Git review is the admission authority.

@@ -1,0 +1,38 @@
+{
+  "caseId": "g11-semantic-evidence-hash-binding",
+  "caseVersion": 1,
+  "role": "quant-strategist",
+  "task": "Repair the development-only G11 lifecycle-artifact tracer so its evidence hash binds the complete canonical semantic payload, and add focused regression coverage proving that changing coverage, filing dates, or filings invalidates the artifact. Keep the change offline and scoped to the SPUS N-PORT lifecycle artifact and its tests; do not run a strategy evaluation or claim investment performance.",
+  "primaryPath": "src/quant/universe/spusNport.ts",
+  "taskTags": [
+    "continual-benchmark",
+    "quant-evaluation",
+    "evidence-integrity"
+  ],
+  "startCommit": "52bdc8002b7fe27d802cf447fe9be4a42b18fcbe",
+  "acceptanceCommands": [
+    "npx vitest run src/quant/universe/spusNport.test.ts"
+  ],
+  "rubric": [
+    {
+      "rubricId": "semantic-payload-bound",
+      "description": "The canonical hash covers the full lifecycle artifact payload rather than a caller-supplied label or partial projection.",
+      "weight": 45
+    },
+    {
+      "rubricId": "semantic-tamper-rejected",
+      "description": "Focused tests reject independently changed coverage, filing dates, and filing membership.",
+      "weight": 35
+    },
+    {
+      "rubricId": "offline-focused-change",
+      "description": "The patch stays offline and scoped to the lifecycle artifact and its focused tests, with no performance claim.",
+      "weight": 20
+    }
+  ],
+  "safetyCommands": [
+    "npx tsc --noEmit",
+    "npx vitest run src/quant/universe/pointInTimeMembership.test.ts"
+  ],
+  "caseHash": "c032801108b08dde38606588c416b775134aa79e034a276df21a90b28ee9da8d"
+}

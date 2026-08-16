@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "episodesPerArm": 3,
+  "candidateThreshold": 10,
+  "failureCodes": [
+    "NONE",
+    "DISPATCH_ERROR",
+    "TIMEOUT",
+    "NO_ARTIFACT",
+    "SCOPE_VIOLATION",
+    "ACCEPTANCE_FAIL",
+    "SAFETY_FAIL",
+    "EVIDENCE_INVALID"
+  ],
+  "caseFiles": [
+    "cases/authoritative-roster-seal.json",
+    "cases/semantic-evidence-hash-binding.json"
+  ],
+  "suiteHash": "c9ba9d1cacdd37379dc7588d7f673ad8834cefb9ec330637d09a1d57e115b502"
+}
