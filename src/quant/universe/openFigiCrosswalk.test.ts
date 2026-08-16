@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CURATED_OPENFIGI_RENAME_FIXTURE_PATH,
+  CURATED_OPENFIGI_RENAME_FIXTURE_SHA256,
+  indexCuratedOpenFigiRenamesByIsin,
   indexCrosswalkByIsin,
+  loadCuratedOpenFigiRenameArtifact,
   loadOpenFigiCrosswalkCapture,
   normalizeCompanyName,
   OPENFIGI_CROSSWALK_FIXTURE_PATH,
@@ -14,6 +18,33 @@ import {
 const hash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 describe('OpenFIGI ISIN->ticker crosswalk (identity resolution only, QDR-14)', () => {
+  const expectedCuratedMappings = {
+    AN8068571086: 'SLB',
+    IE00BY7QL619: 'JCI',
+    US02079K3059: 'GOOGL',
+    US1273871087: 'CDNS',
+    US1598641074: 'CRL',
+    US1924461023: 'CTSH',
+    US3021301094: 'EXPD',
+    US3156161024: 'FFIV',
+    US4456581077: 'JBHT',
+    US45687V1061: 'IR',
+    US5184391044: 'EL',
+    US5797802064: 'MKC',
+    US5926881054: 'MTD',
+    US59522J1034: 'MAA',
+    US6092071058: 'MDLZ',
+    US6541061031: 'NKE',
+    US7140461093: 'RVTY',
+    US79466L3024: 'CRM',
+    US8318652091: 'AOS',
+    US8725401090: 'TJX',
+    US9113121068: 'UPS',
+    US9297401088: 'WAB',
+    US9553061055: 'WST',
+    US9892071054: 'ZBRA',
+  } as const;
+
   it('recomputes the pinned fixture hash from the exact bytes on disk', () => {
     const raw = fs.readFileSync(OPENFIGI_CROSSWALK_FIXTURE_PATH, 'utf8');
     expect(hash(raw)).toBe(OPENFIGI_CROSSWALK_FIXTURE_SHA256);
@@ -29,6 +60,45 @@ describe('OpenFIGI ISIN->ticker crosswalk (identity resolution only, QDR-14)', (
     } finally {
       fs.unlinkSync(tmp);
     }
+  });
+
+  it('pins and validates all 24 curated held-roster rename decisions', () => {
+    const raw = fs.readFileSync(CURATED_OPENFIGI_RENAME_FIXTURE_PATH, 'utf8');
+    expect(hash(raw)).toBe(CURATED_OPENFIGI_RENAME_FIXTURE_SHA256);
+    const artifact = loadCuratedOpenFigiRenameArtifact();
+    const index = indexCuratedOpenFigiRenamesByIsin(artifact);
+    expect(Object.fromEntries(Array.from(index, ([isin, entry]) => [isin, entry.ticker])))
+      .toEqual(expectedCuratedMappings);
+    expect(artifact.entries.filter((entry) => entry.basis === 'US_ISIN_CUSIP_EXACT')).toHaveLength(22);
+    expect(artifact.entries.filter((entry) => entry.basis === 'FOREIGN_ISIN_TICKER_AND_ROSTER_NAME'))
+      .toHaveLength(2);
+    expect(artifact.openNotFoundRosterSymbols).toEqual(['ANET', 'COO', 'DD', 'LIN', 'LRCX', 'STX', 'TEL']);
+    expect(artifact.entries.some((entry) => artifact.openNotFoundRosterSymbols.includes(entry.ticker)))
+      .toBe(false);
+  });
+
+  it('rejects tampering with the curated evidence bytes', () => {
+    const raw = fs.readFileSync(CURATED_OPENFIGI_RENAME_FIXTURE_PATH, 'utf8');
+    const tmp = `${CURATED_OPENFIGI_RENAME_FIXTURE_PATH}.drift-test.json`;
+    fs.writeFileSync(tmp, raw.replace('"SLB"', '"SLX"'));
+    try {
+      expect(() => loadCuratedOpenFigiRenameArtifact(tmp)).toThrow(/curated rename fixture hash mismatch/);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+
+  it('rejects duplicate and conflicting curated identity decisions', () => {
+    const artifact = loadCuratedOpenFigiRenameArtifact();
+    const first = artifact.entries[0];
+    expect(() => indexCuratedOpenFigiRenamesByIsin({
+      ...artifact,
+      entries: [...artifact.entries, first],
+    })).toThrow(/duplicate curated ISIN mapping/);
+    expect(() => indexCuratedOpenFigiRenamesByIsin({
+      ...artifact,
+      entries: [...artifact.entries, { ...first, ticker: 'CONFLICT' }],
+    })).toThrow(/conflicting curated ISIN mapping/);
   });
 
   it('loads the captured evidence and reports the real found/not-found counts (244 ISINs total)', () => {

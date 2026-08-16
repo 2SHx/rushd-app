@@ -4,7 +4,25 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PointInTimeUniverseSnapshot } from './pointInTimeMembership';
+import {
+  resolveDelistingLifecycle,
+  type Form25Filing,
+  type SymbolLifecycleCoverage,
+} from '../data/pitDelistingLifecycle';
+import { stableConfigHash, type JsonValue } from '../backtest/experimentProtocol';
+import {
+  indexCrosswalkByIsin,
+  indexCuratedOpenFigiRenamesByIsin,
+  loadCuratedOpenFigiRenameArtifact,
+  loadOpenFigiCrosswalkCapture,
+  resolveIsinToTicker,
+  type CuratedOpenFigiRenameEntry,
+  type OpenFigiCrosswalkEntry,
+} from './openFigiCrosswalk';
+import type {
+  PointInTimeUniverseSnapshot,
+  SurvivorshipCoverageWaiver,
+} from './pointInTimeMembership';
 
 export const SPUS_SEC_IDENTIFIERS = Object.freeze({
   cik: '0001742912',
@@ -22,6 +40,15 @@ export const SPUS_NPORT_FIXTURE_DIR = path.join(
   'sec-spus-nport',
 );
 
+export const SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR = path.join(
+  process.cwd(),
+  'src',
+  'quant',
+  'universe',
+  'fixtures',
+  'sec-spus-nport-unparseable',
+);
+
 export interface SpusNportFilingReference {
   readonly accession: string;
   readonly reportDate: string;
@@ -31,6 +58,7 @@ export interface SpusNportFilingReference {
   readonly headerDocumentSha256: string;
   readonly primaryDocumentUrl: string;
   readonly headerDocumentUrl: string;
+  readonly fixtureDirectory?: string;
 }
 
 const archiveUrl = (accession: string, filename: string) => {
@@ -75,6 +103,106 @@ export const SPUS_NPORT_FILINGS: readonly SpusNportFilingReference[] = Object.fr
       '0001145549-21-004631',
       '0001145549-21-004631-index-headers.html',
     ),
+  },
+  {
+    accession: '0001387131-21-004867',
+    reportDate: '2021-02-28',
+    acceptedAt: '2021-04-23T11:48:43-04:00',
+    primaryDocumentSha256: 'a81a0673d606139984abff61c9cb6d2f5b81ad288f7e79b5122529fbc94e84dc',
+    headerDocumentSha256: 'f59f9de1ca604a0907368193c5e2563ab20d4a79184389f2abbec3d7020d9dae',
+    primaryDocumentUrl: archiveUrl('0001387131-21-004867', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-21-004867', '0001387131-21-004867-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-21-007842',
+    reportDate: '2021-05-31',
+    acceptedAt: '2021-07-29T12:57:36-04:00',
+    primaryDocumentSha256: 'ee4f980e61e4169d1b2639fb1344d31450435aae1f09a9176f87f00f7039b98c',
+    headerDocumentSha256: 'bcf7447ccb46737d614bcfc2d06e2474bf91f95aec28fdab466ddb2e4548241d',
+    primaryDocumentUrl: archiveUrl('0001387131-21-007842', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-21-007842', '0001387131-21-007842-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-21-010436',
+    reportDate: '2021-08-31',
+    acceptedAt: '2021-10-27T16:34:21-04:00',
+    primaryDocumentSha256: '0b0d5a01d9127092e99f2b7aa1863a4efd23932f5ecb785e3b810e6d93fc3042',
+    headerDocumentSha256: '5d500334b664b38098d81294743a9c995e2af03f3d28979709fb193f858d9fb8',
+    primaryDocumentUrl: archiveUrl('0001387131-21-010436', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-21-010436', '0001387131-21-010436-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-22-000732',
+    reportDate: '2021-11-30',
+    acceptedAt: '2022-01-26T16:31:03-05:00',
+    primaryDocumentSha256: '02e17b7d94da15ba405defdf189043e23fa4e0ba8153180f670a59dfcf903584',
+    headerDocumentSha256: 'bbe3bc17afaeda7e179ce93f92436dc9e202b6f686cc26ede6d29a9a3c939ee6',
+    primaryDocumentUrl: archiveUrl('0001387131-22-000732', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-22-000732', '0001387131-22-000732-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-22-005323',
+    reportDate: '2022-02-28',
+    acceptedAt: '2022-04-26T16:22:38-04:00',
+    primaryDocumentSha256: '86f48c52797bef9a97774f5ce5f3806d45c06feec19aabd58ba9cda00d58b9b4',
+    headerDocumentSha256: '9960c84b3b5e154ae8a7425a2e32a29a6d560607165126223e14ed8b572204a9',
+    primaryDocumentUrl: archiveUrl('0001387131-22-005323', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-22-005323', '0001387131-22-005323-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-22-008131',
+    reportDate: '2022-05-31',
+    acceptedAt: '2022-07-28T15:24:48-04:00',
+    primaryDocumentSha256: 'd0f8a37034e5f89669f7849b586432b2fe9283accbc5b12055c4523f36de4fad',
+    headerDocumentSha256: '32739c7ca6157780dde34ccbeed046d86ad4b44ccf8482b24e4752950594bff4',
+    primaryDocumentUrl: archiveUrl('0001387131-22-008131', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-22-008131', '0001387131-22-008131-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-22-010802',
+    reportDate: '2022-08-31',
+    acceptedAt: '2022-10-26T14:59:20-04:00',
+    primaryDocumentSha256: '2551b6e649a46dc655a7f3b17fb6d8ac2778625114e7b26fdbe8cfa257babfb0',
+    headerDocumentSha256: '9549d2de93c0c9b66de648d6951210977d6715e57f18efc30711016c5acd00bb',
+    primaryDocumentUrl: archiveUrl('0001387131-22-010802', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-22-010802', '0001387131-22-010802-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-23-000702',
+    reportDate: '2022-11-30',
+    acceptedAt: '2023-01-26T11:29:01-05:00',
+    primaryDocumentSha256: '44ee619178647bf4b8ae1bfebb7c1f52b9aca0bde0db2d45d3adcf651f95f6ba',
+    headerDocumentSha256: 'bc5d1e14bce946342c5a8a9387384cfe40df946de0dd2f0af7ce4835d4ed2b9d',
+    primaryDocumentUrl: archiveUrl('0001387131-23-000702', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-23-000702', '0001387131-23-000702-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-23-005252',
+    reportDate: '2023-02-28',
+    acceptedAt: '2023-04-26T12:26:21-04:00',
+    primaryDocumentSha256: '77ff628f5689df7528db7e5a39e93d0b6503097666a6fe7a509a90f70ccc1b82',
+    headerDocumentSha256: '9fdf7c5e1c64bfa290624473262bd686932308562a51dc921f3e4596d8f235c9',
+    primaryDocumentUrl: archiveUrl('0001387131-23-005252', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-23-005252', '0001387131-23-005252-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
+  },
+  {
+    accession: '0001387131-23-008965',
+    reportDate: '2023-05-31',
+    acceptedAt: '2023-07-28T11:17:23-04:00',
+    primaryDocumentSha256: '0f5c4339586689ba6923f9029f89686499ddddd6f3d7cdd82746f4c8cf851189',
+    headerDocumentSha256: '500d4421f3b1d2fb10c58dbaf3ef79d4c5f50236e95a5290b2084f5f364d65ba',
+    primaryDocumentUrl: archiveUrl('0001387131-23-008965', 'primary_doc.xml'),
+    headerDocumentUrl: archiveUrl('0001387131-23-008965', '0001387131-23-008965-index-headers.html'),
+    fixtureDirectory: SPUS_NPORT_ISIN_ONLY_FIXTURE_DIR,
   },
   {
     accession: '0001387131-23-012885',
@@ -224,6 +352,8 @@ export const SPUS_NPORT_FILINGS: readonly SpusNportFilingReference[] = Object.fr
 
 export interface SpusNportHolding {
   readonly symbol: string;
+  readonly symbolEvidence: 'FILING_TICKER' | 'OPENFIGI_NAME_MATCH' | 'CURATED_OPENFIGI_RENAME';
+  readonly isin: string | null;
   readonly name: string;
   readonly title: string;
   readonly cusip: string;
@@ -232,6 +362,18 @@ export interface SpusNportHolding {
   readonly valueUsd: string;
   readonly assetCategory: string;
   readonly issuerCategory: string;
+}
+
+export interface SpusNportUnresolvedHolding {
+  readonly isin: string;
+  readonly name: string;
+  readonly title: string;
+  readonly cusip: string;
+  readonly balance: string;
+  readonly valueUsd: string;
+  readonly assetCategory: string;
+  readonly issuerCategory: string;
+  readonly reason: 'NOT_IN_CROSSWALK' | 'NO_US_COMPOSITE_LISTING' | 'NAME_MISMATCH';
 }
 
 /**
@@ -260,8 +402,38 @@ export interface SpusNportSnapshot {
   readonly primaryDocumentHash: string;
   readonly headerDocumentHash: string;
   readonly holdings: readonly SpusNportHolding[];
+  /** Positive-value held rows whose ticker identity remains unproved; never evidence for OUT. */
+  readonly unresolvedHoldings: readonly SpusNportUnresolvedHolding[];
+  /** Explicit open roster symbols plus raw FOUND candidates whose historical identity is unresolved. */
+  readonly membershipUnknownSymbols: readonly string[];
   readonly unidentifiedHoldings: readonly SpusNportUnidentifiedHolding[];
 }
+
+interface SpusNportIdentityEvidence {
+  readonly crosswalk: ReadonlyMap<string, OpenFigiCrosswalkEntry>;
+  readonly curatedRenames: ReadonlyMap<string, CuratedOpenFigiRenameEntry>;
+  readonly openNotFoundRosterSymbols: readonly string[];
+}
+
+export interface SpusNportLifecycleArtifact {
+  readonly schemaVersion: 1;
+  readonly source: 'SEC_FORM_25';
+  /** Hash of the externally captured artifact; an absent/unpinned injection is rejected. */
+  readonly evidenceHash: string;
+  readonly filings: readonly Form25Filing[];
+  readonly coverage: readonly SymbolLifecycleCoverage[];
+}
+
+export type SpusNportLifecycleArtifactPayload = Omit<SpusNportLifecycleArtifact, 'evidenceHash'>;
+
+const DIVERSIFICATION_WAIVER_REASON =
+  'QDR-14: free Form-25 evidence covers delistings only; trading-suspension history is unavailable';
+
+export const SPUS_DIVERSIFICATION_SURVIVORSHIP_WAIVER: SurvivorshipCoverageWaiver = Object.freeze({
+  acknowledged: true,
+  reason: DIVERSIFICATION_WAIVER_REASON,
+  hash: `sha256:${sha256(DIVERSIFICATION_WAIVER_REASON)}`,
+});
 
 export class SpusNportParseError extends Error {
   constructor(message: string) {
@@ -365,6 +537,7 @@ export function parseSpusNportDocuments(
   primaryXml: string,
   headerHtml: string,
   reference: SpusNportFilingReference,
+  identityEvidence?: SpusNportIdentityEvidence,
 ): SpusNportSnapshot {
   const xmlHash = sha256(primaryXml);
   const headerHash = sha256(headerHtml);
@@ -403,11 +576,15 @@ export function parseSpusNportDocuments(
   const holdingBlocks = blocks(holdingsRoot, 'invstOrSec');
   if (holdingBlocks.length === 0) fail(`${reference.accession}: filing contains no holdings`);
   const seen = new Set<string>();
+  let sawMissingTicker = false;
+  const unresolvedCandidateSymbols = new Set<string>();
   const unidentified: SpusNportUnidentifiedHolding[] = [];
+  const unresolved: SpusNportUnresolvedHolding[] = [];
   const holdings = holdingBlocks.flatMap((holding, index): SpusNportHolding[] => {
     const context = `${reference.accession}.holding[${index}]`;
     const identifiers = oneBlock(holding, 'identifiers', context);
     const tickerValue = zeroOrOneSelfClosingAttribute(identifiers, 'ticker', 'value', context);
+    const isinValue = zeroOrOneSelfClosingAttribute(identifiers, 'isin', 'value', context)?.toUpperCase() ?? null;
     const cusipRaw = oneText(holding, 'cusip', context).toUpperCase();
     const valueRaw = oneText(holding, 'valUSD', context);
 
@@ -428,11 +605,58 @@ export function parseSpusNportDocuments(
       }));
       return [];
     }
-    if (tickerValue === null) {
-      fail(`${context}: missing ticker for an identifiable holding (cusip ${cusipRaw}, valUSD ${valueRaw})`);
-    }
+    const name = oneText(holding, 'name', context);
+    const title = oneText(holding, 'title', context);
+    const balance = positiveDecimal(oneText(holding, 'balance', context), `${context}.balance`);
+    const valueUsd = positiveDecimal(valueRaw, `${context}.valUSD`);
+    const assetCategory = oneText(holding, 'assetCat', context);
+    const issuerCategory = oneText(holding, 'issuerCat', context);
 
-    const symbol = tickerValue.toUpperCase();
+    let symbol: string;
+    let symbolEvidence: SpusNportHolding['symbolEvidence'];
+    if (tickerValue !== null) {
+      symbol = tickerValue.toUpperCase();
+      symbolEvidence = 'FILING_TICKER';
+    } else {
+      sawMissingTicker = true;
+      if (!isinValue || !/^[A-Z]{2}[A-Z0-9]{10}$/.test(isinValue)) {
+        fail(`${context}: missing evidenced ticker and valid ISIN (cusip ${cusipRaw}, valUSD ${valueRaw})`);
+      }
+      const resolution = identityEvidence
+        ? resolveIsinToTicker(isinValue, name, identityEvidence.crosswalk)
+        : {
+          status: 'EXCLUDED' as const,
+          reason: 'NOT_IN_CROSSWALK' as const,
+          isin: isinValue,
+          filingName: name,
+          detail: 'no pinned identity evidence injected',
+        };
+      if (resolution.status === 'RESOLVED') {
+        symbol = resolution.ticker;
+        symbolEvidence = 'OPENFIGI_NAME_MATCH';
+      } else {
+        const curated = identityEvidence?.curatedRenames.get(isinValue);
+        if (curated) {
+          symbol = curated.ticker;
+          symbolEvidence = 'CURATED_OPENFIGI_RENAME';
+        } else {
+          const rawCandidate = identityEvidence?.crosswalk.get(isinValue);
+          if (rawCandidate?.status === 'FOUND') unresolvedCandidateSymbols.add(rawCandidate.ticker);
+          unresolved.push(Object.freeze({
+            isin: isinValue,
+            name,
+            title,
+            cusip: cusipRaw,
+            balance,
+            valueUsd,
+            assetCategory,
+            issuerCategory,
+            reason: resolution.reason,
+          }));
+          return [];
+        }
+      }
+    }
     if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol)) fail(`${context}: invalid ticker ${symbol}`);
     if (seen.has(symbol)) fail(`${context}: duplicate ticker ${symbol}`);
     seen.add(symbol);
@@ -442,13 +666,15 @@ export function parseSpusNportDocuments(
     if (cusipRaw !== 'N/A' && !/^[0-9A-Z*@#]{9}$/.test(cusipRaw)) fail(`${context}: invalid CUSIP ${cusipRaw}`);
     return [Object.freeze({
       symbol,
-      name: oneText(holding, 'name', context),
-      title: oneText(holding, 'title', context),
+      symbolEvidence,
+      isin: isinValue,
+      name,
+      title,
       cusip: cusipRaw,
-      balance: positiveDecimal(oneText(holding, 'balance', context), `${context}.balance`),
-      valueUsd: positiveDecimal(valueRaw, `${context}.valUSD`),
-      assetCategory: oneText(holding, 'assetCat', context),
-      issuerCategory: oneText(holding, 'issuerCat', context),
+      balance,
+      valueUsd,
+      assetCategory,
+      issuerCategory,
     })];
   });
   if (holdings.length === 0) fail(`${reference.accession}: filing contains no identified holdings`);
@@ -465,6 +691,15 @@ export function parseSpusNportDocuments(
     primaryDocumentHash: `sha256:${xmlHash}`,
     headerDocumentHash: `sha256:${headerHash}`,
     holdings: Object.freeze(holdings),
+    unresolvedHoldings: Object.freeze(unresolved),
+    membershipUnknownSymbols: Object.freeze(
+      sawMissingTicker
+        ? Array.from(new Set([
+          ...(identityEvidence?.openNotFoundRosterSymbols ?? []),
+          ...Array.from(unresolvedCandidateSymbols),
+        ])).sort()
+        : [],
+    ),
     unidentifiedHoldings: Object.freeze(unidentified),
   });
 }
@@ -472,12 +707,19 @@ export function parseSpusNportDocuments(
 export function loadCapturedSpusNportSnapshots(
   fixtureDir = SPUS_NPORT_FIXTURE_DIR,
 ): readonly SpusNportSnapshot[] {
+  const curatedArtifact = loadCuratedOpenFigiRenameArtifact();
+  const identityEvidence: SpusNportIdentityEvidence = {
+    crosswalk: indexCrosswalkByIsin(loadOpenFigiCrosswalkCapture()),
+    curatedRenames: indexCuratedOpenFigiRenamesByIsin(curatedArtifact),
+    openNotFoundRosterSymbols: curatedArtifact.openNotFoundRosterSymbols,
+  };
   return Object.freeze(SPUS_NPORT_FILINGS.map((reference) => {
-    const directory = path.join(fixtureDir, reference.accession);
+    const directory = path.join(reference.fixtureDirectory ?? fixtureDir, reference.accession);
     return parseSpusNportDocuments(
       fs.readFileSync(path.join(directory, 'primary_doc.xml'), 'utf8'),
       fs.readFileSync(path.join(directory, 'index-headers.html'), 'utf8'),
       reference,
+      identityEvidence,
     );
   }));
 }
@@ -494,6 +736,78 @@ export function latestAvailableSpusNportSnapshot(
     .sort((a, b) => b.availableAt.getTime() - a.availableAt.getTime())[0] ?? null;
 }
 
+function symbolKey(symbol: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(normalized)) fail(`invalid lifecycle symbol ${symbol}`);
+  return normalized;
+}
+
+function lifecycleSemanticPayload(payload: SpusNportLifecycleArtifactPayload): JsonValue {
+  return {
+    schemaVersion: payload.schemaVersion,
+    source: payload.source,
+    coverage: payload.coverage.map((coverage) => ({
+      symbol: coverage.symbol,
+      cik: coverage.cik,
+      complete: coverage.complete,
+      observedFrom: coverage.observedFrom,
+      observedTo: coverage.observedTo,
+      incompleteReason: coverage.incompleteReason ?? null,
+    })),
+    filings: payload.filings.map((filing) => ({
+      symbol: filing.symbol,
+      cik: filing.cik,
+      formType: filing.formType,
+      filingDate: filing.filingDate,
+      accessionNumber: filing.accessionNumber,
+      primaryDocument: filing.primaryDocument,
+      document: {
+        exchangeEntityName: filing.document.exchangeEntityName,
+        securityClassDescription: filing.document.securityClassDescription,
+        ruleProvision: filing.document.ruleProvision,
+        format: filing.document.format,
+      },
+    })),
+  };
+}
+
+/** Canonical digest of every injected lifecycle semantic field, excluding only the digest itself. */
+export function hashSpusNportLifecycleArtifact(payload: SpusNportLifecycleArtifactPayload): string {
+  return `sha256:${stableConfigHash(lifecycleSemanticPayload(payload))}`;
+}
+
+/** Structural fail-closed seam for a future byte-pinned 161-symbol Form-25 capture. */
+export function validateSpusNportLifecycleArtifact(
+  artifact: SpusNportLifecycleArtifact,
+): ReadonlyMap<string, SymbolLifecycleCoverage> {
+  if (artifact.schemaVersion !== 1 || artifact.source !== 'SEC_FORM_25') {
+    fail('lifecycle artifact must be schema-v1 SEC_FORM_25 evidence');
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(artifact.evidenceHash)) {
+    fail('lifecycle artifact evidenceHash must be a pinned sha256');
+  }
+  const { evidenceHash: _evidenceHash, ...payload } = artifact;
+  if (artifact.evidenceHash !== hashSpusNportLifecycleArtifact(payload)) {
+    fail('lifecycle artifact semantic payload hash mismatch');
+  }
+  const coverageBySymbol = new Map<string, SymbolLifecycleCoverage>();
+  for (const coverage of artifact.coverage) {
+    const symbol = symbolKey(coverage.symbol);
+    if (coverageBySymbol.has(symbol)) fail(`duplicate lifecycle coverage for ${symbol}`);
+    if (coverage.complete && !coverage.cik) fail(`complete lifecycle coverage for ${symbol} requires a CIK`);
+    coverageBySymbol.set(symbol, coverage);
+  }
+  const accessions = new Set<string>();
+  for (const filing of artifact.filings) {
+    const symbol = symbolKey(filing.symbol);
+    const coverage = coverageBySymbol.get(symbol);
+    if (!coverage || coverage.cik !== filing.cik) fail(`Form-25 filing ${filing.accessionNumber} lacks matching coverage`);
+    if (accessions.has(filing.accessionNumber)) fail(`duplicate Form-25 filing ${filing.accessionNumber}`);
+    accessions.add(filing.accessionNumber);
+  }
+  return coverageBySymbol;
+}
+
 /**
  * Adapter into the existing terminal guard. Membership IN/OUT is evidenced by the complete filing;
  * lifecycle and independent Sharia evidence stay unknown, so terminal validation remains blocked.
@@ -502,27 +816,64 @@ export function toPointInTimeUniverseSnapshot(
   snapshot: SpusNportSnapshot,
   effectiveTo: Date | null,
   requiredSymbols: readonly string[] = [],
+  lifecycleArtifact?: SpusNportLifecycleArtifact,
 ): PointInTimeUniverseSnapshot {
   const members = new Set(snapshot.holdings.map(({ symbol }) => symbol));
-  const domain = Array.from(new Set([
-    ...Array.from(members),
-    ...requiredSymbols.map((symbol) => symbol.trim().toUpperCase()),
-  ])).sort();
+  const domain = Array.from(new Set(
+    requiredSymbols.length > 0 ? requiredSymbols.map(symbolKey) : Array.from(members),
+  )).sort();
+  const unknownMembership = new Set(snapshot.membershipUnknownSymbols);
+  const coverageBySymbol = lifecycleArtifact
+    ? validateSpusNportLifecycleArtifact(lifecycleArtifact)
+    : new Map<string, SymbolLifecycleCoverage>();
+  const delistedCoverageComplete = lifecycleArtifact !== undefined
+    && domain.every((symbol) => coverageBySymbol.get(symbol)?.complete === true);
+  const asOfIso = snapshot.availableAt.toISOString().slice(0, 10);
+  const records = domain.map((symbol) => {
+    const coverage = coverageBySymbol.get(symbol) ?? {
+      symbol,
+      cik: null,
+      complete: false,
+      observedFrom: null,
+      observedTo: null,
+      incompleteReason: 'no pinned lifecycle coverage injected',
+    };
+    const lifecycle = resolveDelistingLifecycle(
+      symbol,
+      lifecycleArtifact?.filings.filter((filing) => symbolKey(filing.symbol) === symbol) ?? [],
+      coverage,
+      asOfIso,
+    );
+    const membership = members.has(symbol)
+      ? 'IN' as const
+      : unknownMembership.has(symbol)
+        || (snapshot.unresolvedHoldings.length > 0 && snapshot.membershipUnknownSymbols.length === 0)
+        ? 'UNKNOWN' as const
+        : 'OUT' as const;
+    return Object.freeze({
+      symbol,
+      membership,
+      lifecycle: lifecycle.lifecycle,
+      lifecycleEffectiveAt: lifecycle.lifecycleEffectiveAt === null
+        ? null
+        : new Date(`${lifecycle.lifecycleEffectiveAt}T00:00:00.000Z`),
+      shariaEvidence: null,
+    });
+  });
   return Object.freeze({
     id: `sec-nport:${snapshot.accession}`,
-    source: `${snapshot.source}:${snapshot.primaryDocumentUrl}`,
-    hash: snapshot.primaryDocumentHash,
+    source: lifecycleArtifact
+      ? `${snapshot.source}:${snapshot.primaryDocumentUrl}|${lifecycleArtifact.source}`
+      : `${snapshot.source}:${snapshot.primaryDocumentUrl}`,
+    hash: lifecycleArtifact
+      ? `sha256:${sha256(`${snapshot.primaryDocumentHash}|${lifecycleArtifact.evidenceHash}`)}`
+      : snapshot.primaryDocumentHash,
     asOf: snapshot.reportDate,
     availableAt: snapshot.availableAt,
     effectiveFrom: snapshot.availableAt,
     effectiveTo,
-    lifecycleCoverage: Object.freeze({ delisted: false, suspended: false }),
-    records: Object.freeze(domain.map((symbol) => Object.freeze({
-      symbol,
-      membership: members.has(symbol) ? 'IN' as const : 'OUT' as const,
-      lifecycle: 'UNKNOWN' as const,
-      lifecycleEffectiveAt: null,
-      shariaEvidence: null,
-    }))),
+    lifecycleCoverage: Object.freeze({ delisted: delistedCoverageComplete, suspended: false }),
+    survivorshipWaiver: SPUS_DIVERSIFICATION_SURVIVORSHIP_WAIVER,
+    records: Object.freeze(records),
   });
 }

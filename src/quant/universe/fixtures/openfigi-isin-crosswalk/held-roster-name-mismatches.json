@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "entryCount": 24,
+  "sourceHashes": {
+    "openFigiCaptureSha256": "e1d040f1f6dfd9fb5d99685e6a079c74208b667854539f48132f969d6a29e4cf",
+    "authoritativeRosterSha256": "91332681eec8d8fe65e9e2868c61276fe8bb52d5dc01b3f84759314b53d6851e"
+  },
+  "heldUnknownPolicy": "UNMAPPED_HELD_REMAINS_MEMBERSHIP_UNKNOWN_NEVER_OUT",
+  "openNotFoundRosterSymbols": ["ANET", "COO", "DD", "LIN", "LRCX", "STX", "TEL"],
+  "entries": [
+    {
+      "isin": "AN8068571086",
+      "ticker": "SLB",
+      "rosterCusip": "806857108",
+      "rosterName": "SLB Ltd",
+      "openFigiName": "SLB LTD",
+      "basis": "FOREIGN_ISIN_TICKER_AND_ROSTER_NAME"
+    },
+    {
+      "isin": "IE00BY7QL619",
+      "ticker": "JCI",
+      "rosterCusip": "G51502105",
+      "rosterName": "Johnson Controls International plc",
+      "openFigiName": "JOHNSON CONTROLS INTERNATION",
+      "basis": "FOREIGN_ISIN_TICKER_AND_ROSTER_NAME"
+    },
+    {
+      "isin": "US02079K3059",
+      "ticker": "GOOGL",
+      "rosterCusip": "02079K305",
+      "rosterName": "Alphabet Inc",
+      "openFigiName": "ALPHABET INC-CL A",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US1273871087",
+      "ticker": "CDNS",
+      "rosterCusip": "127387108",
+      "rosterName": "Cadence Design Systems Inc",
+      "openFigiName": "CADENCE DESIGN SYS INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US1598641074",
+      "ticker": "CRL",
+      "rosterCusip": "159864107",
+      "rosterName": "Charles River Laboratories International Inc",
+      "openFigiName": "CHARLES RIVER LABORATORIES",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US1924461023",
+      "ticker": "CTSH",
+      "rosterCusip": "192446102",
+      "rosterName": "Cognizant Technology Solutions Corp",
+      "openFigiName": "COGNIZANT TECH SOLUTIONS-A",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US3021301094",
+      "ticker": "EXPD",
+      "rosterCusip": "302130109",
+      "rosterName": "Expeditors International of Washington Inc",
+      "openFigiName": "EXPEDITORS INTL WASH INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US3156161024",
+      "ticker": "FFIV",
+      "rosterCusip": "315616102",
+      "rosterName": "F5 Inc",
+      "openFigiName": "F5 INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US4456581077",
+      "ticker": "JBHT",
+      "rosterCusip": "445658107",
+      "rosterName": "JB Hunt Transport Services Inc",
+      "openFigiName": "HUNT (JB) TRANSPRT SVCS INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US45687V1061",
+      "ticker": "IR",
+      "rosterCusip": "45687V106",
+      "rosterName": "Ingersoll Rand Inc",
+      "openFigiName": "INGERSOLL-RAND INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US5184391044",
+      "ticker": "EL",
+      "rosterCusip": "518439104",
+      "rosterName": "Estee Lauder Cos Inc/The",
+      "openFigiName": "ESTEE LAUDER COMPANIES-CL A",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US5797802064",
+      "ticker": "MKC",
+      "rosterCusip": "579780206",
+      "rosterName": "McCormick & Co Inc/MD",
+      "openFigiName": "MCCORMICK & CO-NON VTG SHRS",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US5926881054",
+      "ticker": "MTD",
+      "rosterCusip": "592688105",
+      "rosterName": "Mettler-Toledo International Inc",
+      "openFigiName": "METTLER-TOLEDO INTERNATIONAL",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US59522J1034",
+      "ticker": "MAA",
+      "rosterCusip": "59522J103",
+      "rosterName": "Mid-America Apartment Communities Inc",
+      "openFigiName": "MID-AMERICA APARTMENT COMM",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US6092071058",
+      "ticker": "MDLZ",
+      "rosterCusip": "609207105",
+      "rosterName": "Mondelez International Inc",
+      "openFigiName": "MONDELEZ INTERNATIONAL INC-A",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US6541061031",
+      "ticker": "NKE",
+      "rosterCusip": "654106103",
+      "rosterName": "NIKE Inc",
+      "openFigiName": "NIKE INC -CL B",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US7140461093",
+      "ticker": "RVTY",
+      "rosterCusip": "714046109",
+      "rosterName": "Revvity Inc",
+      "openFigiName": "REVVITY INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US79466L3024",
+      "ticker": "CRM",
+      "rosterCusip": "79466L302",
+      "rosterName": "Salesforce Inc",
+      "openFigiName": "SALESFORCE INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US8318652091",
+      "ticker": "AOS",
+      "rosterCusip": "831865209",
+      "rosterName": "A O Smith Corp",
+      "openFigiName": "SMITH (A.O.) CORP",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US8725401090",
+      "ticker": "TJX",
+      "rosterCusip": "872540109",
+      "rosterName": "TJX Cos Inc/The",
+      "openFigiName": "TJX COMPANIES INC",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US9113121068",
+      "ticker": "UPS",
+      "rosterCusip": "911312106",
+      "rosterName": "United Parcel Service Inc",
+      "openFigiName": "UNITED PARCEL SERVICE-CL B",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US9297401088",
+      "ticker": "WAB",
+      "rosterCusip": "929740108",
+      "rosterName": "Westinghouse Air Brake Technologies Corp",
+      "openFigiName": "WABTEC CORP",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US9553061055",
+      "ticker": "WST",
+      "rosterCusip": "955306105",
+      "rosterName": "West Pharmaceutical Services Inc",
+      "openFigiName": "WEST PHARMACEUTICAL SERVICES",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    },
+    {
+      "isin": "US9892071054",
+      "ticker": "ZBRA",
+      "rosterCusip": "989207105",
+      "rosterName": "Zebra Technologies Corp",
+      "openFigiName": "ZEBRA TECHNOLOGIES CORP-CL A",
+      "basis": "US_ISIN_CUSIP_EXACT"
+    }
+  ]
+}

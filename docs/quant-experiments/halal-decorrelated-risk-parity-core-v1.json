@@ -44,12 +44,12 @@
     },
     "runConfig": {
       "setup": "halal-decorrelated-risk-parity-core",
-      "from": "2016-01-04",
+      "from": "2020-05-31",
       "to": "2026-07-17",
       "symbols": null,
       "confirmFull": false,
       "seed": 42,
-      "oosFraction": 0.3,
+      "oosFraction": 0.5,
       "engine": "shared"
     },
     "validation": {
@@ -70,6 +70,7 @@
       "hypothesizedVolReduction": 0.116,
       "hypothesizedMonteCarloP95Drawdown": 0.41,
       "bootstrapBlockLength": 20,
+      "survivorshipCoverageWaiverAcknowledged": true,
       "plateauCells": [
         "sectorCap=0.25,poolSize=80",
         "sectorCap=0.2,poolSize=60",

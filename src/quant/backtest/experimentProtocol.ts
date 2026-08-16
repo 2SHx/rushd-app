@@ -216,6 +216,15 @@ export function assertRunConfigPairedWithGate(manifest: ExperimentManifest): voi
       + `"${manifest.setupId}", found ${JSON.stringify(declaredSetup) ?? 'nothing'}. A runConfig that cannot `
       + 'match any real invocation is a gate block with no way to run under it — present, but not paired');
   }
+  if (spec.productClass === 'DIVERSIFICATION') {
+    const symbols = root.runConfig.symbols;
+    if (!Array.isArray(symbols) || symbols.length === 0
+      || symbols.some((symbol) => typeof symbol !== 'string' || symbol.trim().length === 0)) {
+      throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: a DIVERSIFICATION runConfig `
+        + 'requires an explicit non-empty config.runConfig.symbols array of symbol strings. This only '
+        + 'proves the runnable universe was pinned; lifecycle eligibility must be evidenced separately');
+    }
+  }
 }
 
 /**

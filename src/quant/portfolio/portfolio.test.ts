@@ -6,6 +6,15 @@ import { constructHalalPortfolio } from './construction';
 import { computePortfolioMetrics } from '../backtest/portfolioEngine';
 import { executePortfolioRebalance } from './rebalancer';
 
+vi.mock('@/services/marketData', () => ({
+  registry: { getScreener: () => ({ name: 'PortfolioTestScreener' }) },
+  getCachedShariaVerdict: vi.fn(async (_screener: unknown, symbol: string) => ({
+    compliant: symbol === 'MSFT' || symbol === 'NVDA',
+    source: 'mock',
+    ratios: { nonCompliantIncomeToIncome: symbol === 'MSFT' ? 0.0045 : 0.0015 },
+  })),
+}));
+
 const cleanupMarketBarFixtures = (createdIds: readonly string[]) =>
   createdIds.length === 0
     ? Promise.resolve({ count: 0 })
@@ -49,6 +58,12 @@ describe('Halal Quant Portfolio Tests', () => {
     const row = await prisma.marketBar.create({ data });
     createdMarketBarIds.push(row.id);
     return row;
+  };
+
+  const createMarketBarFixtures = async (data: Prisma.MarketBarCreateManyInput[]) => {
+    const rows = await prisma.marketBar.createManyAndReturn({ data });
+    createdMarketBarIds.push(...rows.map((row) => row.id));
+    return rows;
   };
 
   afterEach(async () => {
@@ -143,10 +158,11 @@ describe('Halal Quant Portfolio Tests', () => {
     // Seed at least some historical bars for candidates to compute scores
     const now = new Date();
 
-    // Seed MSFT bars (upwards momentum)
-    for (let i = 0; i < 95; i++) {
+    // Seed both histories in one DB round-trip; row-at-a-time setup made this integration test
+    // depend on network latency to the test database and regularly exceeded Vitest's timeout.
+    await createMarketBarFixtures(Array.from({ length: 95 }, (_, i) => {
       const ts = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      await createMarketBarFixture({
+      return {
           symbol: 'MSFT',
           market: 'NASDAQ',
           interval: 'DAY',
@@ -157,13 +173,12 @@ describe('Halal Quant Portfolio Tests', () => {
           close: 300 + (95 - i) * 1.5, // upward slope
           volume: 1000000,
           source: 'MOCK'
-      });
-    }
+      };
+    }));
 
-    // Seed NVDA bars (downwards momentum)
-    for (let i = 0; i < 95; i++) {
+    await createMarketBarFixtures(Array.from({ length: 95 }, (_, i) => {
       const ts = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      await createMarketBarFixture({
+      return {
           symbol: 'NVDA',
           market: 'NASDAQ',
           interval: 'DAY',
@@ -174,8 +189,8 @@ describe('Halal Quant Portfolio Tests', () => {
           close: 100 - (95 - i) * 0.2, // downward slope
           volume: 1000000,
           source: 'MOCK'
-      });
-    }
+      };
+    }));
 
     const proposal = await constructHalalPortfolio('NASDAQ', now, { maxNameWeight: 0.25, maxPositions: 2 });
     expect(proposal.weights.length).toBeGreaterThan(0);
@@ -188,7 +203,7 @@ describe('Halal Quant Portfolio Tests', () => {
     for (const w of proposal.weights) {
       expect(w.weight).toBeLessThanOrEqual(0.25);
     }
-  });
+  }, 30_000);
 
   it('correctly calculates portfolio and benchmark tracking metrics', () => {
     const start = new Date('2026-01-01');
@@ -246,7 +261,7 @@ describe('Halal Quant Portfolio Tests', () => {
     // Verify purification fee ledger entry was logged for realized profits
     const purificationCount = await prisma.purificationEntry.count({ where: { userId } });
     expect(purificationCount).toBeGreaterThanOrEqual(0);
-  });
+  }, 30_000);
 
   it('guarantees rebalance idempotency to avoid duplicate orders and snapshots', async () => {
     const now = new Date();
@@ -280,18 +295,18 @@ describe('Halal Quant Portfolio Tests', () => {
 
     const secondSnapCount = await prisma.portfolioSnapshot.count({ where: { userId } });
     expect(secondSnapCount).toBe(1); // Still 1 snapshot
-  });
+  }, 30_000);
 
-  it('calculates purification math correctly on realized profit, and skips on losses', async () => {
+  it('calculates purification math correctly on realized profit', async () => {
     // 1. Seed profitable trade
     await prisma.portfolioItem.create({
       data: {
         userId,
         symbol: 'MSFT',
-        shares: 10.0,
+        shares: 100.0,
         market: 'NASDAQ',
         currency: 'USD',
-        costBasis: 200.0 // bought at 200
+        costBasis: 200.0 // bought at 200; large enough that rebalancing must realize a gain
       }
     });
 
@@ -304,7 +319,7 @@ describe('Halal Quant Portfolio Tests', () => {
         open: 300,
         high: 305,
         low: 295,
-        close: 300, // sold at 300 -> realizedProfit = (300 - 200) * 10 = 1000
+        close: 300,
         volume: 1000000,
         source: 'MOCK'
     });
@@ -319,8 +334,8 @@ describe('Halal Quant Portfolio Tests', () => {
     expect(entries.length).toBeGreaterThan(0);
 
     // Verification of exact purification math:
-    // Profit must be exactly 1000 (simplified close diff)
-    // ratio is determined by MSFT (Zoya fallback complies with ~0.0050 or similar)
+    // The exact sold quantity is determined by target weights; every realized-profit entry must
+    // still apply the screened MSFT purification ratio exactly.
     const msftEntry = entries.find(e => e.symbol === 'MSFT');
     expect(msftEntry).toBeDefined();
     
@@ -330,5 +345,5 @@ describe('Halal Quant Portfolio Tests', () => {
 
     expect(profitNum).toBeGreaterThan(0);
     expect(amountNum).toBeCloseTo(profitNum * ratioNum, 4);
-  });
+  }, 30_000);
 });

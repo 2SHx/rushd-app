@@ -3,6 +3,7 @@
 // constructed for the occasion — which is the failure mode that produced a 2.6x overstatement once
 // already, with no error in the mechanism at all.
 import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
 import {
   assertDiversificationComparator,
   createDraft,
@@ -52,7 +53,7 @@ const MECHANISM = {
   // at all (`assertRunConfigPairedWithGate`). `runConfig` is also excluded from the A/B isolation
   // diff (`DIVERSIFICATION_AB_VARIABLE_BLOCKS`), so its presence here never trips the "differs in
   // more than the universe block" refusal against `INCUMBENT_CONFIG` or a historical anchor.
-  runConfig: { setup: 'halal-decorrelated-risk-parity-core', seed: 42 },
+  runConfig: { setup: 'halal-decorrelated-risk-parity-core', symbols: ['AAA'], seed: 42 },
 };
 
 function draft(config: Record<string, unknown>): ExperimentManifest {
@@ -197,4 +198,29 @@ describe('the check is scoped to the class that needs it', () => {
     const bare = draft({ ...MECHANISM, universe: { rule: 'x' } });
     expect(sealExperiment(bare).state).toBe('SEALED');
   });
+});
+
+it('keeps the G11 candidate DRAFT while applying only the evidenced window and waiver fields', () => {
+  const manifest = JSON.parse(fs.readFileSync(
+    `${process.cwd()}/docs/quant-experiments/halal-decorrelated-risk-parity-core-v1.json`,
+    'utf8',
+  ));
+  expect(manifest).toMatchObject({
+    state: 'DRAFT', configHash: null,
+    config: {
+      runConfig: { from: '2020-05-31', oosFraction: 0.5, symbols: null, confirmFull: false },
+      validation: { survivorshipCoverageWaiverAcknowledged: true },
+    },
+    fullRun: null, terminal: null,
+  });
+});
+
+it('refuses to seal the current partial G11 manifest while runConfig.symbols is null', () => {
+  const manifest = JSON.parse(fs.readFileSync(
+    `${process.cwd()}/docs/quant-experiments/halal-decorrelated-risk-parity-core-v1.json`,
+    'utf8',
+  )) as ExperimentManifest;
+
+  expect(() => sealExperiment(manifest))
+    .toThrow(/requires an explicit non-empty config\.runConfig\.symbols array of symbol strings/);
 });

@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseCsv } from './csv';
 
 export const OPENFIGI_CROSSWALK_FIXTURE_PATH = path.join(
   process.cwd(),
@@ -31,6 +32,54 @@ export const OPENFIGI_CROSSWALK_FIXTURE_PATH = path.join(
 /** Pinned sha256 of the exact captured fixture file. Any drift aborts loading. */
 export const OPENFIGI_CROSSWALK_FIXTURE_SHA256 =
   'e1d040f1f6dfd9fb5d99685e6a079c74208b667854539f48132f969d6a29e4cf';
+
+export const CURATED_OPENFIGI_RENAME_FIXTURE_PATH = path.join(
+  process.cwd(),
+  'src',
+  'quant',
+  'universe',
+  'fixtures',
+  'openfigi-isin-crosswalk',
+  'held-roster-name-mismatches.json',
+);
+export const CURATED_OPENFIGI_RENAME_FIXTURE_SHA256 =
+  '7bc56ebea62e460de9fa09167bb967b4f09477e382909deec214632a6c804306';
+
+const AUTHORITATIVE_SPUS_ROSTER_PATH = path.join(
+  process.cwd(),
+  'src',
+  'quant',
+  'universe',
+  'fixtures',
+  'spus-holdings-2026-07-17.csv',
+);
+
+export type CuratedOpenFigiRenameBasis =
+  | 'US_ISIN_CUSIP_EXACT'
+  | 'FOREIGN_ISIN_TICKER_AND_ROSTER_NAME';
+
+export interface CuratedOpenFigiRenameEntry {
+  readonly isin: string;
+  readonly ticker: string;
+  readonly rosterCusip: string;
+  readonly rosterName: string;
+  readonly openFigiName: string;
+  readonly basis: CuratedOpenFigiRenameBasis;
+}
+
+export interface CuratedOpenFigiRenameArtifact {
+  readonly schemaVersion: 1;
+  readonly entryCount: 24;
+  readonly sourceHashes: {
+    readonly openFigiCaptureSha256: string;
+    readonly authoritativeRosterSha256: string;
+  };
+  /** Unmapped held identities remain UNKNOWN. This artifact never supplies evidence for OUT. */
+  readonly heldUnknownPolicy: 'UNMAPPED_HELD_REMAINS_MEMBERSHIP_UNKNOWN_NEVER_OUT';
+  /** Separate OpenFIGI NOT_FOUND/current-roster matches; intentionally not executable mappings. */
+  readonly openNotFoundRosterSymbols: readonly string[];
+  readonly entries: readonly CuratedOpenFigiRenameEntry[];
+}
 
 export interface OpenFigiFoundEntry {
   readonly isin: string;
@@ -115,6 +164,133 @@ export function indexCrosswalkByIsin(
     map.set(entry.isin, entry);
   }
   return map;
+}
+
+/**
+ * Builds the separately reviewed override index. Duplicate ISINs and two ISINs claiming the same
+ * current ticker are rejected rather than resolved by ordering. Open NOT_FOUND items never enter
+ * this map, so later membership wiring cannot accidentally treat them as resolved.
+ */
+export function indexCuratedOpenFigiRenamesByIsin(
+  artifact: CuratedOpenFigiRenameArtifact,
+): ReadonlyMap<string, CuratedOpenFigiRenameEntry> {
+  const byIsin = new Map<string, CuratedOpenFigiRenameEntry>();
+  const isinByTicker = new Map<string, string>();
+  for (const entry of artifact.entries) {
+    const prior = byIsin.get(entry.isin);
+    if (prior) {
+      const kind = prior.ticker === entry.ticker ? 'duplicate' : 'conflicting';
+      throw new OpenFigiCrosswalkError(
+        `openFigiCrosswalk: ${kind} curated ISIN mapping for ${entry.isin}`,
+      );
+    }
+    const priorIsin = isinByTicker.get(entry.ticker);
+    if (priorIsin) {
+      throw new OpenFigiCrosswalkError(
+        `openFigiCrosswalk: conflicting curated ticker ${entry.ticker} for ${priorIsin} and ${entry.isin}`,
+      );
+    }
+    byIsin.set(entry.isin, entry);
+    isinByTicker.set(entry.ticker, entry.isin);
+  }
+  return byIsin;
+}
+
+function curatedError(message: string): never {
+  throw new OpenFigiCrosswalkError(`openFigiCrosswalk: curated rename artifact ${message}`);
+}
+
+/** Validates every curated decision against both byte-pinned source artifacts. */
+export function validateCuratedOpenFigiRenameArtifact(
+  artifact: CuratedOpenFigiRenameArtifact,
+  openFigiCapture = loadOpenFigiCrosswalkCapture(),
+  rosterText = fs.readFileSync(AUTHORITATIVE_SPUS_ROSTER_PATH, 'utf8'),
+): CuratedOpenFigiRenameArtifact {
+  if (artifact.schemaVersion !== 1 || artifact.entryCount !== 24 || artifact.entries.length !== 24) {
+    curatedError('must contain exactly 24 schema-v1 decisions');
+  }
+  if (artifact.heldUnknownPolicy !== 'UNMAPPED_HELD_REMAINS_MEMBERSHIP_UNKNOWN_NEVER_OUT') {
+    curatedError('must preserve unresolved held identities as MEMBERSHIP_UNKNOWN');
+  }
+  const expectedOpen = ['ANET', 'COO', 'DD', 'LIN', 'LRCX', 'STX', 'TEL'];
+  if (artifact.openNotFoundRosterSymbols.join(',') !== expectedOpen.join(',')) {
+    curatedError('must retain the seven NOT_FOUND roster matches as open items');
+  }
+  if (artifact.sourceHashes.openFigiCaptureSha256 !== OPENFIGI_CROSSWALK_FIXTURE_SHA256) {
+    curatedError('references an unexpected OpenFIGI source hash');
+  }
+  if (sha256(rosterText) !== artifact.sourceHashes.authoritativeRosterSha256) {
+    curatedError('authoritative 217-name roster hash mismatch');
+  }
+
+  const rawByIsin = indexCrosswalkByIsin(openFigiCapture);
+  const rosterByTicker = new Map(
+    parseCsv(rosterText).rows.map((row) => [row.StockTicker, row] as const),
+  );
+  const index = indexCuratedOpenFigiRenamesByIsin(artifact);
+  for (const entry of artifact.entries) {
+    if (!/^[A-Z]{2}[A-Z0-9]{10}$/.test(entry.isin) || !/^[A-Z][A-Z0-9.-]{0,15}$/.test(entry.ticker)) {
+      curatedError(`has malformed identifiers for ${entry.isin}`);
+    }
+    const raw = rawByIsin.get(entry.isin);
+    if (!raw || raw.status !== 'FOUND' || raw.ticker !== entry.ticker || raw.openFigiName !== entry.openFigiName) {
+      curatedError(`${entry.isin} does not exactly match the pinned OpenFIGI capture`);
+    }
+    const roster = rosterByTicker.get(entry.ticker);
+    if (!roster || roster.CUSIP !== entry.rosterCusip || roster.SecurityName !== entry.rosterName) {
+      curatedError(`${entry.isin} does not exactly match the pinned authoritative roster row`);
+    }
+    if (entry.isin.startsWith('US')) {
+      if (entry.basis !== 'US_ISIN_CUSIP_EXACT' || entry.isin.slice(2, 11) !== entry.rosterCusip) {
+        curatedError(`${entry.isin} lacks exact ISIN-derived CUSIP evidence`);
+      }
+    } else if (entry.basis !== 'FOREIGN_ISIN_TICKER_AND_ROSTER_NAME') {
+      curatedError(`${entry.isin} lacks foreign-ISIN ticker plus roster-name evidence`);
+    }
+  }
+  for (const symbol of artifact.openNotFoundRosterSymbols) {
+    if (artifact.entries.some((entry) => entry.ticker === symbol)) {
+      curatedError(`${symbol} open item leaked into the resolved index`);
+    }
+  }
+  return Object.freeze({
+    ...artifact,
+    sourceHashes: Object.freeze({ ...artifact.sourceHashes }),
+    openNotFoundRosterSymbols: Object.freeze([...artifact.openNotFoundRosterSymbols]),
+    entries: Object.freeze(artifact.entries.map((entry) => Object.freeze({ ...entry }))),
+  });
+}
+
+/** Loads the 24 reviewed rename decisions. Offline only; any byte/source drift fails closed. */
+export function loadCuratedOpenFigiRenameArtifact(
+  fixturePath = CURATED_OPENFIGI_RENAME_FIXTURE_PATH,
+): CuratedOpenFigiRenameArtifact {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(fixturePath, 'utf8');
+  } catch (err) {
+    throw new OpenFigiCrosswalkError(
+      `openFigiCrosswalk: unable to read curated rename fixture at ${fixturePath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  const hash = sha256(raw);
+  if (hash !== CURATED_OPENFIGI_RENAME_FIXTURE_SHA256) {
+    throw new OpenFigiCrosswalkError(
+      `openFigiCrosswalk: curated rename fixture hash mismatch (expected ${CURATED_OPENFIGI_RENAME_FIXTURE_SHA256}, got ${hash})`,
+    );
+  }
+  let parsed: CuratedOpenFigiRenameArtifact;
+  try {
+    parsed = JSON.parse(raw) as CuratedOpenFigiRenameArtifact;
+  } catch (err) {
+    throw new OpenFigiCrosswalkError(
+      `openFigiCrosswalk: malformed curated rename fixture: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!parsed || !Array.isArray(parsed.entries) || !Array.isArray(parsed.openNotFoundRosterSymbols)) {
+    curatedError('is missing required arrays');
+  }
+  return validateCuratedOpenFigiRenameArtifact(parsed);
 }
 
 // A fixed, conservative list of trailing legal-entity boilerplate tokens. Stripped repeatedly
