@@ -117,14 +117,21 @@ export function verifyReviewArtifact(scorecard, artifactBytes) {
   );
   if (canonicalize(artifact) !== text) throw new Error('Review artifact bytes must be canonical JSON');
   if (artifact.schemaVersion !== 1) throw new Error('Review artifact schemaVersion must be 1');
-  if (artifact.runId !== scorecard.runId) throw new Error('Review artifact runId does not match the scorecard');
+  assertIdentifier(artifact.runId, 'Review artifact runId');
+  assertIdentifier(scorecard.runId, 'Scorecard runId');
+  if (artifact.runId.toLowerCase() !== scorecard.runId.toLowerCase()) {
+    throw new Error('Review artifact runId does not match the scorecard');
+  }
   assertHash(artifact.scorecardSubjectHash, 'Review artifact subject hash');
   if (artifact.scorecardSubjectHash !== scorecardSubjectHash(scorecard)) {
     throw new Error('Review artifact subject hash does not match the scorecard');
   }
   if (artifact.verdict !== 'PASS') throw new Error('Review artifact verdict must be PASS');
-  if (artifact.reviewedBy !== scorecard.reviewedBy) throw new Error('Review artifact reviewer does not match the scorecard');
   assertIdentifier(artifact.reviewedBy, 'Review artifact reviewer');
+  assertIdentifier(scorecard.reviewedBy, 'Scorecard reviewer');
+  if (artifact.reviewedBy.toLowerCase() !== scorecard.reviewedBy.toLowerCase()) {
+    throw new Error('Review artifact reviewer does not match the scorecard');
+  }
   return true;
 }
 
