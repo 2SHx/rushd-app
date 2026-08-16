@@ -4,11 +4,17 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyCheckpoint } from './continual-harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_MANIFEST = join(ROOT, '.agents', 'continual', 'benchmarks', 'manifest.json');
+const DEFAULT_LEDGER = join(ROOT, '.agents', 'continual', 'events.jsonl');
+const DEFAULT_CHECKPOINT = join(ROOT, '.agents', 'continual', 'head.json');
+const EVALUATOR_PATH = 'scripts/continual-benchmark.mjs';
+const PINNED_SUITE_HASH = 'c9ba9d1cacdd37379dc7588d7f673ad8834cefb9ec330637d09a1d57e115b502';
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const FAILURE_CODES = [
   'NONE',
   'DISPATCH_ERROR',
@@ -43,7 +49,7 @@ export function canonicalize(value) {
 }
 
 function sha256(value) {
-  return createHash('sha256').update(value, 'utf8').digest('hex');
+  return createHash('sha256').update(value).digest('hex');
 }
 
 export function commandDigest(command) {
@@ -73,7 +79,7 @@ export function scoreEpisode(rubric, passedRubricIds) {
   for (const item of rubric) {
     assertObject(item, 'Rubric item');
     assertExactFields(item, ['rubricId', 'description', 'weight'], 'Rubric item');
-    assertString(item.rubricId, 'rubricId');
+    assertIdentifier(item.rubricId, 'rubricId');
     assertString(item.description, 'rubric description');
     if (!Number.isFinite(item.weight) || item.weight <= 0) throw new Error('Rubric weight must be positive');
     if (weights.has(item.rubricId)) throw new Error(`Duplicate rubricId: ${item.rubricId}`);
@@ -107,6 +113,11 @@ function assertString(value, field) {
   if (typeof value !== 'string' || value.trim() === '') throw new Error(`${field} must be a non-empty string`);
 }
 
+function assertIdentifier(value, field) {
+  assertString(value, field);
+  if (!ID_PATTERN.test(value)) throw new Error(`${field} must be a one-line identifier without control characters`);
+}
+
 function assertStringArray(value, field, { nonEmpty = true } = {}) {
   if (!Array.isArray(value) || (nonEmpty && value.length === 0)
     || value.some((item) => typeof item !== 'string' || item.trim() === '')) {
@@ -130,6 +141,21 @@ function assertCommit(value, field) {
   RESOLVED_COMMITS.add(value);
 }
 
+function readGitBlob(commit, path, field) {
+  try {
+    const object = `${commit}:${path}`;
+    const type = execFileSync('git', ['cat-file', '-t', object], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (type !== 'blob') throw new Error('not a blob');
+    return execFileSync('git', ['show', object], { cwd: ROOT });
+  } catch {
+    throw new Error(`${field} path does not resolve to a Git blob`);
+  }
+}
+
 function assertRelativeFile(value, field) {
   assertString(value, field);
   if (isAbsolute(value) || /^[A-Za-z]:\//.test(value) || value.includes('\\') || value.split('/').includes('..')) {
@@ -144,14 +170,15 @@ function assertCase(benchmarkCase) {
     'caseId', 'caseVersion', 'role', 'task', 'primaryPath', 'taskTags', 'startCommit',
     'acceptanceCommands', 'rubric', 'safetyCommands', 'caseHash',
   ], 'Benchmark case');
-  assertString(benchmarkCase.caseId, 'caseId');
+  assertIdentifier(benchmarkCase.caseId, 'caseId');
   if (!Number.isInteger(benchmarkCase.caseVersion) || benchmarkCase.caseVersion <= 0) {
     throw new Error('caseVersion must be a positive integer');
   }
-  assertString(benchmarkCase.role, 'role');
+  assertIdentifier(benchmarkCase.role, 'role');
   assertString(benchmarkCase.task, 'task');
   assertRelativeFile(benchmarkCase.primaryPath, 'primaryPath');
   assertStringArray(benchmarkCase.taskTags, 'taskTags');
+  for (const taskTag of benchmarkCase.taskTags) assertIdentifier(taskTag, 'taskTag');
   assertCommit(benchmarkCase.startCommit, 'startCommit');
   assertStringArray(benchmarkCase.acceptanceCommands, 'acceptanceCommands');
   assertStringArray(benchmarkCase.safetyCommands, 'safetyCommands');
@@ -189,6 +216,7 @@ export function verifyManifest(manifest, cases) {
     identities.add(identity);
   }
   if (hashSuite(cases) !== manifest.suiteHash) throw new Error('suiteHash does not match the frozen cases');
+  if (manifest.suiteHash !== PINNED_SUITE_HASH) throw new Error('suiteHash does not match the evaluator-pinned frozen suite');
   return true;
 }
 
@@ -320,7 +348,7 @@ function assertComparison(comparison, scorecard, manifest, cases, episodes) {
   }
 }
 
-export function verifyScorecard(scorecard, manifest, cases) {
+export function verifyScorecard(scorecard, manifest, cases, context) {
   verifyManifest(manifest, cases);
   assertNoProhibitedFields(scorecard);
   assertObject(scorecard, 'Scorecard');
@@ -330,28 +358,58 @@ export function verifyScorecard(scorecard, manifest, cases) {
     'episodes', 'comparison', 'reviewedBy', 'reviewArtifact',
   ], 'Scorecard');
   if (scorecard.schemaVersion !== 1) throw new Error('Scorecard schemaVersion must be 1');
-  for (const field of ['runId', 'createdAt', 'runner', 'model', 'effort', 'generatedBy', 'reviewedBy']) {
-    assertString(scorecard[field], field);
+  for (const field of ['runId', 'runner', 'model', 'effort', 'generatedBy', 'reviewedBy']) {
+    assertIdentifier(scorecard[field], field);
   }
+  assertString(scorecard.createdAt, 'createdAt');
   if (new Date(scorecard.createdAt).toISOString() !== scorecard.createdAt) throw new Error('createdAt must be an ISO timestamp');
   assertCommit(scorecard.evaluatorCommit, 'evaluatorCommit');
+  const committedEvaluator = readGitBlob(scorecard.evaluatorCommit, EVALUATOR_PATH, 'Evaluator source');
+  const currentEvaluator = readFileSync(fileURLToPath(import.meta.url));
+  if (!committedEvaluator.equals(currentEvaluator)) {
+    throw new Error('Evaluator commit source blob is not byte-identical to the current verifier');
+  }
   if (scorecard.suiteHash !== manifest.suiteHash) throw new Error('Scorecard suiteHash does not match the manifest');
   assertObject(scorecard.proposal, 'Proposal');
   assertExactFields(scorecard.proposal, ['proposalHash', 'lessonId', 'lessonVersion'], 'Proposal');
   assertHash(scorecard.proposal.proposalHash, 'proposalHash');
-  assertString(scorecard.proposal.lessonId, 'lessonId');
+  assertIdentifier(scorecard.proposal.lessonId, 'lessonId');
   if (!Number.isInteger(scorecard.proposal.lessonVersion) || scorecard.proposal.lessonVersion <= 0) {
     throw new Error('lessonVersion must be a positive integer');
+  }
+  assertObject(context, 'Verification context');
+  assertExactFields(context, ['ledger', 'checkpoint'], 'Verification context');
+  verifyCheckpoint(context.ledger, context.checkpoint);
+  const proposalMatches = context.ledger.filter((event) => (
+    event.action === 'PROPOSE'
+      && event.eventHash === scorecard.proposal.proposalHash
+      && event.lessonId === scorecard.proposal.lessonId
+      && event.lessonVersion === scorecard.proposal.lessonVersion
+  ));
+  if (proposalMatches.length !== 1) {
+    throw new Error('Scorecard proposal must match one exact verified PROPOSE ledger event');
   }
   assertHash(scorecard.baselineProjectionHash, 'baselineProjectionHash');
   assertHash(scorecard.candidateProjectionHash, 'candidateProjectionHash');
   if (scorecard.baselineProjectionHash === scorecard.candidateProjectionHash) {
     throw new Error('Baseline and candidate projection hashes must differ');
   }
-  if (scorecard.generatedBy === scorecard.reviewedBy) throw new Error('Generator and reviewer must be distinct');
-  const reviewMatch = /^commit:([a-f0-9]{40})$/.exec(scorecard.reviewArtifact ?? '');
-  if (!reviewMatch) throw new Error('reviewArtifact must reference a full commit SHA');
-  assertCommit(reviewMatch[1], 'reviewArtifact commit');
+  if (scorecard.generatedBy.toLowerCase() === scorecard.reviewedBy.toLowerCase()) {
+    throw new Error('Generator and reviewer identities must be distinct case-insensitively');
+  }
+  assertObject(scorecard.reviewArtifact, 'reviewArtifact');
+  assertExactFields(scorecard.reviewArtifact, ['path', 'digest', 'commit'], 'reviewArtifact');
+  assertRelativeFile(scorecard.reviewArtifact.path, 'reviewArtifact path');
+  assertHash(scorecard.reviewArtifact.digest, 'reviewArtifact digest');
+  assertCommit(scorecard.reviewArtifact.commit, 'reviewArtifact commit');
+  const reviewBytes = readGitBlob(
+    scorecard.reviewArtifact.commit,
+    scorecard.reviewArtifact.path,
+    'reviewArtifact',
+  );
+  if (sha256(reviewBytes) !== scorecard.reviewArtifact.digest) {
+    throw new Error('reviewArtifact digest does not match its Git blob');
+  }
 
   if (!Array.isArray(scorecard.episodes)) throw new Error('Scorecard episodes must be an array');
   const caseById = new Map(cases.map((benchmarkCase) => [benchmarkCase.caseId, benchmarkCase]));
@@ -399,6 +457,23 @@ function readBenchmark(manifestPath) {
   return { manifest, cases };
 }
 
+function readVerificationContext() {
+  let ledger;
+  try {
+    ledger = readFileSync(DEFAULT_LEDGER, 'utf8').split(/\r?\n/).flatMap((line, index) => {
+      if (line.trim() === '') return [];
+      try { return [JSON.parse(line)]; }
+      catch { throw new Error(`Invalid JSON at ledger line ${index + 1}`); }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Invalid JSON at ledger line')) throw error;
+    throw new Error(`Invalid or missing ledger: ${DEFAULT_LEDGER}`);
+  }
+  const checkpoint = readJson(DEFAULT_CHECKPOINT, 'checkpoint');
+  verifyCheckpoint(ledger, checkpoint);
+  return { ledger, checkpoint };
+}
+
 function manifestOption(args) {
   if (args.length === 0) return DEFAULT_MANIFEST;
   if (args.length !== 2 || args[0] !== '--manifest') throw new Error(`Unexpected arguments: ${args.join(' ')}`);
@@ -409,6 +484,7 @@ function main(args) {
   const [command, ...rest] = args;
   if (command === 'verify') {
     const { manifest, cases } = readBenchmark(manifestOption(rest));
+    readVerificationContext();
     for (const benchmarkCase of cases) console.log(`${benchmarkCase.caseId} ${benchmarkCase.caseHash}`);
     console.log(`suite ${manifest.suiteHash}`);
     return;
@@ -418,7 +494,7 @@ function main(args) {
     const scorecardPath = resolve(rest[0]);
     const { manifest, cases } = readBenchmark(manifestOption(rest.slice(1)));
     const scorecard = readJson(scorecardPath, 'scorecard');
-    verifyScorecard(scorecard, manifest, cases);
+    verifyScorecard(scorecard, manifest, cases, readVerificationContext());
     console.log(`scorecard ${sha256(canonicalize(scorecard))}`);
     return;
   }
