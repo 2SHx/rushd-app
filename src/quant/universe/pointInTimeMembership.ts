@@ -24,6 +24,20 @@ export interface PointInTimeMembershipRecord {
   readonly shariaEvidence: PointInTimeShariaEvidence | null;
 }
 
+/**
+ * QDR-14: a DECLARED, structural waiver of the `suspended` half of `lifecycleCoverage` — the
+ * `delisted` half is never waivable, by anyone, for any class. `acknowledged` is a literal `true`
+ * so a waiver object cannot exist half-declared; `reason` and `hash` make it inspectable and
+ * printable rather than an invisible relaxation of the check.
+ */
+export interface SurvivorshipCoverageWaiver {
+  readonly acknowledged: true;
+  /** Why `suspended` coverage is being waived for this snapshot; carried into the audit trail. */
+  readonly reason: string;
+  /** Content hash of the waiver's supporting evidence, so it cannot be silently swapped post hoc. */
+  readonly hash: string;
+}
+
 export interface PointInTimeUniverseSnapshot {
   readonly id: string;
   readonly source: string;
@@ -39,6 +53,12 @@ export interface PointInTimeUniverseSnapshot {
     delisted: boolean;
     suspended: boolean;
   }>;
+  /**
+   * QDR-14: absent (undefined) behaves byte-identically to today — `suspended: false` refuses
+   * unconditionally. A declared waiver only ever permits the `suspended` half, and only when the
+   * request's `productClass` is `'DIVERSIFICATION'`; see `assertPointInTimeMembershipCoverage`.
+   */
+  readonly survivorshipWaiver?: SurvivorshipCoverageWaiver;
   readonly records: readonly PointInTimeMembershipRecord[];
 }
 
@@ -83,11 +103,20 @@ export class DataQualityPitError extends Error {
   }
 }
 
+/**
+ * Mirrors `gatePower.ts`'s `ProductClass` byte-for-byte (this module imports nothing — see the
+ * 'has no network, provider, or database dependency' test — so the union is duplicated, not
+ * imported). Absent ⇒ no waiver can ever apply, matching QDR-10's ALPHA fail-closed default.
+ */
+export type PitProductClass = 'ALPHA' | 'BETA' | 'DIVERSIFICATION';
+
 export interface PointInTimeMembershipRequest {
   readonly snapshots: readonly PointInTimeUniverseSnapshot[];
   readonly decisionTimes: readonly Date[];
   /** The complete symbol domain that must be classified IN or OUT at every decision. */
   readonly requiredSymbols: readonly string[];
+  /** QDR-14: only `'DIVERSIFICATION'` can ever exercise a declared `survivorshipWaiver`. */
+  readonly productClass?: PitProductClass;
 }
 
 export interface ResolvedPointInTimeMembership {
@@ -96,6 +125,11 @@ export interface ResolvedPointInTimeMembership {
   readonly source: string;
   readonly hash: string;
   readonly records: readonly PointInTimeMembershipRecord[];
+  /**
+   * QDR-14: null unless this decision's terminal card was permitted ONLY because a declared
+   * survivorship-coverage waiver stood in for missing `suspended` coverage — never invisible.
+   */
+  readonly survivorshipWaiverApplied: SurvivorshipCoverageWaiver | null;
 }
 
 /** Exact audited C1 sleeves whose terminal historical runs require genuine PIT membership. */
@@ -215,9 +249,24 @@ export function assertPointInTimeMembershipCoverage(
     if (availableAt.getTime() > decisionMs) {
       fail('SNAPSHOT_UNAVAILABLE_AT_DECISION', { decisionAt: decisionIso, snapshotId: snapshot.id });
     }
-    if (!snapshot.lifecycleCoverage.delisted || !snapshot.lifecycleCoverage.suspended) {
-      fail('LIFECYCLE_COVERAGE_MISSING', { decisionAt: decisionIso, snapshotId: snapshot.id });
+    // QDR-14: split lifecycle coverage into its two halves. `delisted` is NEVER waivable, for any
+    // productClass, regardless of any declared waiver — checked first and unconditionally.
+    if (!snapshot.lifecycleCoverage.delisted) {
+      fail('LIFECYCLE_COVERAGE_MISSING', { decisionAt: decisionIso, snapshotId: snapshot.id, field: 'delisted' });
     }
+    // `suspended` may be waived, but ONLY by a snapshot-declared waiver AND ONLY for a
+    // 'DIVERSIFICATION' request. Absence of a waiver (undefined) is byte-identical to today: this
+    // still fails unconditionally. `waiver.acknowledged` is typed `true`, so a half-declared waiver
+    // cannot type-check into existence.
+    const waiver = snapshot.survivorshipWaiver;
+    const waiverApplies = waiver !== undefined && waiver.acknowledged === true
+      && request.productClass === 'DIVERSIFICATION';
+    if (!snapshot.lifecycleCoverage.suspended && !waiverApplies) {
+      fail('LIFECYCLE_COVERAGE_MISSING', { decisionAt: decisionIso, snapshotId: snapshot.id, field: 'suspended' });
+    }
+    const survivorshipWaiverApplied = !snapshot.lifecycleCoverage.suspended && waiverApplies
+      ? waiver!
+      : null;
 
     const recordsBySymbol = new Map<string, PointInTimeMembershipRecord>();
     for (const record of snapshot.records) recordsBySymbol.set(symbolKey(record.symbol), record);
@@ -268,6 +317,7 @@ export function assertPointInTimeMembershipCoverage(
       snapshotId: snapshot.id,
       source: snapshot.source,
       hash: snapshot.hash,
+      survivorshipWaiverApplied,
       records: Object.freeze(resolvedRecords),
     });
   }));

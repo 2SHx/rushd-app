@@ -133,6 +133,7 @@ describe('the anchor carries identity and isolation, never evidence', () => {
     hypothesizedMonteCarloP95Drawdown: 0.41,
     bootstrapBlockLength: 20,
     plateauCells: PLATEAU_GRID,
+    survivorshipCoverageWaiverAcknowledged: false,
   };
 
   /** The treatment arm: the anchor's config with ONLY the universe block changed. */

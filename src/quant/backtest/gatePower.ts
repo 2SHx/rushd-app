@@ -257,6 +257,14 @@ export interface DiversificationGateSpec {
   readonly bootstrapBlockLength: number;
   /** All nine named plateau cells. */
   readonly plateauCells: readonly string[];
+  /**
+   * QDR-14: required declaration that the preparer has considered whether this lane's universe
+   * relies on `pointInTimeMembership.ts`'s survivorship-coverage waiver (a declared, DIVERSIFICATION-
+   * only relaxation of `suspended`-lifecycle coverage — never `delisted`). Declaring `false` when the
+   * lane's universe genuinely carries no waived snapshot is a real declaration, not a default; the
+   * assertion below only refuses the field being ABSENT, never a specific value.
+   */
+  readonly survivorshipCoverageWaiverAcknowledged: boolean;
 }
 
 export interface GateSpec {
@@ -441,6 +449,15 @@ export function assessDiversificationGateFeasibility(
 }
 
 export function assertDiversificationGateSpec(spec: DiversificationGateSpec): void {
+  // QDR-14: the field must be DECLARED — true or false — never merely absent. A missing key is
+  // indistinguishable from an unconsidered waiver, which is exactly the silent relaxation QDR-14
+  // forbids; only an explicit boolean satisfies the requirement.
+  if (typeof spec.survivorshipCoverageWaiverAcknowledged !== 'boolean') {
+    throw new Error(
+      'survivorshipCoverageWaiverAcknowledged must be declared (true or false) for a DIVERSIFICATION '
+      + 'preregistration — QDR-14 forbids the survivorship-coverage waiver from being silently unconsidered',
+    );
+  }
   const positives: [string, number][] = [
     ['formationCadenceDays', spec.formationCadenceDays],
     ['correlationLookbackDays', spec.correlationLookbackDays],
@@ -719,6 +736,15 @@ function requireString(source: Record<string, unknown>, key: string): string {
   return value;
 }
 
+/** QDR-14: the manifest must DECLARE the boolean, not merely omit it (undefined throws). */
+function requireBoolean(source: Record<string, unknown>, key: string): boolean {
+  const value = source[key];
+  if (typeof value !== 'boolean') {
+    throw new Error(`config.validation.${key} must be declared true or false when a DIVERSIFICATION gate is declared`);
+  }
+  return value;
+}
+
 function requireStringArray(source: Record<string, unknown>, key: string): readonly string[] {
   const value = source[key];
   if (!Array.isArray(value) || value.length === 0 || value.some((v) => typeof v !== 'string' || !v.trim())) {
@@ -766,6 +792,7 @@ export function gateSpecFromConfig(config: unknown): AnyGateSpec | null {
       hypothesizedMonteCarloP95Drawdown: requireNumber(validation, 'hypothesizedMonteCarloP95Drawdown'),
       bootstrapBlockLength: requireNumber(validation, 'bootstrapBlockLength'),
       plateauCells: requireStringArray(validation, 'plateauCells'),
+      survivorshipCoverageWaiverAcknowledged: requireBoolean(validation, 'survivorshipCoverageWaiverAcknowledged'),
     };
   }
   if (declaredClass === 'BETA') {

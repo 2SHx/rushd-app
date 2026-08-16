@@ -99,6 +99,7 @@ const SPEC: DiversificationGateSpec = {
   hypothesizedMonteCarloP95Drawdown: 0.41,
   bootstrapBlockLength: 20,
   plateauCells: PLATEAU.map((c) => c.label),
+  survivorshipCoverageWaiverAcknowledged: false,
 };
 
 // ── (1) either arm formed once at the terminal date fails with DATA_QUALITY_PIT_FAILURE ──────────
@@ -409,6 +410,7 @@ describe('the class is sealed, and absence still resolves to ALPHA', () => {
         hypothesizedMonteCarloP95Drawdown: 0.41,
         bootstrapBlockLength: 20,
         plateauCells: PLATEAU.map((c) => c.label),
+        survivorshipCoverageWaiverAcknowledged: false,
       },
     };
     const spec = gateSpecFromConfig(config);

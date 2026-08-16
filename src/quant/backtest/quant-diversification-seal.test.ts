@@ -38,6 +38,7 @@ const GATE = {
   hypothesizedVolReduction: 0.116,
   hypothesizedMonteCarloP95Drawdown: 0.41,
   bootstrapBlockLength: 20,
+  survivorshipCoverageWaiverAcknowledged: false,
   plateauCells: PLATEAU_GRID,
 };
 
