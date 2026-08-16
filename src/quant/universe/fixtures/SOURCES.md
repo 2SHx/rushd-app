@@ -79,3 +79,25 @@ audit; hashes below are of the primary document only:
 
 These 10 are not referenced by `SPUS_NPORT_FILINGS` and are not loaded by
 `loadCapturedSpusNportSnapshots`. Coverage gap: 2020-11-30 → 2023-08-31 (this 10-filing window).
+
+## OpenFIGI ISIN->ticker crosswalk (QDR-14) — identity resolution only
+
+`openfigi-isin-crosswalk/spus-nport-unparseable-isins.json` (sha256 pinned as
+`OPENFIGI_CROSSWALK_FIXTURE_SHA256` in `src/quant/universe/openFigiCrosswalk.ts`): a one-time,
+captured-and-hash-pinned response from the free, keyless `https://api.openfigi.com/v3/mapping`
+endpoint, queried 2026-08-16 for every non-zero-valUSD ISIN disclosed across the ten unparseable
+filings above (244 unique ISINs; batches of 10, job shape `{idType: "ID_ISIN", idValue, exchCode:
+"US"}` — `exchCode: "US"` restricts each match to the composite United States listing, i.e. the
+same US-equity scope `src/services/marketData.ts`/`src/lib/stockUniverse.ts` already use, not a
+foreign/OTC/currency-suffixed listing of the same issuer). Result: 216 ISINs resolved to a US
+composite ticker, 28 had no US composite listing (OpenFIGI returned "No identifier found." —
+observed for names later acquired, taken private, spun off, or reincorporated under a new ISIN,
+e.g. ABIOMED/J&J, Activision Blizzard/Microsoft, Twitter/X, Exxon Mobil's 2024 holdco reorg).
+`openFigiCrosswalk.ts`'s `resolveIsinToTicker` additionally requires the OpenFIGI-resolved company
+name to match the filing's own disclosed `<name>` after normalization (mandatory ticker-reuse
+defense — see the doc comment on `normalizeCompanyName` for the exact rule and its deliberate
+false-negative cost: genuine same-entity renames, e.g. Facebook Inc -> Meta Platforms Inc, are
+excluded too, since this module cannot mechanically distinguish "renamed" from "reused"). A run
+never queries OpenFIGI live; the module only replays this committed fixture. Wiring resolved
+filings back into `SPUS_NPORT_FILINGS` is a separate, later change — this capture only proves the
+crosswalk mechanism and its coverage.
