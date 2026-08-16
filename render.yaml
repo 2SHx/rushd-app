@@ -23,6 +23,24 @@ services:
           name: rushd-db
           property: connectionString
 
+  # One after-close job keeps the authoritative InternalSim forward test automatic for $1/month
+  # (Render's minimum cron charge), instead of paying for three separate schedulers.
+  - type: cron
+    name: rushd-quant-daily
+    runtime: node
+    plan: starter
+    region: oregon
+    schedule: "30 21 * * 1-5"
+    buildCommand: "true"
+    startCommand: node scripts/run-quant-daily.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: RUSHD_APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
 databases:
   - name: rushd-db
     plan: starter

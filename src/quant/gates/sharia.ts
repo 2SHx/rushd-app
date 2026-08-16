@@ -21,6 +21,20 @@ export type ShariaGate = {
   source: string;
 };
 
+const VERIFIED_EXECUTION_SOURCES = new Set(['zoya', 'etf-holdings', 'saudi-sharia-list']);
+// Reuse the repo's declared PIT fundamentals horizon: one fiscal year plus ordinary filing lag.
+const MAX_EXECUTION_EVIDENCE_AGE_DAYS = 550;
+const DAY_MS = 86_400_000;
+
+function hasCurrentEvidence(asOf: Date, decisionAt = new Date()): boolean {
+  const evidenceMs = asOf.getTime();
+  const ageMs = decisionAt.getTime() - evidenceMs;
+  return Number.isFinite(evidenceMs)
+    && Number.isFinite(ageMs)
+    && ageMs >= 0
+    && ageMs <= MAX_EXECUTION_EVIDENCE_AGE_DAYS * DAY_MS;
+}
+
 /**
  * Is a REAL (non-mock) Sharia screening source configured? Only then is a per-symbol verdict
  * TRUSTWORTHY. Keyless, the registry falls back to MockScreener, whose verdicts are fixtures — so a
@@ -47,6 +61,19 @@ export async function evaluateShariaGate(
     }
     if (verdict.compliant === null) {
       return { compliant: false, reason: 'not_covered_by_free_sources', standard: verdict.standard, source: verdict.source };
+    }
+    if (verdict.compliant && (
+      !VERIFIED_EXECUTION_SOURCES.has(verdict.source)
+      || !hasCurrentEvidence(verdict.asOf)
+    )) {
+      return {
+        compliant: false,
+        reason: VERIFIED_EXECUTION_SOURCES.has(verdict.source)
+          ? 'stale_evidence_fail_closed'
+          : 'unverified_source_fail_closed',
+        standard: verdict.standard,
+        source: verdict.source,
+      };
     }
     return {
       compliant: verdict.compliant,

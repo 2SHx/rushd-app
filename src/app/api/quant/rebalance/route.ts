@@ -29,6 +29,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
+    // This legacy fan-out path predates the governed AUTO_PAPER runner. Keep it dark unless an
+    // operator explicitly enables it; M17 shadow probes use their own bounded runner.
+    if (process.env.QUANT_LEGACY_REBALANCE_ENABLED !== '1') {
+      return NextResponse.json({ error: 'disabled' }, { status: 503 });
+    }
+
     if (await isHalted()) {
       return NextResponse.json({ error: 'halted' }, { status: 503 });
     }
@@ -39,6 +45,7 @@ export async function POST(req: Request) {
       where: {
         enabled: true,
         market: 'NASDAQ',
+        autonomyTier: 'AUTO_PAPER',
         owner: { tier: 'ULTRA' }
       }
     });

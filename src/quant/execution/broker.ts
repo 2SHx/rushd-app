@@ -1,7 +1,7 @@
 // Rushd Quant — BrokerAdapter interface + registry (QUANT_DESIGN.md §5).
 // Execution is market-agnostic: the committee/UI talk to one interface. The registry
-// picks AlpacaPaperBroker for NASDAQ only in explicit live mode with an Alpaca key, otherwise the
-// InternalSimBroker (TASI + all keyless/mock mode) — so the whole path runs with no keys.
+// picks a paper broker independently of the market-data provider. InternalSim remains the
+// keyless/default path; a remote paper broker must be selected explicitly and configured fully.
 import { Prisma } from '@prisma/client';
 import type { Market, BrokerKind, OrderStatus, OrderSide } from '@prisma/client';
 
@@ -59,8 +59,22 @@ export function pickBrokerKind(market: Market, env: NodeJS.ProcessEnv = process.
   if (process.env.NODE_ENV === 'test' && env === process.env) {
     return 'INTERNAL_SIM';
   }
-  if (market === 'NASDAQ' && env.MARKET_DATA_MODE === 'live' && env.ALPACA_API_KEY && env.ALPACA_API_KEY !== 'mock-key') {
-    return 'ALPACA_PAPER';
+
+  const configured = env.QUANT_PAPER_BROKER?.trim().toUpperCase();
+  if (!configured || configured === 'INTERNAL_SIM') return 'INTERNAL_SIM';
+  if (configured !== 'ALPACA_PAPER') {
+    throw new Error(`Unsupported QUANT_PAPER_BROKER: ${env.QUANT_PAPER_BROKER}`);
   }
-  return 'INTERNAL_SIM';
+  if (market !== 'NASDAQ') return 'INTERNAL_SIM';
+  if (env.QUANT_SHADOW_PAPER_MUTATIONS !== '1') {
+    throw new Error('ALPACA_PAPER mutations are disabled');
+  }
+  if (!env.ALPACA_API_KEY || env.ALPACA_API_KEY === 'mock-key' || !env.ALPACA_API_SECRET) {
+    throw new Error('ALPACA_PAPER requires non-mock ALPACA_API_KEY and ALPACA_API_SECRET');
+  }
+  const baseUrl = (env.ALPACA_BASE_URL || 'https://paper-api.alpaca.markets').replace(/\/$/, '');
+  if (baseUrl !== 'https://paper-api.alpaca.markets') {
+    throw new Error('ALPACA_PAPER requires the exact paper endpoint');
+  }
+  return 'ALPACA_PAPER';
 }

@@ -9,7 +9,38 @@ import { assertLiveExecutionAllowed } from './liveGuard';
 
 const D = Prisma.Decimal;
 export const ALPACA_PAPER_BASE_URL = 'https://paper-api.alpaca.markets';
+export const ALPACA_LIVE_BASE_URL = 'https://api.alpaca.markets';
 const READ_TIMEOUT_MS = 5_000;
+
+function exactAlpacaOrigin(value: string): 'paper' | 'live' {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Unsupported Alpaca API origin');
+  }
+  if (
+    url.protocol !== 'https:'
+    || url.username
+    || url.password
+    || (url.pathname !== '/' && url.pathname !== '')
+    || url.search
+    || url.hash
+  ) {
+    throw new Error('Unsupported Alpaca API origin');
+  }
+  if (url.origin === ALPACA_PAPER_BASE_URL) return 'paper';
+  if (url.origin === ALPACA_LIVE_BASE_URL) return 'live';
+  throw new Error('Unsupported Alpaca API origin');
+}
+
+export function isExactAlpacaPaperBaseUrl(value: string): boolean {
+  try {
+    return exactAlpacaOrigin(value) === 'paper';
+  } catch {
+    return false;
+  }
+}
 
 export interface AlpacaPaperPortfolioSnapshot {
   retrievedAt: string;
@@ -78,16 +109,18 @@ function mapStatus(s: string): OrderStatus {
 
 export class AlpacaPaperBroker implements BrokerAdapter {
   readonly kind = 'ALPACA_PAPER' as const;
+  private readonly baseUrl: string;
 
   constructor(
     private readonly key: string,
     private readonly secret: string,
-    private readonly baseUrl: string = process.env.ALPACA_BASE_URL || ALPACA_PAPER_BASE_URL,
+    baseUrl: string = process.env.ALPACA_BASE_URL || ALPACA_PAPER_BASE_URL,
   ) {
     // A live (non-paper) URL is only permitted behind the full live-execution gate.
     // This is the enforcement point that keeps real-money orders dark by default.
-    const isLive = baseUrl.includes('api.alpaca.markets') && !baseUrl.includes('paper');
-    if (isLive) assertLiveExecutionAllowed();
+    const kind = exactAlpacaOrigin(baseUrl);
+    if (kind === 'live') assertLiveExecutionAllowed();
+    this.baseUrl = new URL(baseUrl).origin;
   }
 
   private headers(): Record<string, string> {
@@ -163,7 +196,10 @@ export class AlpacaPaperBroker implements BrokerAdapter {
   }
 
   async cancelOrder(ref: string): Promise<void> {
-    await fetch(`${this.baseUrl}/v2/orders/${ref}`, { method: 'DELETE', headers: this.headers() });
+    const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, { method: 'DELETE', headers: this.headers() });
+    if (!res.ok) {
+      throw new Error(`Alpaca cancelOrder failed: ${res.status}`);
+    }
   }
 
   /** One batched read model for the authenticated paper-portfolio UI. Never used for execution math. */
@@ -221,14 +257,14 @@ export class AlpacaPaperBroker implements BrokerAdapter {
 
   async getPositions(): Promise<Position[]> {
     const res = await fetch(`${this.baseUrl}/v2/positions`, { headers: this.headers() });
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error(`Alpaca getPositions failed: ${res.status}`);
     const rows = (await res.json()) as Record<string, unknown>[];
     return rows.map((r) => ({ symbol: String(r.symbol), qty: new D(String(r.qty ?? '0')) }));
   }
 
   async getCash(): Promise<Prisma.Decimal> {
     const res = await fetch(`${this.baseUrl}/v2/account`, { headers: this.headers() });
-    if (!res.ok) return new D(0);
+    if (!res.ok) throw new Error(`Alpaca getCash failed: ${res.status}`);
     const j = (await res.json()) as Record<string, unknown>;
     return new D(String(j.cash ?? '0'));
   }

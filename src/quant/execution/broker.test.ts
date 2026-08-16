@@ -61,6 +61,8 @@ describe('AlpacaPaperBroker enforces the live gate at construction', () => {
     expect(() => new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets')).not.toThrow();
     // a live URL with no flags is blocked — real orders cannot be reached
     expect(() => new AlpacaPaperBroker('k', 's', 'https://api.alpaca.markets')).toThrow(LiveExecutionBlocked);
+    expect(() => new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets.evil.example'))
+      .toThrow('Unsupported Alpaca API origin');
   });
 });
 
@@ -137,6 +139,21 @@ describe('AlpacaPaperBroker client-order idempotency', () => {
     expect(result.avgFillPrice.isZero()).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('fails closed when cancellation or source-of-truth reads fail', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+
+    await expect(broker.cancelOrder('order-1')).rejects.toThrow('cancelOrder failed: 500');
+    await expect(broker.cancelOrder('missing-order')).rejects.toThrow('cancelOrder failed: 404');
+    await expect(broker.getPositions()).rejects.toThrow('getPositions failed: 503');
+    await expect(broker.getCash()).rejects.toThrow('getCash failed: 401');
+  });
 });
 
 describe('AlpacaPaperBroker portfolio snapshot', () => {
@@ -179,12 +196,57 @@ describe('AlpacaPaperBroker portfolio snapshot', () => {
 });
 
 describe('broker registry', () => {
-  it('selects Alpaca paper for NASDAQ with a key, else InternalSim', () => {
-    expect(pickBrokerKind('NASDAQ' as any, { MARKET_DATA_MODE: 'live', ALPACA_API_KEY: 'sk-real' } as any)).toBe('ALPACA_PAPER');
-    expect(pickBrokerKind('NASDAQ' as any, { MARKET_DATA_MODE: 'bundled', ALPACA_API_KEY: 'sk-real' } as any)).toBe('INTERNAL_SIM');
+  it('selects execution independently of market-data mode and defaults keyless to InternalSim', () => {
+    expect(pickBrokerKind('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      MARKET_DATA_MODE: 'bundled',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+    } as any)).toBe('ALPACA_PAPER');
+    expect(pickBrokerKind('NASDAQ' as any, {
+      MARKET_DATA_MODE: 'live',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+    } as any)).toBe('INTERNAL_SIM');
     expect(pickBrokerKind('NASDAQ' as any, {} as any)).toBe('INTERNAL_SIM');
-    expect(pickBrokerKind('TASI' as any, { ALPACA_API_KEY: 'sk-real' } as any)).toBe('INTERNAL_SIM');
+    expect(pickBrokerKind('TASI' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+    } as any)).toBe('INTERNAL_SIM');
     expect(selectBroker('TASI' as any, {} as any).kind).toBe('INTERNAL_SIM');
     expect(selectBroker('NASDAQ' as any, {} as any).kind).toBe('INTERNAL_SIM');
+  });
+
+  it('fails closed for incomplete or unknown remote-paper configuration', () => {
+    expect(() => pickBrokerKind('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+    } as any)).toThrow('mutations are disabled');
+    expect(() => pickBrokerKind('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+    } as any)).toThrow('ALPACA_PAPER requires');
+    expect(() => pickBrokerKind('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'some-broker',
+    } as any)).toThrow('Unsupported QUANT_PAPER_BROKER');
+  });
+
+  it('rejects non-paper endpoints and keeps remote paper unreachable from generic routes', () => {
+    expect(() => pickBrokerKind('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+      ALPACA_BASE_URL: 'https://api.alpaca.markets',
+    } as any)).toThrow('exact paper endpoint');
+    expect(() => selectBroker('NASDAQ' as any, {
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+    } as any)).toThrow('restricted to the bounded shadow-paper runner');
   });
 });

@@ -43,6 +43,15 @@ describe('loadAlpacaPaperView', () => {
       .toEqual({ status: 'unconfigured' });
   });
 
+  it('rejects a lookalike paper hostname before credentials reach a loader', async () => {
+    const load = vi.fn(async () => snapshot);
+    expect(await loadAlpacaPaperView(parent, {
+      ...configured,
+      ALPACA_BASE_URL: 'https://paper-api.alpaca.markets.evil.example',
+    } as NodeJS.ProcessEnv, load)).toEqual({ status: 'unconfigured' });
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('reads the paper account independently of the quote-data mode', async () => {
     const env = { ...configured, MARKET_DATA_MODE: 'bundled' } as NodeJS.ProcessEnv;
     expect(await loadAlpacaPaperView(parent, env, async () => snapshot))

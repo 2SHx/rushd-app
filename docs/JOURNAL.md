@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-16 — M17 shadow-paper foundation + automatic incubation scheduler 🔄
+Shipped: DR-11/QDR-8/M17 broker-neutral contract, explicit InternalSim-default broker config, exact-origin read-only Alpaca preflight, signed-cron idempotency tracer, fail-closed Sharia/cancel/read gates, legacy fan-out dark, and one weekday after-close Render ingest→incubate→evaluate job.
+Decisions: Alpaca is the first operational mirror and Render one-job cron is the commercial-safe low-cost path ($1/month minimum); InternalSim remains authoritative, daily profit is measurement only, generic routes cannot reach remote paper, and real money stays dark.
+Verify: focused changed scope 59/59 plus engine/host regressions 36/36, zero-key scope 36/36 twice, lint/TypeScript/diff-check green; live read-only preflight found ACTIVE but cash −$82,800.08, buying power $0, 6 unreconciled positions including a short, 0 open orders.
+Open: External submit/cleanup/schedule remains blocked—use a new clean dedicated paper account or explicitly authorize legacy liquidation, then implement the M17 durable shadow runner/caps/reconciliation and pass security before one ≤$100 smoke order; full suite is 1,771 pass / 4 unrelated fail (one DB-bound portfolio timeout, three academy/authz assertions).
+
 ## 2026-08-16 — M16 continual-improvement benchmark verifier ✅
 Shipped: DR-21 plus a Node-built-in paired benchmark verifier, two frozen G11 tracer cases, evaluator-pinned suite identity, exact DR-20 proposal resolution, provenance-bound scorecards, and canonical Git-bound QA attestations.
 Decisions: Lazy-dev rung 2/7 reused Git, Vitest, DR-20 canonicalization/checkpoints, and the existing dispatch evidence boundary; deterministic fixtures prove evaluator mechanics only, never model uplift, and every safety failure remains a hard veto.

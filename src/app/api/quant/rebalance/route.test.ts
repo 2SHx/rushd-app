@@ -33,10 +33,12 @@ function request(options: {
 
 describe('POST /api/quant/rebalance legacy cron', () => {
   const originalSecret = process.env.CRON_SECRET;
+  const originalLegacyEnabled = process.env.QUANT_LEGACY_REBALANCE_ENABLED;
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.CRON_SECRET = 'cron-secret';
+    process.env.QUANT_LEGACY_REBALANCE_ENABLED = '1';
     h.isHalted.mockResolvedValue(false);
     h.findStrategies.mockResolvedValue([
       { id: 'strategy-1', ownerUserId: 'user-1' },
@@ -52,6 +54,8 @@ describe('POST /api/quant/rebalance legacy cron', () => {
   afterEach(() => {
     if (originalSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = originalSecret;
+    if (originalLegacyEnabled === undefined) delete process.env.QUANT_LEGACY_REBALANCE_ENABLED;
+    else process.env.QUANT_LEGACY_REBALANCE_ENABLED = originalLegacyEnabled;
   });
 
   it('accepts a valid Bearer Authorization header', async () => {
@@ -62,10 +66,22 @@ describe('POST /api/quant/rebalance legacy cron', () => {
       where: {
         enabled: true,
         market: 'NASDAQ',
+        autonomyTier: 'AUTO_PAPER',
         owner: { tier: 'ULTRA' },
       },
     });
     expect(h.rebalance).toHaveBeenCalledWith('user-1', 'strategy-1', expect.any(Date));
+  });
+
+  it('keeps the legacy fan-out route dark by default', async () => {
+    delete process.env.QUANT_LEGACY_REBALANCE_ENABLED;
+
+    const response = await POST(request({ authorization: 'Bearer cron-secret' }));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'disabled' });
+    expect(h.findStrategies).not.toHaveBeenCalled();
+    expect(h.rebalance).not.toHaveBeenCalled();
   });
 
   it.each([

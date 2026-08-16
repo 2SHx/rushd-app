@@ -7,6 +7,19 @@ vi.mock('@/lib/prisma', () => ({
     backtestRun: { create: vi.fn() },
   },
 }));
+vi.mock('@/services/marketData', () => ({
+  registry: {
+    getScreener: () => ({
+      screen: async (symbol: string) => ({
+        symbol,
+        compliant: true,
+        standard: 'AAOIFI',
+        source: 'zoya',
+        asOf: new Date(),
+      }),
+    }),
+  },
+}));
 
 import { prisma } from '@/lib/prisma';
 import { simulate, runBacktest, buildBacktestContext, type BacktestBar } from './engine';
@@ -17,7 +30,7 @@ const D = Prisma.Decimal;
 const BASE = new Date('2026-01-01T00:00:00.000Z');
 const day = (i: number) => new Date(BASE.getTime() + i * 86_400_000);
 
-// MSFT is compliant under the mock Sharia screener (TSLA/META/AAPL are not) -> tradeable.
+// This unit injects a current, verified Zoya verdict; production mock verdicts fail closed.
 const SYMBOL = 'MSFT';
 
 function bars(n: number, priceAt: (i: number) => number): BacktestBar[] {

@@ -2,6 +2,7 @@ import type { SessionUser } from '@/lib/auth-credentials';
 import {
   ALPACA_PAPER_BASE_URL,
   AlpacaPaperBroker,
+  isExactAlpacaPaperBaseUrl,
   type AlpacaPaperPortfolioSnapshot,
 } from '@/quant/execution/alpacaPaper';
 
@@ -29,7 +30,7 @@ export async function loadAlpacaPaperView(
   if (!isAuthorizedViewer(user, env)) return { status: 'hidden' };
 
   const baseUrl = env.ALPACA_BASE_URL || ALPACA_PAPER_BASE_URL;
-  const isPaperUrl = baseUrl.includes('paper-api.alpaca.markets');
+  const isPaperUrl = isExactAlpacaPaperBaseUrl(baseUrl);
   const configured = !!env.ALPACA_API_KEY
     && !!env.ALPACA_API_SECRET
     && env.ALPACA_PAPER !== 'false'
