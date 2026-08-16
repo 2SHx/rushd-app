@@ -563,6 +563,7 @@
       "captureAnnotation": "Capture convexity is reported for transparency and is not a promotion criterion; the effect is too small to resolve inside a product horizon (measured: ≤44% power at 10.3 years).",
       "noEdgeDisclaimer": "An ACCEPTED_BETA result has not been shown to have an edge: it delivers market exposure within a declared volatility band, with bounded drawdown, no shortfall against its own delivered beta, and honest costs."
     },
+    "diversificationSurvivorshipDisclosure": "This basket comparison assumes no held name was suspended from trading during the measurement window. Trading-suspension history does not exist in any free data source and is not verified for this run. A suspended name's frozen price would understate that name's measured volatility and its correlation with the rest of its basket — and would do so more easily for the correlation-selected basket, which by construction holds the less liquid names. If this happened, the measured diversification and volatility-reduction figures on this card could be overstated in the treatment basket's favor.",
     "shariaStatus": "Sharia Status",
     "compliant": "Compliant",
     "nonCompliant": "Non-compliant",
