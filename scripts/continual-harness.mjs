@@ -165,7 +165,7 @@ function assertKnownFields(event) {
   if (unknown.length) throw new Error(`Unknown event fields: ${unknown.join(', ')}`);
 }
 
-function assertEventShape(event) {
+function assertEventShape(event, { allowOversizeProposal = false } = {}) {
   if (event.schemaVersion !== 1) throw new Error('schemaVersion must be 1');
   assertString(event.eventId, 'eventId', { identifier: true });
   assertString(event.lessonId, 'lessonId', { identifier: true });
@@ -175,7 +175,9 @@ function assertEventShape(event) {
   assertKnownFields(event);
   if (event.action === 'PROPOSE' || event.action === 'ADMIT') {
     assertString(event.text, 'text', { multiline: true });
-    if (Buffer.byteLength(event.text, 'utf8') > MAX_CONTEXT_BYTES) throw new Error('text exceeds the 4,000-byte lesson limit');
+    if (!allowOversizeProposal && Buffer.byteLength(event.text, 'utf8') > MAX_CONTEXT_BYTES) {
+      throw new Error('text exceeds the 4,000-byte lesson limit');
+    }
   }
   if (event.action === 'ADMIT') {
     if (!HASH_PATTERN.test(event.proposalHash)) throw new Error('proposalHash must be a SHA-256 hash');
@@ -205,7 +207,7 @@ function lessonKey(event) {
   return `${event.lessonId}\u0000${event.lessonVersion}`;
 }
 
-function evaluateLedger(events) {
+function evaluateLedger(events, { oversizedProposalHash = null } = {}) {
   if (!Array.isArray(events)) throw new Error('Ledger must be an array of events');
   const eventIds = new Set();
   const proposals = new Map();
@@ -220,7 +222,9 @@ function evaluateLedger(events) {
     if (!HASH_PATTERN.test(event.eventHash) || eventHash(event) !== event.eventHash) {
       throw new Error(`Ledger event hash failed at event ${index + 1}`);
     }
-    assertEventShape(event);
+    assertEventShape(event, {
+      allowOversizeProposal: event.action === 'PROPOSE' && event.eventHash === oversizedProposalHash,
+    });
     if (eventIds.has(event.eventId)) throw new Error(`Duplicate eventId: ${event.eventId}`);
     eventIds.add(event.eventId);
     const key = lessonKey(event);
@@ -346,21 +350,16 @@ function compareLessons(left, right) {
     || left.lessonVersion - right.lessonVersion;
 }
 
-/** Render the active, scoped, provenance-carrying projection, including its prompt delimiter. */
-export function renderContext({ events, role, path, taskTags }) {
-  assertString(role, 'role');
-  if (typeof path !== 'string') throw new Error('path must be a string');
-  if (!Array.isArray(taskTags) || taskTags.some((tag) => typeof tag !== 'string')) throw new Error('taskTags must be an array of strings');
-  const verifiedActive = evaluateLedger(events);
-  const queryPath = normalizedQueryPath(path);
-  if (queryPath === null || targetsKernel(queryPath)) return '';
-  const active = [...verifiedActive.values()]
+function scopedLessons(verifiedActive, role, queryPath, taskTags) {
+  return [...verifiedActive.values()]
     .filter((event) => dimensionMatches(event.roles, role, (value, query) => value === query))
     .filter((event) => dimensionMatches(event.paths, queryPath, pathMatches))
     .filter((event) => dimensionMatches(event.taskTags, taskTags, (value, query) => query.includes(value)))
     .sort(compareLessons);
-  if (active.length === 0) return '';
+}
 
+function renderLessons(active) {
+  if (active.length === 0) return '';
   const blocks = [];
   for (const event of active) {
     if (blocks.length === MAX_LESSONS) break;
@@ -369,6 +368,66 @@ export function renderContext({ events, role, path, taskTags }) {
     if (Buffer.byteLength(candidate, 'utf8') <= MAX_CONTEXT_BYTES) blocks.push(block);
   }
   return blocks.length ? `${CONTEXT_OPEN}\n${blocks.join('\n\n')}${CONTEXT_CLOSE}` : '';
+}
+
+/** Render the active, scoped, provenance-carrying projection, including its prompt delimiter. */
+export function renderContext({ events, role, path, taskTags }) {
+  assertString(role, 'role');
+  if (typeof path !== 'string') throw new Error('path must be a string');
+  if (!Array.isArray(taskTags) || taskTags.some((tag) => typeof tag !== 'string')) throw new Error('taskTags must be an array of strings');
+  const verifiedActive = evaluateLedger(events);
+  const queryPath = normalizedQueryPath(path);
+  if (queryPath === null || targetsKernel(queryPath)) return '';
+  return renderLessons(scopedLessons(verifiedActive, role, queryPath, taskTags));
+}
+
+/** Render one verified, scoped PROPOSE as an escaped evaluation-only overlay without changing the ledger. */
+export function renderProposedContext({
+  events,
+  proposalHash,
+  lessonId,
+  lessonVersion,
+  role,
+  path,
+  taskTags,
+}) {
+  assertString(role, 'role');
+  if (typeof path !== 'string') throw new Error('path must be a string');
+  if (!Array.isArray(taskTags) || taskTags.some((tag) => typeof tag !== 'string')) {
+    throw new Error('taskTags must be an array of strings');
+  }
+  const verifiedActive = evaluateLedger(events, { oversizedProposalHash: proposalHash });
+  const proposed = events.find((event) => event?.eventHash === proposalHash);
+  if (!proposed) throw new Error('No exact proposal hash exists in the verified ledger');
+  if (proposed.action !== 'PROPOSE') throw new Error('Candidate hash must reference the exact PROPOSE event action');
+  if (proposed.lessonId !== lessonId || proposed.lessonVersion !== lessonVersion) {
+    throw new Error('Candidate lesson id/version does not match the exact proposal');
+  }
+  const queryPath = normalizedQueryPath(path);
+  if (queryPath === null || targetsKernel(queryPath)) return '';
+  if (!dimensionMatches(proposed.roles, role, (value, query) => value === query)
+    || !dimensionMatches(proposed.paths, queryPath, pathMatches)
+    || !dimensionMatches(proposed.taskTags, taskTags, (value, query) => query.includes(value))) return '';
+
+  const active = scopedLessons(verifiedActive, role, queryPath, taskTags);
+  if (active.length >= MAX_LESSONS) throw new Error('Proposed candidate exceeds the combined lesson bound');
+  const baseline = renderLessons(active);
+  const available = MAX_CONTEXT_BYTES - Buffer.byteLength(baseline, 'utf8') - (baseline ? 1 : 0);
+  const open = '<continual-benchmark-candidate>\n';
+  const prefix = `status: UNADMITTED\nproposal: ${xmlEscape(proposed.eventHash)}\nproposedBy: ${xmlEscape(proposed.proposedBy)}\nlesson: `;
+  const close = '\n</continual-benchmark-candidate>';
+  const fixedBytes = Buffer.byteLength(`${open}${prefix}${close}`, 'utf8');
+  if (fixedBytes > available) throw new Error('Proposed candidate does not fit the combined context bound');
+  const escapedText = xmlEscape(proposed.text);
+  let boundedText = '';
+  let used = 0;
+  for (const character of escapedText) {
+    const bytes = Buffer.byteLength(character, 'utf8');
+    if (used + bytes > available - fixedBytes) break;
+    boundedText += character;
+    used += bytes;
+  }
+  return `${open}${prefix}${boundedText}${close}`;
 }
 
 function readLedger(path, allowMissing = false) {

@@ -57,6 +57,17 @@ export function commandDigest(command) {
   return sha256(command);
 }
 
+export function parseBenchmarkCommand(command) {
+  if (command === 'npx tsc --noEmit') return ['npx', 'tsc', '--noEmit'];
+  if (typeof command !== 'string' || /[\u0000-\u001f\u007f]/.test(command)) {
+    throw new Error('Benchmark command is outside the exact allowed argv grammar');
+  }
+  const match = /^npx vitest run ((?!-)[A-Za-z0-9._@/+\[\]-]+\.test\.ts)$/.exec(command);
+  if (!match) throw new Error('Benchmark command is outside the exact allowed argv grammar');
+  assertRelativeFile(match[1], 'Benchmark test path');
+  return ['npx', 'vitest', 'run', match[1]];
+}
+
 export function hashCase(benchmarkCase) {
   assertObject(benchmarkCase, 'Benchmark case');
   const { caseHash: _caseHash, ...content } = benchmarkCase;
@@ -93,6 +104,40 @@ export function scoreEpisode(rubric, passedRubricIds) {
   }
   const totalWeight = [...weights.values()].reduce((sum, weight) => sum + weight, 0);
   return (100 * passedWeight) / totalWeight;
+}
+
+export function evaluateEpisodeOutcome(input) {
+  const failed = (failureCode) => ({ passedRubricIds: [], score: 0, failureCode });
+  try {
+    assertObject(input, 'Episode outcome input');
+    assertExactFields(input, [
+      'dispatchFailureCode', 'patch', 'changedPaths', 'allowedChangedPaths',
+      'acceptanceExitStatuses', 'safetyExitStatuses', 'rubricIds',
+    ], 'Episode outcome input');
+    if (![null, 'DISPATCH_ERROR', 'TIMEOUT'].includes(input.dispatchFailureCode)) throw new Error('dispatch failure');
+    if (typeof input.patch !== 'string') throw new Error('patch');
+    for (const field of ['changedPaths', 'allowedChangedPaths']) {
+      if (!Array.isArray(input[field]) || input[field].length === 0) throw new Error(field);
+      for (const path of input[field]) assertRelativeFile(path, field);
+      if (new Set(input[field]).size !== input[field].length) throw new Error(field);
+    }
+    for (const field of ['acceptanceExitStatuses', 'safetyExitStatuses']) {
+      if (!Array.isArray(input[field]) || input[field].length === 0
+        || input[field].some((status) => !Number.isInteger(status) || status < 0)) throw new Error(field);
+    }
+    assertStringArray(input.rubricIds, 'rubricIds');
+    for (const rubricId of input.rubricIds) assertIdentifier(rubricId, 'rubricId');
+  } catch {
+    return failed('EVIDENCE_INVALID');
+  }
+  if (input.dispatchFailureCode) return failed(input.dispatchFailureCode);
+  if (input.patch.trim() === '') return failed('NO_ARTIFACT');
+  if (input.changedPaths.some((path) => !input.allowedChangedPaths.includes(path))) {
+    return failed('SCOPE_VIOLATION');
+  }
+  if (input.acceptanceExitStatuses.some((status) => status !== 0)) return failed('ACCEPTANCE_FAIL');
+  if (input.safetyExitStatuses.some((status) => status !== 0)) return failed('SAFETY_FAIL');
+  return { passedRubricIds: [...input.rubricIds], score: 100, failureCode: 'NONE' };
 }
 
 export function scorecardSubjectHash(scorecard) {
