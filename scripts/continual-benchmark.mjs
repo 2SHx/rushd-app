@@ -95,6 +95,39 @@ export function scoreEpisode(rubric, passedRubricIds) {
   return (100 * passedWeight) / totalWeight;
 }
 
+export function scorecardSubjectHash(scorecard) {
+  assertObject(scorecard, 'Scorecard');
+  const { reviewedBy: _reviewedBy, reviewArtifact: _reviewArtifact, ...subject } = scorecard;
+  return sha256(canonicalize(subject));
+}
+
+export function verifyReviewArtifact(scorecard, artifactBytes) {
+  if (typeof artifactBytes !== 'string' && !Buffer.isBuffer(artifactBytes)) {
+    throw new Error('Review artifact bytes must be a string or Buffer');
+  }
+  const text = Buffer.isBuffer(artifactBytes) ? artifactBytes.toString('utf8') : artifactBytes;
+  let artifact;
+  try { artifact = JSON.parse(text); }
+  catch { throw new Error('Review artifact must contain valid canonical JSON'); }
+  assertObject(artifact, 'Review artifact');
+  assertExactFields(
+    artifact,
+    ['schemaVersion', 'runId', 'scorecardSubjectHash', 'verdict', 'reviewedBy'],
+    'Review artifact',
+  );
+  if (canonicalize(artifact) !== text) throw new Error('Review artifact bytes must be canonical JSON');
+  if (artifact.schemaVersion !== 1) throw new Error('Review artifact schemaVersion must be 1');
+  if (artifact.runId !== scorecard.runId) throw new Error('Review artifact runId does not match the scorecard');
+  assertHash(artifact.scorecardSubjectHash, 'Review artifact subject hash');
+  if (artifact.scorecardSubjectHash !== scorecardSubjectHash(scorecard)) {
+    throw new Error('Review artifact subject hash does not match the scorecard');
+  }
+  if (artifact.verdict !== 'PASS') throw new Error('Review artifact verdict must be PASS');
+  if (artifact.reviewedBy !== scorecard.reviewedBy) throw new Error('Review artifact reviewer does not match the scorecard');
+  assertIdentifier(artifact.reviewedBy, 'Review artifact reviewer');
+  return true;
+}
+
 function assertObject(value, field) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || Object.getPrototypeOf(value) !== Object.prototype) throw new Error(`${field} must be an object`);
@@ -438,6 +471,7 @@ export function verifyScorecard(scorecard, manifest, cases, context) {
     throw new Error('Episode dispatch environment must be identical');
   }
   assertComparison(scorecard.comparison, scorecard, manifest, cases, scorecard.episodes);
+  verifyReviewArtifact(scorecard, reviewBytes);
   return true;
 }
 
