@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { collectSignals } from './collect';
 import type { Analyst, AnalystSignal, AgentKind } from '../types';
 import type { PointInTimeContext } from '../data/pointInTime';
@@ -91,5 +91,23 @@ describe('collectSignals', () => {
     expect(result.symbol).toBe(ctx.symbol);
     expect(result.market).toBe(ctx.market);
     expect(result.asOf).toBe(ctx.asOf);
+  });
+});
+
+describe('collectSignals — default (no gate override) stays PERMISSIVE (keyless analysis path)', () => {
+  beforeEach(() => {
+    // Keyless: no real Sharia source configured, so registry.getScreener() -> MockScreener
+    // (source 'mock'). Callers that never override `gate` are direct/analysis callers (e.g.
+    // backtest/engine.ts) — they must still get a usable, BUY-eligible verdict.
+    vi.stubEnv('ZOYA_API_KEY', '');
+    vi.stubEnv('SHARIA_SOURCE', '');
+    vi.stubEnv('MARKET_DATA_MODE', 'bundled');
+  });
+
+  it('a pure analysis call with no execution intent still returns a BUY-eligible gate keyless', async () => {
+    const result = await collectSignals(fakeCtx(), { analysts: [okAnalyst('QUANT_CORE')] });
+    expect(result.shariaGate.compliant).toBe(true);
+    expect(result.shariaGate.reason).toBe('unverified_source_permissive');
+    expect(result.tradeable).toBe(true);
   });
 });

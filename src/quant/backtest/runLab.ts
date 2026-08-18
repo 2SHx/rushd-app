@@ -69,6 +69,16 @@ import {
   type HalalResidualFastMomentumCoreParams,
 } from '../strategies/halalResidualFastMomentumCore';
 import {
+  HALAL_FAST_MOMENTUM_CASH_CORE_ID,
+  halalFastMomentumCashCoreBookPolicy,
+  type HalalFastMomentumCashCoreParams,
+} from '../strategies/halalFastMomentumCashCore';
+import {
+  HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
+  halalStoppedFastMomentumCoreBookPolicy,
+  type HalalStoppedFastMomentumCoreParams,
+} from '../strategies/halalStoppedFastMomentumCore';
+import {
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE,
   HALAL_SPUS_FORWARD_START,
@@ -216,6 +226,8 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
+  HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
+  HALAL_FAST_MOMENTUM_CASH_CORE_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
 ]);
 
@@ -241,6 +253,9 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
+  HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
+  // QDR-15 allocation-transport lane: inherits the baseline's audited C1 sleeve unchanged.
+  HALAL_FAST_MOMENTUM_CASH_CORE_ID,
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -282,6 +297,12 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   ['halal-momentum-markowitz-core', 60],
   ['halal-trend-rider-core', 60],
   ['halal-fast-momentum-core', 60],
+  // ISOLATED catastrophic-stop A/B on `halal-fast-momentum-core`: the stop is the ONLY new variable,
+  // so the ranking-pool breadth MUST equal the baseline's 60 — a different sleeve size is a confound.
+  [HALAL_STOPPED_FAST_MOMENTUM_CORE_ID, 60],
+  // ISOLATED ALLOCATION transport of `halal-fast-momentum-core`: the book share is the ONLY new
+  // variable, so the ranking-pool breadth MUST equal the baseline's 60 — anything else is a confound.
+  [HALAL_FAST_MOMENTUM_CASH_CORE_ID, 60],
 ]);
 
 /**
@@ -340,6 +361,80 @@ export interface ValidationReturnInputs {
   riskReturns: number[];
   permutationReturns: number[];
   observationUnit: 'book-day' | 'five-session-book' | 'trade';
+  /**
+   * Present ONLY when the sealed manifest declares a BOOTSTRAP observation unit that differs from
+   * the risk/inference unit above (`validation.bootstrapObservationUnit`). A lane may legitimately
+   * seal its Sharpe/DSR on non-overlapping five-session book returns while sealing its Monte-Carlo
+   * drawdown breaker on book-DAY moving blocks; feeding one unit's series to the other's gate is the
+   * exact defect this module's unit routing exists to prevent. Absent for every other lane, so the
+   * returned object is byte-identical to its pre-QDR-15 shape wherever no such split is declared.
+   */
+  bootstrapBookDayReturns?: number[];
+}
+
+/**
+ * The one non-default statistical observation unit this lab implements, spelled in the EXACT
+ * vocabulary a sealed manifest's `config.validation.observationUnit` uses.
+ *
+ * Routing used to be keyed to a single hardcoded setup id, so a second lane that sealed this unit
+ * silently fell through to the per-route default (book-day / trade) and would have measured — and
+ * gated on — a different quantity than it preregistered. The unit is now read FROM the hash-verified
+ * sealed manifest (`RunLabOptions.gateConfig`, set by `assertFrozenCliConfig` only after the run is
+ * proven to match the sealed config hash), which is the only place the declaration is authoritative.
+ *
+ * `LEGACY_FIVE_SESSION_UNIT_SETUP_IDS` is NOT a second registry to grow: it pins the pre-existing
+ * id-keyed behavior so `halal-spus-vol-managed-beta` — whose forward window is already open —
+ * resolves byte-identically with or without a manifest, including in the many call sites and tests
+ * that pass no gate config. New lanes declare their unit in the manifest and are never added here.
+ */
+export const FIVE_SESSION_BOOK_OBSERVATION_UNIT = 'non-overlapping-five-session-book-return';
+
+const LEGACY_FIVE_SESSION_UNIT_SETUP_IDS: ReadonlySet<string> = new Set([
+  HALAL_SPUS_VOL_MANAGED_BETA_ID,
+]);
+
+/**
+ * Resolve the frozen inference unit for a run. Returns `null` for "no non-default unit declared",
+ * which leaves every existing per-route default (trade for legacy, book-day for a shared book,
+ * active book-month for the monthly cross-sectional lanes) exactly as it was.
+ *
+ * Fail-closed: a manifest that declares a unit this lab does NOT implement throws rather than being
+ * silently ignored, because silently ignoring it is precisely how a lane ends up gated in the wrong
+ * unit. No sealed manifest today declares anything other than the five-session unit.
+ */
+export function resolveObservationUnit(
+  setupId: string,
+  gateConfig?: unknown,
+): typeof FIVE_SESSION_BOOK_OBSERVATION_UNIT | null {
+  const declared = (gateConfig as { observationUnit?: unknown } | null | undefined)?.observationUnit;
+  if (declared !== undefined && declared !== FIVE_SESSION_BOOK_OBSERVATION_UNIT) {
+    throw new Error(
+      `${setupId} declares observationUnit "${String(declared)}", which this lab does not implement; `
+      + `the only non-default unit wired to the metrics/DSR path is "${FIVE_SESSION_BOOK_OBSERVATION_UNIT}"`,
+    );
+  }
+  return declared === FIVE_SESSION_BOOK_OBSERVATION_UNIT || LEGACY_FIVE_SESSION_UNIT_SETUP_IDS.has(setupId)
+    ? FIVE_SESSION_BOOK_OBSERVATION_UNIT
+    : null;
+}
+
+/** True when the sealed manifest keeps its Monte-Carlo bootstrap on book-DAY moving blocks. */
+function declaresBookDayBootstrap(gateConfig?: unknown): boolean {
+  return (gateConfig as { bootstrapObservationUnit?: unknown } | null | undefined)
+    ?.bootstrapObservationUnit === 'book-day';
+}
+
+function requiresBootstrapDisclosure(gateConfig?: unknown): boolean {
+  return typeof (gateConfig as { bootstrapDisclosureRequired?: unknown } | null | undefined)
+    ?.bootstrapDisclosureRequired === 'string';
+}
+
+/** Close-to-close NAV returns: the default shared-book observation unit. */
+function bookDayReturns(curve: readonly EquityPoint[]): number[] {
+  return curve.slice(1).map((point, index) => {
+    const previous = curve[index].equity;
+    return previous !== 0 ? point.equity / previous - 1 : 0;
+  });
 }
 
 /** Keep daily CAGR/maxDD, but make Sharpe/DSR/hit-rate use the candidate's frozen 5-session unit. */
@@ -347,9 +442,10 @@ export function metricsForSetup(
   setupId: string,
   curve: EquityPoint[],
   opts: { trades: number; turnover: number; annualization: 'fixed' | 'calendar'; trials: number },
+  gateConfig?: unknown,
 ): BacktestMetrics {
   const headline = computeMetrics(curve, opts);
-  if (setupId !== HALAL_SPUS_VOL_MANAGED_BETA_ID) return headline;
+  if (resolveObservationUnit(setupId, gateConfig) !== FIVE_SESSION_BOOK_OBSERVATION_UNIT) return headline;
   const inference = computeMetrics(fiveSessionMetricCurve(curve), {
     ...opts,
     annualization: 'fixed',
@@ -370,20 +466,25 @@ export function validationReturnInputs(
   sharedCurve: readonly EquityPoint[] | null,
   tradeReturns: number[],
   setupId?: string,
+  gateConfig?: unknown,
 ): ValidationReturnInputs {
   if (route === 'legacy') {
     return { riskReturns: tradeReturns, permutationReturns: tradeReturns, observationUnit: 'trade' };
   }
   if (!sharedCurve) throw new Error('Shared validation requires the shared daily NAV curve');
-  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+  if (resolveObservationUnit(setupId ?? '', gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT) {
     const riskReturns = nonOverlappingFiveSessionBookReturns(sharedCurve);
-    return { riskReturns, permutationReturns: riskReturns, observationUnit: 'five-session-book' };
+    return {
+      riskReturns, permutationReturns: riskReturns, observationUnit: 'five-session-book',
+      // Only when the SAME sealed block also pins the bootstrap to book-days (see the field doc).
+      ...(declaresBookDayBootstrap(gateConfig)
+        ? { bootstrapBookDayReturns: bookDayReturns(sharedCurve) }
+        : {}),
+    };
   }
-  const riskReturns = sharedCurve.slice(1).map((point, index) => {
-    const previous = sharedCurve[index].equity;
-    return previous !== 0 ? point.equity / previous - 1 : 0;
-  });
-  return { riskReturns, permutationReturns: tradeReturns, observationUnit: 'book-day' };
+  return {
+    riskReturns: bookDayReturns(sharedCurve), permutationReturns: tradeReturns, observationUnit: 'book-day',
+  };
 }
 
 /**
@@ -628,6 +729,12 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === 'halal-residual-fast-momentum-core') {
     return halalResidualFastMomentumCoreBookPolicy(params as HalalResidualFastMomentumCoreParams | undefined);
+  }
+  if (setupId === HALAL_STOPPED_FAST_MOMENTUM_CORE_ID) {
+    return halalStoppedFastMomentumCoreBookPolicy(params as HalalStoppedFastMomentumCoreParams | undefined);
+  }
+  if (setupId === HALAL_FAST_MOMENTUM_CASH_CORE_ID) {
+    return halalFastMomentumCashCoreBookPolicy(params as HalalFastMomentumCashCoreParams | undefined);
   }
   if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
     return halalSpusVolManagedBetaBookPolicy(params as HalalSpusVolManagedBetaParams | undefined);
@@ -1855,7 +1962,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     trades: sortedTrades.length, turnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
     trials: validationTrials,
-  });
+  }, options.gateConfig);
   const oosStart = Math.floor(curve.length * (1 - oosFraction));
   const oosTrades = sharedDailyCurve
     ? sortedTrades.filter((trade) => trade.exitTs >= curve[oosStart].ts).length
@@ -1867,7 +1974,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     trades: oosTrades, turnover: oosTurnover,
     annualization: sharedDailyCurve ? 'fixed' : 'calendar',
     trials: validationTrials,
-  });
+  }, options.gateConfig);
 
   // Persist a truthful, compact learning comparison when both real ETF benchmark histories exist.
   // Legacy/missing data remains null; the UI must never synthesize a replacement curve.
@@ -1908,15 +2015,30 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   }
 
   const distribution = summarizeDailyReturns(pooledDailyReturns);
-  const validationReturns = validationReturnInputs(dailyRoute, sharedDailyCurve, validationTradeReturns, setupId);
-  if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
+  const validationReturns = validationReturnInputs(
+    dailyRoute, sharedDailyCurve, validationTradeReturns, setupId, options.gateConfig,
+  );
+  if (validationReturns.observationUnit === 'five-session-book'
     && validationReturns.riskReturns.length < 100) {
-    throw new Error(`${HALAL_SPUS_VOL_MANAGED_BETA_ID} requires 100 non-overlapping five-session book returns`);
+    throw new Error(`${setupId} requires 100 non-overlapping five-session book returns`);
   }
-  const bootstrap = bootstrapTradeOutcomes(validationReturns.riskReturns, {
+  // The DRAWDOWN breaker is bootstrapped in whatever unit the manifest sealed it in, which is not
+  // always the risk/DSR unit; `bootstrapBookDayReturns` is set only where the two were sealed apart.
+  const bootstrapReturns = validationReturns.bootstrapBookDayReturns ?? validationReturns.riskReturns;
+  const bootstrapUnit = validationReturns.bootstrapBookDayReturns
+    || validationReturns.observationUnit === 'book-day'
+    ? ({ observationUnit: 'book-day' as const })
+    : {};
+  const bootstrap = bootstrapTradeOutcomes(bootstrapReturns, {
     resamples: 1000, seed, startEquity: Number(startingCash),
-    ...(validationReturns.observationUnit === 'book-day' ? { observationUnit: 'book-day' as const } : {}),
+    ...bootstrapUnit,
   });
+  const bootstrapDisclosure = requiresBootstrapDisclosure(options.gateConfig)
+    ? bootstrapTradeOutcomes(bootstrapReturns, {
+      resamples: 1000, seed, startEquity: Number(startingCash),
+      observationUnit: 'book-day', blockLength: 1,
+    })
+    : undefined;
   const permutation = signFlipPermutationTest(validationReturns.permutationReturns, { permutations: 1000, seed });
   const tomExposureBlocks = setupId === 'tom-overlay' && sharedBookResult
     ? exposureReturnBlocks(sharedBookResult.daily)
@@ -1997,7 +2119,10 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       );
     }
     const neighborhood = setup.plateauNeighborhood(params);
-    const centerExpectancy = setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID
+    // The plateau must be measured in the SAME unit the lane sealed, or a "plateau" in per-trade
+    // expectancy would be reported for a book whose gate reads five-session book returns.
+    const fiveSessionUnit = resolveObservationUnit(setupId, options.gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT;
+    const centerExpectancy = fiveSessionUnit
       ? meanOosFiveSessionBookReturn(sharedDailyCurve ?? [], oosFraction)
       : oosMeanTradeReturn([...validationTradeRecords]);
     const neighborResults: PlateauNeighborResult[] = [];
@@ -2013,7 +2138,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           replayScope: sharedReplayScope,
           policy: strategyBookPolicyForSetup(setupId, variant.params),
         });
-        if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
+        if (fiveSessionUnit) {
           variantFiveSessionExpectancy = meanOosFiveSessionBookReturn(
             sim.daily.map((point) => ({ ts: point.ts, equity: Number(point.nav.toString()) })),
             oosFraction,
@@ -2171,7 +2296,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       productClass, ...(betaEvidence ? { betaEvidence } : {}),
       ...(diversificationEvidence ? { diversificationEvidence } : {}),
       ...(predictedBreakerFailure ? { predictedBreakerFailure } : {}),
-      full, oos, distribution, bootstrap, permutation,
+      full, oos, distribution, bootstrap,
+      ...(bootstrapDisclosure ? { bootstrapDisclosure } : {}),
+      permutation,
       kellyFraction: kelly.kellyFraction, kellyClampedQty: Number(kelly.envelope.qty.toString()),
       oosFraction, drawdownBreakerPct: DEFAULT_INTRADAY_LIMITS.drawdownHaltPct,
       shariaState, walkForward, profitPlateau,

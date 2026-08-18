@@ -200,14 +200,14 @@ describe('halal-residual-fast-momentum-core v1 setup', () => {
     expect(plateau.neighbors.map(({ label }) => label)).toContain('momentumDays=84|betaLookbackDays=168');
   });
 
-  it('is cataloged on shared C1/max60 policy with 9 local and 99 family trials', () => {
+  it('is cataloged on shared C1/max60 policy with 9 local and 117 family trials', () => {
     expect(STRATEGY_SETUP_CATALOG['halal-residual-fast-momentum-core']).toBe(halalResidualFastMomentumCoreSetup);
     expect(selectDailyBacktestRoute('halal-residual-fast-momentum-core')).toBe('shared');
     expect(strategyBookPolicyForSetup('halal-residual-fast-momentum-core', undefined))
       .toEqual(halalResidualFastMomentumCoreBookPolicy());
     expect(validationTrialsForSetup('halal-residual-fast-momentum-core', HALAL_RESIDUAL_FAST_MOMENTUM_CORE_V1)).toBe(9);
     expect(trialCountEvidence('halal-residual-fast-momentum-core', 9)).toMatchObject({
-      familyTrials: 99, relatedSetups: 11,
+      familyTrials: 117, relatedSetups: 13,
     });
   });
 });

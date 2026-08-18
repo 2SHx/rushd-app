@@ -152,6 +152,13 @@ export const PIT_MEMBERSHIP_REQUIRED_SETUP_IDS = Object.freeze([
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
+  // QDR-14: the catastrophic-stop A/B inherits the baseline's audited C1 sleeve and therefore its
+  // fence. Omitting this id would silently relax the survivorship fence for a NEW lane, which is the
+  // exact failure the allowlist exists to prevent.
+  'halal-stopped-fast-momentum-core',
+  // QDR-15: the allocation-transport lane runs the SAME frozen engine over the SAME audited C1
+  // sleeve. Only the book share changes, so it inherits the survivorship fence unchanged.
+  'halal-fast-momentum-cash-core',
 ] as const);
 
 const PIT_MEMBERSHIP_REQUIRED_SET: ReadonlySet<string> = new Set(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS);

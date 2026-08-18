@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-stopped-fast-momentum-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-stopped-fast-momentum-core",
+    "from": "2018-01-02",
+    "to": "2026-07-10",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db",
+    "market": "NASDAQ",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-fast-momentum-core@v1",
+    "comparatorRunId": "218716ac-f692-4f0f-91f3-81045a159a62",
+    "comparatorGitSha": "000dea1",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "validationTrials": 9,
+      "stopLossPct": 0.2,
+      "stopReference": "engine_average_entry_cost_basis",
+      "stopEvaluation": "non_week_end_completed_session_close_only",
+      "stopFill": "next_session_open",
+      "stopFreedCash": "idle_non_interest_bearing_until_next_iso_week_end",
+      "stopReentryCooldownDays": 0
+    },
+    "plateau": {
+      "axes": ["lookbackDays", "stopLossPct"],
+      "grid": { "lookbackDays": [42, 63, 84], "stopLossPct": [0.15, 0.2, 0.25] },
+      "center": { "lookbackDays": 63, "stopLossPct": 0.2 },
+      "trials": 9
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "selected after inspecting halal-fast-momentum-core's terminal card; historical replay of already-inspected 2018-2026 data fails QDR-9 conditions (b), (d) and (e)",
+      "familyTrialsAfterRegistration": 108,
+      "addedTrials": 9
+    },
+    "predictions": {
+      "oosCagrPct": { "baseline": 105.92, "point": 88.0, "interval": [75.0, 105.0], "direction": "DOWN" },
+      "mcBookDayP95DrawdownPct": { "baseline": 68.4, "point": 58.0, "interval": [52.0, 62.0], "direction": "DOWN" },
+      "oosDeflatedSharpe": { "baseline": 0.874, "interval": [0.83, 0.92], "direction": "FLAT_OR_UP" },
+      "tradesFull": { "baseline": 1390, "interval": [1600, 2300], "direction": "UP" },
+      "exchangeRateCagrPpPerTailPp": { "predicted": 1.73, "comparatorRealized": 1.803, "direction": "BETTER_THAN_COMPARATOR" },
+      "expectedVerdict": "REJECTED (DSR_FAILURE + DRAWDOWN_RISK_FAILURE + NO_PROFIT_PLATEAU_OVERFIT predicted to persist); this experiment measures an exchange rate, it does not claim promotion"
+    },
+    "falsification": {
+      "confirmedRequiresAll": [
+        "deltaMcP95 <= -5.0pp",
+        "cagrPpCostPerTailPp <= 1.803",
+        "oosCagr >= 69.66pct"
+      ],
+      "falsifiedIfAny": [
+        "F1: MC book-day p95 DD > 63.40pct (tail not cut by >= 5.0pp)",
+        "F2: deltaOosCagrPp / deltaMcP95Pp > 1.803 (worse exchange rate than halal-managed-momentum-core)",
+        "F3: OOS CAGR < 69.66pct (velocity edge destroyed below the concentrated baseline)",
+        "F4: MC book-day p95 DD >= 68.40pct (tail unchanged or worse; whipsaw channel dominates)"
+      ]
+    },
+    "terminalFence": {
+      "pitMembershipRequired": true,
+      "status": "BLOCKED",
+      "note": "QDR-14: the id must be added to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS at implementation time. Historical membership, lifecycle/delisting and independent per-name Sharia evidence do not exist, so any run of this version is unverified-diagnostic-only and cannot produce a terminal card."
+    }
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
+  "diagnosticRuns": 3,
+  "fullRun": null,
+  "terminal": null
+}

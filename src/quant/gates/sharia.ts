@@ -49,10 +49,20 @@ export function isRealShariaSourceConfigured(): boolean {
   return false;
 }
 
+// STRICT (default) is the money-moving/track-record posture: an unverified-source or
+// stale-evidence "compliant" verdict is rewritten to non-compliant (the 66451d3 intent).
+// PERMISSIVE is the analysis posture (committee demo/dev, backtest research): the same
+// verdict is honored so keyless/mock mode still produces BUY signals, but `reason` keeps
+// the unverified/stale status visible in the returned gate — never silently relabels a
+// mock verdict as verified. Every execution- or shadow-paper-adjacent caller MUST pass
+// 'strict' explicitly; callers that pass nothing get 'strict' by default (fail-safe).
+export type ShariaGateMode = 'strict' | 'permissive';
+
 export async function evaluateShariaGate(
   symbol: string,
   market: Market,
   screener: ShariaScreener = registry.getScreener(),
+  mode: ShariaGateMode = 'strict',
 ): Promise<ShariaGate> {
   try {
     const verdict = await screener.screen(symbol, market as 'TASI' | 'NASDAQ');
@@ -66,11 +76,18 @@ export async function evaluateShariaGate(
       !VERIFIED_EXECUTION_SOURCES.has(verdict.source)
       || !hasCurrentEvidence(verdict.asOf)
     )) {
+      const stale = VERIFIED_EXECUTION_SOURCES.has(verdict.source);
+      if (mode === 'strict') {
+        return {
+          compliant: false,
+          reason: stale ? 'stale_evidence_fail_closed' : 'unverified_source_fail_closed',
+          standard: verdict.standard,
+          source: verdict.source,
+        };
+      }
       return {
-        compliant: false,
-        reason: VERIFIED_EXECUTION_SOURCES.has(verdict.source)
-          ? 'stale_evidence_fail_closed'
-          : 'unverified_source_fail_closed',
+        compliant: true,
+        reason: stale ? 'stale_evidence_permissive' : 'unverified_source_permissive',
         standard: verdict.standard,
         source: verdict.source,
       };

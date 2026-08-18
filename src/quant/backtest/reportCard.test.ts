@@ -78,11 +78,33 @@ describe('terminal validation report card', () => {
     expect(rendered).not.toContain('120 trades/path');
   });
 
+  it('prints the QDR-16 IID disclosure without letting it affect the binding drawdown gate', () => {
+    const binding = {
+      ...bootstrap,
+      observationUnit: 'book-day' as const,
+      method: 'moving-block' as const,
+      blockLength: 20,
+      maxDrawdown: { p5: 0.1, p50: 0.2, p95: 0.29 },
+    };
+    const disclosure = {
+      ...binding,
+      blockLength: 1,
+      maxDrawdown: { p5: 0.2, p50: 0.3, p95: 0.45 },
+    };
+    const card = assembleReportCard(args({ bootstrap: binding, bootstrapDisclosure: disclosure }));
+    const rendered = renderReportCard(card, false);
+
+    expect(card.checklist.mcMaxDDWithinBreaker).toBe(true);
+    expect(card.rejectionReasonCodes).not.toContain('DRAWDOWN_RISK_FAILURE');
+    expect(rendered).toContain('Non-binding IID p95: 45.00%');
+    expect(rendered).toContain('no gate effect');
+  });
+
   it('reports the family-wide DSR trial count separately from the local plateau', () => {
     const trialCount = trialCountEvidence('halal-fast-momentum-core', 9);
     const rendered = renderReportCard(assembleReportCard(args({ trialCount })), false);
 
-    expect(rendered).toContain('DSR trial count:      99 family-wide (9 local plateau');
+    expect(rendered).toContain('DSR trial count:      117 family-wide (9 local plateau');
     expect(rendered).toContain('DSR trial tier:       EXPLORATORY (fail-closed) — unproved: SEALED_CONFIG_HASH_VERIFIED');
   });
 

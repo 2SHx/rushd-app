@@ -228,6 +228,38 @@ export function assertRunConfigPairedWithGate(manifest: ExperimentManifest): voi
 }
 
 /**
+ * QDR-16: a confirmatory claim must bind its terminal calendar window inside the sealed hash.
+ * Exploratory manifests keep their historical behavior; a present CONFIRMATORY declaration fails
+ * closed unless the runnable config carries one literal, ordered from/to pair and the evidence
+ * boundary names that same start date.
+ */
+export function assertConfirmatoryWindowSealed(manifest: ExperimentManifest): void {
+  const root = isPlainObject(manifest.config) ? manifest.config : null;
+  const validation = root && isPlainObject(root.validation) ? root.validation : null;
+  if (validation?.trialTier !== 'CONFIRMATORY') return;
+
+  const runConfig = root && isPlainObject(root.runConfig) ? root.runConfig : null;
+  const from = runConfig?.from;
+  const to = runConfig?.to;
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (typeof from !== 'string' || typeof to !== 'string'
+    || !datePattern.test(from) || !datePattern.test(to) || from >= to) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: CONFIRMATORY config.runConfig `
+      + 'requires literal YYYY-MM-DD from/to values with from < to; unresolved sentinels and floating '
+      + 'period windows are refused');
+  }
+  if (Object.prototype.hasOwnProperty.call(runConfig, 'period')) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: CONFIRMATORY config.runConfig.period `
+      + 'is forbidden; the explicit calendar from/to pair must be sealed inside configHash');
+  }
+  const expectedBoundary = `forward-only-after-${from}T00:00:00.000Z`;
+  if (root?.evidenceBoundary !== expectedBoundary) {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: CONFIRMATORY evidenceBoundary must `
+      + `equal ${JSON.stringify(expectedBoundary)}`);
+  }
+}
+
+/**
  * QDR-10: the terminal label must match the class sealed into the config. A BETA version can never
  * emit a bare 'ACCEPTED'/'REJECTED', and an ALPHA version can never borrow a BETA label to soften a
  * verdict. Class is read from the sealed config (absent ⇒ ALPHA), so this is hash-anchored.
@@ -330,6 +362,7 @@ export function sealExperiment(
   assertState(manifest, 'DRAFT');
   assertGateFeasibleAtSeal(manifest);
   assertRunConfigPairedWithGate(manifest);
+  assertConfirmatoryWindowSealed(manifest);
   assertDiversificationComparator(manifest, options?.resolveComparator);
   const config = structuredClone(manifest.config);
   return { ...manifest, config, configHash: stableConfigHash(config), state: 'SEALED' };

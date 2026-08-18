@@ -59,7 +59,14 @@ export async function collectSignals(
   opts?: { analysts?: Analyst[]; gate?: (symbol: string, market: PointInTimeContext['market']) => Promise<ShariaGate> },
 ): Promise<CommitteeResult> {
   const analysts = opts?.analysts ?? DEFAULT_ANALYSTS;
-  const gateFn = opts?.gate ?? evaluateShariaGate;
+  // Default here is PERMISSIVE, for direct/keyless analysis and research callers (e.g.
+  // backtest/engine.ts) that never persist an executable Decision. Any caller whose result
+  // CAN reach an order — runCommitteePass (both AUTO_PAPER and HUMAN_APPROVE persist an
+  // executable Decision) — passes `opts.gate` bound to 'strict' explicitly; see
+  // committee/runner.ts. Do not treat this default as safe for an execution-adjacent path.
+  const gateFn = opts?.gate
+    ?? ((symbol: string, market: PointInTimeContext['market']) =>
+      evaluateShariaGate(symbol, market, undefined, 'permissive'));
 
   const [settled, shariaGate] = await Promise.all([
     Promise.allSettled(analysts.map((a) => a.run(ctx))),

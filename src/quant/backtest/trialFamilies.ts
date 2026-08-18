@@ -25,9 +25,11 @@ const HALAL_CORE_SETUP_IDS = Object.freeze([
   'halal-trend-rider-core',
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
+  'halal-stopped-fast-momentum-core',
+  'halal-fast-momentum-cash-core',
 ] as const);
 
-const HALAL_CORE_REGISTERED_TRIALS = 99; // eleven related setups × nine frozen plateau trials
+const HALAL_CORE_REGISTERED_TRIALS = 117; // thirteen related setups × nine frozen plateau trials
 
 export type TrialTier = 'EXPLORATORY' | 'CONFIRMATORY';
 

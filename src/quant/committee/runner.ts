@@ -8,6 +8,7 @@ import type { Market, DecisionMode } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { loadPointInTimeContext } from '../data/pointInTime';
 import { collectSignals } from './collect';
+import { evaluateShariaGate } from '../gates/sharia';
 import { runPortfolioManager } from './pm';
 import type { PortfolioState, MarketState, RiskLimits } from '../risk/envelope';
 
@@ -113,7 +114,15 @@ export async function runCommitteePass(inp: RunPassInput): Promise<{ decisionId:
     stopPrice: price.minus(a.mul(2)),
   };
 
-  const result = await collectSignals(ctx);
+  // Every Decision this runner persists is executable — either auto-executed (AUTO_PAPER)
+  // or human-approved and then executed via /api/quant/execute (HUMAN_APPROVE). So the
+  // Sharia gate here is ALWAYS strict, unconditionally on `mode`: a new DecisionMode that
+  // forgets to branch here still gets the safe (strict) verdict, since there is no branch
+  // to forget. Pure analysis/backtest paths that never persist a Decision (e.g.
+  // backtest/engine.ts) call collectSignals directly and keep its permissive default.
+  const result = await collectSignals(ctx, {
+    gate: (symbol, market) => evaluateShariaGate(symbol, market, undefined, 'strict'),
+  });
   const seed = Math.floor(asOf.getTime() / 1000);
   const pm = await runPortfolioManager({ result, portfolio, market, limits, killSwitch: false, seed });
 

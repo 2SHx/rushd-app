@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-18 — Fast-momentum research drafts + QDR-16 forward-window safeguards ✅
+Shipped: strict Sharia gating on every executable committee/incubation path; stopped-momentum and 30%-momentum/70%-cash strategy drafts; manifest-driven five-session inference; confirmatory calendar-window seal refusal; and a non-binding IID drawdown disclosure beside the binding moving-block result.
+Decisions: both new lanes remain DRAFT/non-executable; the cash lane is forward-only and cannot seal until explicit future dates are hashed, while historical SPUS v1 is preserved but deliberately cannot be resealed under the stronger contract.
+Verify: 125 initial scoped tests plus final 99 QDR-16/strategy regressions pass; TypeScript, lint, and diff-check clean. Full suite exposed 17 unrelated existing/environment failures after the 10 stale QDR-16 fixtures were corrected: 10 Neon-unavailable setup/cleanup failures, 3 academy/authz, and 4 paused continual-learning.
+Open: M17 durable shadow-paper runner/caps/reconciliation is still the operational priority before any external paper submit; neither draft contributes to daily/promotion evidence yet.
+
 ## 2026-08-16 — M17 shadow-paper foundation + automatic incubation scheduler 🔄
 Shipped: DR-11/QDR-8/M17 broker-neutral contract, explicit InternalSim-default broker config, exact-origin read-only Alpaca preflight, signed-cron idempotency tracer, fail-closed Sharia/cancel/read gates, legacy fan-out dark, and one weekday after-close Render ingest→incubate→evaluate job.
 Decisions: Alpaca is the first operational mirror and Render one-job cron is the commercial-safe low-cost path ($1/month minimum); InternalSim remains authoritative, daily profit is measurement only, generic routes cannot reach remote paper, and real money stays dark.

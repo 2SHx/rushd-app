@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-fast-momentum-cash-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-fast-momentum-cash-core",
+    "evidenceBoundary": "forward-only-after-SEAL-REQUIRED-YYYY-MM-DD (QDR-16: at seal this string must be exactly \"forward-only-after-\" + config.runConfig.from + \"T00:00:00.000Z\"; while this sentinel stands the seal is refused)",
+    "historicalMode": "FORWARD_ONLY_NO_HISTORICAL_FULL",
+    "terminalEligible": false,
+    "seed": 42,
+    "runConfig": {
+      "setup": "halal-fast-momentum-cash-core",
+      "from": "SEAL-REQUIRED-YYYY-MM-DD",
+      "to": "SEAL-REQUIRED-YYYY-MM-DD",
+      "universe": "halal",
+      "symbols": null,
+      "confirmFull": false,
+      "seed": 42,
+      "oosFraction": 1,
+      "engine": "shared",
+      "feed": "yahoo-daily",
+      "source": "db"
+    },
+    "universe": {
+      "tradable": "PIT-21-session-dollar-volume-top-60-of-the-verified-compliant-halal-sleeve",
+      "reserve": "non-interest-bearing-cash",
+      "membership": "point-in-time-at-each-decision-no-forward-membership",
+      "shorting": false,
+      "leverage": false,
+      "margin": false
+    },
+    "engine": {
+      "inherits": "halal-fast-momentum-core@v1",
+      "status": "FROZEN — this lane changes ALLOCATION only; no engine parameter may move",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "decisionCadence": "weekly-ISO-week-after-close",
+      "fill": "next-observed-open"
+    },
+    "portfolio": {
+      "fastMomentumTargetWeight": 0.3,
+      "stabiliser": "non-interest-bearing-cash",
+      "stabiliserTargetWeight": 0.7,
+      "rebalanceRule": "restore-fastMomentumTargetWeight-at-every-ISO-week-engine-decision-only-when-|w_actual-0.30|>0.03",
+      "rebalanceBand": 0.03,
+      "intraWeekRebalance": false,
+      "maxGrossFraction": 0.3,
+      "longOnlyCash": true,
+      "cashRemuneration": "none-zero-return-non-interest-bearing"
+    },
+    "execution": {
+      "commissionBpsPerSide": 10,
+      "slippageBpsPerSide": 5,
+      "advParticipationCap": 0.05,
+      "distributionPolicy": "credit-only-when-effective-and-receipt-backed",
+      "corporateActionPolicy": "split-adjustment-must-be-effective-and-receipt-backed"
+    },
+    "validation": {
+      "mode": "never-inspected-forward-only",
+      "productClass": "ALPHA",
+      "minimumTradingSessions": 2435,
+      "observationUnit": "non-overlapping-five-session-book-return",
+      "observationsPerYear": 50.4,
+      "minimumOosObservations": 487,
+      "reservedYears": 9.663,
+      "oosFraction": 1,
+      "trialTier": "CONFIRMATORY",
+      "confirmatoryTrials": 1,
+      "confirmatoryConditions": [
+        "SEALED_CONFIG_HASH_VERIFIED",
+        "FORWARD_ONLY_HISTORICAL_MODE",
+        "ZERO_DIAGNOSTIC_RUNS",
+        "FORWARD_BOUNDARY_AFTER_SEAL",
+        "OBSERVATIONS_AFTER_FORWARD_BOUNDARY",
+        "EXACTLY_ONE_TERMINAL_EVALUATION"
+      ],
+      "confirmatoryEvidenceSource": "out-of-band-manifest-and-run-receipts-verified-at-terminal-time-never-self-asserted-by-this-config",
+      "confirmatoryFallbackTier": "EXPLORATORY",
+      "relatedFamilyTrials": 117,
+      "hypothesizedAnnualSharpe": 0.8,
+      "minimumOosDsr": 0.95,
+      "maximumMonteCarloP95Drawdown": 0.3,
+      "hypothesizedMonteCarloP95Drawdown": 0.252,
+      "bootstrapMethod": "moving-block",
+      "bootstrapBlockLength": 20,
+      "bootstrapObservationUnit": "book-day",
+      "bootstrapDisclosureRequired": "the terminal card must report BOTH the sealed moving-block-20 p95 AND the IID p95 on the same realized curve; the breaker binds on the moving-block figure only",
+      "maximumRiskOfRuin": 0.05,
+      "maximumPlausibleSharpe": 3,
+      "profitPlateauRequired": true,
+      "pointInTimeShariaRequired": true,
+      "replayRequired": true,
+      "terminalWindowBinding": "QDR-16-sealed-explicit-calendar-from-to-see-config.windowBinding",
+      "bootstrapDisclosureImplementation": "the disclosed IID p95 is the SAME bootstrapTradeOutcomes call on the SAME realized book-day return series with the SAME seed and the SAME resample count, at blockLength 1 (a moving block of length 1 IS iid resampling with replacement). It is rendered as an explicitly NON-BINDING line and may never enter any pass/fail predicate; mcMaxDDWithinBreaker continues to read the moving-block-20 figure only."
+    },
+    "plateau": {
+      "fastMomentumTargetWeight": [
+        0.25,
+        0.3,
+        0.35
+      ],
+      "rebalanceBand": [
+        0.02,
+        0.03,
+        0.05
+      ],
+      "center": {
+        "fastMomentumTargetWeight": 0.3,
+        "rebalanceBand": 0.03
+      },
+      "variants": 9,
+      "rule": "all 9 cells are computed INSIDE the single terminal evaluation; the sealed centre cell is the only cell that gates admission, so the other 8 can only FAIL the run (profit-plateau instability), never rescue it — no selection occurs and condition (f) holds"
+    },
+    "hypothesis": {
+      "mechanism": "fast weekly momentum (63/2/top-5) produces a real, additive return stream whose ONLY disqualifying defect at full weight is tail depth; because Sharpe is scale-invariant and a non-interest-bearing cash reserve has zero volatility and zero correlation, a fixed 30% allocation to the frozen engine transports the engine's whole risk-adjusted return through the 30% Monte Carlo p95 drawdown breaker without changing one engine parameter",
+      "causalThesis": "the strategist's INVERSION: the six-strategy inverse-volatility stabiliser, not fast momentum, was the binding drawdown constraint (its OWN MC p95 is 29.12%, 0.88pp under the breaker, so it absorbed only 7.89% fast momentum). Removing the stabiliser's tail — not shrinking the engine — is what buys capacity: cash-only admits 38.72% at the same breaker with HIGHER CAGR (20.14% vs 16.40%) AND higher Sharpe (1.2605 vs 1.165) than the best risky stabiliser",
+      "hypothesizedAnnualSharpe": 0.8,
+      "sharpeDerivation": "worst contiguous multi-year sub-sample 0.958 (1,152 sessions, contains 2020 and 2022 in full) MINUS QDR-10's own measured 2026-survivor-sleeve contribution of ~0.16, which sub-sampling is structurally blind to because every sub-sample uses the identical 2026-fixed sleeve. NOT the fitted 1.15-1.26, which was selected over six stabilisers on one window",
+      "predictedCagr": "12-16% net at the sealed 30% weight; strictly lower than the engine's unlevered figure and not a claim about the engine",
+      "predictedOosDsr": "greater-than-0.950 at annualized Sharpe 0.80 over 487 five-session observations (predicted 0.99336)",
+      "predictedMonteCarloP95Drawdown": "0.252 under moving-block-20 at 2,435 sessions; less-than-0.30",
+      "powerNote": "Powered as a confirmatory (N=1) test at 80.0%: required annualized Sharpe at 487 observations is 0.5292, the declared 0.80 exceeds it by 0.271, and Phi(0.80*sqrt(9.663) - 1.6449) = 0.800. The long window is deliberate: at the honest 0.80 a 4.3-year window is a 50% coin flip, which QDR-10 already refused by name. If any of the six structural confirmatory conditions fails, the lane deflates to 117 exploratory trials, where the declared effect size is unreachable inside any realistic window: such a run must close INSUFFICIENT_SAMPLE, not as evidence against the hypothesis.",
+      "falsification": [
+        "REJECTED if OOS DSR <= 0.95 at N=1 over the 487 sealed observations (realized annualized Sharpe below 0.5292)",
+        "REJECTED if the moving-block-20 book-day MC p95 max drawdown exceeds 0.30 at the realized path length — this is the direct falsification of the cash-transport thesis",
+        "REJECTED if risk of ruin exceeds 0.05",
+        "IMPLAUSIBLE_RESULT if realized Sharpe exceeds 3.00",
+        "PLATEAU_INSTABILITY if any of the 9 allocation cells fails the profit-plateau check",
+        "INSUFFICIENT_SAMPLE (never evidence against the mechanism) if fewer than 487 post-boundary observations exist, or if any of the six confirmatory conditions fails"
+      ],
+      "pathLengthNote": "MC p95 rises with path length: the same 38.72% cash book measures 30.00% at 1,646 sessions, 31.48% at 2,145, 32.67% at 2,520 (~+6.5pp per natural-log unit of length). At the reserved 2,435 sessions the 38.72% book would measure ~32.5% and BREACH; the sealed 30% weight is set to hold ~25.2% at that length, 4.8pp of headroom. The weight is frozen ex ante and may not be re-solved after the path is observed."
+    },
+    "performanceInspection": "forbidden-before-2435-forward-sessions-and-independent-ready-to-run",
+    "windowBinding": {
+      "rule": "QDR-16",
+      "binds": "an explicit calendar from/to pair INSIDE config.runConfig, and therefore inside configHash. No \"period\" key may appear in runConfig and no --period flag may be supplied at the terminal run.",
+      "periodPresetForbidden": "a --period preset resolves `to` against latestTradingDate at RUN time (src/quant/backtest/runLab.ts resolvePeriodDates), so the window would float with whenever the run is launched — that IS window selection after seeing data. Forbidden for every CONFIRMATORY lane. As a consequence FULL_PERIOD_START (2018-01-02) is never consulted by this lane and does not cap it.",
+      "fromDerivation": "the first NYSE regular session strictly after the calendar date of the out-of-band `sealedAt` (the git commit time of the seal). Declared in the hash; verified against `sealedAt` by the terminal auditor.",
+      "toDerivation": "the calendar date of the (2435 + 25)th projected NYSE regular session on or after `from`, computed at seal from the deterministic NYSE holiday rules and written literally into runConfig.to.",
+      "padSessions": 25,
+      "padDisclosure": "the 25-session pad insures ONLY against unscheduled closures (a 9/11- or Sandy-class event) making the sealed window fall short of 2,435 sessions and forcing a spurious INSUFFICIENT_SAMPLE. If no such closure occurs the window yields ~492 observations against the sealed 487 floor; that surplus is fixed at seal, is not selectable afterwards, and moves attainable DSR by under 1%. Disclosed, not hidden.",
+      "cliInvocation": "npm run backtest -- --manifest docs/quant-experiments/halal-fast-momentum-cash-core-v1.json --runner <identity> --setup halal-fast-momentum-cash-core --from <runConfig.from> --to <runConfig.to> --universe halal --seed 42 --oos 1 --engine shared --feed yahoo-daily --source db",
+      "auditorRecomputes": "(d) config.runConfig.from is strictly after the out-of-band `sealedAt`; (e) every terminal observation lies inside [from, to]; (a) stableConfigHash(config) === configHash proves the pair has not moved since seal; and config.evidenceBoundary names the same date as config.runConfig.from. Absence of `sealedAt` fails closed to EXPLORATORY exactly as QDR-9 already rules."
+    }
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

@@ -413,7 +413,10 @@ async function executeIncubationOrder(
   ownerUserId: string,
   order: IncubationOrder,
 ): Promise<boolean> {
-  const gate = await evaluateShariaGate(order.fill.symbol, 'NASDAQ');
+  // Shadow-paper automation is grouped with real execution, not analysis: explicit STRICT
+  // mode so an unverified/stale verdict still blocks the fill even though no live broker
+  // is wired up yet (registry.ts throws for ALPACA_PAPER today).
+  const gate = await evaluateShariaGate(order.fill.symbol, 'NASDAQ', undefined, 'strict');
   if (!gateAllowsAction(gate, order.fill.action)) {
     throw new Error(`Incubation Sharia gate blocked ${order.fill.action} ${order.fill.symbol}`);
   }

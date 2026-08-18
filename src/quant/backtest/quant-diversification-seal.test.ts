@@ -53,7 +53,10 @@ const MECHANISM = {
   // at all (`assertRunConfigPairedWithGate`). `runConfig` is also excluded from the A/B isolation
   // diff (`DIVERSIFICATION_AB_VARIABLE_BLOCKS`), so its presence here never trips the "differs in
   // more than the universe block" refusal against `INCUMBENT_CONFIG` or a historical anchor.
-  runConfig: { setup: 'halal-decorrelated-risk-parity-core', symbols: ['AAA'], seed: 42 },
+  runConfig: {
+    setup: 'halal-decorrelated-risk-parity-core', symbols: ['AAA'], seed: 42,
+    from: '2026-08-19', to: '2029-04-30',
+  },
 };
 
 function draft(config: Record<string, unknown>): ExperimentManifest {
@@ -67,6 +70,7 @@ function draft(config: Record<string, unknown>): ExperimentManifest {
 
 const TREATMENT = {
   ...MECHANISM,
+  evidenceBoundary: 'forward-only-after-2026-08-19T00:00:00.000Z',
   universe: { rule: 'selectCorrelationBalancedSleeve', maxNames: 40, sectorCap: 0.25, poolSize: 80 },
   validation: GATE,
 };

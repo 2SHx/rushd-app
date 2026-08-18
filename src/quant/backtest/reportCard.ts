@@ -142,6 +142,8 @@ export interface ReportCard {
   oos: BacktestMetrics;
   distribution: DailyReturnDistribution;
   bootstrap: BootstrapResult;
+  /** QDR-16: optional non-binding IID view of the same curve; never read by a gate. */
+  bootstrapDisclosure?: BootstrapResult;
   permutation: PermutationResult;
   kellyFraction: number;
   kellyClampedQty: number;
@@ -182,6 +184,8 @@ export interface AssembleArgs {
   oos: BacktestMetrics;
   distribution: DailyReturnDistribution;
   bootstrap: BootstrapResult;
+  /** Non-binding IID disclosure paired with the binding moving-block result. */
+  bootstrapDisclosure?: BootstrapResult;
   permutation: PermutationResult;
   kellyFraction: number;
   kellyClampedQty: number;
@@ -292,7 +296,9 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
     setup: a.setup, symbols: a.symbols, universe: a.universe ?? 'custom',
     periodPreset: a.periodPreset ?? 'CUSTOM', from: a.from, to: a.to, dataFeed: a.dataFeed,
     seed: a.seed, gitSha: a.gitSha, full: a.full, oos: a.oos, distribution: a.distribution,
-    bootstrap: a.bootstrap, permutation: a.permutation, kellyFraction: a.kellyFraction,
+    bootstrap: a.bootstrap,
+    ...(a.bootstrapDisclosure ? { bootstrapDisclosure: a.bootstrapDisclosure } : {}),
+    permutation: a.permutation, kellyFraction: a.kellyFraction,
     kellyClampedQty: a.kellyClampedQty, checklist, implausible, shariaState, status,
     rejectionReasonCodes,
     // QDR-11: an ACCEPTED_DIVERSIFICATION version receives no capital, no allocation, no QDR-7
@@ -370,6 +376,9 @@ export function renderReportCard(c: ReportCard, color = true): string {
   L.push(`  Bootstrap method:     ${bootstrapMethod}${blockLabel}`);
   L.push(`  Bootstrap resamples:  ${c.bootstrap.resamples}  (${c.bootstrap.tradesPerPath} ${bootstrapUnits}/path)`);
   L.push(`  Max DD p5/p50/p95:    ${pct(c.bootstrap.maxDrawdown.p5)} / ${pct(c.bootstrap.maxDrawdown.p50)} / ${pct(c.bootstrap.maxDrawdown.p95)}`);
+  if (c.bootstrapDisclosure) {
+    L.push(paint(`  Non-binding IID p95: ${pct(c.bootstrapDisclosure.maxDrawdown.p95)} (same curve/seed/resamples; no gate effect)`, YELLOW));
+  }
   L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
   L.push(`  Sign-permutation p:   ${c.permutation.pValue.toFixed(3)}  (observed mean ${pct(c.permutation.observedMean)}; method=${c.permutation.method ?? 'sign-flip-legacy-unspecified'})`);
   L.push(`  Kelly fraction:       ${c.kellyFraction.toFixed(4)}  → clamped qty ${c.kellyClampedQty.toFixed(4)}`);

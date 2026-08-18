@@ -263,6 +263,47 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     }))).toThrow(/EMPTY_FALLBACK_ACCEPTANCE_SET/);
   });
 
+  it('QDR-16 seals only an explicit confirmatory calendar window bound to its evidence boundary', () => {
+    const validation = {
+      ...GATE,
+      minimumOosObservations: 487,
+      relatedFamilyTrials: 117,
+      trialTier: 'CONFIRMATORY',
+      confirmatoryTrials: 1,
+    };
+    const config = {
+      validation,
+      runConfig: { setup: 'confirmatory-lane', from: '2026-08-19', to: '2036-07-31' },
+      evidenceBoundary: 'forward-only-after-2026-08-19T00:00:00.000Z',
+    } as unknown as Parameters<typeof createDraft>[0]['config'];
+    const draft = (override: Record<string, unknown> = {}) => createDraft({
+      setupId: 'confirmatory-lane', version: 'v1',
+      config: { ...(config as Record<string, unknown>), ...override } as Parameters<typeof createDraft>[0]['config'],
+      director: 'director-a',
+    });
+
+    expect(sealExperiment(draft()).state).toBe('SEALED');
+    expect(() => sealExperiment(draft({
+      runConfig: { setup: 'confirmatory-lane', from: 'SEAL-REQUIRED-YYYY-MM-DD', to: '2036-07-31' },
+    }))).toThrow(/literal YYYY-MM-DD/);
+    expect(() => sealExperiment(draft({
+      runConfig: { setup: 'confirmatory-lane', from: '2036-07-31', to: '2026-08-19' },
+    }))).toThrow(/from < to/);
+    expect(() => sealExperiment(draft({
+      runConfig: { setup: 'confirmatory-lane', from: '2026-08-19', to: '2036-07-31', period: 'FULL' },
+    }))).toThrow(/runConfig\.period is forbidden/);
+    expect(() => sealExperiment(draft({ evidenceBoundary: 'forward-only-after-2026-08-20T00:00:00.000Z' })))
+      .toThrow(/evidenceBoundary/);
+  });
+
+  it('QDR-16 does not impose a calendar window on exploratory manifests', () => {
+    expect(sealExperiment(createDraft({
+      setupId: 'exploratory-lane', version: 'v1',
+      config: { validation: { trialTier: 'EXPLORATORY' } },
+      director: 'director-a',
+    })).state).toBe('SEALED');
+  });
+
   const BETA_GATE = {
     minimumOosObservations: 104,
     observationsPerYear: 252 / 5,
@@ -366,10 +407,16 @@ describe('seal-time gate feasibility (QDR-9)', () => {
     });
   });
 
-  it('seals the amended SPUS lane and leaves the other sealed manifests untouched', () => {
+  it('QDR-16 refuses the legacy SPUS v1 reseal and leaves other sealed manifests untouched', () => {
     const dir = join(__dirname, '..', '..', '..', 'docs', 'quant-experiments');
+    const spus = JSON.parse(readFileSync(join(dir, 'halal-spus-vol-managed-beta-v1.json'), 'utf8')) as {
+      setupId: string; version: string; config: Parameters<typeof createDraft>[0]['config'];
+    };
+    expect(() => sealExperiment(createDraft({
+      setupId: spus.setupId, version: spus.version, config: spus.config, director: 'director-a',
+    }))).toThrow(/CONFIRMATORY config\.runConfig requires literal YYYY-MM-DD from\/to/);
+
     for (const file of [
-      'halal-spus-vol-managed-beta-v1.json',
       'halal-causal-tcn-alpha-v1.json',
       'halal-residual-fast-momentum-core-v1.json',
     ]) {

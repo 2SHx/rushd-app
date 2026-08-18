@@ -54,6 +54,42 @@ export interface Signal {
 export interface ShariaGate {
   compliant: boolean;
   reason?: string;
+  // Present on live gate output (src/quant/gates/sharia.ts); optional here only because
+  // some test fixtures stub a bare `{ compliant }`. Presentation MUST treat a missing
+  // `source`/`reason` as unverified, never as an implicit "verified compliant".
+  standard?: string;
+  source?: string;
+}
+
+// src/quant/gates/sharia.ts reason codes -> messages/*.json `Quant.shariaReasons.*` keys.
+// Every reason the gate can emit MUST have an entry here; the fallback bucket below routes
+// anything missing/unrecognized to `shariaReasons.unknown` rather than leaking the raw code.
+const SHARIA_REASON_KEYS: Record<string, string> = {
+  aaoifi_screen_pass: 'aaoifiScreenPass',
+  aaoifi_screen_fail: 'aaoifiScreenFail',
+  screener_unavailable_fail_closed: 'screenerUnavailableFailClosed',
+  not_covered_by_free_sources: 'notCoveredByFreeSources',
+  unverified_source_fail_closed: 'unverifiedSourceFailClosed',
+  stale_evidence_fail_closed: 'staleEvidenceFailClosed',
+  unverified_source_permissive: 'unverifiedSourcePermissive',
+  stale_evidence_permissive: 'staleEvidencePermissive',
+};
+
+// Four honest presentation tiers — deliberately NOT a 2-way compliant/non-compliant split.
+// A `compliant:true` verdict is "verified" ONLY when it came from a real, fresh, verified
+// source (`aaoifi_screen_pass`); every other compliant verdict (mock/unverified/stale,
+// permissive mode) is "unverifiedCompliant" and must never render as an unqualified halal
+// claim. Symmetrically, `compliant:false` is split into an actual failed screen
+// (`confirmedNonCompliant`) vs. a fail-closed block where the true verdict is simply
+// unknown (`blockedUnverifiable`) — both block BUY, but only one is an honest claim of
+// non-compliance (src/quant/gates/sharia.ts's own comment makes this distinction).
+type ShariaTier = 'verifiedCompliant' | 'unverifiedCompliant' | 'confirmedNonCompliant' | 'blockedUnverifiable';
+
+function shariaTier(gate: ShariaGate): ShariaTier {
+  if (gate.compliant) {
+    return gate.reason === 'aaoifi_screen_pass' ? 'verifiedCompliant' : 'unverifiedCompliant';
+  }
+  return gate.reason === 'aaoifi_screen_fail' ? 'confirmedNonCompliant' : 'blockedUnverifiable';
 }
 
 export interface DebateTurn {
@@ -384,9 +420,16 @@ export default function CommitteeClient({
 
     let targetText = '';
     if (simStep === 'sharia') {
-      targetText = passData.shariaGate.compliant
-        ? (isAr ? 'توافق شرعي كامل. معايير أنشطة و نسب مالية مقبولة.' : 'Sharia compliant. Sector filters and leverage ratios are fully within limits.')
-        : (isAr ? `تنبيه غير متوافق: ${passData.shariaGate.reason || 'محظور التداول'}` : `Non-compliant Veto: ${passData.shariaGate.reason || 'Trading blocked'}`);
+      const gate = passData.shariaGate;
+      const tier = shariaTier(gate);
+      const reasonKey = gate.reason ? SHARIA_REASON_KEYS[gate.reason] : undefined;
+      const reasonText = t(`shariaReasons.${reasonKey ?? 'unknown'}`);
+      const prefixKey =
+        tier === 'verifiedCompliant' ? 'shariaNarrativeVerified'
+        : tier === 'unverifiedCompliant' ? 'shariaNarrativeUnverified'
+        : tier === 'confirmedNonCompliant' ? 'shariaNarrativeBlocked'
+        : 'shariaNarrativeBlockedUnverifiable';
+      targetText = `${t(prefixKey)} ${reasonText}`;
     } else if (simStep === 'analysts') {
       const signal = passData.signals.find(s => s.agent === activeAgentId);
       if (signal) {
@@ -418,7 +461,7 @@ export default function CommitteeClient({
     }, 12);
 
     return () => clearInterval(interval);
-  }, [simStep, activeAgentId, debateTurnIdx, passData, isAr]);
+  }, [simStep, activeAgentId, debateTurnIdx, passData, isAr, t]);
 
   // Simulation Sequence Engine
   useEffect(() => {
@@ -816,6 +859,47 @@ export default function CommitteeClient({
     return { label: t('shariaUnverified'), className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', Icon: AlertTriangle };
   }
 
+  // Presentation for a single committee pass's live ShariaGate verdict (compliant + reason +
+  // source), as opposed to shariaMeta() above which reads a persisted Position.complianceStatus.
+  // A `compliant:true` verdict from an unverified/mock source is NEVER rendered as a bare
+  // "compliant" badge — the label itself always carries the "unverified/demo" qualifier so it
+  // cannot be visually truncated apart from the caveat.
+  function shariaGateMeta(gate: ShariaGate) {
+    const tier = shariaTier(gate);
+    const reasonKey = gate.reason ? SHARIA_REASON_KEYS[gate.reason] : undefined;
+    const reasonText = t(`shariaReasons.${reasonKey ?? 'unknown'}`);
+    if (tier === 'verifiedCompliant') {
+      return {
+        label: t('shariaCompliant'),
+        reasonText,
+        Icon: ShieldCheck,
+        className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      };
+    }
+    if (tier === 'unverifiedCompliant') {
+      return {
+        label: t('shariaUnverifiedCompliantLabel'),
+        reasonText,
+        Icon: AlertTriangle,
+        className: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+      };
+    }
+    if (tier === 'confirmedNonCompliant') {
+      return {
+        label: t('shariaNonCompliant'),
+        reasonText,
+        Icon: ShieldAlert,
+        className: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+      };
+    }
+    return {
+      label: t('shariaBlockedUnverifiableLabel'),
+      reasonText,
+      Icon: ShieldAlert,
+      className: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    };
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Tab Switcher ── */}
@@ -1127,17 +1211,33 @@ export default function CommitteeClient({
                             {passData.finalAction}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600">SHARIA:</span>
-                          <span className={`px-2.5 py-0.5 text-xs font-black uppercase rounded-lg border ${
-                            passData.shariaGate.compliant
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          }`}>
-                            {passData.shariaGate.compliant ? 'HALAL ✓' : 'HARAM VETO ✗'}
-                          </span>
-                        </div>
+                        {(() => {
+                          const gateMeta = shariaGateMeta(passData.shariaGate);
+                          const GateIcon = gateMeta.Icon;
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-600">{t('shariaGateHeading')}:</span>
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-black uppercase rounded-lg border ${gateMeta.className}`}
+                              >
+                                <GateIcon className="w-3 h-3" aria-hidden="true" />
+                                {gateMeta.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
+                      {(() => {
+                        const gateMeta = shariaGateMeta(passData.shariaGate);
+                        return (
+                          <p
+                            className="w-full basis-full text-[10px] leading-relaxed text-gray-500"
+                            dir={isAr ? 'rtl' : 'ltr'}
+                          >
+                            {gateMeta.reasonText}
+                          </p>
+                        );
+                      })()}
 
                       {(() => {
                         const currentDec = decisions.find(d => d.id === passData.decisionId);

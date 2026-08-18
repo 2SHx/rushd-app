@@ -24,7 +24,24 @@ describe('evaluateShariaGate', () => {
     expect(gate.compliant).toBe(true);
   });
 
-  it('fails closed when a mock source claims compliance', async () => {
+  it('fails closed (execution/strict) when a mock source claims compliance', async () => {
+    screenMock.mockResolvedValue({
+      symbol: 'AAPL',
+      compliant: true,
+      standard: 'AAOIFI',
+      source: 'mock',
+      asOf: new Date(),
+    });
+    const gate = await evaluateShariaGate('AAPL', 'NASDAQ' as any, undefined, 'strict');
+    expect(gate).toMatchObject({
+      compliant: false,
+      reason: 'unverified_source_fail_closed',
+      source: 'mock',
+    });
+    expect(gateAllowsAction(gate, 'BUY')).toBe(false);
+  });
+
+  it('defaults to strict (fail-closed) when no mode argument is passed', async () => {
     screenMock.mockResolvedValue({
       symbol: 'AAPL',
       compliant: true,
@@ -33,11 +50,24 @@ describe('evaluateShariaGate', () => {
       asOf: new Date(),
     });
     const gate = await evaluateShariaGate('AAPL', 'NASDAQ' as any);
-    expect(gate).toMatchObject({
-      compliant: false,
-      reason: 'unverified_source_fail_closed',
+    expect(gate).toMatchObject({ compliant: false, reason: 'unverified_source_fail_closed', source: 'mock' });
+  });
+
+  it('honors a mock-sourced compliant verdict in permissive (analysis/committee) mode, BUY possible', async () => {
+    screenMock.mockResolvedValue({
+      symbol: 'AAPL',
+      compliant: true,
+      standard: 'AAOIFI',
       source: 'mock',
+      asOf: new Date(),
     });
+    const gate = await evaluateShariaGate('AAPL', 'NASDAQ' as any, undefined, 'permissive');
+    expect(gate).toMatchObject({
+      compliant: true,
+      reason: 'unverified_source_permissive',
+      source: 'mock', // still distinguishable as mock — never relabeled as verified
+    });
+    expect(gateAllowsAction(gate, 'BUY')).toBe(true);
   });
 
   it.each(['etf-holdings', 'saudi-sharia-list'])('accepts current compliant %s evidence', async (source) => {
