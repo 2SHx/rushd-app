@@ -204,12 +204,13 @@ describe('assertPointInTimeMembershipCoverage', () => {
 
 describe('terminal C1 membership preflight', () => {
   it('pins the audited setup list and fails closed without ingested snapshots', () => {
-    // 16 since `halal-fast-momentum-cash-core` joined. The QDR-11 lane
+    // 17 since `halal-fundamental-momentum-core` joined. The QDR-11 lane
     // (`halal-decorrelated-risk-parity-core`) re-forms its SLEEVE on a genuine rolling PIT schedule,
     // which is a DIFFERENT guarantee from historical membership and point-in-time Sharia evidence —
     // neither of which exists yet. Every id here is fenced on purpose; a new lane that inherits an
     // audited C1 sleeve MUST be added, or the survivorship fence silently relaxes for it (QDR-14).
-    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(16);
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(17);
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-fundamental-momentum-core');
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-fast-momentum-cash-core');
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-stopped-fast-momentum-core');
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-decorrelated-risk-parity-core');

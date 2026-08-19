@@ -336,17 +336,28 @@ model SymbolSnapshot {
   @@index([symbol, market, asOf])
 }
 
+// ANNUAL = a 10-K fiscal-year filing; QUARTERLY = a 10-Q fiscal-quarter (Q1/Q2/Q3) filing.
+// A real schema-level discriminator (not just `metrics.form`) so a quarterly and an annual row
+// for the same symbol can never collide under `@@unique` and a reader can never mistake one for
+// the other without parsing JSON. Defaults existing rows (all pre-dating this column, all 10-K)
+// to ANNUAL — additive, no existing row's meaning changes.
+enum FundamentalsPeriod {
+  ANNUAL
+  QUARTERLY
+}
+
 model Fundamentals {
-  id         String     @id @default(uuid())
+  id         String             @id @default(uuid())
   symbol     String
   market     Market
   asOf       DateTime // the fiscal period the metrics describe
   releasedAt DateTime // when the data became public — the point-in-time key
-  metrics    Json // { peRatio, debtToMarketCap, revenue, ... } — typed accessors in code
+  period     FundamentalsPeriod @default(ANNUAL) // schema-level ANNUAL/QUARTERLY discriminator
+  metrics    Json // { peRatio, debtToMarketCap, revenue, form, fp, ... } — typed accessors in code
   source     DataSource
-  createdAt  DateTime   @default(now())
+  createdAt  DateTime           @default(now())
 
-  @@unique([symbol, market, asOf])
+  @@unique([symbol, market, asOf, period])
   @@index([symbol, market, releasedAt])
 }
 

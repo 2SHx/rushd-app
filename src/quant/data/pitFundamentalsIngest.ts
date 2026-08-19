@@ -19,6 +19,10 @@ export function toFundamentalsCreateInput(filing: PitFundamentalsFiling): Prisma
     market: filing.market,
     asOf: isoDay(filing.asOf),
     releasedAt: isoDay(filing.releasedAt),
+    // Schema-level ANNUAL/QUARTERLY discriminator (prisma/schema.prisma `Fundamentals.period`),
+    // part of the unique key `[symbol, market, asOf, period]` — an annual and a quarterly row can
+    // never collide/overwrite each other even in the rare case their `asOf` dates coincide.
+    period: filing.period,
     metrics: filing.metrics as unknown as Prisma.InputJsonValue,
     source: 'FUNDAMENTALS',
   };

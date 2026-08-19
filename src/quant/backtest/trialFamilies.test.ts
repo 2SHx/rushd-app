@@ -16,6 +16,7 @@ const HALAL_CORE_SETUP_IDS = [
   'halal-fast-momentum-core',
   'halal-residual-fast-momentum-core',
   'halal-fast-momentum-cash-core',
+  'halal-fundamental-momentum-core',
 ] as const;
 
 const SEALED_CONFIG = { setup: 'halal-spus-vol-managed-beta', seed: 42 };
@@ -46,13 +47,13 @@ function knownPositiveCurve(): EquityPoint[] {
 }
 
 describe('terminal DSR trial-family registry', () => {
-  it('uses all 117 related halal-core trials and never falls below the local plateau', () => {
+  it('uses all 126 related halal-core trials and never falls below the local plateau', () => {
     const evidence = trialCountEvidence('halal-residual-fast-momentum-core', 9);
-    const raisedPlateau = trialCountEvidence('halal-fast-momentum-core', 120);
+    const raisedPlateau = trialCountEvidence('halal-fast-momentum-core', 130);
 
-    expect(evidence.familyTrials).toBe(117);
+    expect(evidence.familyTrials).toBe(126);
     expect(evidence.familyTrials).toBeGreaterThan(evidence.plateauTrials);
-    expect(raisedPlateau.familyTrials).toBe(120);
+    expect(raisedPlateau.familyTrials).toBe(130);
     expect(raisedPlateau.familyTrials).toBeGreaterThanOrEqual(raisedPlateau.plateauTrials);
   });
 
@@ -72,8 +73,8 @@ describe('two-tier trial deflation (QDR-9)', () => {
       const evidence = trialCountEvidence(setupId, 9);
       expect(evidence).toMatchObject({
         familyId: 'halal-core-2026q3-v1',
-        familyTrials: 117,
-        relatedSetups: 13,
+        familyTrials: 126,
+        relatedSetups: 14,
         tier: 'EXPLORATORY',
       });
     }
@@ -83,7 +84,7 @@ describe('two-tier trial deflation (QDR-9)', () => {
       relatedSetups: 1,
       tier: 'EXPLORATORY',
     });
-    expect(trialCountEvidence('halal-fast-momentum-core', 120).familyTrials).toBe(120);
+    expect(trialCountEvidence('halal-fast-momentum-core', 130).familyTrials).toBe(130);
   });
 
   it('grants N=1 only when all six structural conditions are proved', () => {
@@ -123,7 +124,7 @@ describe('two-tier trial deflation (QDR-9)', () => {
     expect(evidence.familyTrials).toBe(108);
     expect(evidence.confirmatoryFailures).toContain(condition);
     expect(core.tier).toBe('EXPLORATORY');
-    expect(core.familyTrials).toBe(117);
+    expect(core.familyTrials).toBe(126);
   });
 
   it('treats absent evidence and a bare self-assertion as proof of nothing', () => {

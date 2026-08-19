@@ -156,6 +156,11 @@ export const PIT_MEMBERSHIP_REQUIRED_SETUP_IDS = Object.freeze([
   // fence. Omitting this id would silently relax the survivorship fence for a NEW lane, which is the
   // exact failure the allowlist exists to prevent.
   'halal-stopped-fast-momentum-core',
+  // QDR-14: the point-in-time revenue-growth SELECTION gate inherits the baseline's audited C1
+  // sleeve and therefore its fence. Historical membership, delisting lifecycle and per-name PIT
+  // Sharia evidence do not exist for 2018-2026, so every run of this version is unverified-
+  // diagnostic-only and cannot produce a terminal card.
+  'halal-fundamental-momentum-core',
   // QDR-15: the allocation-transport lane runs the SAME frozen engine over the SAME audited C1
   // sleeve. Only the book share changes, so it inherits the survivorship fence unchanged.
   'halal-fast-momentum-cash-core',

@@ -137,7 +137,7 @@ describe('ingestBarsBackfill (BACKWARDS deep-history)', () => {
     (prisma.marketBar.findFirst as any)
       .mockResolvedValueOnce({ ts: new Date('2024-01-01T00:00:00.000Z') }) // earliest-before lookup
       .mockResolvedValueOnce({ ts: new Date('2019-01-01T00:00:00.000Z') }); // earliest-after lookup
-    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(deepCandles);
     (prisma.marketBar.createMany as any).mockResolvedValue({ count: 2 });
 
     const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
@@ -157,7 +157,7 @@ describe('ingestBarsBackfill (BACKWARDS deep-history)', () => {
 
   it('inserts everything when no existing bars are stored', async () => {
     (prisma.marketBar.findFirst as any).mockResolvedValueOnce(null).mockResolvedValueOnce({ ts: new Date('2019-01-01T00:00:00.000Z') });
-    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(deepCandles);
     (prisma.marketBar.createMany as any).mockResolvedValue({ count: 4 });
 
     const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
@@ -167,7 +167,7 @@ describe('ingestBarsBackfill (BACKWARDS deep-history)', () => {
 
   it('is idempotent: a second run with the same fetched window inserts 0 rows and issues no createMany call', async () => {
     (prisma.marketBar.findFirst as any).mockResolvedValue({ ts: new Date('2019-01-01T00:00:00.000Z') }); // already the oldest candle
-    vi.spyOn(YahooFinanceProvider.prototype, 'getCandles').mockResolvedValue(deepCandles);
+    vi.spyOn(YahooFinanceProvider.prototype, 'getCandlesStrict').mockResolvedValue(deepCandles);
 
     const result = await ingestBarsBackfill('AAPL', 'NASDAQ');
 

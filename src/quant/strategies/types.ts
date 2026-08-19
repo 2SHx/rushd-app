@@ -67,6 +67,21 @@ export interface UniversePrepareInput {
     close: number;
     volume: number;
   }[]>;
+  /**
+   * RAW, UNSLICED point-in-time fundamental filings loaded explicitly by the harness, because
+   * `prepareUniverse` is SYNCHRONOUS and a setup therefore cannot issue the DB read itself (same
+   * precedent as `benchmarkDailyBarsBySymbol` above). These rows are NOT pre-filtered to any
+   * decision date: the setup MUST slice on `releasedAt <= asOf` — WHEN the filing became public —
+   * and never on `asOf`, which is merely the fiscal period the filing DESCRIBES and can precede
+   * publication by many months. Every read must re-assert it via
+   * `assertNoLookahead(rows, asOf, 'releasedAt')`, which stays non-vacuous precisely because the
+   * harness hands over the unsliced table.
+   */
+  readonly fundamentalsBySymbol?: ReadonlyMap<string, readonly {
+    asOf: Date;
+    releasedAt: Date;
+    totalRevenueUsd: number | null;
+  }[]>;
   /** Optional compact PIT aggregates for setups whose screen depends on same-day cross-section. */
   readonly stocksInPlayBook?: ReadonlyMap<string, readonly {
     date: string;

@@ -2,7 +2,7 @@
 // below are hand-built but structurally faithful to real SEC EDGAR companyfacts/submissions JSON
 // (same field names: val/end/filed/form/fp under facts['us-gaap'][concept].units.USD).
 import { describe, expect, it, vi } from 'vitest';
-import { selectAnnualFundamentalsHistory } from './pitFundamentalsBackfill';
+import { selectAnnualFundamentalsHistory, selectQuarterlyFundamentalsHistory } from './pitFundamentalsBackfill';
 
 function gaapFact(val: number, end: string, filed: string, extra: Partial<{ form: string; fp: string }> = {}) {
   return { val, end, filed, form: '10-K', fp: 'FY', ...extra };
@@ -308,6 +308,147 @@ describe('selectAnnualFundamentalsHistory — point-in-time contract', () => {
     global.fetch = fetchSpy as any;
     try {
       selectAnnualFundamentalsHistory('NONE', { facts: { 'us-gaap': {} } }, { sic: null });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = original;
+    }
+  });
+});
+
+describe('selectQuarterlyFundamentalsHistory — point-in-time contract, acceptance #2/#3', () => {
+  it('separates a DISCRETE quarter from its YTD cumulative sibling — real AAPL fact pair (FY2026 Q2 10-Q, filed 2026-05-01)', () => {
+    // Confirmed live against SEC EDGAR CIK0000320193, accn 0000320193-26-000013: both facts share
+    // form:'10-Q', fp:'Q2', end:'2026-03-28' — only `start` (hence span) distinguishes the 90-day
+    // discrete quarter (val=111,184,000,000) from the 181-day YTD cumulative (val=254,940,000,000).
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          RevenueFromContractWithCustomerExcludingAssessedTax: {
+            units: {
+              USD: [
+                { start: '2025-09-28', end: '2026-03-28', val: 254_940_000_000, form: '10-Q', fp: 'Q2', filed: '2026-05-01' }, // YTD (6mo)
+                { start: '2025-12-28', end: '2026-03-28', val: 111_184_000_000, form: '10-Q', fp: 'Q2', filed: '2026-05-01', frame: 'CY2026Q1' }, // discrete
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings, skips } = selectQuarterlyFundamentalsHistory('AAPL', companyFacts, { sic: '3571' });
+    expect(skips).toEqual([]);
+    expect(filings).toHaveLength(1); // one row for end=2026-03-28, not two
+    expect(filings[0].asOf).toBe('2026-03-28');
+    expect(filings[0].period).toBe('QUARTERLY');
+    expect(filings[0].metrics.totalRevenueUsd).toBe(111_184_000_000); // the DISCRETE figure, never the YTD one
+    expect(filings[0].metrics.form).toBe('10-Q');
+    expect(filings[0].metrics.fp).toBe('Q2');
+  });
+
+  it('rejects a prior-fiscal-year-end INSTANT balance mislabeled with the current filing-level fp — real AAPL fact (FY2010 Q1 10-Q, filed 2010-01-25)', () => {
+    // Confirmed live: accn 0001193125-10-012085 carries a genuine current-quarter cash balance
+    // (end=2009-12-26) alongside a stale prior-FYE comparative (end=2008-09-27) — BOTH tagged
+    // form:'10-Q', fp:'Q1' (filing-level, not per-fact). 2008-09-27 never appears as an 80-100-day
+    // discrete revenue end, so the duration-validated-ends join rejects it; only the genuine
+    // quarter-end balance is admitted.
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: {
+              USD: [
+                { start: '2009-09-27', end: '2009-12-26', val: 15_683_000_000, form: '10-Q', fp: 'Q1', filed: '2010-01-25' },
+              ],
+            },
+          },
+          CashAndCashEquivalentsAtCarryingValue: {
+            units: {
+              USD: [
+                { end: '2009-12-26', val: 7_609_000_000, form: '10-Q', fp: 'Q1', filed: '2010-01-25' }, // genuine
+                { end: '2008-09-27', val: 11_875_000_000, form: '10-Q', fp: 'Q1', filed: '2010-01-25' }, // prior FYE, mislabeled fp
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings } = selectQuarterlyFundamentalsHistory('AAPL', companyFacts, { sic: '3571' });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].asOf).toBe('2009-12-26');
+    expect(filings[0].metrics.cashAndInterestSecuritiesUsd).toBe(7_609_000_000); // never the 2008 FYE figure
+  });
+
+  it('excludes 10-K (annual) facts, never mixing annual figures into the quarterly history', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: {
+              USD: [
+                { val: 250, start: '2022-01-01', end: '2022-03-31', filed: '2022-05-01', form: '10-Q', fp: 'Q1' },
+                { val: 1_000, start: '2022-01-01', end: '2022-12-31', filed: '2023-02-15', form: '10-K', fp: 'FY' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const { filings } = selectQuarterlyFundamentalsHistory('QTLY', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].asOf).toBe('2022-03-31');
+  });
+
+  it('sets releasedAt to the SEC `filed` date, never the fiscal `end` — quarterly acceptance #1', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: { units: { USD: [{ val: 1_000, start: '2019-10-01', end: '2019-12-31', filed: '2020-02-01', form: '10-Q', fp: 'Q1' }] } },
+        },
+      },
+    };
+    const { filings } = selectQuarterlyFundamentalsHistory('ABCD', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].releasedAt).toBe('2020-02-01');
+    expect(filings[0].releasedAt).not.toBe(filings[0].asOf);
+  });
+
+  it('a symbol with zero eligible quarterly facts yields a counted skip, never a fabricated row', () => {
+    const { filings, skips } = selectQuarterlyFundamentalsHistory('EMPT', { facts: { 'us-gaap': {} } }, { sic: null });
+    expect(filings).toEqual([]);
+    expect(skips).toEqual([{ symbol: 'EMPT', reasonCode: 'no_quarterly_10q_facts' }]);
+  });
+
+  it('rejects a half-year (~180d) span even when fp/form are otherwise eligible — guards the boundary', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: { units: { USD: [{ val: 5_000, start: '2022-01-01', end: '2022-06-30', filed: '2022-08-01', form: '10-Q', fp: 'Q2' }] } },
+        },
+      },
+    };
+    const { filings, skips } = selectQuarterlyFundamentalsHistory('HALF', companyFacts, { sic: null });
+    expect(filings).toEqual([]);
+    expect(skips).toEqual([{ symbol: 'HALF', reasonCode: 'no_quarterly_10q_facts' }]);
+  });
+
+  it('admits a genuine ~91-day discrete quarter at the boundary of the window', () => {
+    const companyFacts = {
+      facts: {
+        'us-gaap': {
+          Revenues: { units: { USD: [{ val: 5_000, start: '2022-04-01', end: '2022-06-30', filed: '2022-08-01', form: '10-Q', fp: 'Q2' }] } },
+        },
+      },
+    };
+    const { filings } = selectQuarterlyFundamentalsHistory('OKQ', companyFacts, { sic: null });
+    expect(filings).toHaveLength(1);
+    expect(filings[0].metrics.totalRevenueUsd).toBe(5_000);
+  });
+
+  it('is a pure function: makes zero network calls', () => {
+    const fetchSpy = vi.fn();
+    const original = global.fetch;
+    global.fetch = fetchSpy as any;
+    try {
+      selectQuarterlyFundamentalsHistory('NONE', { facts: { 'us-gaap': {} } }, { sic: null });
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       global.fetch = original;

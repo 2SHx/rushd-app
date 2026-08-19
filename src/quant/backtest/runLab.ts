@@ -79,6 +79,11 @@ import {
   type HalalStoppedFastMomentumCoreParams,
 } from '../strategies/halalStoppedFastMomentumCore';
 import {
+  HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
+  halalFundamentalMomentumCoreBookPolicy,
+  type HalalFundamentalMomentumCoreParams,
+} from '../strategies/halalFundamentalMomentumCore';
+import {
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE,
   HALAL_SPUS_FORWARD_START,
@@ -228,6 +233,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   'halal-residual-fast-momentum-core',
   HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
   HALAL_FAST_MOMENTUM_CASH_CORE_ID,
+  HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
 ]);
 
@@ -256,6 +262,9 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
   // QDR-15 allocation-transport lane: inherits the baseline's audited C1 sleeve unchanged.
   HALAL_FAST_MOMENTUM_CASH_CORE_ID,
+  // ISOLATED fundamental-gate A/B on `halal-fast-momentum-core`: inherits the same audited C1
+  // sleeve, because the revenue-growth gate must be the ONLY new variable.
+  HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -303,6 +312,10 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   // ISOLATED ALLOCATION transport of `halal-fast-momentum-core`: the book share is the ONLY new
   // variable, so the ranking-pool breadth MUST equal the baseline's 60 — anything else is a confound.
   [HALAL_FAST_MOMENTUM_CASH_CORE_ID, 60],
+  // ISOLATED fundamental-gate A/B on `halal-fast-momentum-core`: the revenue-growth gate is the ONLY
+  // new variable, so the ranking-pool breadth MUST equal the baseline's 60 (manifest
+  // universeMode `c1_verified_dollar_volume_sleeve_max60`) -- a different sleeve size is a confound.
+  [HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID, 60],
 ]);
 
 /**
@@ -736,6 +749,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   if (setupId === HALAL_FAST_MOMENTUM_CASH_CORE_ID) {
     return halalFastMomentumCashCoreBookPolicy(params as HalalFastMomentumCashCoreParams | undefined);
   }
+  if (setupId === HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID) {
+    return halalFundamentalMomentumCoreBookPolicy(params as HalalFundamentalMomentumCoreParams | undefined);
+  }
   if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
     return halalSpusVolManagedBetaBookPolicy(params as HalalSpusVolManagedBetaParams | undefined);
   }
@@ -1149,6 +1165,48 @@ async function loadDailySymbol(
   // Assertion (no-mock guard): no MOCK bar may reach the simulator.
   if (real.some((b) => b.source === 'MOCK')) throw new Error(`MOCK bar leaked into ${symbol} daily series`);
   return { bars: real, excludedMock };
+}
+
+/**
+ * Setups whose `prepareUniverse` consumes the RAW point-in-time filings table. `prepareUniverse` is
+ * SYNCHRONOUS, so a setup can never issue this DB read itself — the harness must load, exactly as it
+ * already does for `benchmarkDailyBarsBySymbol`. Keyed by id so every other setup issues zero extra
+ * queries and behaves byte-identically.
+ */
+const PIT_FUNDAMENTALS_SETUP_IDS: ReadonlySet<string> = new Set([
+  HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
+]);
+
+/**
+ * Every `Fundamentals` row for the resolved sleeve, DELIBERATELY UNFILTERED BY DATE. The consuming
+ * setup owns the `releasedAt <= decision close` slice and re-asserts it with
+ * `assertNoLookahead(rows, asOf, 'releasedAt')`; pre-slicing here would make that production guard a
+ * tautology over a feed the harness had already cleaned. `asOf` (the fiscal period the filing
+ * describes) is carried through but is NEVER a point-in-time key — a 10-K describes a year that
+ * ended months before anyone could read it. `metrics.totalRevenueUsd` is read defensively: any
+ * non-finite or absent value becomes `null`, which the setup treats as ADMIT_UNCONDITIONED.
+ */
+async function loadPointInTimeFundamentals(
+  symbols: readonly string[],
+): Promise<Map<string, { asOf: Date; releasedAt: Date; totalRevenueUsd: number | null }[]>> {
+  const { prisma } = await import('../../lib/prisma');
+  const rows = await prisma.fundamentals.findMany({
+    where: { symbol: { in: Array.from(symbols) }, market: 'NASDAQ' },
+    orderBy: [{ symbol: 'asc' }, { releasedAt: 'asc' }, { asOf: 'asc' }],
+    select: { symbol: true, asOf: true, releasedAt: true, metrics: true },
+  });
+  const bySymbol = new Map<string, { asOf: Date; releasedAt: Date; totalRevenueUsd: number | null }[]>();
+  for (const row of rows) {
+    const metrics = row.metrics as unknown;
+    const raw = metrics && typeof metrics === 'object' && !Array.isArray(metrics)
+      ? (metrics as Record<string, unknown>).totalRevenueUsd
+      : undefined;
+    const totalRevenueUsd = typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+    const list = bySymbol.get(row.symbol) ?? [];
+    list.push({ asOf: row.asOf, releasedAt: row.releasedAt, totalRevenueUsd });
+    bySymbol.set(row.symbol, list);
+  }
+  return bySymbol;
 }
 
 /** Latest complete NASDAQ trading date (YYYY-MM-DD) in the REAL daily MarketBar spine, for presets. */
@@ -1690,6 +1748,15 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
           ts: bar.ts, close: Number(bar.close), volume: Number(bar.volume),
         })));
       }
+      // Raw point-in-time filings, same harness-loads/setup-slices contract as the benchmark series
+      // above. Fails closed: a setup that reads filings must never silently run on an empty feed,
+      // because "no filings" and "the gate never fired" are indistinguishable in the output.
+      const fundamentalsBySymbol = PIT_FUNDAMENTALS_SETUP_IDS.has(setupId)
+        ? await loadPointInTimeFundamentals(symbols)
+        : undefined;
+      if (fundamentalsBySymbol && fundamentalsBySymbol.size === 0) {
+        throw new Error(`${setupId} requires real point-in-time Fundamentals rows for its resolved sleeve`);
+      }
       if (dailyRoute === 'shared') {
         const sharedSeries: StrategyBookSeries[] = [];
         let engineSymbols = symbols;
@@ -1717,6 +1784,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             closesBySymbol: new Map(),
             dailyBarsBySymbol,
             benchmarkDailyBarsBySymbol,
+            fundamentalsBySymbol,
           });
           dailyBarsBySymbol.clear();
           sharedCalendarForPlateau = Array.from(calendarTimes)
@@ -1755,6 +1823,7 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             ])),
             dailyBarsBySymbol,
             benchmarkDailyBarsBySymbol,
+            fundamentalsBySymbol,
           });
           console.log(`prepared cross-name book for ${sharedSeries.length} symbol(s) [pairs/cross-sectional]`);
         }
@@ -1837,7 +1906,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
             ts: b.ts, close: Number(b.close), volume: Number(b.volume),
           })));
         }
-        setup.prepareUniverse({ symbols, closesBySymbol, dailyBarsBySymbol, benchmarkDailyBarsBySymbol });
+        setup.prepareUniverse({
+          symbols, closesBySymbol, dailyBarsBySymbol, benchmarkDailyBarsBySymbol, fundamentalsBySymbol,
+        });
         console.log(`prepared cross-name book for ${closesBySymbol.size} symbol(s) [pairs/cross-sectional]`);
       }
       console.log(`\nprocessing ${symbols.length} symbol(s) [source=daily MarketBar, YAHOO/ALPACA only] …`);

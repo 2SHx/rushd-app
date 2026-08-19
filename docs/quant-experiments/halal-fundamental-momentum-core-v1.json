@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-fundamental-momentum-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-fundamental-momentum-core",
+    "from": "2018-01-02",
+    "to": "2026-07-17",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db",
+    "market": "NASDAQ",
+    "universeMode": "c1_verified_dollar_volume_sleeve_max60",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-fast-momentum-core@v1",
+    "comparatorRunId": "218716ac-f692-4f0f-91f3-81045a159a62",
+    "comparatorGitSha": "000dea1",
+    "hypothesis": "Among the C1-verified 60-name sleeve, gating halal-fast-momentum-core's 63d/skip2 price-momentum top-5 selection on a point-in-time, cross-sectional trailing-annual REVENUE-GROWTH percentile (>= 0.50 of eligible sleeve names, computed from consecutive 10-K totalRevenueUsd, both filings released at or before the decision close) removes the subset of price runs that carry no revenue backing and therefore improves risk-adjusted SELECTION quality: OOS DSR rises above 0.874 and MC book-day p95 drawdown falls at least 5pp below 68.40%, without destroying OOS CAGR below 80%.",
+    "mechanism": "A pure price signal cannot separate a price run driven by business acceleration from one driven by multiple re-rating, crowding, or speculative flow; both look identical to a 63d/skip2 relative rank. halal-fast-momentum-core@v1's terminal card diagnoses its 68.40% MC p95 (worst of ten mechanisms) as 'fewer, larger positions concentrated in a faster-turning momentum cluster' and its plateau collapse at lookbackDays=42 as genuine signal noise. Both are the signature of re-rating names entering the top-5. Trailing-annual revenue growth is the one axis in the database that is (a) never a function of price and (b) directly measures whether the business behind the run is growing, so it can veto exactly the names momentum alone cannot distinguish.",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "validationTrials": 9,
+      "minRevenueGrowthPercentile": 0.5,
+      "revenueGrowthSource": "Fundamentals.metrics.totalRevenueUsd (form 10-K only; the only form present in all 3,813 rows)",
+      "revenueGrowthPairing": "current = the row selected by PointInTimeStore.fundamentals(symbol,'NASDAQ',decisionClose) i.e. orderBy [releasedAt desc, asOf desc] over releasedAt <= decisionClose; prior = among rows with releasedAt <= decisionClose the one with the greatest asOf strictly less than current.asOf; growth = (current.totalRevenueUsd - prior.totalRevenueUsd) / prior.totalRevenueUsd, requires both non-null and prior > 0",
+      "revenueGrowthPercentileBasis": "cross_sectional_rank_over_eligible_sleeve_names_at_this_decision_date_only",
+      "revenueGrowthMissingPolicy": "ADMIT_UNCONDITIONED",
+      "minEligibleNamesGuard": 0
+    },
+    "selectionRule": [
+      "1. Compute 63d/skip2 relative momentum and the absolute filter (>0) over the 60-name sleeve using dualMomentumMetrics, imported UNCHANGED. This produces the identical ranked survivor list the comparator uses.",
+      "2. For every sleeve name compute revenueGrowth per params.revenueGrowthPairing from rows PIT-sliced to releasedAt <= decision close, then assertNoLookahead(rows, asOf, 'releasedAt').",
+      "3. ELIGIBLE = sleeve names with a finite revenueGrowth at this decision date. Percentile of a name = (rank among ELIGIBLE ascending) / (|ELIGIBLE| - 1); |ELIGIBLE| < 2 leaves every name unconditioned for that week.",
+      "4. Walk the momentum-ranked survivor list in rank order and ADMIT a name when it is not ELIGIBLE (fallback), or its percentile >= minRevenueGrowthPercentile. Stop at topN. If fewer than topN names are admissible, hold the shortfall in cash exactly as cashFloor already permits.",
+      "5. Everything downstream is byte-identical to the comparator: inverseVolatilityWeights, capAndRedistribute at 25%, cashFloor 2, weekly ISO-week rebalance, decide-close/fill-next-open, 15 bps/side, unchanged risk/ADV/cash envelope. No sizing, exit, or cadence change enters."
+    ],
+    "fallbackNoLookAheadArgument": "ADMIT_UNCONDITIONED branches on whether the PIT read returned two usable filings at this decision close, using the same releasedAt <= asOf filter as the value itself. A filing that exists in the table today but was filed after the decision date is invisible to both the value and the branch, so a name is 'missing' exactly when it was missing to a real decision-maker standing at that close. The branch therefore carries no information dated after asOf. ADMIT (not EXCLUDE) is chosen so the rule can never become a covert bet on filing coverage: a name is never removed for a data gap, and total inertness of the fundamental collapses the book exactly onto the comparator, which is what makes falsification condition F1 detectable.",
+    "plateau": {
+      "axes": ["minRevenueGrowthPercentile", "topN"],
+      "grid": { "minRevenueGrowthPercentile": [0.35, 0.5, 0.65], "topN": [4, 5, 6] },
+      "center": { "minRevenueGrowthPercentile": 0.5, "topN": 5 },
+      "trials": 9,
+      "note": "lookbackDays stays frozen at 63 and skipRecentDays at 2. The comparator's own plateau already established that 42d is where the price signal turns noisy; re-sweeping it here would guarantee a plateau failure driven by the OLD axis and would mask the NEW one."
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "The setup was designed after inspecting halal-fast-momentum-core@v1's terminal card (105.92 / 68.40 / 0.874) and replays the already-inspected 2018-2026 historical window, so QDR-9 conditions (b) forward-only, (d) evidence boundary after seal, and (e) all observations after that boundary cannot hold. EXPLORATORY is the fail-closed default and is correct here. This lane SCREENS and CANNOT PROMOTE: at the 108-trial family floor a 2.55-year OOS window requires an annualized Sharpe near 2.9 to reach DSR 0.95, which the Sharpe > 3.00 implausibility ceiling makes effectively unreachable. Its only legitimate output is a candidate for a separate, sealed, forward-only CONFIRMATORY manifest.",
+      "familyTrialsAfterRegistration": 117,
+      "addedTrials": 9
+    },
+    "predictions": {
+      "oosCagrPct": { "baseline": 105.92, "point": 98.0, "interval": [80.0, 125.0], "direction": "FLAT" },
+      "mcBookDayP95DrawdownPct": { "baseline": 68.4, "point": 60.0, "interval": [54.0, 65.0], "direction": "DOWN" },
+      "oosDeflatedSharpe": { "baseline": 0.874, "point": 0.905, "interval": [0.88, 0.93], "direction": "UP" },
+      "tradesFull": { "baseline": 1390, "interval": [1250, 1500], "direction": "FLAT" },
+      "expectedVerdict": "REJECTED is expected and is not the question: DSR 0.95 is structurally unreachable at 108 exploratory trials over a 2.55-year OOS window. This experiment measures whether a point-in-time fundamental improves SELECTION quality over pure price momentum; it makes no promotion claim."
+    },
+    "falsification": {
+      "confirmedRequiresAll": [
+        "F1 does not fire (the gate demonstrably changes the book)",
+        "oosCagr >= 80.0pct",
+        "mcBookDayP95Drawdown <= 63.40pct",
+        "oosDeflatedSharpe >= 0.894"
+      ],
+      "falsifiedIfAny": [
+        "F1 INERT AXIS (primary kill, and the way the exit-only stop lane died): the run must publish from its own evidence medianWeeklyGatedSkips = the median count, across decision weeks, of names inside the momentum-ranked top-15 that the revenue-growth gate skipped. If medianWeeklyGatedSkips < 2.0, OR the realized top-5 set is identical to the comparator's on >= 90% of decision weeks, the fundamental is decoration on a price signal and the hypothesis is DEAD regardless of the CAGR/DSR numbers, which must then be reported as an inert-axis finding and never as a mechanism result.",
+        "F2 RETURN DESTROYED: OOS CAGR < 80.0pct.",
+        "F3 NO TAIL BENEFIT: MC book-day p95 drawdown > 63.40pct (tail not cut by at least 5pp).",
+        "F4 NO RISK-ADJUSTED BENEFIT: OOS DSR <= 0.874.",
+        "F5 KNIFE EDGE: 3 or more of the 8 frozen plateau neighbours degrade past the OOS-expectancy bound."
+      ],
+      "voidNotFalsified": [
+        "F6 PIT BREACH: any LookaheadError, any non-zero look-ahead violation count, or any decision week in which a row with releasedAt > asOf entered the percentile. The run is VOID and reports nothing about the hypothesis."
+      ]
+    },
+    "coverage": {
+      "measuredOn": "the exact 60 sleeve symbols persisted in results/halal-fast-momentum-core-2018-01-02-2026-07-17-c1_verified_60.json",
+      "fundamentalsTableTotals": "3,813 rows / 215 symbols / all NASDAQ / all form 10-K; asOf 2006-09-24..2026-07-03; releasedAt 2009-10-27..2026-08-07; rows per symbol median 19 (min 3, max 23)",
+      "populatedMetrics": "sic 100.0%, cashAndInterestSecuritiesUsd 96.0%, totalRevenueUsd 68.0%, interestBearingDebtUsd 53.9%, nonCompliantIncomeUsd 51.1% (no peRatio, no mcap, no shares outstanding, no quarterly rows)",
+      "sleeveNamesWithAnyRow": "59 of 60 (XOM has zero Fundamentals rows in any year and is permanently unconditioned)",
+      "usableRevenueGrowthAtDecisionDate": {
+        "2018-01-02": "18 of 60",
+        "2019-01-02": "28 of 60",
+        "2020-01-02": "49 of 60",
+        "2022-01-03": "52 of 60",
+        "2024-01-02": "55 of 60",
+        "2026-01-02": "58 of 60",
+        "2026-07-17": "57 of 60"
+      },
+      "stalenessDaysAtDecisionDate": "median 300-345, max 1,570 in 2019 falling to 352 by 2026 — annual 10-K cadence, so the variable is deliberately slow and is used as a slow structural filter, never as a fast signal",
+      "sufficiencyJudgement": "SUFFICIENT for the OOS window that decides the verdict (55-58 of 60 names conditioned, ~95%) and INSUFFICIENT for 2018-2019 (18-28 of 60). The first ~2 IS years are largely unconditioned; that dilution biases the full-period MC drawdown toward 'no change' and therefore makes F3 conservative, not generous. No claim about 2018-2019 may be drawn from this run."
+    },
+    "terminalFence": {
+      "pitMembershipRequired": true,
+      "status": "BLOCKED",
+      "note": "QDR-14: the id must be added to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS (src/quant/universe/pointInTimeMembership.ts:136) at implementation time. Historical membership, lifecycle/delisting and independent per-name Sharia evidence do not exist for this window, so any run of this version is unverified-diagnostic-only and cannot produce a terminal card. The fence opens only by the QDR-14 disclosure-bound waiver, never silently."
+    },
+    "reuseUnchanged": [
+      "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics",
+      "src/quant/strategies/halalRiskParityCore.ts :: inverseVolatilityWeights, capAndRedistribute",
+      "src/quant/portfolio/frontier.ts :: dailyReturns",
+      "src/quant/data/pointInTime.ts :: assertNoLookahead, PointInTimeStore.fundamentals"
+    ],
+    "filesStrategistMayTouch": [
+      "NEW src/quant/strategies/halalFundamentalMomentumCore.ts",
+      "NEW src/quant/strategies/halalFundamentalMomentumCore.test.ts",
+      "src/quant/strategies/catalog.ts (one registration line)",
+      "src/quant/strategies/types.ts (ONE optional field on UniversePrepareInput: fundamentalsBySymbol?: ReadonlyMap<string, readonly { asOf: Date; releasedAt: Date; totalRevenueUsd: number | null }[]>)",
+      "src/quant/backtest/runLab.ts (populate it at the three existing prepareUniverse call sites, mirroring benchmarkDailyBarsBySymbol at lines 1679-1689/1719/1757/1840; prepareUniverse is sync, so the harness must load and the setup must PIT-slice, exactly the precedent documented at types.ts:63)",
+      "src/quant/universe/pointInTimeMembership.ts (add the id to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS per QDR-14)",
+      "docs/quant-experiments/halal-fundamental-momentum-core-v1.json (this manifest only)"
+    ],
+    "filesForbidden": [
+      "src/quant/strategies/halalFastMomentumCore.ts (the comparator is frozen)",
+      "src/quant/backtest/portfolioEngine.ts, src/quant/backtest/metrics.ts, src/quant/backtest/experimentProtocol.ts (no gate or estimator may move)",
+      "docs/quant-experiments/halal-fast-momentum-cash-core-v1.json and every other sealed or CODIFIED manifest"
+    ]
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": { "director": "quant-research-director", "implementer": "quant-strategist" },
+  "diagnosticRuns": 1,
+  "fullRun": null,
+  "terminal": null
+}

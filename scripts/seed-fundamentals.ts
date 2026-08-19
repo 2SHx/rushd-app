@@ -34,10 +34,11 @@ async function main() {
 
     await prisma.fundamentals.upsert({
       where: {
-        symbol_market_asOf: {
+        symbol_market_asOf_period: {
           symbol: t.symbol,
           market: t.market,
-          asOf: q1AsOf
+          asOf: q1AsOf,
+          period: 'ANNUAL'
         }
       },
       create: {

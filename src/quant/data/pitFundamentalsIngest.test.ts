@@ -18,6 +18,7 @@ const filing: PitFundamentalsFiling = {
   market: 'NASDAQ',
   asOf: '2019-12-31',
   releasedAt: '2020-02-15',
+  period: 'ANNUAL',
   metrics: {
     sic: '3674',
     interestBearingDebtUsd: 100,

@@ -301,9 +301,9 @@ describe('halal-stopped-fast-momentum-core v1 — registration and fences', () =
     expect(validationTrialsForSetup(HALAL_STOPPED_FAST_MOMENTUM_CORE_ID, P)).toBe(9);
   });
 
-  it('joins the halal-core trial family at 117 and stays inside the QDR-14 survivorship fence', () => {
+  it('joins the halal-core trial family at 126 and stays inside the QDR-14 survivorship fence', () => {
     expect(trialCountEvidence(HALAL_STOPPED_FAST_MOMENTUM_CORE_ID, 9)).toMatchObject({
-      familyId: 'halal-core-2026q3-v1', familyTrials: 117, relatedSetups: 13, tier: 'EXPLORATORY',
+      familyId: 'halal-core-2026q3-v1', familyTrials: 126, relatedSetups: 14, tier: 'EXPLORATORY',
     });
     expect(requiresPointInTimeMembership(HALAL_STOPPED_FAST_MOMENTUM_CORE_ID)).toBe(true);
   });

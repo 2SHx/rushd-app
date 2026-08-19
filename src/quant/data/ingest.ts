@@ -211,7 +211,12 @@ export async function ingestBarsBackfill(
   const cutoff = earliest?.ts ?? null;
 
   const days = opts?.days ?? BACKFILL_TARGET_DAYS;
-  const candles = await provider.getCandles(symbol, market, days);
+  // Strict, not getCandles(): getCandles() swallows a fetch failure and returns
+  // generateMockHistory() fixtures, and sourceFor(YahooFinanceProvider) === 'YAHOO'
+  // regardless of which path actually answered — so a transient/bad-ticker failure would
+  // silently persist fabricated bars mislabeled as real YAHOO data. getCandlesStrict throws
+  // instead, which the caller (a per-symbol try/catch) logs and skips — never fabricates.
+  const candles = await provider.getCandlesStrict(symbol, market, days);
   const olderCandles = cutoff
     ? candles.filter((c) => new Date(`${c.time}T00:00:00.000Z`) < cutoff)
     : candles;

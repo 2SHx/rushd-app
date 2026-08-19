@@ -50,8 +50,14 @@ export interface PitFundamentalsMetrics {
   cashAndInterestSecuritiesUsd: number | null;
   nonCompliantIncomeUsd: number | null;
   totalRevenueUsd: number | null;
-  /** Always '10-K' in this unit — see file header on scope. */
-  form: '10-K';
+  /** '10-K' for an annual filing, '10-Q' for a quarterly one — the write-time discriminator that
+   * also lands in the row's own JSON `metrics`, redundant with (never contradicting) the schema-
+   * level `Fundamentals.period` column set by `pitFundamentalsIngest.ts`. */
+  form: '10-K' | '10-Q';
+  /** SEC's own fiscal-period-focus tag: 'FY' for an annual row, 'Q1'|'Q2'|'Q3' for a quarterly one
+   * (10-Qs never separately report Q4 — that period is covered by the following 10-K). Absent on
+   * annual rows (implicitly FY, kept out of the JSON to avoid changing the existing annual shape). */
+  fp?: 'Q1' | 'Q2' | 'Q3';
   notes: string[];
 }
 
@@ -62,6 +68,10 @@ export interface PitFundamentalsFiling {
   asOf: string;
   /** ISO YYYY-MM-DD: when this filing's data became public — the point-in-time key. */
   releasedAt: string;
+  /** Schema-level ANNUAL/QUARTERLY discriminator — see `Fundamentals.period` (prisma/schema.prisma).
+   * Set once here (never inferred later from `metrics.form`) so ingestion, the unique key, and the
+   * JSON payload can never disagree about what granularity a row is. */
+  period: 'ANNUAL' | 'QUARTERLY';
   metrics: PitFundamentalsMetrics;
 }
 
@@ -205,6 +215,7 @@ export function selectAnnualFundamentalsHistory(
       market: 'NASDAQ',
       asOf: end,
       releasedAt,
+      period: 'ANNUAL',
       metrics: {
         sic,
         interestBearingDebtUsd: sumParts([debtLT.get(end)?.val, debtCur.get(end)?.val]),
@@ -219,6 +230,183 @@ export function selectAnnualFundamentalsHistory(
 
   if (filings.length === 0 && skips.length === 0) {
     skips.push({ symbol, reasonCode: 'no_annual_10k_facts' });
+  }
+
+  return { filings, skips };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Quarterly (10-Q) backfill — QDR-15: `halal-fundamental-momentum-core@v1` was falsified because
+// an annual revenue-growth percentile whose fiscal year ended ~300 days earlier cannot improve on
+// a 63-day price rank (docs/quant-experiments). The successor condition is a faster, fully-covered
+// fundamental: quarterly revenue. This section adds that WITHOUT touching the annual path above —
+// `selectAnnualFundamentalsHistory`'s behavior (and its tests) is byte-identical to before.
+//
+// THE MIRROR-IMAGE TRAP (this file's header documents the annual one: a 10-K embeds prior-quarter
+// comparative facts under its own filing-level form/fp tags). For 10-Qs there are TWO mirror traps,
+// both confirmed against live SEC EDGAR (Apple, CIK0000320193) before writing this filter:
+//   (a) DISCRETE vs YTD cumulative, duration facts (revenue/interest-income). A Q2/Q3 10-Q's income
+//       statement always carries BOTH a "three months ended" (discrete) and a "six/nine months
+//       ended" (YTD) column for the same concept, both tagged `form:'10-Q'`, the SAME filing-level
+//       `fp` (e.g. both 'Q2'), and often the SAME `end` — only `start` (and hence the span) differs.
+//       Real fact pair, Apple's FY2026 Q2 10-Q (accn 0000320193-26-000013, filed 2026-05-01):
+//         YTD:      {start:"2025-09-28", end:"2026-03-28", val:254,940,000,000} — 181-day span
+//         DISCRETE: {start:"2025-12-28", end:"2026-03-28", val:111,184,000,000} — 90-day span,
+//                   frame:"CY2026Q1" (no "I", no "YTD" — SEC's own single-quarter label)
+//       Mixing these into one growth series is silently wrong by ~2.3x. The fix mirrors the annual
+//       one exactly: a span window, just centered on one quarter (80-100 days) instead of one year.
+//   (b) ANNUAL-vs-quarterly, INSTANT facts (cash/debt — balance-sheet concepts, no `start` to span-
+//       check). A 10-Q's balance sheet compares the current quarter-end to the PRIOR FISCAL YEAR-END
+//       (an audited annual balance), both tagged `form:'10-Q'` and the SAME filing-level `fp`. Real
+//       fact, Apple's FY2010 Q1 10-Q (accn 0001193125-10-012085, filed 2010-01-25): alongside the
+//       genuine current-quarter cash balance ({end:"2009-12-26", val:7,609,000,000, fp:"Q1"}), the
+//       SAME accession also carries {end:"2008-09-27", val:11,875,000,000, fp:"Q1"} — Apple's prior
+//       FISCAL-YEAR-END (September) balance, mislabeled by the same filing-level fp:'Q1' tag. A
+//       span check cannot catch this (no `start` on an instant fact) and `frame` is unreliable here
+//       too (non-calendar fiscal years desync fp's quarter number from frame's calendar quarter
+//       number). The fix: an instant fact is only admitted at an `end` date already independently
+//       validated as a genuine discrete-quarter END by a DURATION concept (revenue/interest-income)
+//       in trap (a)'s own filter — a company's balance-sheet quarter-end and income-statement
+//       quarter-end are always the same date within one filing, so this join is exact, not a
+//       heuristic, and rejects 2008-09-27 above (it never appears as an 80-100-day revenue end).
+const MIN_QUARTER_SPAN_DAYS = 80;
+const MAX_QUARTER_SPAN_DAYS = 100;
+const QUARTER_FP = new Set(['Q1', 'Q2', 'Q3']);
+
+type QuarterFp = 'Q1' | 'Q2' | 'Q3';
+
+/** Trap (a): a genuinely DISCRETE quarter duration fact — form 10-Q, fp in {Q1,Q2,Q3}, and a
+ * start..end span of 80-100 days (excludes the ~180d/~270d YTD cumulative sibling fact that SEC
+ * filers report alongside it for the same concept/end/fp). */
+function quarterlyDurationFactEligible(f: XbrlFact): f is XbrlFact & { filed: string; start: string } {
+  if (!Number.isFinite(f.val)) return false;
+  if (!isValidSecDateKey(f.end) || !isValidSecDateKey(f.filed)) return false;
+  if (f.end > f.filed!) return false; // reject implausible ordering — mirrors secFundamentals.ts:45
+  if (f.form && !f.form.startsWith('10-Q')) return false;
+  if (!f.fp || !QUARTER_FP.has(f.fp)) return false; // explicit Q1/Q2/Q3 only
+  if (f.start == null || !isValidSecDateKey(f.start)) return false; // duration facts only in this pass
+  const spanDays = (Date.parse(`${f.end}T00:00:00.000Z`) - Date.parse(`${f.start}T00:00:00.000Z`)) / DAY_MS;
+  if (spanDays < MIN_QUARTER_SPAN_DAYS || spanDays > MAX_QUARTER_SPAN_DAYS) return false; // rejects YTD
+  if (f.frame && /YTD$/.test(f.frame)) return false; // defensive second signal, mirrors the annual filter
+  return true;
+}
+
+/** Trap (b): a genuinely current-quarter INSTANT fact — form 10-Q, fp in {Q1,Q2,Q3}, no `start`,
+ * and (the actual discriminator) an `end` already independently validated as a discrete quarter-end
+ * by a duration concept in the SAME filter pass — see file comment above for why this exact join
+ * rejects a prior-fiscal-year-end comparative balance that a naive form/fp filter would admit. */
+function quarterlyInstantFactEligible(validEnds: ReadonlySet<string>) {
+  return (f: XbrlFact): f is XbrlFact & { filed: string } => {
+    if (!Number.isFinite(f.val)) return false;
+    if (!isValidSecDateKey(f.end) || !isValidSecDateKey(f.filed)) return false;
+    if (f.end > f.filed!) return false;
+    if (f.form && !f.form.startsWith('10-Q')) return false;
+    if (!f.fp || !QUARTER_FP.has(f.fp)) return false;
+    if (f.start != null) return false; // instant facts only in this pass
+    if (!validEnds.has(f.end)) return false; // must match a duration-validated genuine quarter-end
+    return true;
+  };
+}
+
+/** Generic end-date merge, parameterized by the eligibility predicate — shared machinery behind
+ * both `annualFactsByEnd`'s (kept as-is above, unrefactored, so the annual path's tested behavior
+ * cannot regress) and the quarterly maps below. Same earliest-filed-wins contract as the header
+ * documents: applies across alternate concept tags for the same `end`, never a fixed tag order. */
+function factsByEnd(
+  node: any,
+  keys: readonly string[],
+  eligible: (f: XbrlFact) => f is XbrlFact & { filed: string },
+  unit: 'USD' | 'shares' = 'USD',
+): Map<string, XbrlFact & { filed: string }> {
+  const merged = new Map<string, XbrlFact & { filed: string }>();
+  for (const key of keys) {
+    const list: XbrlFact[] | undefined = node?.[key]?.units?.[unit];
+    for (const raw of list ?? []) {
+      if (!eligible(raw)) continue;
+      const existing = merged.get(raw.end);
+      if (!existing || raw.filed < existing.filed) merged.set(raw.end, raw);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Pure core: builds the full QUARTERLY (10-Q) filing HISTORY for one symbol from the SAME already-
+ * fetched SEC companyfacts + submissions JSON the annual pass uses — no second network fetch (see
+ * `pitFundamentalsFetch.ts`, which now calls both selectors off one companyfacts/submissions pair).
+ * Same never-fabricates contract as the annual pass: a missing concept, ineligible fact, or a
+ * symbol with zero eligible quarterly facts yields a skip, never a guessed value.
+ */
+export function selectQuarterlyFundamentalsHistory(
+  symbol: string,
+  companyFacts: any,
+  submission: any,
+): { filings: PitFundamentalsFiling[]; skips: PitFundamentalsSkip[] } {
+  const gaap = companyFacts?.facts?.['us-gaap'] ?? {};
+  const sic: string | null = submission?.sic != null ? String(submission.sic) : null;
+
+  // Trap (a) first: DURATION concepts (income-statement) get the discrete-vs-YTD span filter.
+  const revenue = factsByEnd(gaap, TIER2_CONCEPT_KEYS.revenue, quarterlyDurationFactEligible);
+  const nonCompliant = factsByEnd(gaap, TIER2_CONCEPT_KEYS.nonCompliantIncome, quarterlyDurationFactEligible);
+
+  // Trap (b): INSTANT concepts (balance-sheet) are only admitted at an `end` a duration concept
+  // above has already proven is a genuine discrete quarter-end for this symbol.
+  const validEnds = new Set<string>([...Array.from(revenue.keys()), ...Array.from(nonCompliant.keys())]);
+  const instantEligible = quarterlyInstantFactEligible(validEnds);
+  const debtLT = factsByEnd(gaap, TIER2_CONCEPT_KEYS.longTermDebt, instantEligible);
+  const debtCur = factsByEnd(gaap, TIER2_CONCEPT_KEYS.debtCurrent, instantEligible);
+  const cash = factsByEnd(gaap, TIER2_CONCEPT_KEYS.cash, instantEligible);
+  const shortSec = factsByEnd(gaap, TIER2_CONCEPT_KEYS.shortTermSecurities, instantEligible);
+
+  const ends = new Set<string>();
+  for (const m of [debtLT, debtCur, cash, shortSec, revenue, nonCompliant]) {
+    for (const end of Array.from(m.keys())) ends.add(end);
+  }
+
+  if (ends.size === 0) {
+    return { filings: [], skips: [{ symbol, reasonCode: 'no_quarterly_10q_facts' }] };
+  }
+
+  const filings: PitFundamentalsFiling[] = [];
+  const skips: PitFundamentalsSkip[] = [];
+
+  for (const end of Array.from(ends).sort()) {
+    const contributing = [
+      debtLT.get(end), debtCur.get(end), cash.get(end), shortSec.get(end), revenue.get(end), nonCompliant.get(end),
+    ].filter((f): f is XbrlFact & { filed: string } => Boolean(f));
+
+    if (contributing.length === 0) continue; // unreachable (ends built from these maps), defensive only
+
+    const releasedAt = contributing.reduce((max, f) => (f.filed > max ? f.filed : max), contributing[0].filed);
+
+    if (releasedAt < end) {
+      skips.push({ symbol, reasonCode: 'implausible_filing_order', detail: `end=${end} releasedAt=${releasedAt}` });
+      continue;
+    }
+
+    const fp = (revenue.get(end)?.fp ?? nonCompliant.get(end)?.fp) as QuarterFp | undefined;
+
+    filings.push({
+      symbol,
+      market: 'NASDAQ',
+      asOf: end,
+      releasedAt,
+      period: 'QUARTERLY',
+      metrics: {
+        sic,
+        interestBearingDebtUsd: sumParts([debtLT.get(end)?.val, debtCur.get(end)?.val]),
+        cashAndInterestSecuritiesUsd: sumParts([cash.get(end)?.val, shortSec.get(end)?.val]),
+        nonCompliantIncomeUsd: nonCompliant.get(end)?.val ?? null,
+        totalRevenueUsd: revenue.get(end)?.val ?? null,
+        form: '10-Q',
+        fp,
+        notes: nonCompliant.get(end) ? [] : ['non_compliant_income_tag_absent_for_period'],
+      },
+    });
+  }
+
+  if (filings.length === 0 && skips.length === 0) {
+    skips.push({ symbol, reasonCode: 'no_quarterly_10q_facts' });
   }
 
   return { filings, skips };

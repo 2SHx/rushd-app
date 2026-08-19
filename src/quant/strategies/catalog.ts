@@ -34,6 +34,7 @@ import { halalFastMomentumCoreSetup } from './halalFastMomentumCore';
 import { halalResidualFastMomentumCoreSetup } from './halalResidualFastMomentumCore';
 import { halalStoppedFastMomentumCoreSetup } from './halalStoppedFastMomentumCore';
 import { halalFastMomentumCashCoreSetup } from './halalFastMomentumCashCore';
+import { halalFundamentalMomentumCoreSetup } from './halalFundamentalMomentumCore';
 import { halalSpusVolManagedBetaSetup } from './halalSpusVolManagedBeta';
 
 export const STRATEGY_SETUP_CATALOG = Object.freeze({
@@ -73,5 +74,6 @@ export const STRATEGY_SETUP_CATALOG = Object.freeze({
   [halalResidualFastMomentumCoreSetup.id]: halalResidualFastMomentumCoreSetup,
   [halalStoppedFastMomentumCoreSetup.id]: halalStoppedFastMomentumCoreSetup,
   [halalFastMomentumCashCoreSetup.id]: halalFastMomentumCashCoreSetup,
+  [halalFundamentalMomentumCoreSetup.id]: halalFundamentalMomentumCoreSetup,
   [halalSpusVolManagedBetaSetup.id]: halalSpusVolManagedBetaSetup,
 });

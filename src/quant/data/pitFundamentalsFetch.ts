@@ -6,7 +6,12 @@
 // src/quant/data/secFundamentals.ts (same User-Agent, same keyless endpoints). Not imported by any
 // test — see pitFundamentalsBackfill.test.ts for the offline-testable core this wraps.
 import { SEC_HEADERS, fetchJson } from '../universe/tier2XbrlFetch';
-import { selectAnnualFundamentalsHistory, type PitFundamentalsFiling, type PitFundamentalsSkip } from './pitFundamentalsBackfill';
+import {
+  selectAnnualFundamentalsHistory,
+  selectQuarterlyFundamentalsHistory,
+  type PitFundamentalsFiling,
+  type PitFundamentalsSkip,
+} from './pitFundamentalsBackfill';
 
 let tickerToCikPromise: Promise<Map<string, string>> | null = null;
 
@@ -29,15 +34,22 @@ export interface FetchSymbolHistoryResult {
   skips: PitFundamentalsSkip[];
 }
 
-/** One companyfacts.json + submissions.json fetch pair for an already-resolved CIK. Never throws
- * — a network/parse failure becomes a counted skip, exactly like a missing concept. */
+/** One companyfacts.json + submissions.json fetch pair for an already-resolved CIK — reused for
+ * BOTH the annual (10-K) and quarterly (10-Q) selectors, since companyfacts already carries every
+ * form/fp a filer has ever reported; no second network round trip is needed for quarterly coverage.
+ * Never throws — a network/parse failure becomes a counted skip, exactly like a missing concept. */
 export async function fetchPitFundamentalsHistory(symbol: string, cik: string): Promise<FetchSymbolHistoryResult> {
   try {
     const [facts, submission] = await Promise.all([
       fetchJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, 30_000),
       fetchJson(`https://data.sec.gov/submissions/CIK${cik}.json`, 30_000),
     ]);
-    return selectAnnualFundamentalsHistory(symbol, facts, submission);
+    const annual = selectAnnualFundamentalsHistory(symbol, facts, submission);
+    const quarterly = selectQuarterlyFundamentalsHistory(symbol, facts, submission);
+    return {
+      filings: [...annual.filings, ...quarterly.filings],
+      skips: [...annual.skips, ...quarterly.skips],
+    };
   } catch (err) {
     return {
       filings: [],

@@ -146,12 +146,18 @@ describe('sealed observation-unit routing', () => {
     expect(metricsForSetup(HALAL_FAST_MOMENTUM_CASH_CORE_ID, curve, METRIC_OPTS)).toEqual(bookDay);
   });
 
-  it('keeps the manifest a never-run DRAFT (no run of any kind was performed for this wiring)', () => {
+  // The lane SEALED on 2026-08-19 (commit 95fae73) and its forward window opens 2026-09-08, so the
+  // manifest is no longer a DRAFT. What this test actually guards is unchanged and is the whole
+  // point: the seal froze a config that has still NEVER been executed. Zero diagnostic runs and a
+  // null fullRun are the QDR-9 CONFIRMATORY preconditions -- either one moving off these values
+  // silently downgrades the lane to EXPLORATORY deflation, so they stay pinned. The configHash is
+  // pinned too: it IS the seal, and any edit inside it destroys the forward window.
+  it('keeps the sealed manifest never-run (no run of any kind was performed for this wiring)', () => {
     const manifest = JSON.parse(readFileSync(
       join(process.cwd(), 'docs/quant-experiments/halal-fast-momentum-cash-core-v1.json'), 'utf-8',
     )) as { state: string; configHash: unknown; diagnosticRuns: number; fullRun: unknown };
-    expect(manifest.state).toBe('DRAFT');
-    expect(manifest.configHash).toBeNull();
+    expect(manifest.state).toBe('SEALED');
+    expect(manifest.configHash).toBe('115a6b6f471156014cf63deb33dfbceb0929e1fbae951b212691c63dca8188b6');
     expect(manifest.diagnosticRuns).toBe(0);
     expect(manifest.fullRun).toBeNull();
   });
