@@ -4,14 +4,14 @@
   "version": "v1",
   "config": {
     "setup": "halal-fast-momentum-cash-core",
-    "evidenceBoundary": "forward-only-after-SEAL-REQUIRED-YYYY-MM-DD (QDR-16: at seal this string must be exactly \"forward-only-after-\" + config.runConfig.from + \"T00:00:00.000Z\"; while this sentinel stands the seal is refused)",
+    "evidenceBoundary": "forward-only-after-2026-09-08T00:00:00.000Z",
     "historicalMode": "FORWARD_ONLY_NO_HISTORICAL_FULL",
     "terminalEligible": false,
     "seed": 42,
     "runConfig": {
       "setup": "halal-fast-momentum-cash-core",
-      "from": "SEAL-REQUIRED-YYYY-MM-DD",
-      "to": "SEAL-REQUIRED-YYYY-MM-DD",
+      "from": "2026-09-08",
+      "to": "2036-06-24",
       "universe": "halal",
       "symbols": null,
       "confirmFull": false,
@@ -140,16 +140,17 @@
       "rule": "QDR-16",
       "binds": "an explicit calendar from/to pair INSIDE config.runConfig, and therefore inside configHash. No \"period\" key may appear in runConfig and no --period flag may be supplied at the terminal run.",
       "periodPresetForbidden": "a --period preset resolves `to` against latestTradingDate at RUN time (src/quant/backtest/runLab.ts resolvePeriodDates), so the window would float with whenever the run is launched — that IS window selection after seeing data. Forbidden for every CONFIRMATORY lane. As a consequence FULL_PERIOD_START (2018-01-02) is never consulted by this lane and does not cap it.",
-      "fromDerivation": "the first NYSE regular session strictly after the calendar date of the out-of-band `sealedAt` (the git commit time of the seal). Declared in the hash; verified against `sealedAt` by the terminal auditor.",
-      "toDerivation": "the calendar date of the (2435 + 25)th projected NYSE regular session on or after `from`, computed at seal from the deterministic NYSE holiday rules and written literally into runConfig.to.",
+      "fromDerivation": "2026-09-08. QDR-16 sets the FLOOR (\"the first NYSE regular session strictly after the calendar date of sealedAt\"); this seal takes a deliberate, disclosed margin ABOVE that floor rather than the minimum, because the seal commit's time BECOMES sealedAt and a from that lands even one day before it would fail QDR-9 condition (d) and deflate the lane to EXPLORATORY-117, where the declared 0.80 is unreachable. The mechanical rule used: the first NYSE regular session strictly after US Labor Day 2026 (2026-09-07). Authored 2026-08-19, so the margin is 20 calendar days / 12 intervening NYSE sessions. A LATER from strictly strengthens condition (d) (a wider seal-to-boundary gap) and can bias nothing, because no data for any of these dates exists at seal. If the seal commit does not land strictly before 2026-09-08T00:00:00-04:00 this manifest MUST be re-authored with a new from and NOT committed as-is.",
+      "toDerivation": "2036-06-24, the calendar date of the (2435+25)=2460th projected NYSE regular session counting from (inclusive) 2026-09-08 as session 1, computed from the deterministic NYSE holiday rules (New Year's Day with the NYSE Saturday non-observance, MLK 3rd Mon Jan, Washington 3rd Mon Feb, Good Friday by Gregorian computus, Memorial last Mon May, Juneteenth, Independence, Labor 1st Mon Sep, Thanksgiving 4th Thu Nov, Christmas; Sat->preceding Fri, Sun->following Mon). Span 3,577 calendar days = 9.7933 years at 251.19 sessions/yr. The 2,435th required session projects to 2036-05-16; the remaining 25 are the disclosed closure pad. Scheduled half-days are regular sessions and are counted; unscheduled closures are unprojectable by construction and are exactly what the pad insures.",
       "padSessions": 25,
       "padDisclosure": "the 25-session pad insures ONLY against unscheduled closures (a 9/11- or Sandy-class event) making the sealed window fall short of 2,435 sessions and forcing a spurious INSUFFICIENT_SAMPLE. If no such closure occurs the window yields ~492 observations against the sealed 487 floor; that surplus is fixed at seal, is not selectable afterwards, and moves attainable DSR by under 1%. Disclosed, not hidden.",
-      "cliInvocation": "npm run backtest -- --manifest docs/quant-experiments/halal-fast-momentum-cash-core-v1.json --runner <identity> --setup halal-fast-momentum-cash-core --from <runConfig.from> --to <runConfig.to> --universe halal --seed 42 --oos 1 --engine shared --feed yahoo-daily --source db",
-      "auditorRecomputes": "(d) config.runConfig.from is strictly after the out-of-band `sealedAt`; (e) every terminal observation lies inside [from, to]; (a) stableConfigHash(config) === configHash proves the pair has not moved since seal; and config.evidenceBoundary names the same date as config.runConfig.from. Absence of `sealedAt` fails closed to EXPLORATORY exactly as QDR-9 already rules."
+      "cliInvocation": "npm run backtest -- --manifest docs/quant-experiments/halal-fast-momentum-cash-core-v1.json --runner <identity> --setup halal-fast-momentum-cash-core --from 2026-09-08 --to 2036-06-24 --universe halal --seed 42 --oos 1 --engine shared --feed yahoo-daily --source db",
+      "auditorRecomputes": "(d) config.runConfig.from is strictly after the out-of-band `sealedAt`; (e) every terminal observation lies inside [from, to]; (a) stableConfigHash(config) === configHash proves the pair has not moved since seal; and config.evidenceBoundary names the same date as config.runConfig.from. Absence of `sealedAt` fails closed to EXPLORATORY exactly as QDR-9 already rules.",
+      "marginDisclosure": "from is NOT the minimum QDR-16 date but the first session after Labor Day 2026, a 20-calendar-day margin over the authoring date. Disclosed here, inside configHash, so the choice is ex-ante and unselectable afterwards. It costs the lane nothing: the window length is fixed at 2,460 sessions regardless of where it starts."
     }
   },
-  "configHash": null,
-  "state": "DRAFT",
+  "configHash": "115a6b6f471156014cf63deb33dfbceb0929e1fbae951b212691c63dca8188b6",
+  "state": "SEALED",
   "actors": {
     "director": "quant-research-director",
     "implementer": "quant-strategist"
