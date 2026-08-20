@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { pickBrokerKind } from './broker';
 import { InternalSimBroker } from './internalSim';
 import { AlpacaPaperBroker } from './alpacaPaper';
-import { selectBroker } from './registry';
+import { selectBroker, selectShadowPaperBroker } from './registry';
 import { assertLiveExecutionAllowed, isLiveExecutionAllowed, LiveExecutionBlocked } from './liveGuard';
 
 const D = Prisma.Decimal;
@@ -195,6 +195,65 @@ describe('AlpacaPaperBroker portfolio snapshot', () => {
   });
 });
 
+describe('AlpacaPaperBroker submitOrder timeout (LOW finding)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('bounds the POST with an abort signal, like every read call', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'o-1', status: 'new', filled_qty: '0', filled_avg_price: null,
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    await broker.submitOrder({
+      symbol: 'AAPL', market: 'NASDAQ' as any, side: 'BUY' as any, qty: new D(1), refPrice: new D(100), clientOrderId: 'cid-1',
+    });
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(postCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('rejects (never hangs) when the POST is aborted by a timeout', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockRejectedValueOnce(new DOMException('The operation was aborted.', 'TimeoutError'));
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    await expect(
+      broker.submitOrder({
+        symbol: 'AAPL', market: 'NASDAQ' as any, side: 'BUY' as any, qty: new D(1), refPrice: new D(100), clientOrderId: 'cid-2',
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('AlpacaPaperBroker.getLatestQuote (fresh-quote verification support)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads a mid quote from the pinned, fixed market-data host with a timeout signal', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ quote: { bp: '99.5', ap: '100.5' } }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    const mid = await broker.getLatestQuote('AAPL');
+    expect(mid.toString()).toBe('100');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://data.alpaca.markets/v2/stocks/AAPL/quotes/latest');
+    expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('fails closed on a non-OK response or an invalid/zero quote', async () => {
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })));
+    await expect(broker.getLatestQuote('AAPL')).rejects.toThrow('getLatestQuote failed: 503');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ quote: { bp: '0', ap: '0' } }), { status: 200 }),
+    ));
+    await expect(broker.getLatestQuote('AAPL')).rejects.toThrow('invalid quote');
+  });
+});
+
 describe('broker registry', () => {
   it('selects execution independently of market-data mode and defaults keyless to InternalSim', () => {
     expect(pickBrokerKind('NASDAQ' as any, {
@@ -248,5 +307,29 @@ describe('broker registry', () => {
       ALPACA_API_KEY: 'pk-real',
       ALPACA_API_SECRET: 'secret',
     } as any)).toThrow('restricted to the bounded shadow-paper runner');
+  });
+
+  it('selectShadowPaperBroker (the bounded-runner-only path) can construct ALPACA_PAPER once fully gated', () => {
+    const broker = selectShadowPaperBroker({
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+    } as any);
+    expect(broker).toBeInstanceOf(AlpacaPaperBroker);
+    expect(broker.kind).toBe('ALPACA_PAPER');
+  });
+
+  it('selectShadowPaperBroker fails closed on every one of its own gates independently', () => {
+    expect(() => selectShadowPaperBroker({} as any)).toThrow('mutations are disabled');
+    expect(() => selectShadowPaperBroker({ QUANT_SHADOW_PAPER_MUTATIONS: '1' } as any))
+      .toThrow('requires ALPACA_PAPER to be selected'); // QUANT_PAPER_BROKER unset -> INTERNAL_SIM
+    expect(() => selectShadowPaperBroker({
+      QUANT_PAPER_BROKER: 'ALPACA_PAPER',
+      QUANT_SHADOW_PAPER_MUTATIONS: '1',
+      ALPACA_API_KEY: 'pk-real',
+      ALPACA_API_SECRET: 'secret',
+      ALPACA_BASE_URL: 'https://api.alpaca.markets',
+    } as any)).toThrow('exact paper endpoint'); // pickBrokerKind's own check fires first
   });
 });

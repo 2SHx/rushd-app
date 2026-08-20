@@ -10,6 +10,11 @@ import { assertLiveExecutionAllowed } from './liveGuard';
 const D = Prisma.Decimal;
 export const ALPACA_PAPER_BASE_URL = 'https://paper-api.alpaca.markets';
 export const ALPACA_LIVE_BASE_URL = 'https://api.alpaca.markets';
+// Alpaca's market-data API is always served from this separate, fixed host (same key/secret),
+// regardless of paper vs. live trading — never overridable via ALPACA_BASE_URL/env, so there is
+// no way to misconfigure it onto an unexpected origin. Read-only; used only to verify a caller
+// -supplied --ref-price is not stale before the per-order cash cap check (see shadowPaperRunner).
+export const ALPACA_DATA_BASE_URL = 'https://data.alpaca.markets';
 const READ_TIMEOUT_MS = 5_000;
 
 function exactAlpacaOrigin(value: string): 'paper' | 'live' {
@@ -152,7 +157,7 @@ export class AlpacaPaperBroker implements BrokerAdapter {
 
   private async getOrderByClientId(clientOrderId: string): Promise<OrderResult | null> {
     const url = `${this.baseUrl}/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`;
-    const res = await fetch(url, { headers: this.headers() });
+    const res = await fetch(url, { headers: this.headers(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Alpaca getOrderByClientId failed: ${res.status}`);
     return this.mapOrder((await res.json()) as Record<string, unknown>);
@@ -167,6 +172,10 @@ export class AlpacaPaperBroker implements BrokerAdapter {
     const res = await fetch(`${this.baseUrl}/v2/orders`, {
       method: 'POST',
       headers: this.headers(),
+      // Bounded like every other outbound call in this class: a hung POST must surface as a
+      // catchable timeout, never leave the caller (and the durable ShadowPaperRun row) waiting
+      // indefinitely on whether a money-moving order was accepted.
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
       body: JSON.stringify({
         symbol: o.symbol,
         qty: o.qty.toString(),
@@ -189,17 +198,56 @@ export class AlpacaPaperBroker implements BrokerAdapter {
   }
 
   async getOrder(ref: string): Promise<OrderResult> {
-    const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, { headers: this.headers() });
+    const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, { headers: this.headers(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Alpaca getOrder failed: ${res.status}`);
     const j = (await res.json()) as Record<string, unknown>;
     return this.mapOrder(j);
   }
 
   async cancelOrder(ref: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, { method: 'DELETE', headers: this.headers() });
+    const res = await fetch(`${this.baseUrl}/v2/orders/${ref}`, {
+      method: 'DELETE',
+      headers: this.headers(),
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    });
     if (!res.ok) {
       throw new Error(`Alpaca cancelOrder failed: ${res.status}`);
     }
+  }
+
+  /**
+   * Fresh mid-quote (bid+ask)/2 for a symbol, from the fixed, pinned market-data host above.
+   * Read-only; used only to verify a caller-supplied --ref-price against a live price before the
+   * per-order cash cap check — never to size an order and never itself a transmission point.
+   */
+  async getLatestQuote(symbol: string): Promise<Prisma.Decimal> {
+    const res = await fetch(`${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/quotes/latest`, {
+      headers: this.headers(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`Alpaca getLatestQuote failed: ${res.status}`);
+    const j = (await res.json()) as Record<string, unknown>;
+    const quote = (j.quote ?? {}) as Record<string, unknown>;
+    const bid = decimal(quote.bp);
+    const ask = decimal(quote.ap);
+    if (!bid.gt(0) || !ask.gt(0)) throw new Error('Alpaca returned an invalid quote');
+    return bid.plus(ask).div(2);
+  }
+
+  /**
+   * Raw Alpaca account/positions/open-orders JSON, untouched (snake_case keys, no redaction).
+   * Read-only. Feeds scripts/paper-preflight.mjs's evaluateAlpacaPaperPreflight, which expects
+   * Alpaca's own shape — getPortfolioSnapshot() below is a *different*, redacted shape for the UI
+   * and must not be reused here.
+   */
+  async getPreflightSnapshot(): Promise<{ account: unknown; positions: unknown[]; openOrders: unknown[] }> {
+    const [account, positions, openOrders] = await Promise.all([
+      this.read('/v2/account'),
+      this.read('/v2/positions'),
+      this.read('/v2/orders?status=open&direction=desc&limit=50'),
+    ]);
+    return { account, positions: positions as unknown[], openOrders: openOrders as unknown[] };
   }
 
   /** One batched read model for the authenticated paper-portfolio UI. Never used for execution math. */

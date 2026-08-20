@@ -623,6 +623,75 @@ model ResearchDoc {
   @@index([tags])
 }
 
+// M17/DR-11 — broker-neutral SHADOW_PAPER operational mirror (QUANT_DESIGN.md QDR-8
+// operational-mirror amendment). These two models are DELIBERATELY disconnected from every
+// promotion-evidence model (Strategy, Decision, BookEvaluation, AllocationDecision): no
+// relation field here targets them, and none of them declares a back-relation here, so no
+// Prisma include/join path can pull a shadow row into allocator input, a card, or the
+// >=63-book-day series. `bookId`/`decisionId` are plain strings (like BookEvaluation.bookId),
+// never foreign keys, for the same reason. Real submission stays gated in code
+// (src/quant/execution/registry.ts, shadowPaperRunner.ts) — these models only make the
+// resulting evidence durable and idempotent.
+enum ShadowPaperRunStatus {
+  STARTED
+  PREFLIGHT_BLOCKED
+  GATE_BLOCKED
+  DRY_RUN
+  SUBMITTED
+  RECONCILED
+  FAILED
+}
+
+enum ShadowPaperOrderPurpose {
+  PROBE_CANCEL
+  PROBE_FILL
+  FLATTEN
+}
+
+model ShadowPaperRun {
+  id                 String               @id @default(uuid())
+  bookId             String
+  strategyVersion    String
+  asOf               DateTime
+  adapter            BrokerKind
+  // One-way, non-secret fingerprint of the broker account (never the raw account id/credentials).
+  accountFingerprint String
+  preflight          Json
+  status             ShadowPaperRunStatus @default(STARTED)
+  requestedNotional  Decimal              @db.Decimal(18, 4)
+  evidence           Json
+  startedAt          DateTime             @default(now())
+  finishedAt         DateTime?
+  orders             ShadowPaperOrder[]
+
+  // Idempotent run claim: a concurrent double-fire for the same book/version/day/adapter
+  // produces one row (insert-or-reuse), never two.
+  @@unique([bookId, strategyVersion, asOf, adapter])
+}
+
+model ShadowPaperOrder {
+  id            String                  @id @default(uuid())
+  runId         String
+  run           ShadowPaperRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  // Plain string, no FK — see the models' header comment. Never joined back to Decision.
+  decisionId    String?
+  // SHA-256 of (bookId, strategyVersion, asOf, decisionId, purpose): the idempotency key
+  // that lets a retried/duplicated attempt resolve to the same broker + DB order exactly once.
+  clientOrderId String                  @unique
+  brokerRef     String?
+  symbol        String
+  side          OrderSide
+  qty           Decimal                 @db.Decimal(18, 6)
+  filledQty     Decimal                 @default(0) @db.Decimal(18, 6)
+  avgFillPrice  Decimal                 @default(0) @db.Decimal(18, 6)
+  status        OrderStatus             @default(NEW)
+  purpose       ShadowPaperOrderPurpose
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([runId])
+}
+
 model PurificationEntry {
   id        String   @id @default(uuid())
   userId    String
