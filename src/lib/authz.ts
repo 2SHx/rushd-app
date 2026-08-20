@@ -89,9 +89,7 @@ const BASIC_CAPABILITIES: readonly Capability[] = [
   'trading:tasi',
   'quiz:access',
   'academy:track:foundations',
-  'academy:track:economics',
   'academy:track:wealth-building',
-  'academy:track:advanced-financial-analysis',
   'academy:strategy-team:lesson1',
   'workspace:unlock',
 ];

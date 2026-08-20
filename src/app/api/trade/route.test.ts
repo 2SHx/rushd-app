@@ -37,8 +37,12 @@ const prismaMock = {
   },
 };
 
+const NASDAQ_TIERS = new Set(['PREMIUM', 'ULTRA']);
+
 vi.mock('@/lib/authz', () => ({
   requireSession: () => requireSession(),
+  can: (session: { tier?: string } | null | undefined, capability: string) =>
+    capability === 'trading:nasdaq' ? !!session?.tier && NASDAQ_TIERS.has(session.tier) : true,
 }));
 
 vi.mock('@/services/marketData', () => ({
@@ -82,7 +86,7 @@ describe('POST /api/trade', () => {
   });
 
   it('blocks buying non-compliant assets', async () => {
-    requireSession.mockResolvedValue({ id: 'user_1' });
+    requireSession.mockResolvedValue({ id: 'user_1', tier: 'PREMIUM' });
     fetchMarketData.mockResolvedValue({
       symbol: 'TSLA',
       market: 'NASDAQ',
@@ -164,7 +168,7 @@ describe('POST /api/trade', () => {
   });
 
   it('rejects BUY order on insufficient balance', async () => {
-    requireSession.mockResolvedValue({ id: 'user_1' });
+    requireSession.mockResolvedValue({ id: 'user_1', tier: 'PREMIUM' });
     fetchMarketData.mockResolvedValue({
       symbol: 'NVDA',
       market: 'NASDAQ',
@@ -190,7 +194,7 @@ describe('POST /api/trade', () => {
   });
 
   it('executes SELL order successfully', async () => {
-    requireSession.mockResolvedValue({ id: 'user_1' });
+    requireSession.mockResolvedValue({ id: 'user_1', tier: 'PREMIUM' });
     fetchMarketData.mockResolvedValue({
       symbol: 'AAPL',
       market: 'NASDAQ',
@@ -225,5 +229,57 @@ describe('POST /api/trade', () => {
     expect(data.success).toBe(true);
     expect(data.balance).toBe('450.50');
     expect(data.sharesOwned).toBe('3.00');
+  });
+
+  it('blocks a BASIC-tier user from a NASDAQ trade — no order placed', async () => {
+    requireSession.mockResolvedValue({ id: 'user_1', tier: 'BASIC' });
+    fetchMarketData.mockResolvedValue({
+      symbol: 'AAPL',
+      market: 'NASDAQ',
+      price: 175.25,
+      isShariaCompliant: true,
+    });
+
+    const req = new Request('http://localhost/api/trade', {
+      method: 'POST',
+      body: JSON.stringify({ symbol: 'AAPL', market: 'NASDAQ', action: 'BUY', shares: 1 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error).toBe('tier_gate');
+    expect(fetchMarketData).not.toHaveBeenCalled();
+    expect(jarUpdate).not.toHaveBeenCalled();
+    expect(portfolioUpsert).not.toHaveBeenCalled();
+    expect(transactionCreate).not.toHaveBeenCalled();
+  });
+
+  it('permits a PREMIUM-tier user to place a NASDAQ trade', async () => {
+    requireSession.mockResolvedValue({ id: 'user_1', tier: 'PREMIUM' });
+    fetchMarketData.mockResolvedValue({
+      symbol: 'AAPL',
+      market: 'NASDAQ',
+      price: 175.25,
+      isShariaCompliant: true,
+    });
+    jarFindUnique.mockResolvedValue({
+      userId: 'user_1',
+      balance: new Prisma.Decimal('1000.00'),
+      currency: 'USD',
+    });
+    jarUpdate.mockResolvedValue({ balance: new Prisma.Decimal('824.75') });
+    portfolioUpsert.mockResolvedValue({ shares: new Prisma.Decimal('1.00') });
+    transactionCreate.mockResolvedValue({});
+
+    const req = new Request('http://localhost/api/trade', {
+      method: 'POST',
+      body: JSON.stringify({ symbol: 'AAPL', market: 'NASDAQ', action: 'BUY', shares: 1 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
   });
 });

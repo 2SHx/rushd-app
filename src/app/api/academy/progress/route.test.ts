@@ -149,6 +149,33 @@ describe('POST /api/academy/progress', () => {
     expect(progressUpsert).not.toHaveBeenCalled();
   });
 
+  it('a PARENT writing progress for a child they do NOT own gets 403 and no DB write', async () => {
+    requireSession.mockResolvedValue({ id: 'parent-1', role: 'PARENT', tier: 'BASIC', parentId: null });
+    userFindUnique.mockResolvedValue({ ...basicChildRow, parentId: 'someone-else' });
+    const res = await POST(postRequest({ ...KIDS_LESSON, userId: 'child-1' }));
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toBe('forbidden');
+    expect(progressUpsert).not.toHaveBeenCalled();
+  });
+
+  it('a PARENT writing progress for their OWN child succeeds', async () => {
+    requireSession.mockResolvedValue({ id: 'parent-1', role: 'PARENT', tier: 'BASIC', parentId: null });
+    userFindUnique.mockResolvedValue({ ...basicChildRow, parentId: 'parent-1' });
+    const res = await POST(postRequest({ ...KIDS_LESSON, userId: 'child-1' }));
+    expect(res.status).toBe(201);
+    expect(progressUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a CHILD writing another user\'s progress gets 403 and no DB write', async () => {
+    requireSession.mockResolvedValue({ id: 'child-1', role: 'CHILD', tier: 'BASIC', parentId: 'parent-1' });
+    const res = await POST(postRequest({ ...KIDS_LESSON, userId: 'sibling-2' }));
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toBe('forbidden');
+    expect(progressUpsert).not.toHaveBeenCalled();
+  });
+
   it('requires one valid checkpoint answer before awarding completion XP', async () => {
     const missing = await POST(postRequest({ ...KIDS_LESSON, answers: undefined }));
     expect(missing.status).toBe(400);

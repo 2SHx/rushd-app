@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/authz';
+import { can, requireSession } from '@/lib/authz';
 import { fetchMarketData } from '@/services/marketData';
 import { Prisma } from '@prisma/client';
 import { UserExecutionLockedError, userExecutionLockKey } from '@/quant/execution/userLock';
@@ -34,6 +34,15 @@ export async function POST(req: Request) {
     }
 
     const { symbol, market, action, shares } = parsed.data;
+
+    // DR-16 paywall: NASDAQ trading is PREMIUM+. Fail-closed via `can()` —
+    // gated before any external fetch or DB write.
+    if (market === 'NASDAQ' && !can(user, 'trading:nasdaq')) {
+      return NextResponse.json(
+        { error: 'tier_gate', message: 'NASDAQ trading requires a PREMIUM or ULTRA plan.' },
+        { status: 403 }
+      );
+    }
 
     // 1. Fetch live market price and Sharia verdict
     const marketData = await fetchMarketData(symbol, market);

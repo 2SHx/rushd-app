@@ -135,8 +135,22 @@ export async function POST(request: Request): Promise<Response> {
     const userId = parsed.data.userId ?? sessionUser.id;
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, tier: true, ageSegment: true, parent: { select: { tier: true } } },
+      select: { id: true, role: true, tier: true, ageSegment: true, parentId: true, parent: { select: { tier: true } } },
     });
+
+    // Cross-user write guard (fail-closed, same ownership predicate as
+    // `authorizeAccess`): a caller may only write their own progress, or —
+    // if they are a PARENT — a child they actually own, proven via the
+    // child row's own `parentId` (never inferred from role alone). Checked
+    // inline against the single user row already fetched above (no second
+    // query) and collapsed with the not-found case into one 403 so this
+    // minors-facing endpoint can't be used to enumerate valid userIds.
+    if (userId !== sessionUser.id) {
+      const owns = sessionUser.role === 'PARENT' && !!targetUser && targetUser.parentId === sessionUser.id;
+      if (!owns) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+      }
+    }
     if (!targetUser) {
       return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
     }
