@@ -425,6 +425,36 @@ describe('runShadowPaperProbe — gate ordering and blocking', () => {
   });
 });
 
+describe('reconciliation unblocks a genuine SELL end-to-end (real, non-mocked preflight)', () => {
+  it('a SELL of a genuinely held, fully-reconciled position reaches the short guard and is PERMITTED', async () => {
+    // The broker reports one held long AAPL share; OUR durable records (a single FILLED BUY of
+    // qty 1 for this exact account fingerprint) account for it exactly. Preflight is NOT mocked
+    // here — this exercises the real evaluateAlpacaPaperPreflight, proving the reconciliation
+    // match itself (not just the downstream short guard) is what lets this SELL through. Before
+    // this change, ANY open position (reconciled or not) tripped UNRECONCILED_POSITIONS and the
+    // account was forced flat before every order — a SELL of a real holding was structurally
+    // unreachable.
+    mockBroker({ positions: [{ symbol: 'AAPL', side: 'long', qty: '1' }] });
+    // First call is the reconciliation-evidence fetch (step 6b); the second is step 8's
+    // already-REALIZED-run-spend query, which needs the {qty, avgFillPrice} shape instead.
+    h.orderFindMany.mockResolvedValueOnce([{ symbol: 'AAPL', side: 'BUY', filledQty: new D(1) }]);
+    const result = await runShadowPaperProbe(baseInput({ side: 'SELL', notionalUsd: new D(50), refPrice: new D(100) }));
+    expect(result.status).toBe('DRY_RUN');
+    expect(result.wouldSend).toMatchObject({ side: 'SELL', qty: '0.5' });
+    expect(h.evaluateAlpacaPaperPreflight).toHaveReturnedWith(expect.objectContaining({ ready: true, blockers: [] }));
+  });
+
+  it('the SAME position with NO matching durable record is refused at preflight, never reaching the short guard', async () => {
+    mockBroker({ positions: [{ symbol: 'AAPL', side: 'long', qty: '1' }] });
+    h.orderFindMany.mockResolvedValue([]); // no durable evidence for this account
+    const result = await runShadowPaperProbe(baseInput({ side: 'SELL', notionalUsd: new D(50), refPrice: new D(100) }));
+    expect(result.status).toBe('PREFLIGHT_BLOCKED');
+    expect((result as any).blocker).toContain('UNRECONCILED_POSITIONS');
+    expect(h.runCreate).not.toHaveBeenCalled();
+    expect(h.submitOrder).not.toHaveBeenCalled();
+  });
+});
+
 describe('verifiedHeldQty (unit)', () => {
   it('returns 0 for a symbol with no matching position row', () => {
     expect(verifiedHeldQty([], 'AAPL').toString()).toBe('0');

@@ -235,14 +235,29 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   if (actualAccountId !== expectedAccountId) {
     return { status: 'GATE_BLOCKED', blocker: 'account_identity_mismatch' };
   }
+  const fingerprint = accountFingerprint(actualAccountId);
 
-  // 6b. Dirty-state preflight.
+  // 6b. Dirty-state / reconciliation preflight. "Unreconciled" means "we hold no durable FILLED
+  // ShadowPaperOrder record accounting for this broker-reported position" — never "a position
+  // exists". Evidence is OUR durable rows for this exact account (fingerprint-matched), fetched
+  // here (never a caller argument/env var/flag) and handed to the pure evaluator below.
+  const rawPositions = Array.isArray(snapshot.positions) ? snapshot.positions : [];
+  let ourFilledOrders: Array<{ symbol: string; side: OrderSide; qty: string }> = [];
+  if (rawPositions.length > 0) {
+    const durableRows = await prisma.shadowPaperOrder.findMany({
+      where: { status: 'FILLED', run: { accountFingerprint: fingerprint } },
+      select: { symbol: true, side: true, filledQty: true },
+    });
+    ourFilledOrders = durableRows.map((o) => ({ symbol: o.symbol, side: o.side, qty: o.filledQty.toString() }));
+  }
+
   const preflight = evaluateAlpacaPaperPreflight({
     baseUrl: ALPACA_PAPER_BASE_URL,
     account: snapshot.account,
     positions: snapshot.positions,
     openOrders: snapshot.openOrders,
     runCap: RUN_CAP_USD.toString(),
+    ourFilledOrders,
   });
   if (!preflight.ready) return { status: 'PREFLIGHT_BLOCKED', blocker: preflight.blockers.join(',') };
 
@@ -305,7 +320,6 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   const clientOrderId = shadowClientOrderId({
     bookId: input.bookId, strategyVersion: input.strategyVersion, asOf: input.asOf, decisionId, purpose: input.purpose,
   });
-  const fingerprint = accountFingerprint(actualAccountId || decisionId);
 
   // 8. Durable, idempotent run claim — insert-or-reuse on its unique key.
   const runKey = {
