@@ -25,14 +25,21 @@
 //                             alone. An absent expected-id env var refuses outright (fails closed).
 //   6b. Preflight evaluate — evaluateAlpacaPaperPreflight(): ACTIVE/USD/not-blocked, no unreconciled
 //                             positions or shorts, no open orders, cash >= run cap.
+//   6c. Short guard         — a SELL is refused unless verifiedHeldQty(), read from the broker's OWN
+//                             preflight position snapshot above (never a caller argument), shows a
+//                             genuinely held long qty for the symbol; fails closed on ambiguous data.
 //   7. Per-order cash cap  — order notional (qty * caller's --ref-price) <= USD 100, read from
 //                             account.cash only — never buying_power (grep-provable: this file
 //                             never reads a `buyingPower`/`buying_power` field). Preflight (6b)
 //                             already proved account.cash >= the USD 500 run cap, so a single
-//                             <=100 order can never exceed available cash by construction.
+//                             <=100 order can never exceed available cash by construction. The
+//                             requested qty is also re-checked against 6c's verified held qty here.
 //   7a. Fresh-quote cap check — (7) is self-referential (qty was itself derived from --ref-price);
 //                             re-price the SAME qty against a live quote and re-check the cap, so a
 //                             stale/fat-fingered --ref-price cannot smuggle an over-cap order past (7).
+//   7c. Limit price          — bound the fill price around the fresh quote (BUY: +0.5% ceiling,
+//                             SELL: -0.5% floor) instead of a bare market order; re-check the cash
+//                             cap against this worst-case price too.
 //   7b. Run cash cap        — this run's already-REALIZED (filled) notional plus this order's
 //                             request <= USD 500 gross per run, computed and enforced inside a
 //                             Postgres row-locked transaction on the run (see step 8) so concurrent
@@ -99,7 +106,8 @@ export interface ShadowPaperWouldSend {
   symbol: string;
   side: OrderSide;
   qty: string;
-  type: 'market';
+  type: 'limit';
+  limitPrice: string;
   timeInForce: 'day';
   clientOrderId: string;
 }
@@ -127,6 +135,31 @@ export function shadowClientOrderId(input: {
 /** One-way, non-secret account fingerprint — never the raw account id/number/credentials. */
 export function accountFingerprint(accountRawId: string): string {
   return `acct_${createHash('sha256').update(accountRawId).digest('hex').slice(0, 32)}`;
+}
+
+/**
+ * The broker's OWN reported held LONG quantity for `symbol`, read from the raw preflight
+ * position snapshot — never from anything the caller supplies. This is the sole source of truth
+ * a SELL is checked against (see step 6c). Fails closed (throws) on anything ambiguous or
+ * malformed rather than guessing, because a wrong answer here is a naked short: zero/no matching
+ * row is NOT an error (it just means "nothing held", returned as 0), but a duplicate row, a
+ * non-long side, or an unparseable/negative qty all refuse outright.
+ */
+export function verifiedHeldQty(positions: unknown[], symbol: string): Prisma.Decimal {
+  const rows = (positions as Record<string, unknown>[]).filter((p) => String(p?.symbol ?? '') === symbol);
+  if (rows.length === 0) return new D(0);
+  if (rows.length > 1) throw new Error(`ambiguous broker position data for ${symbol}: ${rows.length} rows`);
+  const [row] = rows;
+  const side = String(row?.side ?? '').toLowerCase();
+  if (side !== 'long') throw new Error(`unexpected non-long broker position side for ${symbol}: ${side || 'unknown'}`);
+  let qty: Prisma.Decimal;
+  try {
+    qty = new D(String(row?.qty ?? ''));
+  } catch {
+    throw new Error(`unparseable broker qty for ${symbol}`);
+  }
+  if (!qty.isFinite() || qty.isNegative()) throw new Error(`invalid broker qty for ${symbol}`);
+  return qty;
 }
 
 async function killSwitchEngaged(env: NodeJS.ProcessEnv): Promise<boolean> {
@@ -213,6 +246,23 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   });
   if (!preflight.ready) return { status: 'PREFLIGHT_BLOCKED', blocker: preflight.blockers.join(',') };
 
+  // 6c. Short guard (CRITICAL finding) — a SELL is refused unless the broker's OWN position
+  // snapshot (fetched at step 6 above, never an argument the caller supplies) shows a genuinely
+  // held long qty for this symbol. This is independent of (6b)'s blanket dirty-state block, so it
+  // stays correct even if that check's scope ever changes — defense in depth, not a duplicate.
+  // Fails closed: any ambiguous/malformed broker position data refuses rather than guessing.
+  let heldQty: Prisma.Decimal | null = null;
+  if (input.side === 'SELL') {
+    try {
+      heldQty = verifiedHeldQty(snapshot.positions as unknown[], input.symbol);
+    } catch (e) {
+      return { status: 'GATE_BLOCKED', blocker: `held_qty_unverifiable:${(e as Error).message}` };
+    }
+    if (!heldQty.gt(0)) {
+      return { status: 'GATE_BLOCKED', blocker: 'sell_without_held_position' };
+    }
+  }
+
   // 7. Per-order cash cap — cash only, never buying_power (this file never reads `buyingPower`/
   // `buying_power`; grep-provable). Note: preflight above already required
   // account.cash >= RUN_CAP_USD, and every order sized here is <= ORDER_CAP_USD <= RUN_CAP_USD,
@@ -220,6 +270,11 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   const qty = input.notionalUsd.div(input.refPrice).toDecimalPlaces(6, Prisma.Decimal.ROUND_DOWN);
   const orderNotional = qty.mul(input.refPrice);
   if (orderNotional.gt(ORDER_CAP_USD)) return { status: 'GATE_BLOCKED', blocker: 'order_exceeds_cash_cap' };
+
+  // 6c (continued) — the requested qty itself must not exceed the verified held qty above.
+  if (input.side === 'SELL' && qty.gt(heldQty as Prisma.Decimal)) {
+    return { status: 'GATE_BLOCKED', blocker: 'sell_exceeds_held_position' };
+  }
 
   // 7a. Fresh-quote verification — (7) is self-referential (qty was derived FROM --ref-price), so
   // a stale/fat-fingered --ref-price far below the real price still passes it while the REAL fill
@@ -233,6 +288,17 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   }
   if (qty.mul(freshQuote).gt(ORDER_CAP_USD)) {
     return { status: 'GATE_BLOCKED', blocker: 'order_exceeds_cash_cap_at_fresh_quote' };
+  }
+
+  // 7c. Limit price (MED finding) — bound the fill price around the fresh quote just fetched
+  // instead of submitting a bare market order. BUY may pay at most 0.5% above the fresh quote;
+  // SELL must receive at least 0.5% below it (symmetric with InternalSimBroker's own limitPrice
+  // enforcement in internalSim.ts, and the 0.5% BUY band matches the security re-review's
+  // recommended freshQuote*1.005). Re-check the cap against this worst-case price: it can exceed
+  // (7a)'s fresh-quote check on a BUY, since limitPrice > freshQuote there.
+  const limitPrice = input.side === 'BUY' ? freshQuote.mul('1.005') : freshQuote.mul('0.995');
+  if (qty.mul(limitPrice).gt(ORDER_CAP_USD)) {
+    return { status: 'GATE_BLOCKED', blocker: 'order_exceeds_cash_cap_at_limit_price' };
   }
 
   const decisionId = input.decisionId ?? `${input.bookId}:${input.asOf.toISOString()}:${input.purpose}`;
@@ -308,7 +374,7 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   }
 
   const wouldSend: ShadowPaperWouldSend = {
-    symbol: input.symbol, side: input.side, qty: qty.toString(), type: 'market', timeInForce: 'day', clientOrderId,
+    symbol: input.symbol, side: input.side, qty: qty.toString(), type: 'limit', limitPrice: limitPrice.toString(), timeInForce: 'day', clientOrderId,
   };
 
   // Already durably terminal (a prior attempt already submitted/filled/closed this exact
@@ -345,7 +411,7 @@ export async function runShadowPaperProbe(input: ShadowPaperProbeInput): Promise
   // below can never strand the run at STARTED: it always lands on either SUBMITTED (success) or a
   // distinctly-flagged FAILED with the broker ref preserved for manual recovery (never silence).
   const fill = await broker.submitOrder({
-    symbol: input.symbol, market: 'NASDAQ' as Market, side: input.side, qty, refPrice: input.refPrice, clientOrderId,
+    symbol: input.symbol, market: 'NASDAQ' as Market, side: input.side, qty, refPrice: input.refPrice, limitPrice, clientOrderId,
   });
   await prisma.shadowPaperRun.update({ where: { id: run.id }, data: { status: 'SUBMITTED', finishedAt: new Date() } });
   try {

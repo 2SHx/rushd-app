@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   getPreflightSnapshot: vi.fn(),
   getLatestQuote: vi.fn(),
   submitOrder: vi.fn(),
+  evaluateAlpacaPaperPreflight: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => {
@@ -48,8 +49,20 @@ vi.mock('../automation/incubationBooks', () => ({
   ],
 }));
 vi.mock('./registry', () => ({ selectShadowPaperBroker: h.selectShadowPaperBroker }));
+// Default: delegate to the REAL evaluateAlpacaPaperPreflight, so every existing test still
+// exercises the genuine dirty-state logic. Only the dedicated short-guard tests below override
+// this per-call (mockReturnValueOnce) to simulate "somehow preflight passed" purely so they can
+// prove the short guard's OWN, independent check — never to weaken preflight itself.
+vi.mock('../../../scripts/paper-preflight.mjs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../scripts/paper-preflight.mjs')>();
+  h.evaluateAlpacaPaperPreflight.mockImplementation(actual.evaluateAlpacaPaperPreflight);
+  return { ...actual, evaluateAlpacaPaperPreflight: h.evaluateAlpacaPaperPreflight };
+});
 
-import { runShadowPaperProbe, shadowClientOrderId, reconcileShadowPaperOrder, ShadowPaperBlocked, ORDER_CAP_USD, RUN_CAP_USD } from './shadowPaperRunner';
+import {
+  runShadowPaperProbe, shadowClientOrderId, reconcileShadowPaperOrder, ShadowPaperBlocked,
+  ORDER_CAP_USD, RUN_CAP_USD, verifiedHeldQty,
+} from './shadowPaperRunner';
 
 const CLEAN_ACCOUNT = { id: 'acct-raw-id', status: 'ACTIVE', currency: 'USD', cash: '100000', buying_power: '999999999', trading_blocked: false };
 
@@ -157,27 +170,31 @@ describe('runShadowPaperProbe — gate ordering and blocking', () => {
   });
 
   it('rejects an order once prior REALIZED spend in the same run would push the cumulative total past the USD 500 run cap', async () => {
+    // Order notional is $90 here (not $100): at the fresh quote, a BUY's limitPrice cap check
+    // (freshQuote * 1.005) needs a little headroom under the $100 per-order cap, so this test's
+    // own $90 order doesn't trip THAT gate and can isolate the run-cap logic under test.
     h.runFindUnique.mockResolvedValue({ id: 'run-1', status: 'STARTED' });
     h.orderFindMany.mockResolvedValue([
-      { qty: new D(4), avgFillPrice: new D(100) }, // $400 already filled in this run
+      { qty: new D(4.1), avgFillPrice: new D(100) }, // $410 already filled in this run
     ]);
-    const result = await runShadowPaperProbe(baseInput({ notionalUsd: new D(100) })); // + $100 = $500, still ok
+    const result = await runShadowPaperProbe(baseInput({ notionalUsd: new D(90) })); // + $90 = $500, still ok
     expect(result.status).toBe('DRY_RUN');
     const callsAfterAllowedOrder = h.orderCreate.mock.calls.length;
 
     h.orderFindMany.mockResolvedValue([
-      { qty: new D(4.5), avgFillPrice: new D(100) }, // $450 already filled in this run
+      { qty: new D(4.11), avgFillPrice: new D(100) }, // $411 already filled in this run
     ]);
-    const blocked = await runShadowPaperProbe(baseInput({ notionalUsd: new D(100) })); // + $100 > $500
+    const blocked = await runShadowPaperProbe(baseInput({ notionalUsd: new D(90) })); // + $90 > $500
     expect(blocked).toMatchObject({ status: 'GATE_BLOCKED', blocker: 'run_exceeds_cash_cap' });
     expect(h.orderCreate.mock.calls.length).toBe(callsAfterAllowedOrder);
   });
 
-  it('dry-run stops immediately before transmission and reports exactly what WOULD be sent', async () => {
+  it('dry-run stops immediately before transmission and reports exactly what WOULD be sent, as a bounded limit order', async () => {
     const result = await runShadowPaperProbe(baseInput());
     expect(result.status).toBe('DRY_RUN');
+    // refPrice 100 -> notional 50 -> qty 0.5; fresh quote 100 -> BUY limitPrice = 100 * 1.005 = 100.5.
     expect(result.wouldSend).toEqual({
-      symbol: 'AAPL', side: 'BUY', qty: '0.5', type: 'market', timeInForce: 'day',
+      symbol: 'AAPL', side: 'BUY', qty: '0.5', type: 'limit', limitPrice: '100.5', timeInForce: 'day',
       clientOrderId: expect.stringMatching(/^rushd-shadow-[0-9a-f]{64}$/),
     });
     expect(h.submitOrder).not.toHaveBeenCalled();
@@ -315,6 +332,123 @@ describe('runShadowPaperProbe — gate ordering and blocking', () => {
       // Tagged-template call: first arg is the strings array containing the FOR UPDATE lock SQL.
       expect(lockCallArgs[0].join('')).toContain('FOR UPDATE');
     });
+  });
+
+  describe('short guard (CRITICAL finding) — a SELL is impossible without a broker-verified held position', () => {
+    it('refuses --side SELL on a flat account before any transmission path', async () => {
+      // Default mockBroker() snapshot has positions: [] — the account is flat.
+      const result = await runShadowPaperProbe(baseInput({ side: 'SELL' }));
+      expect(result).toMatchObject({ status: 'GATE_BLOCKED', blocker: 'sell_without_held_position' });
+      expect(h.runCreate).not.toHaveBeenCalled();
+      expect(h.orderCreate).not.toHaveBeenCalled();
+      expect(h.submitOrder).not.toHaveBeenCalled();
+    });
+
+    it('refuses --purpose FLATTEN on a zero position', async () => {
+      const result = await runShadowPaperProbe(baseInput({ side: 'SELL', purpose: 'FLATTEN' }));
+      expect(result).toMatchObject({ status: 'GATE_BLOCKED', blocker: 'sell_without_held_position' });
+      expect(h.runCreate).not.toHaveBeenCalled();
+      expect(h.submitOrder).not.toHaveBeenCalled();
+    });
+
+    it('refuses a SELL exceeding the verified held quantity, sourced from the broker\'s own position snapshot', async () => {
+      // Requested qty = 50/100 = 0.5, but the broker reports only 0.3 held long.
+      h.evaluateAlpacaPaperPreflight.mockReturnValueOnce({
+        ready: true, blockers: [], account: { status: 'ACTIVE' }, positionCount: 1, openOrderCount: 0,
+      });
+      mockBroker({ positions: [{ symbol: 'AAPL', side: 'long', qty: '0.3' }] });
+      const result = await runShadowPaperProbe(baseInput({ side: 'SELL', notionalUsd: new D(50), refPrice: new D(100) }));
+      expect(result).toMatchObject({ status: 'GATE_BLOCKED', blocker: 'sell_exceeds_held_position' });
+      expect(h.runCreate).not.toHaveBeenCalled();
+      expect(h.submitOrder).not.toHaveBeenCalled();
+    });
+
+    it('permits a SELL within a genuinely held quantity', async () => {
+      h.evaluateAlpacaPaperPreflight.mockReturnValueOnce({
+        ready: true, blockers: [], account: { status: 'ACTIVE' }, positionCount: 1, openOrderCount: 0,
+      });
+      mockBroker({ positions: [{ symbol: 'AAPL', side: 'long', qty: '1' }] });
+      const result = await runShadowPaperProbe(baseInput({ side: 'SELL', notionalUsd: new D(50), refPrice: new D(100) }));
+      expect(result.status).toBe('DRY_RUN');
+      expect(result.wouldSend).toMatchObject({ side: 'SELL', qty: '0.5' });
+    });
+
+    it('fails closed (refuses) when the broker position data is ambiguous or malformed, never guessing', async () => {
+      h.evaluateAlpacaPaperPreflight.mockReturnValueOnce({
+        ready: true, blockers: [], account: { status: 'ACTIVE' }, positionCount: 1, openOrderCount: 0,
+      });
+      // A "short" side entry for the symbol is never trusted as coverage for a SELL.
+      mockBroker({ positions: [{ symbol: 'AAPL', side: 'short', qty: '5' }] });
+      const result = await runShadowPaperProbe(baseInput({ side: 'SELL' }));
+      expect((result as any).blocker).toContain('held_qty_unverifiable:');
+      expect(h.runCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bounded limit price (MED finding) — no longer a bare market order', () => {
+    it('carries a limitPrice derived from the fresh quote: BUY at +0.5%, SELL at -0.5%', async () => {
+      h.getLatestQuote.mockResolvedValue(new D(200));
+      const buy = await runShadowPaperProbe(baseInput({ notionalUsd: new D(50), refPrice: new D(200) }));
+      expect(buy.wouldSend).toMatchObject({ type: 'limit', limitPrice: '201' }); // 200 * 1.005
+
+      h.evaluateAlpacaPaperPreflight.mockReturnValueOnce({
+        ready: true, blockers: [], account: { status: 'ACTIVE' }, positionCount: 1, openOrderCount: 0,
+      });
+      mockBroker({ positions: [{ symbol: 'AAPL', side: 'long', qty: '1' }] });
+      const sell = await runShadowPaperProbe(baseInput({ side: 'SELL', notionalUsd: new D(50), refPrice: new D(200) }));
+      expect(sell.wouldSend).toMatchObject({ type: 'limit', limitPrice: '199' }); // 200 * 0.995
+    });
+
+    it('refuses an order whose limit price (not just the fresh quote) would exceed the cash cap', async () => {
+      // qty 0.99 at freshQuote 100 -> $99, under cap; at BUY limitPrice 100.5 -> $99.495, still under
+      // cap so this exact figure wouldn't trip it — use a qty right at the freshQuote boundary so the
+      // limit-price re-check is the one that fires.
+      h.getLatestQuote.mockResolvedValue(new D(100));
+      const result = await runShadowPaperProbe(baseInput({ notionalUsd: new D(99.6), refPrice: new D(100) }));
+      // qty = 0.996; at freshQuote 100 -> $99.6 (passes 7a); at limitPrice 100.5 -> $100.098 (fails 7c).
+      expect(result).toMatchObject({ status: 'GATE_BLOCKED', blocker: 'order_exceeds_cash_cap_at_limit_price' });
+      expect(h.runCreate).not.toHaveBeenCalled();
+    });
+
+    it('passes the computed limitPrice through to broker.submitOrder on the transmit path', async () => {
+      h.orderFindUnique.mockResolvedValue({ id: 'order-1', status: 'NEW', brokerRef: null, qty: new D(0.5) });
+      h.submitOrder.mockResolvedValue({ brokerRef: 'alpaca-order-1', status: 'FILLED', filledQty: new D(0.5), avgFillPrice: new D(100.5) });
+      h.getLatestQuote.mockResolvedValue(new D(100));
+      const result = await runShadowPaperProbe(baseInput({
+        dryRun: false,
+        env: { QUANT_SHADOW_PAPER_SECURITY_GATE: 'PASS', QUANT_SHADOW_PAPER_EXPECTED_ACCOUNT_ID: 'acct-raw-id' } as any,
+      }));
+      expect(result.status).toBe('SUBMITTED');
+      const call = h.submitOrder.mock.calls[0][0];
+      expect(call.limitPrice.toString()).toBe('100.5');
+    });
+  });
+});
+
+describe('verifiedHeldQty (unit)', () => {
+  it('returns 0 for a symbol with no matching position row', () => {
+    expect(verifiedHeldQty([], 'AAPL').toString()).toBe('0');
+    expect(verifiedHeldQty([{ symbol: 'MSFT', side: 'long', qty: '5' }], 'AAPL').toString()).toBe('0');
+  });
+
+  it('returns the held qty for a genuine long position', () => {
+    expect(verifiedHeldQty([{ symbol: 'AAPL', side: 'long', qty: '2.5' }], 'AAPL').toString()).toBe('2.5');
+  });
+
+  it('fails closed on a duplicate row for the same symbol', () => {
+    expect(() => verifiedHeldQty(
+      [{ symbol: 'AAPL', side: 'long', qty: '1' }, { symbol: 'AAPL', side: 'long', qty: '2' }],
+      'AAPL',
+    )).toThrow(/ambiguous/);
+  });
+
+  it('fails closed on a non-long side', () => {
+    expect(() => verifiedHeldQty([{ symbol: 'AAPL', side: 'short', qty: '1' }], 'AAPL')).toThrow(/non-long/);
+  });
+
+  it('fails closed on an unparseable or negative qty', () => {
+    expect(() => verifiedHeldQty([{ symbol: 'AAPL', side: 'long', qty: 'not-a-number' }], 'AAPL')).toThrow();
+    expect(() => verifiedHeldQty([{ symbol: 'AAPL', side: 'long', qty: '-1' }], 'AAPL')).toThrow(/invalid/);
   });
 });
 

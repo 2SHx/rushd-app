@@ -304,14 +304,14 @@ export class AlpacaPaperBroker implements BrokerAdapter {
   }
 
   async getPositions(): Promise<Position[]> {
-    const res = await fetch(`${this.baseUrl}/v2/positions`, { headers: this.headers() });
+    const res = await fetch(`${this.baseUrl}/v2/positions`, { headers: this.headers(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Alpaca getPositions failed: ${res.status}`);
     const rows = (await res.json()) as Record<string, unknown>[];
     return rows.map((r) => ({ symbol: String(r.symbol), qty: new D(String(r.qty ?? '0')) }));
   }
 
   async getCash(): Promise<Prisma.Decimal> {
-    const res = await fetch(`${this.baseUrl}/v2/account`, { headers: this.headers() });
+    const res = await fetch(`${this.baseUrl}/v2/account`, { headers: this.headers(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Alpaca getCash failed: ${res.status}`);
     const j = (await res.json()) as Record<string, unknown>;
     return new D(String(j.cash ?? '0'));
