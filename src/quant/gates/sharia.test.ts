@@ -79,7 +79,7 @@ describe('evaluateShariaGate', () => {
 
   it('fails closed on stale, future-dated, or arbitrary positive evidence', async () => {
     for (const verdict of [
-      { source: 'etf-holdings', asOf: new Date(Date.now() - 551 * 86_400_000) },
+      { source: 'etf-holdings', asOf: new Date(Date.now() - 136 * 86_400_000) },
       { source: 'zoya', asOf: new Date(Date.now() + 86_400_000) },
       { source: 'owner-spreadsheet', asOf: new Date() },
     ]) {
@@ -88,6 +88,31 @@ describe('evaluateShariaGate', () => {
       });
       expect((await evaluateShariaGate('AAPL', 'NASDAQ' as any)).compliant).toBe(false);
     }
+  });
+
+  it('accepts evidence just inside the quarterly-rescreen threshold (~135d) and rejects evidence just past it', async () => {
+    // Margins (134/136d, not an exact 135d edge) deliberately avoid a race against the few ms
+    // that pass between this asOf and evaluateShariaGate's own internal `new Date()` call.
+    screenMock.mockResolvedValue({
+      symbol: 'AAPL', compliant: true, standard: 'AAOIFI', source: 'etf-holdings',
+      asOf: new Date(Date.now() - 134 * 86_400_000),
+    });
+    expect((await evaluateShariaGate('AAPL', 'NASDAQ' as any)).compliant).toBe(true);
+
+    screenMock.mockResolvedValue({
+      symbol: 'AAPL', compliant: true, standard: 'AAOIFI', source: 'etf-holdings',
+      asOf: new Date(Date.now() - 136 * 86_400_000),
+    });
+    expect((await evaluateShariaGate('AAPL', 'NASDAQ' as any)).compliant).toBe(false);
+  });
+
+  it('the tightened threshold now blocks evidence that the old 550-day fiscal-year horizon would have accepted (e.g. a stalled quarterly snapshot refresh)', async () => {
+    screenMock.mockResolvedValue({
+      symbol: 'AAPL', compliant: true, standard: 'AAOIFI', source: 'etf-holdings',
+      asOf: new Date(Date.now() - 200 * 86_400_000), // ~6.5 months — well under the old 550d, now stale
+    });
+    const gate = await evaluateShariaGate('AAPL', 'NASDAQ' as any);
+    expect(gate).toMatchObject({ compliant: false, reason: 'stale_evidence_fail_closed' });
   });
 
   it('returns compliant false for a blacklisted symbol (TSLA)', async () => {

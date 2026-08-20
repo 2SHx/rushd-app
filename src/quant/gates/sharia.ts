@@ -22,8 +22,16 @@ export type ShariaGate = {
 };
 
 const VERIFIED_EXECUTION_SOURCES = new Set(['zoya', 'etf-holdings', 'saudi-sharia-list']);
-// Reuse the repo's declared PIT fundamentals horizon: one fiscal year plus ordinary filing lag.
-const MAX_EXECUTION_EVIDENCE_AGE_DAYS = 550;
+// AAOIFI-aligned index providers (S&P Shariah, MSCI Islamic) rescreen constituents QUARTERLY,
+// not annually — a fiscal-year horizon (previously 550d) was never the right standard, only a
+// convenient one. Now that quarterly fundamentals are in the database (8,393 quarterly rows,
+// ~91d staleness at any decision date, vs 180-320d for annual), there is no reason to accept
+// evidence older than one quarterly rescreen cycle. 135d = one quarter (90d) + the SEC's own
+// maximum 10-Q filing deadline (45d, non-accelerated filers) — the same buffer a quarterly-
+// rescreen posture would need to avoid flagging a compliant name as stale the day before its
+// filing lands. This tightens (not loosens) the gate: evidence aged 136-550d, which passed
+// before, now fails closed.
+const MAX_EXECUTION_EVIDENCE_AGE_DAYS = 135;
 const DAY_MS = 86_400_000;
 
 function hasCurrentEvidence(asOf: Date, decisionAt = new Date()): boolean {

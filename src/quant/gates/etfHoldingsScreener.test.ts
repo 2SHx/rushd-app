@@ -36,10 +36,29 @@ describe('CompositeShariaScreener — US ETF-holdings membership', () => {
     expect(verdict.asOf.toISOString().slice(0, 10)).toBe('2026-07-16');
   });
 
-  it('HLAL-only membership also ⇒ compliant true, source etf-holdings (union of funds)', async () => {
+  it('HLAL-only membership does NOT count — HLAL (FTSE Shariah) is out-of-stack and structurally excluded, even when populated with real, dated data', async () => {
+    // Regression guard for the authority stack (AAOIFI + Al-Rajhi + S&P Shariah): if
+    // refresh-sharia-snapshots.ts ever successfully fetches HLAL holdings and populates the
+    // bundled snapshot, that must NOT silently become execution-grade evidence.
     const screener = new CompositeShariaScreener(FIXTURE_ETF, EMPTY_SAUDI);
-    const verdict = await screener.screen('GOOGL', 'NASDAQ');
+    const verdict = await screener.screen('GOOGL', 'NASDAQ'); // GOOGL is HLAL-only in the fixture
+    expect(verdict.compliant).toBeNull();
+    expect(verdict.source).toBe('none');
+  });
+
+  it('a symbol in BOTH SPUS and HLAL still resolves via the authorized fund (SPUS) only', async () => {
+    const mixedFixture: EtfHoldingsSnapshot = {
+      asOf: '2026-07-16',
+      funds: { SPUS: ['NFLX'], HLAL: ['NFLX'] },
+    };
+    const screener = new CompositeShariaScreener(mixedFixture, EMPTY_SAUDI);
+    const verdict = await screener.screen('NFLX', 'NASDAQ');
     expect(verdict).toMatchObject({ compliant: true, source: 'etf-holdings' });
+  });
+
+  it('isEtfHoldingsSnapshotUsable is false when only the out-of-stack HLAL fund carries data', () => {
+    const hlalOnly: EtfHoldingsSnapshot = { asOf: '2026-07-16', funds: { SPUS: [], HLAL: ['GOOGL', 'META'] } };
+    expect(isEtfHoldingsSnapshotUsable(hlalOnly)).toBe(false);
   });
 
   it('absence from both funds ⇒ compliant NULL (unknown), never a fabricated false', async () => {

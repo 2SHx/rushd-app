@@ -18,7 +18,10 @@ function mockScreener(nonCompliant: Set<string> = new Set()): ShariaScreener {
       compliant: !nonCompliant.has(symbol),
       standard: 'AAOIFI',
       source: 'zoya',
-      asOf: new Date('2026-01-01T00:00:00.000Z'),
+      // Relative, not absolute: this fixture feeds MAX_EXECUTION_EVIDENCE_AGE_DAYS (135d).
+      // A wall-clock date silently ages past the window and turns this into a time bomb —
+      // it already did once, when the window tightened 550d -> 135d.
+      asOf: new Date(Date.now() - 30 * 86_400_000),
     })),
   };
 }

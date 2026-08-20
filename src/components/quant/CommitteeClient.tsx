@@ -444,8 +444,15 @@ export default function CommitteeClient({
         targetText = isAr ? pmSignal.rationaleAr : pmSignal.rationaleEn;
       }
     } else if (simStep === 'risk') {
+      // The typewriter renders `targetText` as a single plain-text node char-by-char (no JSX
+      // markup survives), so a Latin token (e.g. "BUY") embedded in the Arabic sentence can't
+      // be isolated with a separate <span> — it must be isolated in-string with Unicode bidi
+      // control characters: U+2066 LEFT-TO-RIGHT ISOLATE ... U+2069 POP DIRECTIONAL ISOLATE.
+      // Without this, the neutral punctuation immediately touching the token (the colon before
+      // it, the period after it) can be pulled into the token's LTR run by the bidi algorithm
+      // and visually displaced from its intended RTL position.
       targetText = isAr
-        ? `مدير المخاطر يراجع حدود التوصية غير الملزمة: ${passData.finalAction}. التنفيذ، إذا طلبه المستخدم، يتم فقط عبر المسار الموثق في الخادم.`
+        ? `مدير المخاطر يراجع حدود التوصية غير الملزمة: ⁦${passData.finalAction}⁩. التنفيذ، إذا طلبه المستخدم، يتم فقط عبر المسار الموثق في الخادم.`
         : `The Risk Manager is reviewing the non-binding ${passData.finalAction} recommendation. Any user-requested execution is handled only by the authenticated server path.`;
     }
 

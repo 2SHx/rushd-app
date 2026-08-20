@@ -4,8 +4,13 @@
 // know this exists.
 //
 // Resolution order per symbol (fail-closed; never fabricates a verdict):
-//   L1 (US)   — presence in a published Sharia-screened ETF's holdings (SPUS and/or HLAL)
-//               ⇒ compliant=true, source='etf-holdings'. The fund itself already ran a real
+//   L1 (US)   — presence in an AUTHORIZED (in-stack-methodology) Sharia-screened ETF's
+//               holdings ⇒ compliant=true, source='etf-holdings'. Today that is SPUS only
+//               (S&P Shariah methodology, which IS in the declared AAOIFI + Al-Rajhi + S&P
+//               Shariah authority stack). HLAL (FTSE Shariah methodology) is bundled in the
+//               snapshot file's shape but is EXCLUDED from evidence by the
+//               AUTHORIZED_ETF_METHODOLOGIES allowlist below, regardless of whether its data
+//               is populated — see that allowlist for why. The fund itself already ran a real
 //               AAOIFI-style screen to admit the name; we are not re-deriving compliance, we
 //               are citing evidence of an existing one.
 //   L2 (TASI) — presence in the bundled quarterly Saudi Sharia-list snapshot
@@ -53,10 +58,33 @@ function cleanUsSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
 
-/** Real, dated evidence: at least one fund has holdings AND the snapshot carries a real asOf. */
+// Declared authority stack (owner decision; do not add to this without a stack change):
+//   AAOIFI + Al-Rajhi + S&P Shariah.
+// Fund → methodology allowlist. A fund's holdings are only citable as execution-grade
+// evidence if ITS OWN screening methodology is in that stack. This is enforced structurally
+// (not by a comment on the data file): a fund key is unusable unless it is ALSO listed here
+// with an authorized methodology, hardcoded at review time. `refresh-sharia-snapshots.ts`
+// can populate any fund key it successfully fetches (including HLAL) into
+// data/etf-holdings.json without asking us — this allowlist is what stops a populated
+// out-of-stack snapshot from silently becoming verified evidence.
+const AUTHORIZED_ETF_METHODOLOGIES: Readonly<Record<string, string>> = {
+  SPUS: 'S&P Shariah', // in-stack
+  // HLAL (Wahed FTSE USA Shariah ETF) is deliberately NOT listed: it tracks the FTSE Shariah
+  // methodology, which is NOT in the declared authority stack. If refresh-sharia-snapshots.ts
+  // ever succeeds in fetching HLAL holdings, they are ignored here by construction — adding
+  // HLAL requires an explicit owner decision to expand the authority stack, not a successful
+  // fetch.
+};
+
+function isAuthorizedFund(fund: string): boolean {
+  return fund in AUTHORIZED_ETF_METHODOLOGIES;
+}
+
+/** Real, dated evidence: at least one AUTHORIZED fund has holdings AND the snapshot has a real asOf. */
 export function isEtfHoldingsSnapshotUsable(snapshot: EtfHoldingsSnapshot = etfHoldingsSnapshot): boolean {
   if (!snapshot?.asOf) return false;
-  return Object.values(snapshot.funds ?? {}).some((symbols) => Array.isArray(symbols) && symbols.length > 0);
+  return Object.entries(snapshot.funds ?? {})
+    .some(([fund, symbols]) => isAuthorizedFund(fund) && Array.isArray(symbols) && symbols.length > 0);
 }
 
 /** Real, dated evidence: at least one symbol AND the snapshot carries a real asOf. */
@@ -72,11 +100,13 @@ export function isCompositeSourceUsable(
   return isEtfHoldingsSnapshotUsable(etf) || isSaudiListSnapshotUsable(saudi);
 }
 
-/** Which funds (of the ones present in the snapshot) list this US symbol, in declaration order. */
+/** Which AUTHORIZED (in-stack-methodology) funds list this US symbol, in declaration order.
+ *  A fund present in the snapshot but absent from AUTHORIZED_ETF_METHODOLOGIES (e.g. HLAL)
+ *  is excluded here regardless of how much data it carries. */
 function fundsContaining(snapshot: EtfHoldingsSnapshot, symbol: string): string[] {
   const clean = cleanUsSymbol(symbol);
   return Object.entries(snapshot.funds ?? {})
-    .filter(([, symbols]) => Array.isArray(symbols) && symbols.includes(clean))
+    .filter(([fund, symbols]) => isAuthorizedFund(fund) && Array.isArray(symbols) && symbols.includes(clean))
     .map(([fund]) => fund);
 }
 
