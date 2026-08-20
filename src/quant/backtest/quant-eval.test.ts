@@ -37,11 +37,28 @@ describe('quant-eval', () => {
 
   let originalMode: string | undefined;
 
+  // Vitest's own per-test timeout race abandons the test callback but still runs afterAll
+  // (verified: cleanupFixture() completes even when the `it` below times out). What it does
+  // NOT survive is a *process*-level termination — a developer Ctrl-C'ing an apparently-stuck
+  // 40s run, or a CI job cancellation — which sends SIGINT/SIGTERM before afterAll can execute.
+  // That is the realistic path a fixture leak reaches the real MarketBar table, so catch it here.
+  const onTerminationSignal = () => {
+    // Fire-and-forget: best effort, synchronous process teardown can't await this, but Postgres
+    // will still commit the DELETE once issued even if the process exits immediately after.
+    void cleanupFixture();
+  };
+
   beforeAll(async () => {
     originalMode = process.env.MARKET_DATA_MODE;
     // Bypasses live screening filters to allow mock data matching in zero-key environment
     delete process.env.MARKET_DATA_MODE;
 
+    process.once('SIGINT', onTerminationSignal);
+    process.once('SIGTERM', onTerminationSignal);
+
+    // Self-healing: even if a prior run leaked past every safeguard below (e.g. SIGKILL, which
+    // nothing in userspace can intercept), this wipes it before it can corrupt anything that
+    // reads real market data — the fixture window/symbols are fixed and deterministic.
     await cleanupFixture();
 
     // Seed >100 trading sessions while keeping the DB-backed public seam focused.
@@ -101,6 +118,8 @@ describe('quant-eval', () => {
   }, 15000);
 
   afterAll(async () => {
+    process.off('SIGINT', onTerminationSignal);
+    process.off('SIGTERM', onTerminationSignal);
     if (originalMode === undefined) {
       delete process.env.MARKET_DATA_MODE;
     } else {

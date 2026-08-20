@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runQuantDaily } from '../../../scripts/run-quant-daily.mjs';
 
 describe('low-cost daily quant scheduler', () => {
-  it('calls ingest, incubation, and evaluation in order with the signed POST contract', async () => {
+  it('calls ingest, incubation, evaluation, and the AUTO_PAPER run in order with the signed POST contract', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
 
     await expect(runQuantDaily({
@@ -14,11 +14,13 @@ describe('low-cost daily quant scheduler', () => {
       { path: '/api/cron/quant-ingest', status: 200 },
       { path: '/api/cron/quant-incubation', status: 200 },
       { path: '/api/cron/quant-incubation-evaluate', status: 200 },
+      { path: '/api/cron/quant-run', status: 200 },
     ]);
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'https://rushd.test/api/cron/quant-ingest',
       'https://rushd.test/api/cron/quant-incubation',
       'https://rushd.test/api/cron/quant-incubation-evaluate',
+      'https://rushd.test/api/cron/quant-run',
     ]);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: 'POST',

@@ -5,6 +5,7 @@ const STEPS = [
   '/api/cron/quant-ingest',
   '/api/cron/quant-incubation',
   '/api/cron/quant-incubation-evaluate',
+  '/api/cron/quant-run',
 ];
 export const RUSHD_PRODUCTION_ORIGIN = 'https://rushd-app.onrender.com';
 
@@ -26,7 +27,8 @@ function productionOrigin(value, allowedOrigin) {
   return url.origin;
 }
 
-/** One low-cost after-close scheduler: ingest, simulate frozen books, then evaluate them. */
+/** One low-cost after-close scheduler: ingest, simulate frozen books, evaluate them, then
+ * run the AUTO_PAPER committee so opted-in strategies actually execute unattended. */
 export async function runQuantDaily({
   baseUrl,
   secret,
