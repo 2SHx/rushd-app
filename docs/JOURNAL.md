@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-21 — Codex handoff: tail, turnover, AAOIFI cap, JWT tier ✅
+Shipped: reconciled the fast-momentum tail baseline; measured turnover churn; enriched 11,929/12,212 Fundamentals rows (211/216 symbols) with filed SEC shares and exposed shares×PIT close to the AAOIFI screener; added a server-only five-minute subscription-tier refresh.
+Decisions: 68.4037% is the legacy IID result; 66.5473% moving-block-20 is the current comparator (the reported 64.5% lacks saved RNG parameters); rank-8 hysteresis plausibly saves 1.80pp/year direct costs; market-cap gaps and tier-refresh failures remain fail-closed.
+Verify: turnover script used 464,434 real bars/446 rebalances; AAOIFI audit preserved 12,212 rows with 0 look-ahead/order violations and AAPL 14.594B×$310.03=$4.525T; focused data 71/71 and auth/edge 16/16, lint and TypeScript clean; sealed SHA unchanged.
+Open: update the four affected draft-manifest threshold clauses only through their owners (66.55% baseline; 61.55% improvement threshold); investigate five SEC share-coverage gaps and independently provenance any future 64.5% tail claim.
+
 ## 2026-08-19 — First CONFIRMATORY lane SEALED + two falsifications + DB loss/recovery ✅
 Shipped: `halal-fast-momentum-cash-core@v1` SEALED (commit `95fae73`, `configHash 115a6b6f…`, window 2026-09-08→2036-06-24, 2,460 sessions / 492 five-session observations, declared Sharpe 0.80) — the program's first strategy on a real path to ACCEPTED; QDR-16 window binding + `assertConfirmatoryWindowSealed` enforcement; quarterly 10-Q fundamentals (8,393 rows, staleness 320d→flat 91d, 0 look-ahead); AUTO_PAPER automation proven end-to-end on InternalSim.
 Decisions: declared Sharpe 0.80 not 1.15 (fitted) nor 0.958 (worst sub-sample) — sub-sampling cannot remove survivorship bias common to every window, so QDR-10's ~0.16 haircut applies; the window, not the number, absorbs regime risk (487 obs tolerate ~3 2022-like years, a 2.95y window tolerates zero); QDR-16 ruled the forward-window blocker an AUTHORING defect and explicitly refused to amend `assertFrozenCliConfig`, since QDR-13's precedent requires conflict with a recorded decision, not convenience.

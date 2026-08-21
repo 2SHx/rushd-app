@@ -7,6 +7,7 @@
 // `src/auth.config.ts`; this file only adds the Credentials provider, which
 // needs prisma + bcryptjs and therefore cannot run on the edge (middleware).
 import NextAuth from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from '@/auth.config';
 import { authorizeParent, authorizeChild } from '@/lib/auth-credentials';
@@ -16,6 +17,44 @@ import { TokenBucket } from '@/services/marketData';
 const authLimiter = new TokenBucket(10, 1);
 
 import { prisma } from '@/lib/prisma';
+
+/** Paid capability revocation can lag by at most this long after the database tier changes. */
+export const TIER_REFRESH_TTL_MS = 5 * 60_000;
+
+/** Server-only JWT enrichment. `auth.config.ts` remains Prisma-free for edge middleware. */
+export async function refreshSubscriptionTierToken(
+  token: JWT,
+  signedIn: boolean,
+  nowMs = Date.now(),
+): Promise<JWT> {
+  if (signedIn) {
+    token.tierRefreshedAt = nowMs;
+    return token;
+  }
+
+  const refreshedAt = typeof token.tierRefreshedAt === 'number' ? token.tierRefreshedAt : 0;
+  if (refreshedAt <= nowMs && nowMs - refreshedAt < TIER_REFRESH_TTL_MS) return token;
+
+  if (typeof token.userId !== 'string') {
+    token.tier = 'BASIC';
+    return token;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: token.userId },
+      select: { tier: true },
+    });
+    token.tier = user?.tier ?? 'BASIC';
+    token.tierRefreshedAt = nowMs;
+  } catch {
+    // Fail closed for paid capabilities, but leave the old timestamp expired so the next request
+    // retries instead of pinning a transient database failure for the whole TTL.
+    token.tier = 'BASIC';
+    console.error('[AUTH_AUDIT] Subscription tier refresh failed; defaulting to BASIC.');
+  }
+  return token;
+}
 
 const nextAuthResult = NextAuth({
   ...authConfig,
@@ -126,6 +165,13 @@ const nextAuthResult = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt(args) {
+      const token = await authConfig.callbacks.jwt(args);
+      return refreshSubscriptionTierToken(token, Boolean(args.user));
+    },
+  },
 });
 
 export const handlers = nextAuthResult.handlers;

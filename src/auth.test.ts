@@ -163,3 +163,56 @@ describe('auth() wrapper — no-session means no-session', () => {
     warnSpy.mockRestore();
   });
 });
+
+describe('subscription tier refresh', () => {
+  it('removes paid capabilities after a database downgrade without requiring re-login', async () => {
+    mutableEnv.NODE_ENV = 'test';
+    findUnique.mockResolvedValue({ tier: 'BASIC' });
+
+    const { refreshSubscriptionTierToken, TIER_REFRESH_TTL_MS } = await import('./auth');
+    const { can } = await import('./lib/authz');
+    const refreshed = await refreshSubscriptionTierToken({
+      userId: 'parent-1',
+      tier: 'ULTRA',
+      tierRefreshedAt: 1_000,
+    }, false, 1_000 + TIER_REFRESH_TTL_MS);
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'parent-1' },
+      select: { tier: true },
+    });
+    expect(refreshed.tier).toBe('BASIC');
+    expect(can({ tier: refreshed.tier as 'BASIC' }, 'analytics:quant')).toBe(false);
+  });
+
+  it('does not query Prisma while the five-minute tier stamp is fresh', async () => {
+    mutableEnv.NODE_ENV = 'test';
+
+    const { refreshSubscriptionTierToken, TIER_REFRESH_TTL_MS } = await import('./auth');
+    const token = { userId: 'parent-1', tier: 'ULTRA', tierRefreshedAt: 1_000 };
+    const refreshed = await refreshSubscriptionTierToken(token, false, 1_000 + TIER_REFRESH_TTL_MS - 1);
+
+    expect(refreshed.tier).toBe('ULTRA');
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('fails closed to BASIC on a refresh error and leaves the token eligible for retry', async () => {
+    mutableEnv.NODE_ENV = 'test';
+    findUnique.mockRejectedValue(new Error('sensitive database detail'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { refreshSubscriptionTierToken } = await import('./auth');
+    const refreshed = await refreshSubscriptionTierToken({
+      userId: 'parent-1',
+      tier: 'ULTRA',
+      tierRefreshedAt: 1_000,
+    }, false, 500_000);
+
+    expect(refreshed.tier).toBe('BASIC');
+    expect(refreshed.tierRefreshedAt).toBe(1_000);
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[AUTH_AUDIT] Subscription tier refresh failed; defaulting to BASIC.',
+    );
+    errorSpy.mockRestore();
+  });
+});
