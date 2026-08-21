@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-decorrelated-fast-momentum-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-decorrelated-fast-momentum-core",
+    "from": "2018-01-02",
+    "to": "2026-07-17",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db",
+    "market": "NASDAQ",
+    "universeMode": "c1_verified_dollar_volume_sleeve_max60",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-fast-momentum-core@v1",
+    "comparatorRunId": "218716ac-f692-4f0f-91f3-81045a159a62",
+    "comparatorGitSha": "000dea1",
+    "comparatorArtifact": "results/halal-fast-momentum-core-2018-01-02-2026-07-17-c1_verified_60.json",
+    "hypothesis": "Adding exactly one new SELECTION-time variable to halal-fast-momentum-core@v1 -- maxPairwiseCorrelation = 0.55, a decision-date admission ceiling on a candidate's MAXIMUM trailing-63-session daily-return Pearson correlation against the already-admitted names -- removes the redundant member of each correlated pair from the weekly top-5, cutting MC book-day p95 drawdown from 68.40% to at or below 63.40% and holding OOS DSR above 0.874, at an honestly predicted OOS CAGR cost of about 14pp (105.92% -> ~92%), and it is DEAD if the realised AVERAGE pairwise correlation of the selected five does not fall by at least 0.04 absolute below the same engine's unfiltered top-5 measured on the identical decision dates (measured baseline mean 0.334, so the treatment must reach 0.294 or lower).",
+    "mechanism": "The comparator ranks by 63d/skip2 momentum, takes a fixed top 5, and sizes by inverseVolatilityWeights, which is UNIVARIATE: it reads each name's own sigma and never reads the covariance BETWEEN the five picks. When momentum resolves the top 5 into one semiconductor/AI-rally cluster, the sizer sees five positions and the market sees one. The ledger diagnoses this in its own words for halal-momentum-risk-parity-core: momentum selection 'concentrated the book into a correlated semiconductor/AI-rally cluster that crashes together'. Every prior repair attacked a downstream step and each one is measured: covariance-aware SIZING after momentum selection (halal-momentum-markowitz-core, markowitzFrontier tangency weights over the selected subset) moved MC p95 only 64.68% -> 60.51%, -4.17pp, because reweighting five names drawn from one cluster still holds one cluster -- a sizer can reallocate risk among the bets it is handed but cannot create a bet that was never selected; ENTRY SUPPRESSION (halal-managed-momentum-core, vol target + drawdown governor + 200d regime filter) bought 13.98pp of tail for 25.21pp of OOS CAGR, an exchange rate of 1.803 CAGR-pp per tail-pp, because it fixes concentration by owning less of everything; EXIT-ONLY (halal-stopped-fast-momentum-core) was falsified on a measurably inert stopLossPct that fired 11 times in 8.5 years; and a fundamental SELECTION gate (halal-fundamental-momentum-core) was falsified with OOS DSR 0.874 -> 0.680. Correlation-balanced selection itself has been tried exactly once, on halal-decorrelated-risk-parity-core, whose base book was ALREADY diversified so the constraint had almost nothing to bite on -- the same reason sector caps moved risk parity only -0.95pp (40 names) and -2.69pp (100 names). It has never been applied to MOMENTUM selection, which is where the concentration originates. The causal claim is therefore narrow and testable: you cannot diversify at the SIZING step what you destroyed at the SELECTION step, so the correction must move the admission decision itself, and the efficiency argument for why it should beat entry suppression is that it holds gross exposure, cash floor, cadence, and sizer byte-identical and pays only the shallow momentum-rank spread between rank 3 and rank 8 of a 60-name sleeve, rather than the full spread between invested and cash.",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "validationTrials": 9,
+      "maxPairwiseCorrelation": 0.55,
+      "correlationWindowSessions": "DERIVED, NOT CHOSEN: exactly the 63 daily returns produced by dailyReturns(closes) where closes are the lookbackDays+1 = 64 trailing closes ending AT the decision close -- the identical return vectors halalFastMomentumCore already materialises to compute sigma for inverseVolatilityWeights. No new window parameter enters, no new data plumbing enters, and the window is bounded above by asOf by construction.",
+      "correlationStatistic": "MAXIMUM signed Pearson correlation against the already-admitted set (decorrelatedSleeve.ts :: pearson, imported unchanged). MAX not AVERAGE: an average dilutes the exact failure being attacked -- a name correlated 0.95 with one holding and 0.20 with three others averages ~0.39 and would be admitted, which is precisely the NVDA/MU redundancy this experiment exists to remove. SIGNED not absolute: a negatively correlated name is a hedge, not a duplicate, and must be admitted freely.",
+      "correlationDegeneracyPolicy": "A survivor whose dailyReturns throws, or whose 63-return sample standard deviation is 0 or non-finite, is dropped from candidacy before the walk -- the identical degeneracy rule the comparator already applies inside its sizing step, moved one step earlier so a name that could never be sized can never be admitted."
+    },
+    "selectionRule": [
+      "1. Steps 1 and 2 of halal-fast-momentum-core are BYTE-IDENTICAL and imported unchanged: build the momentum-rankable set (>= lookbackDays+1 trailing bars ending exactly at asOf) via dualMomentumMetrics(closes, 63, 2), then apply the absolute-momentum filter absolute > 0. The rank formula is not touched.",
+      "2. SURVIVORS = the eligible set sorted by relative momentum descending, ties by symbol ascending -- byte-identical to the ordering selectTopNByMomentum produces. Drop degenerate names per params.correlationDegeneracyPolicy. Compute r_i = dailyReturns(closes_i), the same 63-vector used for sizing.",
+      "3. PASS A -- ADMISSION WALK. Walk SURVIVORS in that momentum order. Admit the rank-1 survivor unconditionally (the seed: the highest-momentum name is never skipped, so the rule can never become a low-momentum tilt). For each subsequent survivor i, admit it if and only if max over already-admitted j of pearson(r_i, r_j) <= maxPairwiseCorrelation; otherwise SKIP it and continue down the rank list. Stop as soon as |admitted| == topN. There is no candidate-depth parameter: the walk runs the eligible list and the realised depth is an OUTPUT (admissionDepth), reported, never tuned.",
+      "4. PASS B -- SHORTFALL FILL, entered only when PASS A exhausts SURVIVORS with |admitted| < topN. Repeatedly admit, from the remaining survivors, the name with the LOWEST maximum correlation to the current admitted set; ties break by higher momentum rank, then by symbol ascending. Repeat until |admitted| == topN or survivors are exhausted. The threshold is NEVER relaxed by any amount and no second parameter is introduced -- what changes is the ORDERING OBJECTIVE, from 'momentum rank subject to a correlation ceiling' to 'minimum redundancy'.",
+      "5. cashFloor is untouched: if the eligible count is below cashFloor=2 the whole book holds cash exactly as the comparator does, and if SURVIVORS < topN the book holds fewer names exactly as the comparator would. PASS B never invents a name and never buys a negative-absolute-momentum name, because it draws only from the same post-absolute-filter survivor list.",
+      "6. Everything downstream is byte-identical to the comparator: inverseVolatilityWeights over the admitted set, capAndRedistribute at 25%, weekly ISO-week rebalance, decide-at-close / fill-next-open, 15 bps/side, unchanged ADV/cash/risk envelope. No sizing, exit, cadence, or rank-formula change enters."
+    ],
+    "fallbackCannotCollapseArgument": "TO THE BASELINE: PASS B admits by minimum max-correlation, not by momentum rank, so it reproduces the comparator's top-5 only in the single case where the comparator's top-5 ALSO happens to be the five least-redundant survivors -- which is exactly the state in which the mechanism is genuinely inert, and which falsification F1 detects directly and kills on. A silent collapse is therefore not a hidden failure mode; it is the measured null result. TO A COVERT LOW-VOLATILITY BET: Pearson correlation is scale-invariant -- both numerator and denominator are homogeneous of degree one in each series, so each name's sigma cancels exactly -- hence a low-volatility name enjoys no admission advantage whatsoever, and the admission decision is a pure function of co-movement SHAPE. The sizer is unchanged inverse-volatility, so any volatility tilt in the realised book would be attributable to the untouched sizer rather than to the new selector. This argument is nonetheless INSTRUMENTED rather than asserted: the run must publish selectedMeanRealizedVol63 for both arms, and F6 kills the decorrelation claim if the selected set's mean realised volatility falls more than 20% relative to the comparator's.",
+    "noLookAheadArgument": "The correlation matrix is built ONLY from r_i = dailyReturns(closes_i) where closes_i are the 64 trailing closes ending AT the decision close, obtained from the same binary-searched index the comparator already uses for momentum and sigma. No full-sample correlation matrix, no forward window, and no sleeve-level correlation precomputation is permitted anywhere in the implementation -- using the full-sample matrix would be direct look-ahead on the exact statistic being claimed, the identical defect confessed and fixed for the QDR-11 lane in the 2026-08-07 journal entry. assertNoLookahead is called on the decision bars exactly as the comparator calls it. Any bar dated after asOf entering any correlation VOIDS the run.",
+    "plateau": {
+      "axes": [
+        "maxPairwiseCorrelation",
+        "topN"
+      ],
+      "grid": {
+        "maxPairwiseCorrelation": [
+          0.45,
+          0.55,
+          0.65
+        ],
+        "topN": [
+          4,
+          5,
+          6
+        ]
+      },
+      "center": {
+        "maxPairwiseCorrelation": 0.55,
+        "topN": 5
+      },
+      "trials": 9,
+      "axisJustification": "Axis 1 is the ONE new variable and must be swept. Axis 2 is topN {4,5,6}, the comparator's OWN second plateau axis, reused unchanged so the two grids are directly comparable at every cell. lookbackDays stays FROZEN at 63 and skipRecentDays at 2: the comparator's terminal card records a SPIKY plateau caused specifically by its lookbackDays=42 neighbours, so re-sweeping that axis here would guarantee a plateau failure driven by the OLD noisy axis and would mask the NEW one. cashFloor and perNameCap stay fixed, matching the comparator's precedent. The {0.45,0.55,0.65} range is now calibrated against the MEASURED distribution of the statistic the ceiling acts on -- the unfiltered top-5 MAXIMUM pairwise rho, mean 0.629, median 0.637 -- so the grid straddles that median: 0.45 binds in a large majority of weeks, 0.55 binds in a measured 69.3% of weeks, and 0.65 sits just above the median max and therefore binds in a minority. Three genuinely different binding regimes, spanned without moving the centre."
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "The setup was designed AFTER inspecting halal-fast-momentum-core@v1's terminal card (105.92 / 68.40 / 0.874) and six prior related results, and it replays the already-inspected 2018-2026 historical window, so QDR-9 conditions (b) forward-only, (d) evidence boundary strictly after seal, and (e) every observation after that boundary cannot hold. EXPLORATORY is the fail-closed default and is correct. THIS LANE SCREENS AND CANNOT PROMOTE: at the registered family floor a ~2.55-year OOS window requires an annualised Sharpe near 2.9 to reach DSR > 0.95, which the Sharpe > 3.00 implausibility ceiling makes effectively unreachable, so REJECTED is the expected terminal label and is not the question being asked. Its only legitimate output is a candidate for a separate, sealed, forward-only CONFIRMATORY manifest under QDR-9/QDR-16, where N = 1 applies regardless of how many exploratory families precede it.",
+      "familyTrialsBeforeRegistration": 126,
+      "familyTrialsAfterRegistration": 135,
+      "addedTrials": 9,
+      "note": "HALAL_CORE_REGISTERED_TRIALS in src/quant/backtest/trialFamilies.ts:33 must rise 126 -> 135 at implementation time. A family count may only rise, never fall."
+    },
+    "predictions": {
+      "selectedTop5AvgPairwiseCorrelation": {
+        "statisticRole": "PRIMARY MECHANISM METRIC and the F1 subject. The AVERAGE is tested, not the maximum, and deliberately so: for a near-equal-weight book the portfolio variance is sigma_bar^2 * [1/n + (1-1/n)*rho_bar], so ONLY the average pairwise correlation enters the variance the tail is built from. The maximum is merely the admission RULE, and a max-based test would be near-tautological -- under PASS A the admitted max is <= 0.55 by construction -- so it verifies implementation, not mechanism, and is demoted to the VOID check F1b.",
+        "baselineMeasured": 0.334,
+        "baselineMustAlsoBeRecomputedInSameRun": true,
+        "point": 0.275,
+        "interval": [
+          0.24,
+          0.3
+        ],
+        "direction": "DOWN",
+        "arithmetic": "Implied pair sd from max-mean 0.629 over 10 pairs is ~0.192, so ~13.0% of pairs exceed 0.55 with conditional mean ~0.646. One PASS-A swap replaces a name whose 4 pairs sum ~1.65 with a substitute whose 4 pairs must all clear the ceiling and sum ~1.12, i.e. delta-sum ~0.53 over 10 pairs = 0.053 per swap; at the ~0.9 swaps/week implied by the measured 69.3% binding rate that is delta rho_bar ~ 0.048. An independent coordinator estimate lands at ~0.064. The prediction is set at the midpoint, 0.059, i.e. 0.334 -> 0.275.",
+        "note": "Both arms are measured on the IDENTICAL decision dates and IDENTICAL return vectors; the comparator arm needs no second backtest, only that the unfiltered momentum top-5 be recorded alongside the admitted set. F1 is a WITHIN-RUN paired comparison and therefore immune to any drift between the out-of-band top-60-by-dollar-volume pool and the run's c1_verified sleeve. If the same-run baseline differs from the out-of-band 0.334 by more than 0.05, that discrepancy must be reported as a universe-resolution finding, but F1 still uses the same-run number."
+      },
+      "selectedTop5EffectiveBets": {
+        "baselineMeasured": 2.14,
+        "point": 2.38,
+        "ratio": 1.11,
+        "direction": "UP",
+        "formula": "decorrelatedSleeve.ts :: effectiveBets(rho_bar, 5)",
+        "note": "At the F1 kill edge (rho_bar 0.294) the ratio is only 1.07, below QDR-11's 1.10 effective-bet precedent. That precedent is NOT imported as a gate here -- doing so would strengthen F1 past what the arithmetic says a working mechanism delivers -- but the ratio must be published so a reviewer can see where the result sits against it."
+      },
+      "oosCagrPct": {
+        "baseline": 105.92,
+        "point": 92.0,
+        "interval": [
+          75.0,
+          103.0
+        ],
+        "direction": "DOWN",
+        "recalibrationNote": "Moved UP from the original 86.0 because the measured book reshaping is MILDER than the fictitious 0.62 -> 0.44 that produced 86.0: roughly 0.9 of 5 slots swapped per week, displaced ~3 momentum ranks inside a 60-name sleeve. The mechanism is smaller than assumed in BOTH directions -- less CAGR cost AND less tail benefit -- and both were recalibrated together, in the same pass, from the same measurement. This is the least-constrained quantity in the preregistration and its interval is the widest for that reason."
+      },
+      "mcBookDayP95DrawdownPct": {
+        "baseline": 68.4,
+        "point": 63.5,
+        "interval": [
+          60.0,
+          66.0
+        ],
+        "direction": "DOWN",
+        "recalibrationNote": "Moved UP from the original 57.0, which is not supported by the measurement. Book variance goes as [0.2 + 0.8*rho_bar] at n=5, so rho_bar 0.334 -> 0.275 cuts book volatility by only 5.2% (68.40 -> 64.85 if drawdown scales with volatility). The one legitimate reason to expect more is that drawdowns are built in the high-correlation weeks and the ceiling bites hardest exactly there: at the measured p90 week (rho_bar 0.536, capped to ~0.40) the volatility cut is 9.1%, giving 62.20. The honest band is therefore [62.2, 64.8] on this arithmetic alone, widened to [60.0, 66.0] for the unmodelled effect of holding different names. Point 63.5."
+      },
+      "oosDeflatedSharpe": {
+        "baseline": 0.874,
+        "point": 0.86,
+        "interval": [
+          0.82,
+          0.92
+        ],
+        "direction": "DOWN (REVERSED from the original UP)",
+        "arithmetic": "At the recalibrated points, log-return falls by a factor 0.903 while volatility falls by only 0.948, so OOS Sharpe goes 1.731 -> ~1.65 and DSR at N=9 falls slightly. The original UP prediction assumed a volatility cut large enough to outrun the return cut; the measurement does not support that. F4 (DSR > 0.874) is therefore NOT expected to pass at the central estimate and is deliberately left UNCHANGED.",
+        "note": "DSR values across this ledger were computed at varying N and are NOT comparable; both numbers must be quoted at N=9."
+      },
+      "tradesFull": {
+        "baseline": 1390,
+        "point": 1650,
+        "interval": [
+          1450,
+          1900
+        ],
+        "direction": "UP",
+        "note": "UP, and now anchored: the ceiling binds in a measured 69.3% of weeks, so roughly 0.9 of 5 slots churn on the correlation rule in addition to the unchanged weekly re-rank."
+      },
+      "predictedExchangeRate": {
+        "value": 2.84,
+        "units": "OOS CAGR pp surrendered per pp of MC p95 tail removed",
+        "comparator": 1.803,
+        "comparatorSource": "halal-managed-momentum-core: 25.21pp CAGR for 13.98pp tail",
+        "statedPlainly": "AT THE RECALIBRATED CENTRAL ESTIMATES THIS EXPERIMENT FAILS ITS OWN F3 BAR: 13.92pp / 4.90pp = 2.84, against an adoption bar of strictly below 1.803. Clearing F3 at a 4.90pp tail cut requires the OOS CAGR cost to land under 8.82pp, i.e. OOS CAGR above 97.10% -- inside the stated interval but NOT the central case. The bar is left unchanged and the prediction is left where the arithmetic puts it. The a-priori probability of confirmation is well under 50% and the primary yield of this run is F1 plus the tail decomposition, not a promotion candidate."
+      },
+      "expectedVerdict": "REJECTED is expected at the exploratory floor and is not the question. After the baseline correlation measurement the central estimates also fail F2 (marginally), F3 and F4, and that is disclosed rather than accommodated. The question this run answers, which no prior experiment on this engine has answered, is whether correlation-aware SELECTION can move a momentum book's realised correlation structure at all and at what price -- and, by the same evidence, how much of the 68.40% tail is pairwise redundancy versus single-name volatility.",
+      "selectedTop5MaxPairwiseCorrelation": {
+        "baselineMeasured": 0.629,
+        "point": 0.47,
+        "interval": [
+          0.42,
+          0.55
+        ],
+        "direction": "DOWN",
+        "note": "Below 0.55 on average because in the 30.7% of weeks where the ceiling does not bind the max is already lower. This is an implementation-correctness metric, not a mechanism metric."
+      }
+    },
+    "cagrCostStatement": "STATED PLAINLY, UP FRONT, AND RECALIBRATED AGAINST MEASUREMENT: this hypothesis trades CAGR for tail, which is a legitimate outcome rather than a failure, but it is predicted here, before the run, so it cannot be discovered afterwards and reframed. Skipping the redundant member of a correlated pair and admitting a name ~3 momentum ranks lower must cost expected return, because momentum rank is the only return signal in the engine. Predicted cost 105.92% -> 92.0% OOS CAGR, about 13.9pp, retaining ~87% of the comparator. The exchange rate that would make this worthwhile is arithmetic, not opinion: halal-managed-momentum-core already bought 13.98pp of tail for 25.21pp of CAGR, i.e. 1.803 CAGR-pp per tail-pp, and that trade was judged bad. A mechanism that buys tail at a WORSE rate than an already-rejected governor stack has taught us nothing, so the adoption bar is a realised rate strictly BELOW 1.80 -- and the recalibrated central prediction of 2.84 DOES NOT CLEAR IT. That is the honest position after measuring the baseline: the average pairwise correlation of the unfiltered top-5 is 0.334, not the ~0.62 the manifest originally assumed, so there is far less redundancy available to remove than the 'five positions, one bet' diagnosis implied, and the arithmetic ceiling on the tail benefit is roughly 5-9% relative. The owner's stated preference is materially better RETURNS rather than better risk control; on that preference this experiment is now interesting mainly as a DECOMPOSITION -- if F1 passes while F2/F3/F4 fail, the finding is that this engine's tail is a single-name-volatility problem and not a correlation problem, which closes the correlation-selection family on this book and points the next preregistration at the per-name volatility and 25% cap axis. No falsification bar was moved to accommodate any of this.",
+    "falsification": {
+      "confirmedRequiresAll": [
+        "F1 does not fire (the selector demonstrably decorrelates the book: rhoB - rhoT >= 0.04 absolute)",
+        "mcBookDayP95Drawdown <= 63.40pct",
+        "realised exchange rate < 1.80 CAGR-pp per tail-pp",
+        "oosDeflatedSharpe > 0.874 at N = 9",
+        "oosCagr >= 70.0pct"
+      ],
+      "falsifiedIfAny": [
+        "F1 INERT AXIS -- PRIMARY KILL, RECALIBRATED. Let rhoT = the mean, over OOS decision weeks, of the AVERAGE pairwise 63-session correlation of the ADMITTED five, and rhoB = the same statistic for the comparator's unfiltered momentum top-5 on the identical decision dates and identical return vectors. If rhoB - rhoT < 0.04 ABSOLUTE, the mechanism is decoration and the hypothesis is DEAD regardless of CAGR, DSR or drawdown, and the card must report it as an inert-axis finding rather than a mechanism result. WHY 0.04 AND NOT 0.10: the ceiling acts on the MAXIMUM pairwise correlation, whose measured baseline mean is 0.629, while the AVERAGE baseline is only 0.334; capping the max at 0.55 moves the average by ~0.048 on this manifest's own swap-intensity arithmetic and ~0.064 on an independent estimate, so a 0.10 threshold would have killed a mechanism that did exactly what it was designed to do. 0.04 sits below both estimates and above zero, so it is passable by a working mechanism and unreachable by a decorative one. The AVERAGE is the right subject because portfolio variance at n=5 is sigma_bar^2 * [0.2 + 0.8*rho_bar] -- only the average enters the variance the tail is built from. CO-CONDITION, also fatal on its own and STRENGTHENED by the measurement: if fewer than 40% of decision weeks record at least one PASS-A skip (admissionDepth > topN), the ceiling is not binding as measured -- the baseline max exceeds 0.55 in 69.3% of weeks -- and the same inert-axis verdict applies. Two prior hypotheses on this engine died on inertness discovered AFTER the fact; here it is preregistered, directly measured, and calibrated to the statistic the rule actually acts on.",
+        "F2 NO TAIL BENEFIT: MC book-day p95 drawdown > 63.40pct, i.e. the tail is not cut by at least 5pp. Anything at or above 64.23pct would additionally mean selection-time decorrelation did no better than the -4.17pp already delivered by covariance SIZING, which refutes the core causal claim outright.",
+        "F3 BAD EXCHANGE RATE: (105.92 - oosCagr) / (68.40 - mcP95) >= 1.80, or the tail denominator is <= 0. The mechanism is then no better than halal-managed-momentum-core's already-rejected governor stack and the correlation-selection family is closed on this book.",
+        "F4 NO RISK-ADJUSTED BENEFIT: oosDeflatedSharpe <= 0.874 at N = 9. If decorrelation cuts volatility more than it cuts return, DSR must rise; if it does not, the swap is destroying more signal than risk.",
+        "F5 RETURN DESTROYED: oosCagr < 70.0pct.",
+        "F6 CONFOUNDED BY A VOLATILITY TILT: selectedMeanRealizedVol63 of the admitted five falls more than 20% RELATIVE to the comparator's unfiltered top-5. The tail improvement is then partly a low-volatility tilt rather than decorrelation, and no decorrelation claim may be drawn even if F1 passes.",
+        "F7 KNIFE EDGE: 3 or more of the 8 frozen plateau neighbours degrade past the OOS-expectancy bound, or any neighbour flips sign."
+      ],
+      "voidNotFalsified": [
+        "F8 PIT BREACH: any LookaheadError, any non-zero look-ahead violation count, or any correlation computed from a bar dated after the decision close. The run is VOID and reports nothing about the hypothesis.",
+        "F9 COMPARATOR INSTRUMENTATION MISSING: the run does not publish rhoB, selectedMeanRealizedVol63 for both arms, admissionDepth, and the per-week skip count. F1 and F6 are then unevaluable and the run reports nothing.",
+        "F1b IMPLEMENTATION BREACH (VOID, not falsified): in any decision week where PASS B did not fire, the maximum pairwise correlation of the admitted set must be <= maxPairwiseCorrelation by construction. Any violation means the admission walk is implemented incorrectly and the run reports nothing about the hypothesis. This is a correctness assertion, deliberately NOT a mechanism test -- it is near-tautological under a correct implementation, which is exactly why it may not stand in for F1."
+      ]
+    },
+    "requiredPublishedEvidence": [
+      "rhoT and rhoB: mean over OOS decision weeks of the selected-five AVERAGE pairwise 63-session correlation, treatment and unfiltered-comparator arms, identical dates (F1 subject)",
+      "the same pair for the MAXIMUM pairwise correlation, plus the per-week max distribution (F1b subject)",
+      "effectiveBets(rhoT, 5) and effectiveBets(rhoB, 5), with the ratio, quoted against QDR-11's 1.10 precedent",
+      "skipWeeksFraction = fraction of decision weeks with admissionDepth > topN, and median admissionDepth",
+      "selectedMeanRealizedVol63 for both arms (F6 subject)",
+      "realised exchange rate (105.92 - oosCagr) / (68.40 - mcP95)",
+      "the standard QDR-6 card: OOS CAGR, OOS DSR at N = 9, MC book-day p95, trades, plateau verdict",
+      "a tail decomposition: the share of the MC p95 change attributable to the average-correlation move ([0.2+0.8*rhoT]/[0.2+0.8*rhoB]) versus the residual, so a reader can see whether this book's tail is a correlation problem or a single-name-volatility problem"
+    ],
+    "reuseUnchanged": [
+      "src/quant/universe/decorrelatedSleeve.ts :: pearson, effectiveBets (pure, tested, relative-variance-floored; do NOT reuse selectDecorrelatedSleeve -- it requires a non-null sector for every candidate, enforces a sector cap, and minimises AVERAGE correlation over a free-standing sleeve, none of which is this rule)",
+      "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics",
+      "src/quant/strategies/halalRiskParityCore.ts :: inverseVolatilityWeights, capAndRedistribute",
+      "src/quant/portfolio/frontier.ts :: dailyReturns",
+      "src/quant/data/pointInTime.ts :: assertNoLookahead"
+    ],
+    "filesStrategistMayTouch": [
+      "NEW src/quant/strategies/halalDecorrelatedFastMomentumCore.ts (structure copied from halalFastMomentumCore.ts; the ONLY behavioural delta is a new exported pure function selectDecorrelatedTopN(survivors, returnsBySymbol, topN, floor, maxPairwiseCorrelation) inserted between the existing Step 2 and Step 4)",
+      "NEW src/quant/strategies/halalDecorrelatedFastMomentumCore.test.ts (must pin: PASS A skips a duplicate and admits the next rank; PASS B fills by minimum redundancy and NOT by momentum rank; a negatively correlated name is admitted; a uniform-scaling of any candidate's return series changes nothing about admission (scale-invariance proof of the no-low-vol-bet claim); at maxPairwiseCorrelation = 1.0 the selection is byte-identical to selectTopNByMomentum)",
+      "src/quant/strategies/catalog.ts (one registration line)",
+      "src/quant/backtest/trialFamilies.ts (HALAL_CORE_REGISTERED_TRIALS 126 -> 135, and the comment's setup count 14 -> 15)",
+      "src/quant/universe/pointInTimeMembership.ts (add the id to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS per QDR-14)",
+      "docs/quant-experiments/halal-decorrelated-fast-momentum-core-v1.json (this manifest only)"
+    ],
+    "filesNotNeeded": "No change to src/quant/strategies/types.ts and no change to src/quant/backtest/runLab.ts is required, unlike the fundamental lane: the correlation input is the SAME trailing close series the setup already loads into its own CompactSeries state, so no new field on UniversePrepareInput and no new harness load path enters.",
+    "filesForbidden": [
+      "src/quant/strategies/halalFastMomentumCore.ts (the comparator is frozen; the new setup is a sibling file, never an edit)",
+      "src/quant/universe/decorrelatedSleeve.ts (import only; the helper is shared with the QDR-11 lane and must not drift)",
+      "src/quant/backtest/portfolioEngine.ts, src/quant/backtest/metrics.ts, src/quant/backtest/experimentProtocol.ts (no gate, breaker, or estimator may move)",
+      "docs/quant-experiments/halal-fast-momentum-cash-core-v1.json and every other SEALED or CODIFIED manifest; the sealed lane must not be run, inspected, or referenced by this work"
+    ],
+    "terminalFence": {
+      "pitMembershipRequired": true,
+      "status": "BLOCKED",
+      "note": "QDR-14: historical membership, delisting lifecycle, and independent per-name Sharia evidence do not exist for 2018-2026, so any run of this version is unverified-diagnostic-only and cannot produce a terminal card until the QDR-14 disclosure-bound waiver path is satisfied. The fence opens by disclosure, never silently. Long-only cash, NASDAQ-only, halal; no shorting, margin, or leverage."
+    },
+    "baselineCorrelationMeasurement": {
+      "status": "MEASURED OUT-OF-BAND BEFORE PREREGISTRATION, exploratory, on data the comparator already ran; adds no trial and touches nothing sealed.",
+      "method": "404 decision weeks, MarketBar NASDAQ daily from 2018, top-60 by 21-session dollar volume, 63d/skip2 momentum, positive-absolute filter, top 5; pairwise Pearson over the trailing 63 daily returns ending at the decision close.",
+      "unfilteredTop5AveragePairwiseRho": {
+        "mean": 0.334,
+        "median": 0.322,
+        "p10": 0.148,
+        "p90": 0.536
+      },
+      "unfilteredTop5MaximumPairwiseRho": {
+        "mean": 0.629,
+        "median": 0.637
+      },
+      "weeksWithMaxPairRhoAbove055": 0.693,
+      "weeksWithAvgRhoAbove055": 0.087,
+      "impliedEffectiveBetsOfFive": 2.14,
+      "whyThisChangedThePreregistration": "Two errors were corrected before any trial was spent. (1) The original a-priori rho prediction (0.62 -> 0.44, labelled AVERAGE) was reasoning about the MAXIMUM while labelling it the average; against a measured average of 0.334, 0.44 would have been an INCREASE. (2) The original F1 threshold of 0.10 absolute on the AVERAGE would have false-falsified a fully working mechanism: the ceiling acts on the maximum, and capping the max at 0.55 when the baseline max averages 0.629 moves the average only ~0.05-0.06. Both are recalibrated below. The 0.55 ceiling itself, F2, F3, F4, F5, F6 and F7 are UNCHANGED -- nothing was loosened to make passing easier.",
+      "bindingConcernResolved": "The director's open risk that a weakly-binding ceiling would fire F1 on a true null is RESOLVED in the good direction: the max exceeds 0.55 in 69.3% of weeks, so the constraint binds hard and this is not a null experiment.",
+      "uncomfortableFindingThatFollows": "2.14 effective bets out of 5 is NOT 'one bet'. Six terminal cards narrate this engine's 68.40% tail as a book 'concentrated into a correlated cluster that crashes together', and the measured average pairwise correlation of 0.334 only partly supports that narrative. Most of the tail must therefore come from single-name volatility and the 25% per-name cap rather than from pairwise redundancy. This is stated here, before the run, because it lowers the a-priori probability that this mechanism clears F2/F3/F4 and it must not be discovered afterwards."
+    }
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

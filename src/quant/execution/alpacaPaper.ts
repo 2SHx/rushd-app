@@ -217,22 +217,55 @@ export class AlpacaPaperBroker implements BrokerAdapter {
 
   /**
    * Fresh mid-quote (bid+ask)/2 for a symbol, from the fixed, pinned market-data host above.
+   * If NBBO quotes are inactive/off-hours (ap or bp is 0), falls back to the latest executed trade price.
    * Read-only; used only to verify a caller-supplied --ref-price against a live price before the
    * per-order cash cap check — never to size an order and never itself a transmission point.
    */
   async getLatestQuote(symbol: string): Promise<Prisma.Decimal> {
-    const res = await fetch(`${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/quotes/latest`, {
-      headers: this.headers(),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`Alpaca getLatestQuote failed: ${res.status}`);
-    const j = (await res.json()) as Record<string, unknown>;
-    const quote = (j.quote ?? {}) as Record<string, unknown>;
-    const bid = decimal(quote.bp);
-    const ask = decimal(quote.ap);
-    if (!bid.gt(0) || !ask.gt(0)) throw new Error('Alpaca returned an invalid quote');
-    return bid.plus(ask).div(2);
+    try {
+      const res = await fetch(`${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/quotes/latest`, {
+        headers: this.headers(),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        const j = (await res.json()) as Record<string, unknown>;
+        const quote = (j.quote ?? {}) as Record<string, unknown>;
+        const bid = decimal(quote.bp);
+        const ask = decimal(quote.ap);
+        if (bid.gt(0) && ask.gt(0)) {
+          return bid.plus(ask).div(2);
+        }
+      } else if (res.status !== 404 && res.status !== 422) {
+        throw new Error(`Alpaca getLatestQuote failed: ${res.status}`);
+      }
+    } catch (e) {
+      if ((e as Error).message?.startsWith('Alpaca getLatestQuote failed:')) {
+        throw e;
+      }
+    }
+
+    // Off-hours / one-sided quote fallback: query latest executed trade price
+    try {
+      const resTrade = await fetch(`${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(symbol)}/trades/latest`, {
+        headers: this.headers(),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (!resTrade.ok) throw new Error(`Alpaca getLatestTrade failed: ${resTrade.status}`);
+      const jTrade = (await resTrade.json()) as Record<string, unknown>;
+      const trade = (jTrade.trade ?? {}) as Record<string, unknown>;
+      const tradePrice = decimal(trade.p);
+      if (tradePrice.gt(0)) {
+        return tradePrice;
+      }
+    } catch (e) {
+      if ((e as Error).message?.startsWith('Alpaca getLatestTrade failed:')) {
+        throw e;
+      }
+    }
+
+    throw new Error('Alpaca returned an invalid quote');
   }
 
   /**

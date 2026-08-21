@@ -249,8 +249,26 @@ describe('AlpacaPaperBroker.getLatestQuote (fresh-quote verification support)', 
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
       new Response(JSON.stringify({ quote: { bp: '0', ap: '0' } }), { status: 200 }),
+    ).mockResolvedValueOnce(
+      new Response(JSON.stringify({ trade: { p: '0' } }), { status: 200 }),
     ));
     await expect(broker.getLatestQuote('AAPL')).rejects.toThrow('invalid quote');
+  });
+
+  it('falls back to latest trade price when NBBO quote is off-hours (ap is 0)', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ quote: { bp: '450', ap: '0' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ trade: { p: '481.20' } }), { status: 200 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const broker = new AlpacaPaperBroker('k', 's', 'https://paper-api.alpaca.markets');
+    const price = await broker.getLatestQuote('MSFT');
+    expect(price.toString()).toBe('481.2');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://data.alpaca.markets/v2/stocks/MSFT/quotes/latest');
+    expect(fetchMock.mock.calls[1][0]).toBe('https://data.alpaca.markets/v2/stocks/MSFT/trades/latest');
   });
 });
 

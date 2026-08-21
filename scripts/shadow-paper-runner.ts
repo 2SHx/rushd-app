@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { Prisma } from '@prisma/client';
 import type { OrderSide } from '@prisma/client';
 import { runShadowPaperProbe, type ShadowPaperProbeInput } from '../src/quant/execution/shadowPaperRunner';
+import { selectShadowPaperBroker } from '../src/quant/execution/registry';
 import { INCUBATION_BOOKS } from '../src/quant/automation/incubationBooks';
 
 export class UsageError extends Error {}
@@ -20,14 +21,14 @@ function arg(args: string[], flag: string): string | undefined {
   return i === -1 ? undefined : args[i + 1];
 }
 
-export function parseShadowPaperArgs(args: string[]): ShadowPaperProbeInput {
+export function parseShadowPaperArgs(args: string[], resolvedRefPrice?: Prisma.Decimal): ShadowPaperProbeInput {
   const bookId = arg(args, '--book');
   const symbol = arg(args, '--symbol');
   const side = arg(args, '--side');
   const notional = arg(args, '--notional');
-  const refPrice = arg(args, '--ref-price');
+  const rawRefPrice = arg(args, '--ref-price');
   const purpose = arg(args, '--purpose');
-  if (!bookId || !symbol || !side || !notional || !refPrice || !purpose) {
+  if (!bookId || !symbol || !side || !notional || !rawRefPrice || !purpose) {
     throw new UsageError('Required: --book --symbol --side --notional --ref-price --purpose');
   }
   const book = INCUBATION_BOOKS.find((b) => b.bookId === bookId);
@@ -36,13 +37,28 @@ export function parseShadowPaperArgs(args: string[]): ShadowPaperProbeInput {
   if (purpose !== 'PROBE_CANCEL' && purpose !== 'PROBE_FILL' && purpose !== 'FLATTEN') {
     throw new UsageError('--purpose must be PROBE_CANCEL, PROBE_FILL, or FLATTEN');
   }
+  let refPrice: Prisma.Decimal;
+  if (resolvedRefPrice) {
+    refPrice = resolvedRefPrice;
+  } else if (rawRefPrice.toLowerCase() === 'live' || rawRefPrice.toLowerCase() === '<live>' || rawRefPrice.toLowerCase() === 'auto') {
+    throw new UsageError('--ref-price live requires resolution via broker; specify a numeric price or run via CLI');
+  } else {
+    try {
+      refPrice = new Prisma.Decimal(rawRefPrice);
+      if (!refPrice.isFinite() || !refPrice.gt(0)) {
+        throw new Error();
+      }
+    } catch {
+      throw new UsageError('--ref-price must be a positive number or "live"');
+    }
+  }
   return {
     bookId,
     strategyVersion: book.paramsVersion,
     symbol,
     side: side as OrderSide,
     notionalUsd: new Prisma.Decimal(notional),
-    refPrice: new Prisma.Decimal(refPrice),
+    refPrice,
     purpose,
     asOf: new Date(),
     // Only --dry-run=false unlocks anything past this CLI's own refusal below — the module-level
@@ -52,7 +68,18 @@ export function parseShadowPaperArgs(args: string[]): ShadowPaperProbeInput {
 }
 
 async function main() {
-  const input = parseShadowPaperArgs(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  const rawRefPrice = arg(rawArgs, '--ref-price');
+  const symbol = arg(rawArgs, '--symbol');
+  let resolvedRefPrice: Prisma.Decimal | undefined;
+
+  if (rawRefPrice && (rawRefPrice.toLowerCase() === 'live' || rawRefPrice.toLowerCase() === '<live>' || rawRefPrice.toLowerCase() === 'auto')) {
+    if (!symbol) throw new UsageError('Required: --symbol when using --ref-price live');
+    const broker = selectShadowPaperBroker(process.env);
+    resolvedRefPrice = await broker.getLatestQuote(symbol);
+  }
+
+  const input = parseShadowPaperArgs(rawArgs, resolvedRefPrice);
   if (!input.dryRun && process.env.QUANT_SHADOW_PAPER_SECURITY_GATE !== 'PASS') {
     // Belt-and-suspenders: refuse before even constructing the broker, matching this dispatch's
     // "transmit nothing" constraint. runShadowPaperProbe enforces the same gate independently.
