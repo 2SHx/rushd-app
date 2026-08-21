@@ -11,7 +11,28 @@
 // `asOf` is ever visible, enforced in the query AND asserted at runtime. Because every
 // filter lives here, analyst code is byte-identical between live and backtest.
 import { prisma } from '@/lib/prisma';
-import type { Market, BarInterval, MarketBar, Fundamentals, NewsItem, IntradayBar, SymbolSnapshot } from '@prisma/client';
+import type {
+  Market,
+  BarInterval,
+  MarketBar,
+  Fundamentals,
+  FundamentalsPeriod,
+  NewsItem,
+  IntradayBar,
+  SymbolSnapshot,
+} from '@prisma/client';
+
+/**
+ * `Fundamentals.period` (schema-level ANNUAL/QUARTERLY discriminator) is never optional at a call
+ * site — mixing a 10-K in with "last N quarters" (or vice versa) is a silent correctness bug, not
+ * a type error, so every reader must say which it wants. `ANNUAL_DEFAULT` is the safe fallback for
+ * a caller that specifies nothing: it is the highest-coverage period (debt 53.9% vs 47.4%, cash
+ * 96.0% vs 94.6% non-null on annual vs quarterly, measured 2026-08-20) and matches every reader's
+ * behavior before the 2026-08-19 quarterly ingest, so an un-migrated caller sees byte-identical
+ * results rather than a silent mix. A caller that specifically wants quarterly cadence (e.g. a
+ * rolling AAOIFI rescreen, or "last 4 quarters" momentum) must pass `'QUARTERLY'` explicitly.
+ */
+export const ANNUAL_DEFAULT: FundamentalsPeriod = 'ANNUAL';
 
 /** Thrown when a record dated after `asOf` reaches a caller — a look-ahead bug. */
 export class LookaheadError extends Error {
@@ -66,10 +87,21 @@ export class PointInTimeStore {
    * row describing the MOST RECENTLY COMPLETED fiscal period among those that became public
    * simultaneously — the most current annual figure a decision-maker actually had in hand at
    * `asOf`, never an older, superseded fiscal year's row.
+   *
+   * `period` is REQUIRED-in-spirit, optional-in-signature: every existing caller of this method
+   * passes it explicitly (see `loadPointInTimeContext`'s `fundamentalsPeriod` arg); the default
+   * (`ANNUAL_DEFAULT`) only protects a future caller that forgets, so it fails safe (same period as
+   * every pre-quarterly-ingest reader) rather than accidentally mixing 10-K and 10-Q rows. Never
+   * omit `period` from the `where` clause — that is precisely the 2026-08-19 defect this guards.
    */
-  async fundamentals(symbol: string, market: Market, asOf: Date): Promise<Fundamentals | null> {
+  async fundamentals(
+    symbol: string,
+    market: Market,
+    asOf: Date,
+    period: FundamentalsPeriod = ANNUAL_DEFAULT,
+  ): Promise<Fundamentals | null> {
     const f = await prisma.fundamentals.findFirst({
-      where: { symbol, market, releasedAt: { lte: asOf } },
+      where: { symbol, market, period, releasedAt: { lte: asOf } },
       orderBy: [{ releasedAt: 'desc' }, { asOf: 'desc' }],
     });
     if (f) assertNoLookahead([f], asOf, 'releasedAt');
@@ -132,7 +164,8 @@ export interface PointInTimeContext {
   readonly asOf: Date;
   /** Bars within the last `lookbackDays` calendar days, chronological. */
   bars(lookbackDays: number): MarketBar[];
-  /** Latest fundamentals public at or before asOf. */
+  /** Latest fundamentals public at or before asOf, for the period `loadPointInTimeContext` was
+   * loaded with (`fundamentalsPeriod`, default `ANNUAL_DEFAULT`). */
   fundamentals(): Fundamentals | null;
   /** News published within the last `sinceDays` days, newest-first. */
   news(sinceDays: number): NewsItem[];
@@ -145,6 +178,14 @@ export interface LoadContextArgs {
   /** Widest window any analyst will request (default 400d ≈ 252 trading days). */
   maxLookbackDays?: number;
   interval?: BarInterval;
+  /**
+   * Which `Fundamentals.period` this context's single fundamentals row is drawn from. Default
+   * `ANNUAL_DEFAULT` — every current consumer (the fundamental analyst, reasoning over a ~1y
+   * holding horizon) wants the highest-coverage, most-stable annual figure, not a thinner-coverage
+   * quarterly snapshot. Pass `'QUARTERLY'` explicitly for a caller that specifically wants
+   * quarterly cadence.
+   */
+  fundamentalsPeriod?: FundamentalsPeriod;
 }
 
 /**
@@ -153,11 +194,11 @@ export interface LoadContextArgs {
  * slice already-vetted arrays, so an analyst cannot reach past `asOf`.
  */
 export async function loadPointInTimeContext(args: LoadContextArgs): Promise<PointInTimeContext> {
-  const { symbol, market, asOf, maxLookbackDays = 400, interval = 'DAY' } = args;
+  const { symbol, market, asOf, maxLookbackDays = 400, interval = 'DAY', fundamentalsPeriod = ANNUAL_DEFAULT } = args;
   const store = new PointInTimeStore(interval);
   const [allBars, fund, allNews] = await Promise.all([
     store.bars(symbol, market, asOf, maxLookbackDays),
-    store.fundamentals(symbol, market, asOf),
+    store.fundamentals(symbol, market, asOf, fundamentalsPeriod),
     store.news(symbol, market, asOf, maxLookbackDays),
   ]);
 

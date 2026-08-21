@@ -4,6 +4,20 @@
 // Reuses the existing AAOIFI two-stage screener (registry.getScreener() — Zoya when
 // keyed, MockScreener otherwise) from src/services/marketData.ts; does not reimplement
 // screening. Screener unavailable/throws ⇒ FAIL-CLOSED (treated as non-compliant).
+//
+// NOT YET WIRED to the `Fundamentals` Prisma table (grepped 2026-08-20: no caller of this file
+// reads `prisma.fundamentals`; that join is the pending `shariaVerdict()` addition to
+// `PointInTimeContext`, see pointInTime.ts's "join in Q3" comment). Recorded here so the period
+// decision travels with the gate it is FOR, not just with the reader: when that join lands, it
+// must call `PointInTimeStore.fundamentals(symbol, market, asOf, 'QUARTERLY')` — explicitly
+// QUARTERLY, never the store's `ANNUAL_DEFAULT`. Rationale (mirrors this file's existing
+// `MAX_EXECUTION_EVIDENCE_AGE_DAYS` freshness posture below): AAOIFI-aligned index providers
+// rescreen constituents quarterly, and `computeAaoifiScreen` (tier2AaoifiScreener.ts) already
+// fails closed on any null required ratio input — so quarterly's thinner debt-field coverage
+// (measured 47.4% vs annual's 53.9% non-null) can only ever produce MORE conservative
+// (non-)compliant verdicts, never a false pass. A compliance gate that must fail closed should
+// prefer the freshest evidence and let missing fields fail closed, not prefer stale-but-complete
+// annual evidence that may misstate today's balance sheet.
 import type { Market } from '@prisma/client';
 import { registry, type ShariaScreener } from '@/services/marketData';
 import { isCompositeSourceUsable } from './etfHoldingsScreener';

@@ -10,6 +10,12 @@
 // (STALE_FUNDAMENTALS — several large filers stop separately tagging small non-operating income
 // line items after a few years, which must never be silently treated as still-compliant), is
 // fail-closed excluded, never defaulted to zero or skipped.
+//
+// PERIOD-AGNOSTIC BY DESIGN: `Tier2Inputs` carries a single already-selected `asOf`/metric set, not
+// a `Fundamentals.period` discriminator — WHICH filing (annual vs quarterly) backs those numbers is
+// entirely the caller's decision (see pointInTime.ts's `PointInTimeStore.fundamentals(period)` and
+// sharia.ts's period rationale for the pending Sharia-gate join); this module never re-derives or
+// assumes it, and the 30/30/5 arithmetic below is identical either way.
 const DEBT_TO_MCAP_MAX_BPS = 3000; // 30%
 const INTEREST_SECURITIES_TO_MCAP_MAX_BPS = 3000; // 30%
 const NON_COMPLIANT_INCOME_TO_REVENUE_MAX_BPS = 500; // 5%

@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-revenue-fragility-momentum-core",
+  "version": "v1",
+  "config": {
+    "setup": "halal-revenue-fragility-momentum-core",
+    "from": "2018-01-02",
+    "to": "2026-07-17",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db",
+    "market": "NASDAQ",
+    "universeMode": "c1_verified_dollar_volume_sleeve_max60",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-fast-momentum-core@v1",
+    "comparatorRunId": "218716ac-f692-4f0f-91f3-81045a159a62",
+    "comparatorGitSha": "000dea1",
+    "comparatorArtifact": "results/halal-fast-momentum-core-2018-01-02-2026-07-17-c1_verified_60.json",
+    "predecessorFalsified": "halal-fundamental-momentum-core@v1 (QDR-17) -- FALSIFIED on F3/F4: OOS DSR 0.874 -> 0.680 while OOS CAGR rose 105.92% -> 127.99%.",
+    "hypothesis": "Adding exactly one new SELECTION-time variable to halal-fast-momentum-core@v1 -- maxRevenueFragilityPercentile = 0.80, a decision-date admission ceiling on a candidate's cross-sectional percentile of REVENUE-GROWTH DOWNSIDE SEMI-DEVIATION (the below-mean semi-deviation of its last four point-in-time-visible year-over-year DISCRETE-QUARTER totalRevenueUsd growth rates, read only from Fundamentals rows with period='QUARTERLY' and releasedAt <= decision close) removes the most fundamentally fragile fifth of the data-carrying candidates from the weekly top-5, cutting MC book-day p95 drawdown from 68.40% to at or below 63.40% and holding OOS DSR above 0.874, at an honestly predicted OOS CAGR cost of about 31pp (105.92% -> ~75%); and it is DEAD if the median count, over OOS decision weeks, of comparator-top-5 names the ceiling vetoes is below 1.0.",
+    "mechanism": "The comparator's diagnosed failure is a 68.40% MC book-day p95 drawdown that is NOT primarily a correlated-cluster failure: the selected five measure average pairwise 63-session correlation 0.334, i.e. 5/(1+4*0.334) = 2.14 effective bets, so the dominant share of the tail is SINGLE-NAME volatility interacting with the 25% per-name cap. The engine's only risk instrument is inverseVolatilityWeights, which reads each name's own trailing PRICE sigma -- a backward-looking, mean-reverting statistic that is quiet exactly before a fundamental break and that says nothing about whether the BUSINESS behind a 63-day price run has already demonstrated it can contract. Revenue-growth downside semi-deviation is the one quantity reachable in this database that (a) is never a function of price, so it is orthogonal to the sigma the sizer already uses, (b) measures demonstrated business DOWNSIDE rather than business speed, so it does not repeat the predecessor's return-chasing failure, and (c) at quarterly cadence is measured 60-78 days stale instead of the ~300 days that made the predecessor veto SMCI at momentum rank 1 on a fiscal year that had ended ten months earlier. The predecessor died twice over: on staleness, and because ADMIT_UNCONDITIONED inverted into a bet on filing ABSENCE (XOM promoted at momentum rank 9 with zero filings). This lane fixes the first by changing the data cadence and the second by changing the FALLBACK STRUCTURE from a threshold-with-exemption to a COMPOSITION-INVARIANT STRATIFICATION whose neutrality is a machine-checked run-time invariant, not a claim.",
+    "signalClass": "RISK",
+    "signalClassJustification": "The book does not lack return: OOS CAGR 105.92% is the highest of every mechanism in the ledger, and the predecessor proved that adding a RETURN-side fundamental to this engine makes matters worse -- it lifted OOS CAGR to 127.99% by rotating down the momentum ranks and paid for it with OOS DSR 0.874 -> 0.680. The binding defect is a 68.40% single-name tail. A second return signal would re-run a falsified experiment; a risk signal attacks the measured defect. This lane therefore trades CAGR for tail ON PURPOSE, and says so numerically in `predictions.exchangeRate`.",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "validationTrials": 9,
+      "maxRevenueFragilityPercentile": 0.8,
+      "fragilityYoyObservations": 4,
+      "fragilitySource": "Fundamentals rows with period='QUARTERLY' ONLY (schema-level enum, prisma/schema.prisma:355 -- a quarterly row can never be mistaken for an annual one at read time). Defence in depth: metrics.form must start with '10-Q' and metrics.fp must be one of Q1|Q2|Q3. Value read is metrics.totalRevenueUsd (7,076 of 8,393 quarterly rows non-null, 84.3%). The DISCRETE-vs-YTD 80-100 day span filter has already been applied upstream at ingest (src/quant/data/pitFundamentalsBackfill.ts), so a year-to-date figure can never be read as a single quarter.",
+      "fragilityDefinition": "At decision close t: PIT-slice each sleeve name's QUARTERLY rows to releasedAt <= t and assertNoLookahead(rows, t, 'releasedAt'). De-duplicate by asOf keeping the row with the greatest releasedAt (amendment-safe). Walk distinct fiscal quarters newest-first by asOf; for each quarter q with finite totalRevenueUsd R(q), find the PIT-visible quarterly row p whose asOf is within +/-45 days of q.asOf - 365d (10-Qs never report Q4, so the year-ago SAME quarter is the correct and available comparison); require R(p) finite and > 0; emit g(q) = (R(q) - R(p)) / R(p). Collect the first fragilityYoyObservations = 4 such g values, newest-first. ELIGIBLE iff exactly 4 are collected. fragility = sqrt( mean_i( min(0, g_i - mean(g))^2 ) ) -- the BELOW-MEAN semi-deviation, so business ACCELERATION is never penalised and only demonstrated contraction is.",
+      "fragilityPercentileBasis": "cross_sectional_rank_over_ELIGIBLE_sleeve_names_at_this_decision_date_only; percentile = (rank ascending by fragility) / (|ELIGIBLE| - 1); a name is ADMISSIBLE on this axis iff percentile <= maxRevenueFragilityPercentile. |ELIGIBLE| < 5 leaves the week entirely untreated (identical to comparator) and is counted in the published untreatedWeeks figure.",
+      "fragilityMissingPolicy": "STRATIFIED_COMPOSITION_INVARIANT -- see config.fallbackNonInversionProof. NOT admit-unconditioned, NOT exclude-unconditioned; the ineligible stratum's admitted membership is byte-identical to the comparator's every single week.",
+      "fragilityShortfallFill": "LOWEST_FRAGILITY_PERCENTILE_NEVER_RELAX_THRESHOLD -- if fewer than k eligible survivors clear the ceiling, remaining ELIGIBLE slots are filled by ASCENDING fragility percentile (least fragile first) among the remaining eligible survivors, never by momentum rank and never by relaxing the ceiling (QDR-18 PASS-B precedent). Ineligible names are never used to fill an eligible slot.",
+      "annualRowPolicy": "Any Fundamentals row with period='ANNUAL' reaching the statistic is a VOID condition (V4), not a fallback."
+    },
+    "selectionRule": [
+      "1. Compute 63d/skip2 relative momentum and the absolute filter (>0) over the 60-name C1-verified sleeve using dualMomentumMetrics, imported UNCHANGED. This produces S, the identical ranked survivor list the comparator uses.",
+      "2. B = the first topN=5 names of S. B is byte-identically the comparator's weekly pick and is recorded as the same-run comparator arm (no second backtest).",
+      "3. For every name in S compute fragility per params.fragilityDefinition from QUARTERLY rows PIT-sliced on releasedAt, then assertNoLookahead(rows, asOf, 'releasedAt'). ELIGIBLE = names with a finite fragility at this decision date; INELIGIBLE = the rest. Sc = ELIGIBLE members of S in momentum order.",
+      "4. Bu = B intersect INELIGIBLE. ADMIT ALL OF Bu UNCHANGED. The new variable never evaluates, vetoes, promotes, or demotes a name that carries no usable value. Let k = |B| - |Bu| = |B intersect ELIGIBLE|.",
+      "5. Fill the remaining k slots ONLY from Sc: walk Sc in momentum order and admit while fragilityPercentile <= maxRevenueFragilityPercentile, stopping at k. If fewer than k clear the ceiling, fill the residual slots from the remaining members of Sc by ASCENDING fragility percentile (params.fragilityShortfallFill); never relax the ceiling, never cross the stratum boundary. If |Sc| < k (impossible, since B intersect ELIGIBLE is a subset of Sc) hold cash exactly as cashFloor already permits.",
+      "6. ASSERT the two composition invariants of config.fallbackNonInversionProof at every decision week and THROW on violation (V2 VOID, not a hypothesis result).",
+      "7. Everything downstream is byte-identical to the comparator: inverseVolatilityWeights, capAndRedistribute at 25%, cashFloor 2, weekly ISO-week rebalance, decide-close/fill-next-open, 15 bps/side, unchanged risk/ADV/cash envelope. No sizing, exit, cadence, or momentum-rank-formula change enters."
+    ],
+    "fallbackNonInversionProof": {
+      "predecessorCauseOfDeath": "halal-fundamental-momentum-core@v1 applied a threshold ONLY to names carrying data and exempted the rest (ADMIT_UNCONDITIONED). Any threshold-with-exemption is structurally a coverage bet: an exempted name's admission probability is strictly weakly higher than a conditioned name's at the same momentum rank, so HAVING DATA IS A HANDICAP. The mirror policy (EXCLUDE_UNCONDITIONED) inverts the same bet the other way. Neither is neutral; the choice only picks the sign. Measured consequence: XOM, with zero filings, was promoted into the book from momentum rank 9.",
+      "thisDesign": "Stratify, do not exempt. The admitted set's INELIGIBLE members are fixed to exactly the comparator's own INELIGIBLE members, and the count of ELIGIBLE slots is fixed to exactly the comparator's own count. The new variable only permutes WHICH eligible names occupy the eligible slots.",
+      "invariantI1": "For every decision week: admitted INTERSECT INELIGIBLE == B INTERSECT INELIGIBLE, as SET EQUALITY, not merely equal cardinality. Therefore a name with no usable quarterly value can never gain a slot it would not already have had under pure momentum. The predecessor's exact pathology -- a zero-filing name at momentum rank 9 entering the book -- is structurally impossible, not merely improbable.",
+      "invariantI2": "For every decision week: |admitted INTERSECT ELIGIBLE| == |B INTERSECT ELIGIBLE|. Therefore the data-carrying stratum can never lose slots to the no-data stratum: acquiring coverage cannot cost a name's stratum any exposure, and losing coverage cannot win the other stratum any.",
+      "whyThisIsNeutralInBothDirections": "I1 fixes the treatment's exposure to no-data names NAME-FOR-NAME to the comparator's, so P(admitted | no data) is invariant to the rule: lacking data is never an advantage. I2 fixes the aggregate slot count of the data-carrying stratum, so no covered name is ever displaced BY an uncovered name: having data is never a handicap. The residual competition is strictly within the eligible stratum, among peers who all carry data, which is the mechanism itself and is symmetric by construction.",
+      "proofNotAssertion": "Both invariants are evaluated inside the decision loop, THROW on violation, and are published on the card as `coverageMixDeltaWeeks` (the count of decision weeks violating I1 or I2). The hypothesis is only interpretable when that figure is exactly 0; any non-zero value is VOID condition V2, an implementation bug, and reports nothing about the hypothesis.",
+      "coverageDoseNotTilt": "Under the predecessor, thin early coverage produced a DIRECTIONAL bias (few names conditioned, and those few handicapped). Under stratification, thin early coverage reduces only the treatment DOSE (k is small when few of B are eligible) and produces no directional tilt whatsoever. That is why the 24/60 eligibility of 2018 biases the experiment's POWER and not its SIGN."
+    },
+    "pointInTimeArgument": "prepareUniverse is SYNCHRONOUS, so filings cannot be read from the DB inside a decision. The harness loads the RAW, UNSLICED table (runLab.ts loadPointInTimeFundamentals, mirroring benchmarkDailyBarsBySymbol) and the SETUP does the point-in-time slice, so assertNoLookahead stays non-vacuous in production rather than a tautology over a pre-cleaned feed. The slice keys on releasedAt -- when the filing became public -- and NEVER on asOf, which is the fiscal quarter the filing DESCRIBES. A 10-Q describes a quarter that ended before anyone could read it. Measured median staleness at the decision date on this sleeve is 60-78 days (2018: 61d; 2026: 78d), versus 300-345 days for the annual predecessor.",
+    "plateau": {
+      "axes": [
+        "maxRevenueFragilityPercentile",
+        "fragilityYoyObservations"
+      ],
+      "grid": {
+        "maxRevenueFragilityPercentile": [
+          0.7,
+          0.8,
+          0.9
+        ],
+        "fragilityYoyObservations": [
+          3,
+          4,
+          5
+        ]
+      },
+      "center": {
+        "maxRevenueFragilityPercentile": 0.8,
+        "fragilityYoyObservations": 4
+      },
+      "trials": 9,
+      "note": "BOTH plateau axes are on the NEW variable -- deliberately stronger than the predecessor, which spent one of its two axes on topN, an OLD axis. lookbackDays is pinned to a zod literal 63 and skipRecentDays to 2 because the comparator's own plateau already established that 42d is where the price signal turns noisy; re-sweeping it here would guarantee a plateau failure driven by the OLD axis and mask the NEW one. topN, cashFloor, perNameCap and maxNames are literals for the same reason. Coverage of every grid cell was measured before freezing: eligible sleeve names at 2018-01-02 / 2026-07-17 are 26/58 (K=3), 24/58 (K=4), 24/58 (K=5)."
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "The setup was designed after inspecting halal-fast-momentum-core@v1's terminal card (105.92 / 68.40 / 0.874) and halal-fundamental-momentum-core@v1's falsification, and it replays the already-inspected 2018-2026 historical window. QDR-9 conditions (b) forward-only, (d) evidence boundary after seal and (e) all observations after that boundary therefore cannot hold. EXPLORATORY is not a formality here: it SCREENS and CANNOT PROMOTE.",
+      "familyTrialsAfterRegistration": 144,
+      "addedTrials": 9,
+      "note": "src/quant/backtest/trialFamilies.ts currently declares HALAL_CORE_REGISTERED_TRIALS = 126 over fourteen HALAL_CORE_SETUP_IDS. QDR-18 requires halal-decorrelated-fast-momentum-core as the fifteenth (135). This id is the sixteenth (144). The strategist must set the constant to HALAL_CORE_SETUP_IDS.length * 9 rather than hand-editing a literal, so the count can never drift from the list again."
+    },
+    "validation": {
+      "benchmark": {
+        "benchmarkId": "SPUS",
+        "benchmarkSource": "MarketBar daily closes, feed yahoo-daily, source db, matched decision dates",
+        "benchmarkRelativeClaim": false,
+        "reason": "QDR-19 requires an INVESTABLE declared benchmark and forbids declaring a reconstructed equal-weight universe basket, which is survivor-conditioned by the same bias QDR-15 haircuts at -0.16 Sharpe. SPUS is the only investable halal comparator available, but it has no history before ~2019-12, so a matched-date Information Ratio would cover roughly 78% of this 2018-01-02..2026-07-17 window and none of the earliest in-sample period. This lane therefore makes NO benchmark-relative return claim. The SPUS block is published for the covered dates, and the equal-weight MarketBar reconstruction is published as CONTEXT ONLY, explicitly labelled non-declarable.",
+        "publishedBlocksConfirmed": "Per QDR-19 this lane's card WILL publish (i) the BENCHMARK block -- benchmark id and source, matched-date benchmark CAGR/vol/Sharpe/maxDD/Ulcer, active return, tracking error, IR, IR t-statistic IR*sqrt(oosYears) with its one-sided p, and psrVsBenchmark -- and (ii) the PATH-SHAPE block -- realized Ulcer Index, time underwater, CVaR(5%), Martin ratio, bootstrap Ulcer p50/p95, and the max-drawdown p95 path-length sensitivity line at a declared reference horizon alongside the binding figure. Every line is REPORTED, never gated. No result from this lane may be used to derive a threshold for any future Ulcer or CVaR gate (QDR-19 forbids this by name)."
+      }
+    },
+    "predictions": {
+      "oosCagrPct": {
+        "baseline": 105.92,
+        "point": 75.0,
+        "interval": [
+          45.0,
+          98.0
+        ],
+        "direction": "DOWN"
+      },
+      "mcBookDayP95DrawdownPct": {
+        "baseline": 68.4,
+        "point": 57.0,
+        "interval": [
+          50.0,
+          66.0
+        ],
+        "direction": "DOWN"
+      },
+      "oosDeflatedSharpe": {
+        "baseline": 0.874,
+        "basis": "N=9, the comparator's own trial count, so the pair is comparable",
+        "point": 0.9,
+        "interval": [
+          0.78,
+          0.94
+        ],
+        "direction": "UP"
+      },
+      "tradesFull": {
+        "baseline": 1390,
+        "point": 1620,
+        "interval": [
+          1400,
+          1900
+        ],
+        "direction": "UP"
+      },
+      "tradesOos": {
+        "baseline": 410,
+        "point": 480,
+        "interval": [
+          400,
+          570
+        ],
+        "direction": "UP"
+      },
+      "realizedCoverageEligibleOf60": {
+        "measuredNotGuessed": "counted directly against the 60 sleeve symbols persisted in the comparator artifact, over Fundamentals period='QUARTERLY', at fragilityYoyObservations = 4",
+        "firstYearOfWindow_2018-01-02": 24,
+        "firstYearOfWindow_2019-01-02": 26,
+        "2020-01-02": 46,
+        "2022-01-03": 52,
+        "oosStart_2024-01-02": 55,
+        "2025-07-01": 57,
+        "lastYearOfWindow_2026-01-02": 57,
+        "lastYearOfWindow_2026-07-17": 58,
+        "direction": "UP, and this is a prediction the run must reproduce from its own PIT reads, not a free parameter"
+      },
+      "medianWeeklyVetoedNamesOos": {
+        "point": 1.0,
+        "interval": [
+          1.0,
+          3.0
+        ],
+        "direction": "UP from a structural 0"
+      },
+      "exchangeRate": {
+        "definition": "(baseline OOS CAGR pp - treatment OOS CAGR pp) / (baseline MC p95 pp - treatment MC p95 pp); lower is better; the adoption bar 1.803 is the MEASURED halal-managed-momentum-core exchange rate reused unchanged from QDR-18 and is NOT authored here",
+        "point": 2.71,
+        "adoptionBar": 1.803,
+        "statedPlainly": "THE CENTRAL ESTIMATE FAILS ITS OWN ADOPTION BAR. To clear 1.803 at the predicted 11.40pp tail cut, OOS CAGR must stay above 85.36%, which is inside the predicted interval but is NOT the central case. This lane trades CAGR for tail; the owner's stated preference is materially higher returns, and on that preference this run is valuable primarily as a DECOMPOSITION -- it measures how much of the 68.40% tail is single-name fundamental fragility, given that the measured 0.334 average pairwise correlation and 2.14 effective bets say the tail is NOT mostly a correlated cluster. A large CAGR loss with a barely-moved tail CLOSES the fundamental-selection family on this book."
+      },
+      "expectedVerdict": "REJECTED is expected and is not the question: OOS DSR > 0.95 is structurally unreachable at 144 exploratory trials over a ~2.55-year OOS window (the required annualized Sharpe approaches 2.9, against a 3.00 implausibility ceiling). This experiment measures whether a fast, well-covered, point-in-time fundamental RISK variable improves SELECTION quality; it makes no promotion claim."
+    },
+    "falsification": {
+      "confirmedRequiresAll": [
+        "F1 does not fire (the ceiling demonstrably changes the book AND demonstrably de-fragilizes it)",
+        "mcBookDayP95Drawdown <= 63.40pct (tail cut by at least 5pp)",
+        "exchangeRate < 1.803",
+        "oosDeflatedSharpe > 0.874 at N=9",
+        "oosCagr >= 55.0pct"
+      ],
+      "falsifiedIfAny": [
+        "F1 INERT AXIS (primary kill, numeric, measured on the statistic the rule acts on; two prior hypotheses died on inertness and this must DETECT it, never infer it from CAGR). The run must publish from its own evidence, restricted to OOS decision weeks: (a) medianWeeklyVetoedNames = the MEDIAN count of names in the comparator arm's own top-5 B that the ceiling vetoed; (b) vetoWeeksFraction = the fraction of OOS decision weeks recording at least one veto; (c) identicalTopFiveFraction = the fraction of OOS decision weeks whose admitted set equals B; (d) fragilityGap = the mean over OOS decision weeks of ( mean fragility percentile of B's ELIGIBLE members MINUS mean fragility percentile of the admitted set's ELIGIBLE members ). THE HYPOTHESIS IS DEAD, regardless of CAGR, DSR or drawdown, if medianWeeklyVetoedNames < 1.0, OR vetoWeeksFraction < 0.40, OR identicalTopFiveFraction >= 0.90, OR fragilityGap < 0.10. It must then be reported as an inert-axis finding and never as a mechanism result.",
+        "F2 NO TAIL BENEFIT: MC book-day p95 drawdown > 63.40pct.",
+        "F3 BAD EXCHANGE RATE: exchangeRate >= 1.803 -- the tail was bought at a worse price than halal-managed-momentum-core's already-rejected three-governor stack.",
+        "F4 NO RISK-ADJUSTED BENEFIT: OOS DSR <= 0.874 at N=9.",
+        "F5 RETURN DESTROYED: OOS CAGR < 55.0pct.",
+        "F6 KNIFE EDGE: 3 or more of the 8 frozen plateau neighbours degrade past the OOS-expectancy bound."
+      ],
+      "voidNotFalsified": [
+        "V1 PIT BREACH: any LookaheadError, any non-zero look-ahead violation count, or any decision week in which a row with releasedAt > asOf entered the statistic. VOID; reports nothing about the hypothesis.",
+        "V2 COVERAGE-MIX BREACH: coverageMixDeltaWeeks != 0, i.e. any decision week violating invariant I1 (set equality of the ineligible admitted members against the comparator arm) or I2 (equal count of eligible slots). This is an implementation bug and VOIDS the run; it is the predecessor's exact cause of death and must be proved absent, never assumed.",
+        "V3 GROWTH-LEVEL CONFOUND: the median over OOS decision weeks of |Spearman(fragility, mean of the same K YoY growths)| across the eligible cross-section is >= 0.70. The variable would then be a disguised negative-growth-LEVEL bet rather than a fragility measure, the RISK claim is VOID, and the result must be reported as a growth-level finding. CALIBRATION (measured pre-run, out of band, no trial spent, QDR-18 precedent): this Spearman is -0.23 to +0.65 across eight sampled decision dates with an OOS median near +0.24, so the 0.70 threshold cannot false-void a working mechanism. The same measurement rejected an earlier candidate statistic -- min of the last K YoY growths -- whose Spearman against mean growth measured -0.56 to -0.91 (median about -0.78), i.e. a disguised growth bet; that candidate was discarded BEFORE freezing.",
+        "V4 ANNUAL LEAK: any Fundamentals row with period='ANNUAL', or any row whose metrics.form does not start with '10-Q' or whose metrics.fp is not one of Q1|Q2|Q3, entering the statistic."
+      ]
+    },
+    "coverage": {
+      "measuredOn": "the exact 60 sleeve symbols persisted in results/halal-fast-momentum-core-2018-01-02-2026-07-17-c1_verified_60.json, read live from Fundamentals",
+      "quarterlyTableTotals": "8,393 rows / 214 symbols, period='QUARTERLY'; asOf 2008-03-27..2026-07-31. Non-null: totalRevenueUsd 7,076 (84.3%), cashAndInterestSecuritiesUsd 7,939 (94.6%), interestBearingDebtUsd 3,977 (47.4%), nonCompliantIncomeUsd 4,323 (51.5%). Joint totalRevenueUsd AND cashAndInterestSecuritiesUsd: 6,646 (79.2%). interestBearingDebtUsd at 47.4% is too sparse to design against and was NOT designed against.",
+      "sleeveQuarterlyRows": "2,404 rows; ALL 60 sleeve names carry at least one quarterly row -- including XOM, which carried ZERO annual rows and whose promotion at momentum rank 9 was the predecessor's worked pathology.",
+      "eligibleAtDecisionDateK4": {
+        "2018-01-02": 24,
+        "2019-01-02": 26,
+        "2020-01-02": 46,
+        "2022-01-03": 52,
+        "2024-01-02": 55,
+        "2025-07-01": 57,
+        "2026-01-02": 57,
+        "2026-07-17": 58
+      },
+      "eligibleAtDecisionDateK3": {
+        "2018-01-02": 26,
+        "2020-01-02": 50,
+        "2024-01-02": 56,
+        "2026-07-17": 58
+      },
+      "eligibleAtDecisionDateK5": {
+        "2018-01-02": 24,
+        "2020-01-02": 39,
+        "2024-01-02": 55,
+        "2026-07-17": 58
+      },
+      "stalenessDaysAtDecisionDate": "median 60-78 across the window (2018-01-02: 61d; 2020-01-02: 64d; 2024-01-02: 64d; 2026-07-17: 78d), versus the annual predecessor's 300-345d. Flat by construction, because the 10-Q cadence does not drift.",
+      "quarterCadenceCaveat": "10-Qs never separately report Q4 -- that period is covered by the following 10-K -- so QUARTERLY rows arrive three per fiscal year and the year-over-year comparison is always same-quarter against same-quarter. The +/-45 day matching window in fragilityDefinition exists for this reason and is NOT a tunable parameter.",
+      "sufficiencyRuling": "The OOS window (last 30% of 2018-01-02..2026-07-17, beginning approximately 2024-01) carries 55-58 of 60 names eligible, i.e. 92-97% coverage, so every falsification condition F1-F6 -- all of which are evaluated on OOS weeks -- is tested at effectively full coverage. The EARLY in-sample window is genuinely thin: 24/60 (40%) at 2018-01-02 and 26/60 at 2019-01-02, reaching 46/60 only in 2020. This reduces the treatment DOSE in 2018-2019 and therefore the information content of the in-sample cells of the plateau; it does NOT bias the SIGN of anything, because invariants I1/I2 make an uneligible name's treatment byte-identical to the comparator's. The honest statement is: the early window is under-powered, not tilted, and the plateau's in-sample expectancy in 2018-2019 should be read as weak evidence. The published per-year eligible counts make the dose ramp visible to the reader rather than hidden."
+    },
+    "queuePosition": {
+      "position": "AFTER E4 (decorrelation), BEFORE E5 (isolated vol targeting) -- fifth of six in the E1..E5 + this lane queue.",
+      "whyAfterE4": "E4 and this lane both attack the 68.40% tail but through provably disjoint channels: E4 attacks CROSS-NAME redundancy, this lane attacks SINGLE-NAME fragility. The measured decomposition already says which is larger -- average pairwise correlation 0.334 gives 5/(1+4*0.334) = 2.14 effective bets, so a correlation ceiling has an arithmetic ceiling of roughly 5-9% relative tail benefit and the residual is single-name. Running E4 first fixes the correlation share as a measured constant, so this lane's result reads as the residual single-name share rather than an unattributed mixture.",
+      "whyBeforeE5": "QDR-19 records that vol targeting mechanically lowers realized volatility and max drawdown, so E5 'succeeds trivially' under any maxDD-shaped criterion. If E5 runs first, every later tail claim on this engine is contaminated by a scale change and attribution becomes impossible. E1/E2/E3 (multi-horizon blend, per-name cap sweep, breadth) are permutations of the price engine and carry no ordering dependency in either direction.",
+      "note": "QDR-9 sets CONFIRMATORY N=1 regardless of exploratory family count, so queue position costs this lane nothing it could otherwise have earned."
+    },
+    "terminalFence": {
+      "pitMembershipRequired": true,
+      "status": "BLOCKED",
+      "note": "QDR-14: the id must be added to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS (src/quant/universe/pointInTimeMembership.ts). Historical membership, lifecycle/delisting and independent per-name point-in-time Sharia evidence do not exist for this window, so EVERY run of this version is unverified-diagnostic-only and cannot produce a terminal card. The fence opens only by the QDR-14 disclosure-bound waiver, never silently. AAOIFI: the sleeve is C1 VERIFIED_COMPLIANT at run time (buildC1ShariaRunSnapshot), unchanged. Long-only cash, NASDAQ-only, no shorting, no margin, no leverage. Execution remains paper/simulated only."
+    },
+    "reuseUnchanged": [
+      "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics",
+      "src/quant/strategies/halalFastMomentumCore.ts :: selectTopNByMomentum (IMPORT ONLY -- the comparator file is frozen)",
+      "src/quant/strategies/halalRiskParityCore.ts :: inverseVolatilityWeights, capAndRedistribute",
+      "src/quant/portfolio/frontier.ts :: dailyReturns",
+      "src/quant/data/pointInTime.ts :: assertNoLookahead",
+      "src/quant/strategies/gapperCalibration.ts :: median",
+      "src/quant/data/pitFundamentalsBackfill.ts :: the upstream DISCRETE-vs-YTD 80-100 day span filter and the current-quarter instant-fact filter already guarantee that a QUARTERLY row is a genuine single quarter -- reused by relying on it, never re-implemented"
+    ],
+    "filesStrategistMayTouch": [
+      "NEW src/quant/strategies/halalRevenueFragilityMomentumCore.ts",
+      "NEW src/quant/strategies/halalRevenueFragilityMomentumCore.test.ts (must include: an I1/I2 invariant property test over a synthetic cross-section, a coverage-inversion adversarial test proving a zero-filing name at momentum rank 9 can NEVER be admitted, a PIT test proving a row with releasedAt > asOf is invisible to BOTH the value and the eligibility branch, an ANNUAL-row rejection test, and a YTD-vs-discrete span test)",
+      "src/quant/strategies/catalog.ts (one registration line)",
+      "src/quant/strategies/types.ts (extend the EXISTING optional UniversePrepareInput.fundamentalsBySymbol row shape with `period: 'ANNUAL' | 'QUARTERLY'` and `form: string | null`, `fp: string | null`; DO NOT add a second map)",
+      "src/quant/backtest/runLab.ts (loadPointInTimeFundamentals currently selects no `period` column and therefore returns ANNUAL and QUARTERLY rows mixed -- carry `period`/`form`/`fp` through, and add this id to PIT_FUNDAMENTALS_SETUP_IDS)",
+      "src/quant/universe/pointInTimeMembership.ts (add the id to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS per QDR-14)",
+      "src/quant/backtest/trialFamilies.ts (add the id to HALAL_CORE_SETUP_IDS and derive the count as HALAL_CORE_SETUP_IDS.length * 9)",
+      "docs/quant-experiments/halal-revenue-fragility-momentum-core-v1.json (this manifest only)"
+    ],
+    "filesForbidden": [
+      "src/quant/strategies/halalFastMomentumCore.ts (the comparator is frozen; import only)",
+      "src/quant/strategies/halalFundamentalMomentumCore.ts (the falsified predecessor is evidence and is not edited)",
+      "src/quant/backtest/portfolioEngine.ts, src/quant/backtest/metrics.ts, src/quant/backtest/experimentProtocol.ts (no gate, breaker or estimator may move)",
+      "src/quant/data/pitFundamentalsBackfill.ts, src/quant/data/pointInTime.ts (the sanctioned read path and the ingest span filters are reused, never modified)",
+      "docs/quant-experiments/halal-fast-momentum-cash-core-v1.json and every other sealed or CODIFIED manifest; halal-fast-momentum-cash-core@v1 is not touched, read, run, or referenced"
+    ],
+    "openRisks": [
+      "The comparator's MC book-day p95 drawdown is 68.40% in its persisted artifact (bootstrap.maxDrawdown.p95 = 0.6840) but was quoted to this director as 64.5%. Every threshold in this manifest is stated against the ARTIFACT value 68.40%. Before the run the strategist must reconcile the two figures; if the reconciled baseline is 64.50%, the same ABSOLUTE deltas apply (F2 becomes 59.50%, and the exchangeRate denominator is recomputed against the reconciled baseline). No threshold is re-authored after seeing a treatment result.",
+      "runLab.ts's existing loadPointInTimeFundamentals does not filter or carry `period`, so it returns ANNUAL and QUARTERLY rows mixed. If the quarterly backfill (2026-08-19) landed before halal-fundamental-momentum-core@v1's single diagnostic run, that run's 'annual' gate may have silently consumed quarterly rows, which would change how its falsification should be read. The strategist must check the ingest timestamp against the run timestamp and report the answer; it does not change this lane's design either way, because V4 makes an annual leak a VOID condition here."
+    ]
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

@@ -17,7 +17,9 @@ import {
   assertNoLookahead,
   LookaheadError,
   IntradayPointInTimeStore,
+  ANNUAL_DEFAULT,
 } from './pointInTime';
+import { computeAaoifiScreen, type Tier2Inputs } from '../universe/tier2AaoifiScreener';
 
 const asOf = new Date('2026-06-30T00:00:00.000Z');
 const daysAgo = (n: number) => new Date(asOf.getTime() - n * 86_400_000);
@@ -130,6 +132,73 @@ describe('PointInTimeStore.fundamentals — deterministic tie-break — acceptan
   });
 });
 
+describe('PointInTimeStore.fundamentals — explicit ANNUAL/QUARTERLY period (2026-08-19 defect fix)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('a request for QUARTERLY queries period: QUARTERLY, never ANNUAL — and vice versa', async () => {
+    (prisma.fundamentals.findFirst as any).mockResolvedValue(null);
+    await new PointInTimeStore().fundamentals('AAPL', 'NASDAQ' as any, asOf, 'QUARTERLY');
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where.period).toBe('QUARTERLY');
+
+    vi.clearAllMocks();
+    (prisma.fundamentals.findFirst as any).mockResolvedValue(null);
+    await new PointInTimeStore().fundamentals('AAPL', 'NASDAQ' as any, asOf, 'ANNUAL');
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where.period).toBe('ANNUAL');
+  });
+
+  it('a caller that specifies nothing gets the documented ANNUAL_DEFAULT, not a mix', async () => {
+    (prisma.fundamentals.findFirst as any).mockResolvedValue(null);
+    await new PointInTimeStore().fundamentals('AAPL', 'NASDAQ' as any, asOf);
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where.period).toBe(ANNUAL_DEFAULT);
+    expect(ANNUAL_DEFAULT).toBe('ANNUAL');
+  });
+
+  it.each(['ANNUAL', 'QUARTERLY'] as const)(
+    'LOOK-AHEAD INJECTION (%s) → assertNoLookahead still rejects a releasedAt after asOf',
+    async (period) => {
+      (prisma.fundamentals.findFirst as any).mockResolvedValue({
+        id: 'leak', symbol: 'AAPL', market: 'NASDAQ', period, releasedAt: new Date(asOf.getTime() + 1),
+      });
+      await expect(new PointInTimeStore().fundamentals('AAPL', 'NASDAQ' as any, asOf, period)).rejects.toBeInstanceOf(
+        LookaheadError,
+      );
+    },
+  );
+
+  it('the period a Sharia-gate-style reader chooses is what it reads, and a null required field still fails closed', async () => {
+    // Simulates the pending Sharia-gate join (sharia.ts's documented QUARTERLY choice): resolve
+    // the latest QUARTERLY row, map its metrics onto Tier2Inputs, and run the real AAOIFI screen.
+    (prisma.fundamentals.findFirst as any).mockResolvedValue({
+      id: 'q1', symbol: 'AAPL', market: 'NASDAQ', period: 'QUARTERLY',
+      asOf: new Date('2026-06-30'), releasedAt: daysAgo(10),
+      metrics: {
+        sic: '7372', interestBearingDebtUsd: null, // thin quarterly coverage: debt field absent
+        cashAndInterestSecuritiesUsd: 1_000, marketCapUsd: 2_000_000_000, nonCompliantIncomeUsd: 0,
+        totalRevenueUsd: 100_000_000,
+      },
+    });
+    const row = await new PointInTimeStore().fundamentals('AAPL', 'NASDAQ' as any, asOf, 'QUARTERLY');
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where.period).toBe('QUARTERLY');
+    expect(row).not.toBeNull();
+
+    const metrics = row!.metrics as Record<string, unknown>;
+    const inputs: Tier2Inputs = {
+      symbol: row!.symbol,
+      name: row!.symbol,
+      sic: metrics.sic as string,
+      interestBearingDebtUsd: metrics.interestBearingDebtUsd as number | null,
+      cashAndInterestSecuritiesUsd: metrics.cashAndInterestSecuritiesUsd as number,
+      marketCapUsd: metrics.marketCapUsd as number,
+      nonCompliantIncomeUsd: metrics.nonCompliantIncomeUsd as number,
+      totalRevenueUsd: metrics.totalRevenueUsd as number,
+      asOf: row!.asOf.toISOString().slice(0, 10),
+    };
+    const screen = computeAaoifiScreen(inputs, { referenceDate: asOf });
+    expect(screen.compliant).toBe(false);
+    expect(screen.reasonCodes).toContain('missing_xbrl_inputs');
+  });
+});
+
 describe('loadPointInTimeContext (sync view)', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -142,6 +211,8 @@ describe('loadPointInTimeContext (sync view)', () => {
 
     expect(ctx.symbol).toBe('AAPL');
     expect(ctx.asOf).toBe(asOf);
+    // No fundamentalsPeriod passed → documented ANNUAL_DEFAULT reaches the store's `where`.
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where.period).toBe(ANNUAL_DEFAULT);
     // bars(30) keeps only the two within 30 days (daysAgo(10), asOf), chronological
     expect(ctx.bars(30).map((b) => b.ts.getTime())).toEqual([daysAgo(10).getTime(), asOf.getTime()]);
     // bars(365) keeps all three

@@ -8,6 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { Prisma } from '@prisma/client';
+import type { FundamentalsPeriod } from '@prisma/client';
 import { STRATEGY_SETUP_CATALOG } from '../strategies/catalog';
 import { GAPPER_ORB_V1_IEX } from '../strategies/gapperOrb';
 import { bollingerV3BookPolicy, type BollingerMrLongV3Params } from '../strategies/bollingerMrLongV3';
@@ -1173,25 +1174,39 @@ async function loadDailySymbol(
  * already does for `benchmarkDailyBarsBySymbol`. Keyed by id so every other setup issues zero extra
  * queries and behaves byte-identically.
  */
-const PIT_FUNDAMENTALS_SETUP_IDS: ReadonlySet<string> = new Set([
-  HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
+// Every PIT-fundamentals setup declares WHICH `Fundamentals.period` it reads, explicitly, right
+// next to its id — never a bare membership set that leaves the period to a shared default. A 10-K
+// (ANNUAL) and a 10-Q (QUARTERLY) describe different-length periods; a setup computing "trailing
+// N quarters" that silently received annual rows (or vice versa) would run undetected on the wrong
+// filings. `halal-fundamental-momentum-core@v1`'s hypothesis is explicitly "trailing-annual
+// REVENUE-GROWTH" (see its manifest comment) and its `HALAL_MEMBERSHIP`-gated backtest predates the
+// 2026-08-19 quarterly ingest, so it reads ANNUAL — the period its manifest was written against.
+const PIT_FUNDAMENTALS_PERIOD_BY_SETUP_ID: ReadonlyMap<string, FundamentalsPeriod> = new Map([
+  [HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID, 'ANNUAL'],
 ]);
 
 /**
- * Every `Fundamentals` row for the resolved sleeve, DELIBERATELY UNFILTERED BY DATE. The consuming
- * setup owns the `releasedAt <= decision close` slice and re-asserts it with
+ * Every `Fundamentals` row of the given `period` for the resolved sleeve, DELIBERATELY UNFILTERED
+ * BY DATE. The consuming setup owns the `releasedAt <= decision close` slice and re-asserts it with
  * `assertNoLookahead(rows, asOf, 'releasedAt')`; pre-slicing here would make that production guard a
  * tautology over a feed the harness had already cleaned. `asOf` (the fiscal period the filing
  * describes) is carried through but is NEVER a point-in-time key — a 10-K describes a year that
  * ended months before anyone could read it. `metrics.totalRevenueUsd` is read defensively: any
  * non-finite or absent value becomes `null`, which the setup treats as ADMIT_UNCONDITIONED.
+ *
+ * `period` is a required argument, not defaulted here: unlike `PointInTimeStore.fundamentals`
+ * (one shared low-level primitive many future callers might reach without a strong opinion), every
+ * caller of THIS function is a single named setup in `PIT_FUNDAMENTALS_PERIOD_BY_SETUP_ID` that
+ * already knows exactly which period its hypothesis is written against, so the map above IS the
+ * explicit declaration — a missing entry is a bug, not a case for a silent fallback.
  */
-async function loadPointInTimeFundamentals(
+export async function loadPointInTimeFundamentals(
   symbols: readonly string[],
+  period: FundamentalsPeriod,
 ): Promise<Map<string, { asOf: Date; releasedAt: Date; totalRevenueUsd: number | null }[]>> {
   const { prisma } = await import('../../lib/prisma');
   const rows = await prisma.fundamentals.findMany({
-    where: { symbol: { in: Array.from(symbols) }, market: 'NASDAQ' },
+    where: { symbol: { in: Array.from(symbols) }, market: 'NASDAQ', period },
     orderBy: [{ symbol: 'asc' }, { releasedAt: 'asc' }, { asOf: 'asc' }],
     select: { symbol: true, asOf: true, releasedAt: true, metrics: true },
   });
@@ -1750,9 +1765,11 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       }
       // Raw point-in-time filings, same harness-loads/setup-slices contract as the benchmark series
       // above. Fails closed: a setup that reads filings must never silently run on an empty feed,
-      // because "no filings" and "the gate never fired" are indistinguishable in the output.
-      const fundamentalsBySymbol = PIT_FUNDAMENTALS_SETUP_IDS.has(setupId)
-        ? await loadPointInTimeFundamentals(symbols)
+      // because "no filings" and "the gate never fired" are indistinguishable in the output. The
+      // period comes from the explicit per-setup declaration above — never a bare membership check.
+      const pitFundamentalsPeriod = PIT_FUNDAMENTALS_PERIOD_BY_SETUP_ID.get(setupId);
+      const fundamentalsBySymbol = pitFundamentalsPeriod
+        ? await loadPointInTimeFundamentals(symbols, pitFundamentalsPeriod)
         : undefined;
       if (fundamentalsBySymbol && fundamentalsBySymbol.size === 0) {
         throw new Error(`${setupId} requires real point-in-time Fundamentals rows for its resolved sleeve`);
