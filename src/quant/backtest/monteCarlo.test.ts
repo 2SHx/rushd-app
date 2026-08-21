@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
 import {
   BOOK_DAY_MOVING_BLOCK_LENGTH_V1, mulberry32, bootstrapMonthlyBlocks, bootstrapTradeOutcomes,
-  movingBlockSampleIndices, signFlipPermutationTest,
+  movingBlockSampleIndices, signFlipPermutationTest, maxDrawdownPathLengthSensitivity,
   fractionalKellyFraction, kellySizedDecision,
 } from './monteCarlo';
 import type { MarketState, PortfolioState, RiskLimits } from '../risk/envelope';
@@ -126,5 +126,49 @@ describe('fractional-Kelly clamped by the envelope', () => {
     const sized = kellySizedDecision(TRADES, pf, mkt, limits, 1.0);
     // whatever Kelly wants, the traded qty obeys the name-weight cap
     expect(Number(sized.envelope.qty.toString())).toBeLessThanOrEqual(1000 + 1e-9);
+  });
+});
+
+describe('QDR-19 max-drawdown path-length sensitivity (published, never gated)', () => {
+  // A mildly negative-drift series with real dispersion, so drawdowns actually accumulate.
+  const returns = Array.from({ length: 500 }, (_, i) => 0.0015 + 0.02 * Math.sin(i * 1.31) - 0.0004 * (i % 7));
+
+  it('marks exactly one binding length and re-runs the SAME bootstrap at the others', () => {
+    const points = maxDrawdownPathLengthSensitivity(returns, {
+      seed: 2026, resamples: 1000, observationUnit: 'book-day', blockLength: 20,
+      tradesPerPath: 500, referencePathLengths: [250, 1000],
+    });
+    expect(points.map((p) => p.pathLength)).toEqual([250, 500, 1000]);
+    expect(points.filter((p) => p.binding)).toHaveLength(1);
+    expect(points.find((p) => p.binding)!.pathLength).toBe(500);
+    // The binding point must equal the binding bootstrap byte-for-byte — it is the SAME run, not a
+    // re-estimate, or the disclosure and the gate would be reading different numbers.
+    const binding = bootstrapTradeOutcomes(returns, {
+      seed: 2026, resamples: 1000, observationUnit: 'book-day', blockLength: 20, tradesPerPath: 500,
+    });
+    expect(points.find((p) => p.binding)!.p95).toBe(binding.maxDrawdown.p95);
+  });
+
+  it('shows the p95 RISING with path length — the defect the disclosure exists to expose', () => {
+    // Max drawdown is a divergent extreme-value statistic: a longer path has more chances to print
+    // a worse worst point, so its p95 grows with length by construction. QDR-19 measured ~6.3pp per
+    // natural-log unit; the direction is what matters and is asserted here.
+    const points = maxDrawdownPathLengthSensitivity(returns, {
+      seed: 7, resamples: 1000, observationUnit: 'book-day', blockLength: 20,
+      referencePathLengths: [200, 400, 800, 1600],
+    });
+    for (let i = 1; i < points.length; i++) {
+      expect(points[i].p95).toBeGreaterThanOrEqual(points[i - 1].p95);
+    }
+    expect(points[points.length - 1].p95).toBeGreaterThan(points[0].p95);
+  });
+
+  it('is deterministic and never re-seeds the binding run', () => {
+    const opts = {
+      seed: 99, resamples: 1000, observationUnit: 'book-day' as const, blockLength: 20,
+      referencePathLengths: [300, 700],
+    };
+    expect(JSON.stringify(maxDrawdownPathLengthSensitivity(returns, opts)))
+      .toBe(JSON.stringify(maxDrawdownPathLengthSensitivity(returns, opts)));
   });
 });

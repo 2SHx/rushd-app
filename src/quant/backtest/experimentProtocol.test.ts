@@ -10,6 +10,7 @@ import {
   markQaPass,
   sealExperiment,
   stableConfigHash,
+  assertBenchmarkDeclaredAtSeal,
   readManifest,
   recordDiagnostic,
   recordFullResult,
@@ -223,6 +224,13 @@ describe('experiment manifest protocol', () => {
 
 describe('seal-time gate feasibility (QDR-9)', () => {
   const GATE = {
+    // QDR-19 (A2): a gate-bearing validation block must declare its benchmark to seal.
+    benchmark: {
+      benchmarkId: 'SPUS',
+      benchmarkSource: 'MarketBar daily closes, matched decision dates',
+      benchmarkRelativeClaim: false,
+      reason: 'test fixture: this lane makes no benchmark-relative return claim',
+    },
     minimumOosDsr: 0.95,
     maximumPlausibleSharpe: 3,
     observationsPerYear: 252 / 5,
@@ -305,6 +313,12 @@ describe('seal-time gate feasibility (QDR-9)', () => {
   });
 
   const BETA_GATE = {
+    // QDR-19 (A2): a gate-bearing validation block must declare its benchmark to seal.
+    benchmark: {
+      benchmarkId: 'SPUS',
+      benchmarkSource: 'MarketBar daily closes, matched decision dates',
+      hypothesizedInformationRatio: 0,
+    },
     minimumOosObservations: 104,
     observationsPerYear: 252 / 5,
     relatedFamilyTrials: 108,
@@ -430,5 +444,94 @@ describe('seal-time gate feasibility (QDR-9)', () => {
       expect(resealed.state).toBe('SEALED');
       expect(resealed.configHash).toBe(sealed.configHash);
     }
+  });
+});
+
+describe('QDR-19 (A2): a gate-bearing manifest must declare its benchmark at seal', () => {
+  const GATE_19 = {
+    minimumOosDsr: 0.95,
+    maximumPlausibleSharpe: 3,
+    minimumOosObservations: 1200,
+    observationsPerYear: 252,
+    relatedFamilyTrials: 4,
+    hypothesizedAnnualSharpe: 1.4,
+  };
+  const draft = (validation: Record<string, unknown>) => createDraft({
+    setupId: 'benchmark-probe',
+    version: 'v1',
+    config: { validation, runConfig: { setup: 'benchmark-probe', seed: 42 } } as never,
+    director: 'director-a',
+  });
+  const BENCHMARK = {
+    benchmarkId: 'SPUS',
+    benchmarkSource: 'MarketBar daily closes, matched decision dates',
+  };
+
+  it('refuses a gated manifest carrying no benchmark block', () => {
+    expect(() => sealExperiment(draft(GATE_19))).toThrow(/config\.validation\.benchmark is missing/);
+  });
+
+  it('seals on a declared IR hypothesis, or on an explicit no-claim with a written reason', () => {
+    expect(sealExperiment(draft({
+      ...GATE_19, benchmark: { ...BENCHMARK, hypothesizedInformationRatio: 0.3 },
+    })).state).toBe('SEALED');
+    expect(sealExperiment(draft({
+      ...GATE_19,
+      benchmark: {
+        ...BENCHMARK,
+        benchmarkRelativeClaim: false,
+        reason: 'SPUS has no investable history before 2019-12, so a matched-date IR would cover '
+          + 'only part of this window; no benchmark-relative return claim is made',
+      },
+    })).state).toBe('SEALED');
+  });
+
+  it('refuses a half-declared block — present-but-incomplete throws, on QDR-9\'s grammar', () => {
+    expect(() => sealExperiment(draft({ ...GATE_19, benchmark: { benchmarkId: 'SPUS' } })))
+      .toThrow(/benchmarkSource/);
+    expect(() => sealExperiment(draft({ ...GATE_19, benchmark: { ...BENCHMARK } })))
+      .toThrow(/hypothesizedInformationRatio|benchmarkRelativeClaim/);
+    expect(() => sealExperiment(draft({
+      ...GATE_19, benchmark: { ...BENCHMARK, benchmarkRelativeClaim: false, reason: 'because' },
+    }))).toThrow(/written config\.validation\.benchmark\.reason/);
+  });
+
+  it('refuses a survivor-conditioned reconstruction as a DECLARED benchmark', () => {
+    // QDR-19: such a basket may be PUBLISHED as context, never declared — it carries exactly the
+    // survivorship inflation QDR-15 haircuts at −0.16 Sharpe.
+    expect(() => sealExperiment(draft({
+      ...GATE_19,
+      benchmark: {
+        benchmarkId: 'equal-weight-universe-reconstruction',
+        benchmarkSource: 'MarketBar reconstruction',
+        hypothesizedInformationRatio: 0.3,
+      },
+    }))).toThrow(/INVESTABLE instrument/);
+  });
+
+  it('does NOT touch a manifest that declares no gate at all — absent seals unchanged', () => {
+    // QDR-9's grammar, preserved: the obligation attaches to a DSR-gate declaration, not to every
+    // preregistration. A lane with no gate block seals exactly as it did before this record.
+    const ungated = createDraft({
+      setupId: 'ungated', version: 'v1',
+      config: { universe: { rule: 'halal' } } as never, director: 'director-a',
+    });
+    expect(sealExperiment(ungated).state).toBe('SEALED');
+  });
+
+  it('is FORWARD-ONLY: it fires only inside sealExperiment, which only ever sees a DRAFT', () => {
+    // QDR-19: "new gate or seal criteria bind only manifests sealed strictly after 2026-08-21".
+    // The mechanism is structural rather than a date comparison — an already-sealed manifest can
+    // never re-enter this path, so nothing sealed before the record can be retroactively refused.
+    const sealed = sealExperiment(draft({
+      ...GATE_19, benchmark: { ...BENCHMARK, hypothesizedInformationRatio: 0.3 },
+    }));
+    const legacy = { ...sealed, config: { validation: GATE_19, runConfig: { setup: 'benchmark-probe', seed: 42 } } };
+    const rehashed = { ...legacy, configHash: stableConfigHash(legacy.config as never) };
+    // A manifest sealed WITHOUT a benchmark block (i.e. before this record) still moves through
+    // every downstream lifecycle transition untouched — none of them calls the new refusal.
+    expect(markCodified(rehashed as never, 'implementer-a').state).toBe('CODIFIED');
+    expect(() => assertBenchmarkDeclaredAtSeal(rehashed as never)).toThrow(); // only if RE-sealed…
+    expect(() => sealExperiment(rehashed as never)).toThrow(/Expected DRAFT, found SEALED/); // …and it cannot be
   });
 });

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { BetaCriteriaInput } from './betaCriteria';
 import { stableConfigHash } from './experimentProtocol';
-import type { BacktestMetrics } from './metrics';
+import type { BacktestMetrics, BenchmarkEvidence, CurveSummary, PathShapeEvidence } from './metrics';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
-import { assembleReportCard, renderReportCard, type AssembleArgs } from './reportCard';
+import {
+  assembleReportCard,
+  renderReportCard,
+  QDR19_NON_DECLARABLE_BENCHMARK_LINE,
+  QDR19_PATH_LENGTH_SENSITIVITY_LINE,
+  QDR19_REPORTED_NEVER_GATED_ANNOTATION,
+  type AssembleArgs,
+} from './reportCard';
 import { trialCountEvidence } from './trialFamilies';
 
 const metrics = (override: Partial<BacktestMetrics> = {}): BacktestMetrics => ({
@@ -31,6 +38,21 @@ const permutation: PermutationResult = {
   observedMean: 0.01,
   pValue: 0.01,
 };
+
+const curveSummary = (override: Partial<CurveSummary> = {}): CurveSummary => ({
+  observations: 2146,
+  years: 8.512,
+  cagr: 0.2,
+  annualVolatility: 0.2,
+  sharpe: 1,
+  sortino: 1.4,
+  maxDrawdown: 0.35,
+  ulcerIndex: 0.1,
+  timeUnderwater: 0.85,
+  conditionalValueAtRisk: -0.03,
+  martinRatio: 2,
+  ...override,
+});
 
 function args(override: Partial<AssembleArgs> = {}): AssembleArgs {
   return {
@@ -333,5 +355,176 @@ describe('QDR-10 BETA-class report card', () => {
     expect(sample.rejectionReasonCodes).toEqual(['INSUFFICIENT_SAMPLE']);
     expect(implausible.rejectionReasonCodes).toEqual(['IMPLAUSIBLE_RESULT']);
     for (const card of [drawdown, ruin, sharia, sample, implausible]) expect(card.status).toBe('REJECTED_BETA');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QDR-19: the two new blocks are MANDATORY PUBLISHED EVIDENCE and gate NOTHING. These tests exist
+// mostly to make the SECOND half true and keep it true — QDR-19 adopted no threshold, moved no
+// breaker and added no reason code, so any future wiring of Ulcer/CVaR/IR/the IID disclosure into
+// `PromotionChecklist` must break a test rather than silently change a verdict.
+// ─────────────────────────────────────────────────────────────────────────────
+const pathShape: PathShapeEvidence = {
+  observations: 2146,
+  ulcerIndex: 0.1475,
+  timeUnderwater: 0.891,
+  underwaterThreshold: 0,
+  cvarAlpha: 0.05,
+  conditionalValueAtRisk: -0.0555,
+  martinRatio: 2.516,
+  sortinoRatio: 1.486,
+  maxDrawdown: 0.4142,
+  cagr: 0.3711,
+  bootstrapUlcer: { p50: 0.21, p95: 0.34 },
+  maxDrawdownPathLengthSensitivity: [
+    { pathLength: 1646, p95: 0.3, binding: false },
+    { pathLength: 2145, p95: 0.3148, binding: true },
+    { pathLength: 2520, p95: 0.3267, binding: false },
+  ],
+};
+
+const benchmarkEvidence: BenchmarkEvidence = {
+  benchmarkId: 'SPUS',
+  benchmarkSource: 'MarketBar daily closes, matched dates',
+  declarable: true,
+  matchedObservations: 2146,
+  years: 8.512,
+  strategy: curveSummary({ cagr: 0.3711, ulcerIndex: 0.1475, martinRatio: 2.516 }),
+  benchmark: curveSummary({ cagr: 0.1863, ulcerIndex: 0.0715, martinRatio: 2.606, sharpe: 0.924 }),
+  activeReturn: 0.1911,
+  activeCagr: 0.1848,
+  trackingError: 0.297,
+  informationRatio: 0.643,
+  informationRatioTStat: 1.876,
+  informationRatioPValue: 0.0303,
+  psrVsBenchmark: 0.7412,
+};
+
+describe('QDR-19 published evidence', () => {
+  it('renders both blocks with the reported-never-gated annotation', () => {
+    const rendered = renderReportCard(assembleReportCard(args({
+      pathShapeEvidence: pathShape,
+      benchmarkEvidence,
+      bootstrap: { ...bootstrap, ulcerIndex: { p5: 0.11, p50: 0.21, p95: 0.34 } },
+    })), false);
+    expect(rendered).toContain('QDR-19 PATH SHAPE');
+    expect(rendered).toContain('Ulcer Index:          14.75');
+    expect(rendered).toContain('Martin (CAGR/UI): 2.516');
+    expect(rendered).toContain('Time underwater:      89.10%');
+    expect(rendered).toContain('CVaR(5%):             -5.55% per period');
+    expect(rendered).toContain('QDR-19 BENCHMARK');
+    expect(rendered).toContain('Benchmark:            SPUS');
+    expect(rendered).toContain('Information Ratio 0.643');
+    expect(rendered).toContain('IR t-stat:            1.876');
+    expect(rendered).toContain('PSR vs benchmark:     0.7412');
+    // The mandatory path-length sensitivity disclosure sits beside the BINDING p95 line.
+    expect(rendered).toContain('Max DD p95 by length: 1646:30.00%  2145:31.48%  2520:32.67%');
+    expect(rendered).toContain(QDR19_PATH_LENGTH_SENSITIVITY_LINE);
+    expect(rendered.match(new RegExp(QDR19_REPORTED_NEVER_GATED_ANNOTATION, 'g'))).toHaveLength(2);
+  });
+
+  it('marks a reconstructed basket as CONTEXT ONLY and never as a declared benchmark', () => {
+    const rendered = renderReportCard(assembleReportCard(args({
+      benchmarkEvidence: { ...benchmarkEvidence, declarable: false, benchmarkId: 'EQW-UNIVERSE' },
+    })), false);
+    expect(rendered).toContain(QDR19_NON_DECLARABLE_BENCHMARK_LINE);
+  });
+
+  it('is strictly additive: absent evidence leaves the card and its render untouched', () => {
+    const without = assembleReportCard(args());
+    const with19 = assembleReportCard(args({ pathShapeEvidence: pathShape, benchmarkEvidence }));
+    expect(without.benchmarkEvidence).toBeUndefined();
+    expect(without.pathShapeEvidence).toBeUndefined();
+    // Stripping the two new keys must reproduce the pre-QDR-19 card byte-for-byte, key order too.
+    const { benchmarkEvidence: _b, pathShapeEvidence: _p, ...stripped } = with19;
+    expect(JSON.stringify(stripped)).toBe(JSON.stringify(without));
+    expect(renderReportCard(without, false)).not.toContain('QDR-19');
+  });
+
+  it('publishes the blocks WITHOUT touching checklist or rejectionReasonCodes', () => {
+    const base = assembleReportCard(args());
+    const published = assembleReportCard(args({
+      pathShapeEvidence: pathShape,
+      benchmarkEvidence,
+      bootstrap: { ...bootstrap, ulcerIndex: { p5: 0.5, p50: 0.7, p95: 0.9 } },
+      bootstrapDisclosure: { ...bootstrap, method: 'iid', maxDrawdown: { p5: 0.5, p50: 0.7, p95: 0.95 } },
+    }));
+    expect(JSON.stringify(published.checklist)).toBe(JSON.stringify(base.checklist));
+    expect(JSON.stringify(published.rejectionReasonCodes)).toBe(JSON.stringify(base.rejectionReasonCodes));
+    expect(published.status).toBe(base.status);
+  });
+});
+
+describe('QDR-19 gate isolation — mcMaxDDWithinBreaker reads the MOVING-BLOCK figure and nothing else', () => {
+  // Each case is built so that repointing the breaker at ANY other drawdown-shaped number flips the
+  // verdict. Both directions are covered, so a mutation cannot survive by accident in one of them.
+  it('PASSES on the binding figure even when the IID disclosure and Ulcer would both fail', () => {
+    const card = assembleReportCard(args({
+      drawdownBreakerPct: 0.3,
+      // binding moving-block p95 = 0.25 ⇒ within breaker
+      bootstrap: {
+        ...bootstrap,
+        method: 'moving-block',
+        observationUnit: 'book-day',
+        blockLength: 20,
+        maxDrawdown: { p5: 0.1, p50: 0.18, p95: 0.25 },
+        ulcerIndex: { p5: 0.3, p50: 0.5, p95: 0.9 }, // would FAIL if the breaker read Ulcer
+      },
+      // QDR-16 non-binding IID view = 0.85 ⇒ would FAIL if the breaker read the disclosure
+      bootstrapDisclosure: { ...bootstrap, method: 'iid', maxDrawdown: { p5: 0.4, p50: 0.6, p95: 0.85 } },
+      pathShapeEvidence: { ...pathShape, ulcerIndex: 0.95 }, // would FAIL if it read realized Ulcer
+    }));
+    expect(card.checklist.mcMaxDDWithinBreaker).toBe(true);
+    expect(card.rejectionReasonCodes).not.toContain('DRAWDOWN_RISK_FAILURE');
+  });
+
+  it('FAILS on the binding figure even when the IID disclosure and Ulcer would both pass', () => {
+    const card = assembleReportCard(args({
+      drawdownBreakerPct: 0.3,
+      bootstrap: {
+        ...bootstrap,
+        method: 'moving-block',
+        observationUnit: 'book-day',
+        blockLength: 20,
+        maxDrawdown: { p5: 0.2, p50: 0.3, p95: 0.42 }, // binding ⇒ breaches
+        ulcerIndex: { p5: 0.01, p50: 0.02, p95: 0.05 }, // would PASS if the breaker read Ulcer
+      },
+      bootstrapDisclosure: { ...bootstrap, method: 'iid', maxDrawdown: { p5: 0.05, p50: 0.08, p95: 0.12 } },
+      pathShapeEvidence: { ...pathShape, ulcerIndex: 0.01 },
+    }));
+    expect(card.checklist.mcMaxDDWithinBreaker).toBe(false);
+    expect(card.rejectionReasonCodes).toContain('DRAWDOWN_RISK_FAILURE');
+  });
+
+  it('is indifferent to the entire path-length sensitivity array, including a breaching length', () => {
+    // A longer reference path breaches the breaker by construction (max-DD p95 grows with length).
+    // The gate must still read ONLY the binding figure, or the breaker would be measuring the
+    // window rather than the book — the exact defect QDR-19 published the disclosure to expose.
+    const withBreachingLengths = assembleReportCard(args({
+      drawdownBreakerPct: 0.3,
+      bootstrap: { ...bootstrap, maxDrawdown: { p5: 0.1, p50: 0.18, p95: 0.29 } },
+      pathShapeEvidence: {
+        ...pathShape,
+        maxDrawdownPathLengthSensitivity: [
+          { pathLength: 2145, p95: 0.29, binding: true },
+          { pathLength: 5040, p95: 0.61, binding: false },
+        ],
+      },
+    }));
+    expect(withBreachingLengths.checklist.mcMaxDDWithinBreaker).toBe(true);
+    expect(withBreachingLengths.rejectionReasonCodes).not.toContain('DRAWDOWN_RISK_FAILURE');
+  });
+
+  it('no QDR-19 statistic can add or remove a rejection reason code, at any value', () => {
+    const extremes: Partial<AssembleArgs>[] = [
+      { pathShapeEvidence: { ...pathShape, ulcerIndex: 0.99, conditionalValueAtRisk: -0.99, timeUnderwater: 1 } },
+      { pathShapeEvidence: { ...pathShape, ulcerIndex: 0, conditionalValueAtRisk: 0, timeUnderwater: 0 } },
+      { benchmarkEvidence: { ...benchmarkEvidence, informationRatio: -5, informationRatioTStat: -12, psrVsBenchmark: 0 } },
+      { benchmarkEvidence: { ...benchmarkEvidence, informationRatio: 9, informationRatioTStat: 20, psrVsBenchmark: 1 } },
+    ];
+    const baseline = JSON.stringify(assembleReportCard(args()).rejectionReasonCodes);
+    for (const override of extremes) {
+      expect(JSON.stringify(assembleReportCard(args(override)).rejectionReasonCodes)).toBe(baseline);
+    }
   });
 });

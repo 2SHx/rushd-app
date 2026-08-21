@@ -31,6 +31,15 @@ function manifestPath(): string {
 // seal-time suite already proves clears `assessBetaGateFeasibility` (n=104, criterion-(a) rates
 // within the corrected bar, a benchmark-model sanity fraction inside the widened band).
 const BETA_VALIDATION = {
+  // QDR-19 (A2): a gate-bearing validation block must declare its benchmark to seal. Forward-only
+  // — it binds manifests sealed after 2026-08-21, which every fixture built here is.
+  benchmark: {
+    benchmarkId: 'SPUS',
+    benchmarkSource: 'MarketBar daily closes, matched decision dates',
+    benchmarkRelativeClaim: false,
+    reason: 'test fixture: this lane makes no benchmark-relative return claim',
+  },
+
   minimumOosObservations: 104,
   observationsPerYear: 252 / 5,
   relatedFamilyTrials: 108,
@@ -181,6 +190,7 @@ describe('G10 (QDR-13): the sealed BETA/DIVERSIFICATION gate block is reachable 
     const { createDraft, sealExperiment } = await import('./experimentProtocol');
     const betaGate = {
       productClass: 'BETA', minimumOosObservations: 104, observationsPerYear: 252 / 5,
+      benchmark: { benchmarkId: 'SPUS', benchmarkSource: 'MarketBar daily closes', benchmarkRelativeClaim: false, reason: 'test fixture: no benchmark-relative claim is made' },
       relatedFamilyTrials: 108, benchmarkSymbol: 'SPUS', targetAnnualVol: 0.10,
       volCeiling: 0.13, volFloor: 0.06, hypothesizedBeta: 0.85, maxAnnualTurnover: 4,
       maxAnnualCostDragBps: 40, declaredVolatilityFalseAlarmRate: 0.002,

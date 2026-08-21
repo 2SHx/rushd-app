@@ -362,3 +362,351 @@ export function computePortfolioMetrics(
     downCaptureVsSpus: spusCapture.downCapture
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QDR-19 (2026-08-21) MANDATORY PUBLISHED EVIDENCE — path-shape and benchmark blocks.
+//
+// Everything below is PURE, ADDITIVE and REPORTED-NEVER-GATED, on the exact precedent of
+// `computeCaptureRatios` (QDR-10): `computeMetrics` and `computePortfolioMetrics` outputs are
+// byte-identical after this addition, no `PromotionChecklist` field reads any of it, and QDR-19
+// adopted NO threshold for any of these statistics. Deriving an Ulcer or CVaR threshold from a
+// measured book is forbidden by name in that record.
+//
+// UNITS. Every drawdown-shaped quantity here is a FRACTION, matching `BacktestMetrics.maxDrawdown`
+// (0.1475, not 14.75). The Ulcer Index is conventionally *quoted* in percentage points — 14.75 —
+// so renderers multiply by 100. `martinRatio` is unit-free provided both arguments carry the same
+// unit, which is why it takes CAGR and Ulcer rather than an equity curve.
+//
+// YEAR-COUNT CONVENTION. `computeMetrics` derives elapsed years from the curve's CALENDAR span
+// (MS_PER_YEAR). The helpers below annualize by OBSERVATION COUNT / periodsPerYear, because a
+// benchmark comparison is matched-DATE and a session-count convention is what makes the two series
+// commensurable. On the flagship curve the two differ by 0.25 years (8.512 vs 8.537), moving CAGR
+// 37.11% → 36.99% and Martin 2.516 → 2.508. The convention is stated, never inferred.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Running peak-to-current drawdown at every point of an equity curve, as fractions in [0, 1). */
+export function drawdownSeries(equity: readonly number[]): number[] {
+  const out: number[] = [];
+  let peak = Number.NEGATIVE_INFINITY;
+  for (const value of equity) {
+    if (value > peak) peak = value;
+    out.push(peak > 0 ? (peak - value) / peak : 0);
+  }
+  return out;
+}
+
+/**
+ * Ulcer Index (Martin & McCann 1989) — √mean(DD²) over the whole path, as a FRACTION.
+ *
+ * QDR-19 adopts this as mandatory publication because it is the only one of the four risk
+ * statistics carrying information volatility does not already contain: on the flagship the
+ * engine/benchmark Ulcer ratio is 2.063× against a 1.756× volatility ratio, i.e. 17.5% worse than
+ * scale alone predicts. Unlike max drawdown it is an AVERAGE over the path — a consistent estimator
+ * of a stationary quantity rather than a divergent extreme — so it does not inflate with window
+ * length the way the p95 max-DD figure measurably does.
+ */
+export function ulcerIndex(equity: readonly number[]): number {
+  if (equity.length === 0) return 0;
+  const dd = drawdownSeries(equity);
+  return Math.sqrt(dd.reduce((sum, d) => sum + d * d, 0) / dd.length);
+}
+
+/**
+ * Fraction of observations spent below the running high-water mark.
+ *
+ * `threshold` is a DECLARED drawdown floor and defaults to 0, i.e. the strict textbook test
+ * `dd > 0`. It exists because an undeclared epsilon is a free parameter: QDR-19's published pair
+ * (engine 88.6%, benchmark 83.2%) is not reproducible at `threshold = 0` — the strict figures on
+ * the same two curves are 89.10% and 85.23% — and is recovered only at an implicit floor near
+ * 10 bps (88.54% / 83.18%). Whatever a card uses, it prints the threshold beside the number.
+ */
+export function timeUnderwater(equity: readonly number[], threshold = 0): number {
+  if (equity.length === 0) return 0;
+  const dd = drawdownSeries(equity);
+  return dd.filter((d) => d > threshold).length / dd.length;
+}
+
+/**
+ * Conditional Value at Risk (expected shortfall) at `alpha` — the mean of the worst `alpha` tail of
+ * the per-period return series. Returned in RETURN units and NEGATIVE for a loss tail
+ * (flagship: −0.0555, i.e. −5.55%/day at 5%).
+ *
+ * The tail size is `max(1, floor(alpha·n))`, so it never silently averages an empty slice. CVaR is
+ * coherent (subadditive) where max drawdown is not — but note QDR-19's measurement that on this
+ * book CVaR is nearly collinear with volatility (1.808× against a 1.756× vol ratio), so it carries
+ * almost no gate information it would not duplicate. It is published; it gates nothing.
+ */
+export function conditionalValueAtRisk(returns: readonly number[], alpha = 0.05): number {
+  if (returns.length === 0) return 0;
+  if (!(alpha > 0 && alpha <= 1)) throw new Error('CVaR alpha must be in (0, 1]');
+  const sorted = [...returns].sort((a, b) => a - b);
+  const tail = sorted.slice(0, Math.max(1, Math.floor(alpha * sorted.length)));
+  return mean(tail);
+}
+
+/**
+ * Martin ratio = CAGR / Ulcer Index (rf = 0). Duration-aware Calmar: it divides by the RMS of the
+ * whole underwater path instead of its single worst point. Unit-free while both inputs share a
+ * unit. QDR-19's honesty note: on the flagship the BENCHMARK wins this ratio, 2.606 to 2.516.
+ */
+export function martinRatio(cagr: number, ulcer: number): number {
+  return ulcer > 0 ? cagr / ulcer : 0;
+}
+
+/**
+ * Sortino ratio — mean / downside deviation about `target`, annualized by √periodsPerYear. The
+ * downside deviation divides by the FULL observation count (not just the below-target ones), which
+ * is the standard definition and the one that reproduces the published 1.486.
+ *
+ * Reported only. QDR-19(C) REFUSED substituting this numerator into the Deflated Sharpe: PSR's
+ * variance is a delta-method result for the specific functional μ/σ, and a Sortino numerator would
+ * make the shipped denominator understate the estimator's variance on positively skewed series —
+ * an anti-conservative deflation, the exact opposite of what the instrument is for.
+ */
+export function sortinoRatio(
+  returns: readonly number[],
+  opts: { periodsPerYear?: number; target?: number } = {},
+): number {
+  if (returns.length === 0) return 0;
+  const periodsPerYear = opts.periodsPerYear ?? 252;
+  const target = opts.target ?? 0;
+  const excess = returns.map((r) => r - target);
+  const downside = Math.sqrt(excess.reduce((sum, r) => sum + Math.min(r, 0) ** 2, 0) / excess.length);
+  return downside > 0 ? (mean(excess) / downside) * Math.sqrt(periodsPerYear) : 0;
+}
+
+/**
+ * Probabilistic Sharpe Ratio against a NON-ZERO benchmark Sharpe — `PSR(SR*)` with
+ * `SR* = the benchmark's matched-date annualized Sharpe`, de-annualized to per-period.
+ *
+ * QDR-19 calls this "the one coherent in-framework version" of the benchmark critique: `SR* = 0` in
+ * the shipped Deflated Sharpe is a CHOICE, not a derivation, and PSR is defined for any `SR*`, so
+ * this stays entirely inside the estimator's assumptions — unlike changing the numerator. Adopted
+ * as a REPORTED COMPANION STATISTIC ONLY. Gating it would raise the required annualized Sharpe to
+ * `SR_benchmark + (1.6449 + C)/√oosYears` and re-create QDR-9's rejected decade-long unfalsifiable
+ * wait; that needs a fresh record carrying its own power analysis.
+ */
+export function psrVsBenchmark(
+  returns: readonly number[],
+  opts: { benchmarkAnnualSharpe: number; periodsPerYear?: number },
+): number {
+  const n = returns.length;
+  if (n < 2) return 0;
+  const periodsPerYear = opts.periodsPerYear ?? 252;
+  const m = mean(returns as number[]);
+  const std = Math.sqrt(moment(returns as number[], m, 2));
+  if (std === 0) return 0;
+  const srPeriod = m / std;
+  const srBenchmarkPeriod = opts.benchmarkAnnualSharpe / Math.sqrt(periodsPerYear);
+  const skew = moment(returns as number[], m, 3) / std ** 3;
+  const kurt = moment(returns as number[], m, 4) / std ** 4; // non-excess (normal ≈ 3)
+  const term = Math.max(1 - skew * srPeriod + ((kurt - 1) / 4) * srPeriod ** 2, 1e-12);
+  return normalCDF(((srPeriod - srBenchmarkPeriod) * Math.sqrt(n - 1)) / Math.sqrt(term));
+}
+
+/** One curve's stand-alone summary, on the observation-count year convention documented above. */
+export interface CurveSummary {
+  observations: number;
+  years: number;
+  cagr: number;
+  annualVolatility: number;
+  sharpe: number;
+  sortino: number;
+  maxDrawdown: number;
+  ulcerIndex: number;
+  timeUnderwater: number;
+  conditionalValueAtRisk: number;
+  martinRatio: number;
+}
+
+const periodReturns = (equity: readonly number[]): number[] => {
+  const out: number[] = [];
+  for (let i = 1; i < equity.length; i++) {
+    out.push(equity[i - 1] !== 0 ? (equity[i] - equity[i - 1]) / equity[i - 1] : 0);
+  }
+  return out;
+};
+
+/** Pure summary of a single equity curve. Never gated; feeds the two QDR-19 published blocks. */
+export function summarizeCurve(
+  equity: readonly number[],
+  opts: { periodsPerYear?: number; cvarAlpha?: number; underwaterThreshold?: number } = {},
+): CurveSummary {
+  const periodsPerYear = opts.periodsPerYear ?? 252;
+  const returns = periodReturns(equity);
+  const years = returns.length / periodsPerYear;
+  const first = equity[0] ?? 0;
+  const last = equity[equity.length - 1] ?? 0;
+  const cagr = first > 0 && years > 0 ? Math.pow(last / first, 1 / years) - 1 : 0;
+  const sd = stdDev(returns);
+  const ui = ulcerIndex(equity);
+  let peak = Number.NEGATIVE_INFINITY;
+  let maxDrawdown = 0;
+  for (const value of equity) {
+    if (value > peak) peak = value;
+    if (peak > 0) maxDrawdown = Math.max(maxDrawdown, (peak - value) / peak);
+  }
+  return {
+    observations: equity.length,
+    years,
+    cagr,
+    annualVolatility: sd * Math.sqrt(periodsPerYear),
+    sharpe: sd > 0 ? (mean(returns) / sd) * Math.sqrt(periodsPerYear) : 0,
+    sortino: sortinoRatio(returns, { periodsPerYear }),
+    maxDrawdown,
+    ulcerIndex: ui,
+    timeUnderwater: timeUnderwater(equity, opts.underwaterThreshold ?? 0),
+    conditionalValueAtRisk: conditionalValueAtRisk(returns, opts.cvarAlpha ?? 0.05),
+    martinRatio: martinRatio(cagr, ui),
+  };
+}
+
+/**
+ * One point of the max-drawdown path-length sensitivity disclosure. Structurally identical to
+ * `monteCarlo.MaxDrawdownPathLengthPoint`, which produces it; declared here so `metrics.ts` stays
+ * free of any dependency on the sampler, exactly as it is today.
+ */
+export interface MaxDrawdownPathLengthPoint {
+  readonly pathLength: number;
+  readonly p95: number;
+  /** True for the length the BINDING `mcMaxDDWithinBreaker` figure was measured at. */
+  readonly binding: boolean;
+}
+
+/** QDR-19 PATH-SHAPE block. Every field is published; none is read by any gate. */
+export interface PathShapeEvidence {
+  observations: number;
+  ulcerIndex: number;
+  timeUnderwater: number;
+  /** The DECLARED drawdown floor used for `timeUnderwater`; printed beside it. */
+  underwaterThreshold: number;
+  cvarAlpha: number;
+  conditionalValueAtRisk: number;
+  martinRatio: number;
+  sortinoRatio: number;
+  maxDrawdown: number;
+  cagr: number;
+  /** Bootstrap Ulcer percentiles from the SAME resampled paths as the binding max-DD figure. */
+  bootstrapUlcer?: { p50: number; p95: number };
+  /**
+   * QDR-19's mandatory max-DD path-length sensitivity disclosure: the binding p95 alongside the
+   * same statistic at other path lengths. Window length alone moves a pass into a fail, so the
+   * breaker measures the window as much as it measures the book.
+   */
+  maxDrawdownPathLengthSensitivity?: readonly MaxDrawdownPathLengthPoint[];
+}
+
+export function computePathShapeEvidence(
+  equity: readonly number[],
+  opts: {
+    /** REQUIRED and explicit: Martin's numerator, so no year-count convention is ever inferred. */
+    cagr: number;
+    periodsPerYear?: number;
+    cvarAlpha?: number;
+    underwaterThreshold?: number;
+    bootstrapUlcer?: { p50: number; p95: number };
+    maxDrawdownPathLengthSensitivity?: readonly MaxDrawdownPathLengthPoint[];
+  },
+): PathShapeEvidence {
+  const summary = summarizeCurve(equity, opts);
+  const ui = summary.ulcerIndex;
+  return {
+    observations: summary.observations,
+    ulcerIndex: ui,
+    timeUnderwater: summary.timeUnderwater,
+    underwaterThreshold: opts.underwaterThreshold ?? 0,
+    cvarAlpha: opts.cvarAlpha ?? 0.05,
+    conditionalValueAtRisk: summary.conditionalValueAtRisk,
+    martinRatio: martinRatio(opts.cagr, ui),
+    sortinoRatio: summary.sortino,
+    maxDrawdown: summary.maxDrawdown,
+    cagr: opts.cagr,
+    ...(opts.bootstrapUlcer ? { bootstrapUlcer: opts.bootstrapUlcer } : {}),
+    ...(opts.maxDrawdownPathLengthSensitivity
+      ? { maxDrawdownPathLengthSensitivity: opts.maxDrawdownPathLengthSensitivity }
+      : {}),
+  };
+}
+
+/** QDR-19 BENCHMARK block. Every field is published; none is read by any gate — IR is NOT a gate. */
+export interface BenchmarkEvidence {
+  /** MUST name an investable instrument at seal (SPUS is the default). A reconstructed */
+  /** equal-weight universe basket may be published as CONTEXT but never DECLARED — it is */
+  /** survivor-conditioned by the same bias QDR-15 haircuts at −0.16 Sharpe. */
+  benchmarkId: string;
+  benchmarkSource: string;
+  /** True only for a declared investable benchmark; false marks survivor-conditioned context. */
+  declarable: boolean;
+  matchedObservations: number;
+  years: number;
+  strategy: CurveSummary;
+  benchmark: CurveSummary;
+  /** Annualized ARITHMETIC mean of the per-period active return (not the CAGR difference). */
+  activeReturn: number;
+  /** The CAGR difference, published alongside because the two answer different questions. */
+  activeCagr: number;
+  trackingError: number;
+  informationRatio: number;
+  /** IR·√years, and its ONE-SIDED normal p-value. */
+  informationRatioTStat: number;
+  informationRatioPValue: number;
+  /** PSR with SR* = the benchmark's matched-date annualized Sharpe. Companion statistic only. */
+  psrVsBenchmark: number;
+}
+
+/**
+ * Assemble the benchmark block from two MATCHED-DATE equity curves.
+ *
+ * The IR estimator is deliberately the SAME arithmetic `computePortfolioMetrics` already uses for
+ * `irVsSpus`/`irVsSpy` — `mean(diff)·P / (stdev(diff)·√P)` — so this is reuse, not a second
+ * estimator that could silently disagree with the one already shipping.
+ */
+export function computeBenchmarkEvidence(args: {
+  benchmarkId: string;
+  benchmarkSource: string;
+  declarable: boolean;
+  strategyEquity: readonly number[];
+  benchmarkEquity: readonly number[];
+  periodsPerYear?: number;
+  cvarAlpha?: number;
+  underwaterThreshold?: number;
+}): BenchmarkEvidence {
+  if (args.strategyEquity.length !== args.benchmarkEquity.length) {
+    throw new Error('Benchmark evidence requires matched-date curves of equal length');
+  }
+  const periodsPerYear = args.periodsPerYear ?? 252;
+  const summaryOpts = {
+    periodsPerYear,
+    cvarAlpha: args.cvarAlpha,
+    underwaterThreshold: args.underwaterThreshold,
+  };
+  const strategy = summarizeCurve(args.strategyEquity, summaryOpts);
+  const benchmark = summarizeCurve(args.benchmarkEquity, summaryOpts);
+  const strategyReturns = periodReturns(args.strategyEquity);
+  const benchmarkReturns = periodReturns(args.benchmarkEquity);
+  const active = strategyReturns.map((r, i) => r - benchmarkReturns[i]);
+  const trackingError = stdDev(active) * Math.sqrt(periodsPerYear);
+  const activeReturn = mean(active) * periodsPerYear;
+  const informationRatio = trackingError > 0 ? activeReturn / trackingError : 0;
+  const years = strategyReturns.length / periodsPerYear;
+  const tStat = informationRatio * Math.sqrt(Math.max(years, 0));
+  return {
+    benchmarkId: args.benchmarkId,
+    benchmarkSource: args.benchmarkSource,
+    declarable: args.declarable,
+    matchedObservations: args.strategyEquity.length,
+    years,
+    strategy,
+    benchmark,
+    activeReturn,
+    activeCagr: strategy.cagr - benchmark.cagr,
+    trackingError,
+    informationRatio,
+    informationRatioTStat: tStat,
+    informationRatioPValue: 1 - normalCDF(tStat),
+    psrVsBenchmark: psrVsBenchmark(strategyReturns, {
+      benchmarkAnnualSharpe: benchmark.sharpe,
+      periodsPerYear,
+    }),
+  };
+}

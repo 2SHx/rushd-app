@@ -101,6 +101,16 @@ export interface BootstrapResult {
   finalEquity: { p5: number; p50: number; p95: number };
   maxDrawdown: { p5: number; p50: number; p95: number };
   riskOfRuin: number; // fraction of paths that touched ≤ ruinFraction × startEquity
+  /**
+   * QDR-19 mandatory published evidence: the Ulcer Index of the SAME resampled paths that produce
+   * `maxDrawdown`, as fractions. Optional purely so historical persisted cards stay readable, on
+   * the `method?`/`blockLength?` precedent. REPORTED, NEVER GATED — `mcMaxDDWithinBreaker` reads
+   * `maxDrawdown.p95` and nothing else, and QDR-19 adopted no Ulcer threshold at any value.
+   *
+   * Derived inside the existing resampling loop from the already-drawn indices, so it consumes NO
+   * additional RNG draws: `maxDrawdown`/`finalEquity`/`riskOfRuin` for a given seed are unchanged.
+   */
+  ulcerIndex?: { p5: number; p50: number; p95: number };
 }
 
 export interface BootstrapOpts {
@@ -183,6 +193,7 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
     finalEquity: { p5: startEquity, p50: startEquity, p95: startEquity },
     maxDrawdown: { p5: 0, p50: 0, p95: 0 },
     riskOfRuin: 0,
+    ulcerIndex: { p5: 0, p50: 0, p95: 0 },
     ...observationLabel,
     ...(blockLength ? { blockLength } : {}),
   };
@@ -190,12 +201,15 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
 
   const finals: number[] = [];
   const maxDDs: number[] = [];
+  const ulcers: number[] = [];
   let ruined = 0;
 
   for (let s = 0; s < resamples; s++) {
     let equity = startEquity;
     let peak = startEquity;
     let maxDD = 0;
+    let squaredDrawdownSum = 0;
+    let drawdownObservations = 0;
     let wasRuined = false;
     const sampledIndices = method === 'moving-block'
       ? movingBlockIndices(tradeReturns.length, tradesPerPath, blockLength!, rng)
@@ -206,21 +220,30 @@ export function bootstrapTradeOutcomes(tradeReturns: number[], opts: BootstrapOp
       if (equity > peak) peak = equity;
       const dd = peak > 0 ? (peak - equity) / peak : 0;
       if (dd > maxDD) maxDD = dd;
+      squaredDrawdownSum += dd * dd;
+      drawdownObservations++;
       if (equity <= ruinLevel) wasRuined = true;
     }
     finals.push(equity);
     maxDDs.push(maxDD);
+    ulcers.push(drawdownObservations ? Math.sqrt(squaredDrawdownSum / drawdownObservations) : 0);
     if (wasRuined) ruined++;
   }
 
   finals.sort((a, b) => a - b);
   maxDDs.sort((a, b) => a - b);
+  const sortedUlcers = [...ulcers].sort((a, b) => a - b);
   return {
     resamples, tradesPerPath,
     method,
     finalEquity: { p5: percentile(finals, 5), p50: percentile(finals, 50), p95: percentile(finals, 95) },
     maxDrawdown: { p5: percentile(maxDDs, 5), p50: percentile(maxDDs, 50), p95: percentile(maxDDs, 95) },
     riskOfRuin: ruined / resamples,
+    ulcerIndex: {
+      p5: percentile(sortedUlcers, 5),
+      p50: percentile(sortedUlcers, 50),
+      p95: percentile(sortedUlcers, 95),
+    },
     ...observationLabel,
     ...(blockLength ? { blockLength } : {}),
   };
@@ -306,4 +329,41 @@ export function kellySizedDecision(
   const proposedQty = mkt.price.gt(0) ? notional.div(mkt.price) : new D(0);
   const envelope = applyEnvelope({ action: 'BUY', qty: proposedQty }, pf, mkt, limits, false);
   return { kellyFraction, proposedQty, envelope };
+}
+
+/** One point of QDR-19's mandatory max-drawdown path-length sensitivity disclosure. */
+export interface MaxDrawdownPathLengthPoint {
+  readonly pathLength: number;
+  readonly p95: number;
+  /** True for the length the BINDING `mcMaxDDWithinBreaker` figure was measured at. */
+  readonly binding: boolean;
+}
+
+/**
+ * QDR-19(B): re-run the SAME bootstrap at other path lengths so the card can print how much of the
+ * binding p95 is the window rather than the book.
+ *
+ * Max drawdown is a divergent extreme-value statistic, so its p95 grows with path length by
+ * construction — measured at ≈6.3pp per natural-log unit of path length on the reference book
+ * (30.00% at 1,646 sessions → 31.48% at 2,145 → 32.67% at 2,520). Window length alone can move a
+ * pass into a fail, which is exactly why this line is mandatory beside the p95 and why the Ulcer
+ * Index (a path AVERAGE, hence a consistent estimator) is published next to it.
+ *
+ * Every point is REPORTED, NEVER GATED. The binding figure remains `bootstrap.maxDrawdown.p95` at
+ * the observed path length; nothing in `PromotionChecklist` reads this array. Each length re-seeds
+ * from the same `seed`, so the disclosure is reproducible and the binding run is untouched.
+ */
+export function maxDrawdownPathLengthSensitivity(
+  tradeReturns: number[],
+  opts: BootstrapOpts & { readonly referencePathLengths: readonly number[] },
+): MaxDrawdownPathLengthPoint[] {
+  const bindingLength = opts.tradesPerPath ?? tradeReturns.length;
+  const lengths = Array.from(new Set([...opts.referencePathLengths, bindingLength]))
+    .filter((length) => Number.isInteger(length) && length > 0)
+    .sort((a, b) => a - b);
+  return lengths.map((pathLength) => ({
+    pathLength,
+    p95: bootstrapTradeOutcomes(tradeReturns, { ...opts, tradesPerPath: pathLength }).maxDrawdown.p95,
+    binding: pathLength === bindingLength,
+  }));
 }

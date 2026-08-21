@@ -260,6 +260,75 @@ export function assertConfirmatoryWindowSealed(manifest: ExperimentManifest): vo
 }
 
 /**
+ * QDR-19 (A2) — the single new seal-time refusal, and the ONLY thing in that record that makes
+ * anything harder. A manifest whose `config.validation` declares a DSR gate must also declare the
+ * benchmark it will be published against:
+ *
+ *   config.validation.benchmark = {
+ *     benchmarkId,                       // an INVESTABLE instrument; SPUS is the default
+ *     benchmarkSource,                   // where the matched-date series comes from
+ *     hypothesizedInformationRatio       // ...OR...
+ *     | (benchmarkRelativeClaim: false + a written `reason`)
+ *   }
+ *
+ * Absent ⇒ throw, exactly on QDR-9's precedent that a PRESENT-BUT-INCOMPLETE gate block refuses
+ * while an ABSENT one seals unchanged. The Information Ratio itself is NOT a pass/fail gate and
+ * this refusal adds no `RejectionReasonCode`; it only forbids sealing a gated lane that has not
+ * said what it will be compared to.
+ *
+ * FORWARD-ONLY BY CONSTRUCTION, which is what QDR-19 requires ("binds only manifests sealed
+ * strictly after 2026-08-21"). This fires INSIDE `sealExperiment` and nowhere else, and
+ * `sealExperiment` asserts `state === 'DRAFT'` before reaching here — so a manifest already SEALED,
+ * CODIFIED, QA_PASS, FULL_CLAIMED or terminal can never re-enter this path, is never re-hashed, and
+ * is never re-validated. No existing sealed or codified manifest is disturbed, no re-seal is
+ * triggered, and terminal evaluation never calls this. `halal-fast-momentum-cash-core@v1` in
+ * particular is judged by the metrics in force at its seal, byte-identically.
+ *
+ * `benchmarkId` must be a plain instrument ticker. The `reconstructed`/`equal-weight` tripwire is a
+ * cheap check, not a proof of investability: QDR-19 forbids DECLARING a reconstructed equal-weight
+ * universe basket because it is survivor-conditioned by the bias QDR-15 haircuts at -0.16 Sharpe.
+ * Such a basket may still be PUBLISHED as context — that is a reporting decision, not a seal one.
+ */
+export function assertBenchmarkDeclaredAtSeal(manifest: ExperimentManifest): void {
+  const spec = gateSpecFromConfig(manifest.config);
+  if (!spec) return;
+  const root = isPlainObject(manifest.config) ? manifest.config : null;
+  const validation = root && isPlainObject(root.validation) ? root.validation : null;
+  const refuse = (detail: string): never => {
+    throw new Error(`Cannot seal ${manifest.setupId}@${manifest.version}: QDR-19 requires a gate-bearing `
+      + `config.validation to declare its benchmark — ${detail}. Every gate in this program measures `
+      + 'against zero; a lane that never says what it is compared to cannot publish the mandatory '
+      + 'BENCHMARK block. The Information Ratio is NOT a pass/fail gate — this is a declaration '
+      + 'obligation, and it binds only manifests sealed after 2026-08-21');
+  };
+  const benchmark = validation && isPlainObject(validation.benchmark) ? validation.benchmark : null;
+  if (!benchmark) refuse('config.validation.benchmark is missing');
+  const declared = benchmark as Record<string, JsonValue>;
+  const benchmarkId = declared.benchmarkId;
+  if (typeof benchmarkId !== 'string' || !benchmarkId.trim()) {
+    refuse('config.validation.benchmark.benchmarkId must be a non-empty instrument symbol (default SPUS)');
+  }
+  if (/reconstruct|equal[-_ ]?weight|basket/i.test(String(benchmarkId))) {
+    refuse(`benchmarkId ${JSON.stringify(benchmarkId)} names a reconstructed basket; a declared benchmark `
+      + 'must be an INVESTABLE instrument, and a survivor-conditioned reconstruction may only be published '
+      + 'as context');
+  }
+  if (typeof declared.benchmarkSource !== 'string' || !declared.benchmarkSource.trim()) {
+    refuse('config.validation.benchmark.benchmarkSource must name where the matched-date series comes from');
+  }
+  const hypothesizedIr = declared.hypothesizedInformationRatio;
+  if (typeof hypothesizedIr === 'number' && Number.isFinite(hypothesizedIr)) return;
+  if (declared.benchmarkRelativeClaim === false) {
+    if (typeof declared.reason !== 'string' || declared.reason.trim().length < 20) {
+      refuse('declaring benchmarkRelativeClaim: false requires a written config.validation.benchmark.reason');
+    }
+    return;
+  }
+  refuse('declare either a finite config.validation.benchmark.hypothesizedInformationRatio or '
+    + 'benchmarkRelativeClaim: false with a written reason');
+}
+
+/**
  * QDR-10: the terminal label must match the class sealed into the config. A BETA version can never
  * emit a bare 'ACCEPTED'/'REJECTED', and an ALPHA version can never borrow a BETA label to soften a
  * verdict. Class is read from the sealed config (absent ⇒ ALPHA), so this is hash-anchored.
@@ -364,6 +433,9 @@ export function sealExperiment(
   assertRunConfigPairedWithGate(manifest);
   assertConfirmatoryWindowSealed(manifest);
   assertDiversificationComparator(manifest, options?.resolveComparator);
+  // QDR-19 (A2) runs LAST, deliberately: every pre-existing refusal keeps its precedence and its
+  // exact message, so no manifest that was already refused starts being refused for a new reason.
+  assertBenchmarkDeclaredAtSeal(manifest);
   const config = structuredClone(manifest.config);
   return { ...manifest, config, configHash: stableConfigHash(config), state: 'SEALED' };
 }

@@ -12,7 +12,7 @@ import {
   type DiversificationCriterionCode,
 } from './diversificationCriteria';
 import type { ProductClass } from './gatePower';
-import type { BacktestMetrics } from './metrics';
+import type { BacktestMetrics, BenchmarkEvidence, PathShapeEvidence } from './metrics';
 import type { DailyReturnDistribution } from './distribution';
 import type { BootstrapResult, PermutationResult } from './monteCarlo';
 import type { TrialCountEvidence } from './trialFamilies';
@@ -76,6 +76,27 @@ export const DIVERSIFICATION_FORMATION_RHO_ANNOTATION =
   'formation-window correlation is reported, never gated: it is the quantity the selector minimized';
 // Arabic counterparts live in messages/*.json under i18n-fintech-expert review per QDR-11; the
 // terminal card is an operator artifact and stays English-only, as for BETA.
+
+/**
+ * QDR-19 verbatim card copy. The BENCHMARK and PATH-SHAPE blocks are MANDATORY PUBLISHED EVIDENCE
+ * and gate NOTHING — printed under QDR-10's `BETA_CAPTURE_REPORT_ANNOTATION` precedent and QDR-11's
+ * `DIVERSIFICATION_FORMATION_RHO_ANNOTATION` precedent: print the evidence and tell the reader
+ * exactly what it cannot support. QDR-19 adopted NO Ulcer, CVaR or IR threshold, moved NO breaker,
+ * and added NO `RejectionReasonCode`; `checklist` and `rejectionReasonCodes` are byte-identical
+ * after this record. Sealed lanes print these lines too, because reporting is additive, sits
+ * OUTSIDE `stableConfigHash(config)`, and cannot touch a verdict.
+ */
+export const QDR19_REPORTED_NEVER_GATED_ANNOTATION =
+  'reported, never gated: QDR-19 adopted no Ulcer, CVaR or Information-Ratio threshold and moved no '
+  + 'breaker; a threshold derived from the book in front of it would be gate-shopping';
+/** Forced onto every benchmark block built from a reconstructed basket rather than an instrument. */
+export const QDR19_NON_DECLARABLE_BENCHMARK_LINE =
+  'CONTEXT ONLY — a reconstructed equal-weight universe basket is survivor-conditioned by the same '
+  + 'bias QDR-15 haircuts at -0.16 Sharpe and may never be a DECLARED benchmark';
+/** Printed beside the binding max-DD p95 whenever the sensitivity disclosure is present. */
+export const QDR19_PATH_LENGTH_SENSITIVITY_LINE =
+  'max drawdown is a divergent extreme-value statistic: its p95 grows with path length by '
+  + 'construction (~6.3pp per ln-unit measured), so window length alone can move a pass into a fail';
 
 /** QDR-10 verbatim card copy. A BETA version may make no alpha claim anywhere. */
 export const BETA_DSR_ANNOTATION = 'reported, not a gate; this version makes no edge claim';
@@ -166,6 +187,9 @@ export interface ReportCard {
   /** BETA only: which of the three promotion criteria failed. Empty array = all three passed. */
   betaCriterionFailures?: BetaCriterionCode[];
   betaSummary?: BetaCriteriaResult;
+  /** QDR-19 mandatory published evidence. Reported only — no gate, no reason code, ever. */
+  benchmarkEvidence?: BenchmarkEvidence;
+  pathShapeEvidence?: PathShapeEvidence;
 }
 
 export interface AssembleArgs {
@@ -212,6 +236,16 @@ export interface AssembleArgs {
   diversificationEvidence?: DiversificationCriteriaInput;
   /** Sealed `hypothesizedMonteCarloP95Drawdown` above the breaker; forces the disclosure line. */
   predictedBreakerFailure?: boolean;
+  /**
+   * QDR-19 BENCHMARK block: benchmark id and source, matched-date benchmark CAGR/vol/Sharpe/maxDD/
+   * Ulcer, active return, tracking error, IR, the IR t-statistic and `psrVsBenchmark`. Optional at
+   * this layer ONLY because assembling it needs a matched-date benchmark curve the caller owns; it
+   * can never alter `checklist` or `rejectionReasonCodes`, whatever it contains.
+   */
+  benchmarkEvidence?: BenchmarkEvidence;
+  /** QDR-19 PATH-SHAPE block: Ulcer, time underwater, CVaR(5%), Martin, bootstrap Ulcer p50/p95
+   * and the max-DD path-length sensitivity disclosure. Same reported-never-gated status. */
+  pathShapeEvidence?: PathShapeEvidence;
 }
 
 export function assembleReportCard(a: AssembleArgs): ReportCard {
@@ -307,6 +341,10 @@ export function assembleReportCard(a: AssembleArgs): ReportCard {
     acceptanceMeaning: isDiversification ? 'UNIVERSE_RULE_ADMISSION_ONLY' : 'AUTO_PAPER_ADMISSION_ONLY',
     riskOfRuinLimit,
     ...(a.trialCount ? { trialCount: a.trialCount } : {}),
+    // QDR-19 reporting, spread LAST: purely additive, and absent input leaves the assembled card
+    // byte-identical to the pre-QDR-19 object, key order included.
+    ...(a.benchmarkEvidence ? { benchmarkEvidence: a.benchmarkEvidence } : {}),
+    ...(a.pathShapeEvidence ? { pathShapeEvidence: a.pathShapeEvidence } : {}),
   };
 }
 
@@ -379,6 +417,16 @@ export function renderReportCard(c: ReportCard, color = true): string {
   if (c.bootstrapDisclosure) {
     L.push(paint(`  Non-binding IID p95: ${pct(c.bootstrapDisclosure.maxDrawdown.p95)} (same curve/seed/resamples; no gate effect)`, YELLOW));
   }
+  // QDR-19(B2): the mandatory path-length sensitivity disclosure sits beside the BINDING p95 above.
+  // The binding figure is the one at `binding: true`; every other length is context.
+  const sensitivity = c.pathShapeEvidence?.maxDrawdownPathLengthSensitivity;
+  if (sensitivity?.length) {
+    L.push(`  Max DD p95 by length: ${sensitivity.map((s) => `${s.pathLength}:${pct(s.p95)}`).join('  ')}`);
+    L.push(paint(`                        ${QDR19_PATH_LENGTH_SENSITIVITY_LINE}`, YELLOW));
+  }
+  if (c.bootstrap.ulcerIndex) {
+    L.push(`  Bootstrap Ulcer p50/p95: ${pct(c.bootstrap.ulcerIndex.p50)} / ${pct(c.bootstrap.ulcerIndex.p95)}`);
+  }
   L.push(`  Risk of ruin:         ${pct(c.bootstrap.riskOfRuin)} (limit ${pct(c.riskOfRuinLimit)})`);
   L.push(`  Sign-permutation p:   ${c.permutation.pValue.toFixed(3)}  (observed mean ${pct(c.permutation.observedMean)}; method=${c.permutation.method ?? 'sign-flip-legacy-unspecified'})`);
   L.push(`  Kelly fraction:       ${c.kellyFraction.toFixed(4)}  → clamped qty ${c.kellyClampedQty.toFixed(4)}`);
@@ -426,6 +474,35 @@ export function renderReportCard(c: ReportCard, color = true): string {
     L.push(`  Criteria:             ${DIVERSIFICATION_CRITERION_CODES.map((code) => `${code}:${yn(!dFailures.includes(code))}`).join('  ')}`);
     if (c.predictedBreakerFailure) L.push(paint(`  ${DIVERSIFICATION_PREDICTED_REJECTION_LINE}`, RED));
     L.push(paint(`  ${DIVERSIFICATION_ACCEPT_MEANING_LINE}`, YELLOW));
+  }
+  // ──── QDR-19 mandatory published evidence. Both blocks are additive and gate NOTHING; when the
+  // caller supplies no evidence the rendered card is byte-identical to the pre-QDR-19 output.
+  if (c.pathShapeEvidence) {
+    const ps = c.pathShapeEvidence;
+    L.push('──── QDR-19 PATH SHAPE (published evidence; NOTHING here is a gate) ────');
+    L.push(`  Ulcer Index:          ${(ps.ulcerIndex * 100).toFixed(2)}   Martin (CAGR/UI): ${ps.martinRatio.toFixed(3)}`);
+    L.push(`  Time underwater:      ${pct(ps.timeUnderwater)}  (drawdown floor ${pct(ps.underwaterThreshold)})`);
+    L.push(`  CVaR(${(ps.cvarAlpha * 100).toFixed(0)}%):             ${pct(ps.conditionalValueAtRisk)} per period   Sortino: ${ps.sortinoRatio.toFixed(3)}`);
+    if (ps.bootstrapUlcer) {
+      L.push(`  Bootstrap UI p50/p95: ${(ps.bootstrapUlcer.p50 * 100).toFixed(2)} / ${(ps.bootstrapUlcer.p95 * 100).toFixed(2)}`);
+    }
+    L.push(paint(`                        ${QDR19_REPORTED_NEVER_GATED_ANNOTATION}`, YELLOW));
+  }
+  if (c.benchmarkEvidence) {
+    const b = c.benchmarkEvidence;
+    L.push('──── QDR-19 BENCHMARK (published evidence; the IR is NOT a pass/fail gate) ────');
+    L.push(`  Benchmark:            ${b.benchmarkId}  (${b.benchmarkSource})`);
+    if (!b.declarable) L.push(paint(`                        ${QDR19_NON_DECLARABLE_BENCHMARK_LINE}`, YELLOW));
+    L.push(`  Matched dates:        ${b.matchedObservations} observations (${b.years.toFixed(3)} yr)`);
+    L.push(`  Benchmark CAGR/vol:   ${pct(b.benchmark.cagr)} / ${pct(b.benchmark.annualVolatility)}`
+      + `   Sharpe ${b.benchmark.sharpe.toFixed(3)}`);
+    L.push(`  Benchmark maxDD/UI:   ${pct(b.benchmark.maxDrawdown)} / ${(b.benchmark.ulcerIndex * 100).toFixed(2)}`
+      + `   Martin ${b.benchmark.martinRatio.toFixed(3)}`);
+    L.push(`  Active return:        ${pct(b.activeReturn)}/yr arithmetic  (CAGR difference ${pct(b.activeCagr)})`);
+    L.push(`  Tracking error:       ${pct(b.trackingError)}   Information Ratio ${b.informationRatio.toFixed(3)}`);
+    L.push(`  IR t-stat:            ${b.informationRatioTStat.toFixed(3)}  (one-sided p ${b.informationRatioPValue.toFixed(4)})`);
+    L.push(`  PSR vs benchmark:     ${b.psrVsBenchmark.toFixed(4)}  (SR* = benchmark matched-date annualized Sharpe)`);
+    L.push(paint(`                        ${QDR19_REPORTED_NEVER_GATED_ANNOTATION}`, YELLOW));
   }
   L.push('──── promotion checklist (all required) ────');
   L.push(`  walk-forward:${yn(c.checklist.walkForward)}  OOS≥20% (${pct(c.checklist.oosHoldoutPct)}):${yn(c.checklist.oosHoldoutOk)}  trades≥100:${yn(c.checklist.enoughTrades)}`);

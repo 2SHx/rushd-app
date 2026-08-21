@@ -22,6 +22,14 @@ const PLATEAU_GRID = (() => {
 })();
 
 const GATE = {
+  // QDR-19 (A2): a gate-bearing validation block must declare its benchmark to seal. Forward-only
+  // — it binds manifests sealed after 2026-08-21, which every fixture built here is.
+  benchmark: {
+    benchmarkId: 'SPUS',
+    benchmarkSource: 'MarketBar daily closes, matched decision dates',
+    benchmarkRelativeClaim: false,
+    reason: 'test fixture: this lane makes no benchmark-relative return claim',
+  },
   productClass: 'DIVERSIFICATION',
   minimumOosObservations: 644,
   observationsPerYear: 252,
@@ -79,7 +87,7 @@ const TREATMENT = {
 const INCUMBENT_CONFIG = {
   ...MECHANISM,
   universe: { rule: 'selectDollarVolumeSleeve', maxNames: 40 },
-  validation: { minimumOosObservations: 100, minimumOosDsr: 0.95, maximumPlausibleSharpe: 3, observationsPerYear: 12, relatedFamilyTrials: 9, hypothesizedAnnualSharpe: 0.8 },
+  validation: { minimumOosObservations: 100, minimumOosDsr: 0.95, maximumPlausibleSharpe: 3, observationsPerYear: 12, relatedFamilyTrials: 9, hypothesizedAnnualSharpe: 0.8, benchmark: { benchmarkId: 'SPUS', benchmarkSource: 'MarketBar daily closes', benchmarkRelativeClaim: false, reason: 'test fixture: no benchmark-relative claim is made' } },
 };
 
 const resolver = (overrides: Partial<{ sealed: boolean; config: unknown }> = {}): ComparatorResolver =>
@@ -177,6 +185,7 @@ describe('the check is scoped to the class that needs it', () => {
       universe: { rule: 'selectDollarVolumeSleeve', maxNames: 40 },
       validation: {
         minimumOosObservations: 500, minimumOosDsr: 0.95, maximumPlausibleSharpe: 3,
+        benchmark: { benchmarkId: 'SPUS', benchmarkSource: 'MarketBar daily closes', benchmarkRelativeClaim: false, reason: 'test fixture: no benchmark-relative claim is made' },
         observationsPerYear: 252 / 5, relatedFamilyTrials: 1, hypothesizedAnnualSharpe: 1.6,
       },
     });
