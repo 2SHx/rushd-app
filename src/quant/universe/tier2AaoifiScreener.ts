@@ -91,6 +91,17 @@ function isNonNegativeFinite(n: number | null): n is number {
 
 const bps = (num: number, denom: number): number => Math.round((num / denom) * 10_000);
 
+/** Point-in-time market cap denominator: a filed share count times a real close known by the
+ * decision. Missing, zero, or non-finite inputs propagate as null so the screen fails closed. */
+export function marketCapUsdFromShares(sharesOutstanding: unknown, priceUsd: unknown): number | null {
+  if (typeof sharesOutstanding !== 'number' || !Number.isFinite(sharesOutstanding) || sharesOutstanding <= 0) {
+    return null;
+  }
+  if (typeof priceUsd !== 'number' || !Number.isFinite(priceUsd) || priceUsd <= 0) return null;
+  const marketCap = sharesOutstanding * priceUsd;
+  return Number.isFinite(marketCap) && marketCap > 0 ? marketCap : null;
+}
+
 export interface ComputeAaoifiScreenOptions {
   /** Any XBRL input older than this (days) is fail-closed excluded (STALE_FUNDAMENTALS). */
   maxInputAgeDays?: number;

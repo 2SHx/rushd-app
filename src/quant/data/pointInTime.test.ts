@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    marketBar: { findMany: vi.fn() },
+    marketBar: { findMany: vi.fn(), findFirst: vi.fn() },
     fundamentals: { findFirst: vi.fn() },
     newsItem: { findMany: vi.fn() },
     intradayBar: { findMany: vi.fn() },
@@ -196,6 +196,43 @@ describe('PointInTimeStore.fundamentals — explicit ANNUAL/QUARTERLY period (20
     const screen = computeAaoifiScreen(inputs, { referenceDate: asOf });
     expect(screen.compliant).toBe(false);
     expect(screen.reasonCodes).toContain('missing_xbrl_inputs');
+  });
+});
+
+describe('PointInTimeStore.aaoifiInputs — PIT market cap from shares x price', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('derives marketCapUsd from the filed share count and latest real close at the decision', async () => {
+    (prisma.fundamentals.findFirst as any).mockResolvedValue({
+      symbol: 'AAPL', market: 'NASDAQ', period: 'QUARTERLY',
+      asOf: new Date('2026-03-31T00:00:00.000Z'), releasedAt: new Date('2026-05-01T00:00:00.000Z'),
+      metrics: {
+        sic: '3571', interestBearingDebtUsd: 100, cashAndInterestSecuritiesUsd: 200,
+        nonCompliantIncomeUsd: 1, totalRevenueUsd: 1_000, sharesOutstanding: 10_000_000,
+        sharesOutstandingFiledAt: '2026-05-01', sharesOutstandingAsOf: '2026-04-25', notes: [],
+      },
+    });
+    (prisma.marketBar.findFirst as any).mockResolvedValue(bar(asOf));
+    const input = await new PointInTimeStore().aaoifiInputs('AAPL', 'NASDAQ' as any, asOf, 'QUARTERLY');
+
+    expect(input?.marketCapUsd).toBe(10_000_000);
+    expect((prisma.fundamentals.findFirst as any).mock.calls[0][0].where).toMatchObject({
+      period: 'QUARTERLY', releasedAt: { lte: asOf },
+    });
+    expect((prisma.marketBar.findFirst as any).mock.calls[0][0].where).toMatchObject({
+      source: { in: ['YAHOO', 'ALPACA'] }, ts: { lte: asOf },
+    });
+  });
+
+  it('rejects a future price bar injected past the decision date', async () => {
+    (prisma.fundamentals.findFirst as any).mockResolvedValue({
+      symbol: 'AAPL', market: 'NASDAQ', period: 'QUARTERLY', asOf, releasedAt: asOf,
+      metrics: { sharesOutstanding: 10_000_000, notes: [] },
+    });
+    (prisma.marketBar.findFirst as any).mockResolvedValue(bar(daysAgo(-1)));
+
+    await expect(new PointInTimeStore().aaoifiInputs('AAPL', 'NASDAQ' as any, asOf, 'QUARTERLY'))
+      .rejects.toBeInstanceOf(LookaheadError);
   });
 });
 

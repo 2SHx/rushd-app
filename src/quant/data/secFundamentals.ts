@@ -33,6 +33,7 @@ function isValidSecDateKey(value: string): boolean {
 export function selectSecSharesOutstanding(
   lists: readonly (readonly SecFactPoint[])[],
   dateKey: string,
+  options: { filedInclusive?: boolean } = {},
 ): SecSharesOutstanding | null {
   let best: SecFactPoint | null = null;
   for (const list of lists) {
@@ -43,7 +44,7 @@ export function selectSecSharesOutstanding(
         !isValidSecDateKey(fact.end) ||
         !isValidSecDateKey(fact.filed) ||
         fact.end > fact.filed ||
-        fact.filed >= dateKey
+        (options.filedInclusive ? fact.filed > dateKey : fact.filed >= dateKey)
       ) continue;
       if (!best || fact.filed > best.filed || (fact.filed === best.filed && fact.end > best.end)) best = fact;
     }

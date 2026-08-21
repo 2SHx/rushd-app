@@ -21,6 +21,10 @@ import type {
   IntradayBar,
   SymbolSnapshot,
 } from '@prisma/client';
+import {
+  marketCapUsdFromShares,
+  type Tier2Inputs,
+} from '../universe/tier2AaoifiScreener';
 
 /**
  * `Fundamentals.period` (schema-level ANNUAL/QUARTERLY discriminator) is never optional at a call
@@ -106,6 +110,51 @@ export class PointInTimeStore {
     });
     if (f) assertNoLookahead([f], asOf, 'releasedAt');
     return f;
+  }
+
+  /** Latest filing and real close both visible at `asOf`, mapped directly to AAOIFI 30/30/5
+   * inputs. The filing date gates the share count; the bar timestamp gates the price. */
+  async aaoifiInputs(
+    symbol: string,
+    market: Market,
+    asOf: Date,
+    period: FundamentalsPeriod = 'QUARTERLY',
+  ): Promise<Tier2Inputs | null> {
+    const [fundamentals, priceBar] = await Promise.all([
+      this.fundamentals(symbol, market, asOf, period),
+      prisma.marketBar.findFirst({
+        where: {
+          symbol, market, interval: this.interval,
+          source: { in: ['YAHOO', 'ALPACA'] },
+          ts: { lte: asOf },
+        },
+        orderBy: { ts: 'desc' },
+      }),
+    ]);
+    if (!fundamentals) return null;
+    if (priceBar) assertNoLookahead([priceBar], asOf, 'ts');
+
+    const metrics = fundamentals.metrics as Record<string, unknown>;
+    const nullableNumber = (value: unknown): number | null => (
+      typeof value === 'number' && Number.isFinite(value) ? value : null
+    );
+    return {
+      symbol,
+      name: symbol,
+      sic: typeof metrics.sic === 'string' ? metrics.sic : null,
+      interestBearingDebtUsd: nullableNumber(metrics.interestBearingDebtUsd),
+      cashAndInterestSecuritiesUsd: nullableNumber(metrics.cashAndInterestSecuritiesUsd),
+      marketCapUsd: marketCapUsdFromShares(
+        metrics.sharesOutstanding,
+        priceBar ? Number(priceBar.close) : null,
+      ),
+      nonCompliantIncomeUsd: nullableNumber(metrics.nonCompliantIncomeUsd),
+      totalRevenueUsd: nullableNumber(metrics.totalRevenueUsd),
+      asOf: fundamentals.asOf.toISOString().slice(0, 10),
+      notes: Array.isArray(metrics.notes)
+        ? metrics.notes.filter((note): note is string => typeof note === 'string')
+        : [],
+    };
   }
 
   async news(symbol: string, market: Market, asOf: Date, sinceDays?: number): Promise<NewsItem[]> {

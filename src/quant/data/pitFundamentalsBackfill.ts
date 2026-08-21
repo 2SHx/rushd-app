@@ -43,6 +43,7 @@
 // counted reason (see PitFundamentalsSkip), never a guessed value.
 import type { XbrlFact } from '../universe/tier2XbrlFetch';
 import { TIER2_CONCEPT_KEYS } from '../universe/tier2XbrlFetch';
+import { selectSecSharesOutstanding } from './secFundamentals';
 
 export interface PitFundamentalsMetrics {
   sic: string | null;
@@ -50,6 +51,12 @@ export interface PitFundamentalsMetrics {
   cashAndInterestSecuritiesUsd: number | null;
   nonCompliantIncomeUsd: number | null;
   totalRevenueUsd: number | null;
+  /** Latest positive SEC share count actually public by this row's `releasedAt`. */
+  sharesOutstanding: number | null;
+  /** SEC filing date that made `sharesOutstanding` public; never after `releasedAt`. */
+  sharesOutstandingFiledAt: string | null;
+  /** Measurement date described by the selected shares fact. */
+  sharesOutstandingAsOf: string | null;
   /** '10-K' for an annual filing, '10-Q' for a quarterly one — the write-time discriminator that
    * also lands in the row's own JSON `metrics`, redundant with (never contradicting) the schema-
    * level `Fundamentals.period` column set by `pitFundamentalsIngest.ts`. */
@@ -161,6 +168,17 @@ function sumParts(values: Array<number | undefined>): number | null {
   return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 }
 
+function sharesOutstandingAtOrBefore(companyFacts: any, releasedAt: string) {
+  const rawLists: XbrlFact[][] = [
+    companyFacts?.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares,
+    companyFacts?.facts?.['us-gaap']?.CommonStockSharesOutstanding?.units?.shares,
+  ].filter(Boolean);
+  const lists = rawLists.map((list) => list.filter(
+    (fact): fact is XbrlFact & { filed: string } => typeof fact.filed === 'string',
+  ));
+  return selectSecSharesOutstanding(lists, releasedAt, { filedInclusive: true });
+}
+
 /**
  * Pure core: builds the full annual filing HISTORY for one symbol from already-fetched SEC
  * companyfacts + submissions JSON. No network, no Date.now(), no randomness — fully offline
@@ -202,6 +220,7 @@ export function selectAnnualFundamentalsHistory(
     if (contributing.length === 0) continue; // unreachable (ends built from these maps), defensive only
 
     const releasedAt = contributing.reduce((max, f) => (f.filed > max ? f.filed : max), contributing[0].filed);
+    const shares = sharesOutstandingAtOrBefore(companyFacts, releasedAt);
 
     // Defensive re-check at the assembled-row level (per-fact check above already guarantees this
     // for every individual contributing fact, but a row is only as trustworthy as its worst input).
@@ -222,6 +241,9 @@ export function selectAnnualFundamentalsHistory(
         cashAndInterestSecuritiesUsd: sumParts([cash.get(end)?.val, shortSec.get(end)?.val]),
         nonCompliantIncomeUsd: nonCompliant.get(end)?.val ?? null,
         totalRevenueUsd: revenue.get(end)?.val ?? null,
+        sharesOutstanding: shares?.shares ?? null,
+        sharesOutstandingFiledAt: shares?.filedDate ?? null,
+        sharesOutstandingAsOf: shares?.endDate ?? null,
         form: '10-K',
         notes: nonCompliant.get(end) ? [] : ['non_compliant_income_tag_absent_for_period'],
       },
@@ -378,6 +400,7 @@ export function selectQuarterlyFundamentalsHistory(
     if (contributing.length === 0) continue; // unreachable (ends built from these maps), defensive only
 
     const releasedAt = contributing.reduce((max, f) => (f.filed > max ? f.filed : max), contributing[0].filed);
+    const shares = sharesOutstandingAtOrBefore(companyFacts, releasedAt);
 
     if (releasedAt < end) {
       skips.push({ symbol, reasonCode: 'implausible_filing_order', detail: `end=${end} releasedAt=${releasedAt}` });
@@ -398,6 +421,9 @@ export function selectQuarterlyFundamentalsHistory(
         cashAndInterestSecuritiesUsd: sumParts([cash.get(end)?.val, shortSec.get(end)?.val]),
         nonCompliantIncomeUsd: nonCompliant.get(end)?.val ?? null,
         totalRevenueUsd: revenue.get(end)?.val ?? null,
+        sharesOutstanding: shares?.shares ?? null,
+        sharesOutstandingFiledAt: shares?.filedDate ?? null,
+        sharesOutstandingAsOf: shares?.endDate ?? null,
         form: '10-Q',
         fp,
         notes: nonCompliant.get(end) ? [] : ['non_compliant_income_tag_absent_for_period'],

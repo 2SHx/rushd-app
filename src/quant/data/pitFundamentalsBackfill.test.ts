@@ -9,6 +9,28 @@ function gaapFact(val: number, end: string, filed: string, extra: Partial<{ form
 }
 
 describe('selectAnnualFundamentalsHistory — point-in-time contract', () => {
+  it('carries only a share count filed by the fundamentals release date', () => {
+    const companyFacts = {
+      facts: {
+        dei: {
+          EntityCommonStockSharesOutstanding: { units: { shares: [
+            { val: 10_000_000, end: '2020-02-01', filed: '2020-02-15' },
+            { val: 20_000_000, end: '2020-03-01', filed: '2020-03-15' },
+          ] } },
+        },
+        'us-gaap': {
+          Revenues: { units: { USD: [gaapFact(1_000, '2019-12-31', '2020-02-15')] } },
+        },
+      },
+    };
+    const { filings } = selectAnnualFundamentalsHistory('ABCD', companyFacts, { sic: '3674' });
+    expect(filings[0].metrics).toMatchObject({
+      sharesOutstanding: 10_000_000,
+      sharesOutstandingFiledAt: '2020-02-15',
+      sharesOutstandingAsOf: '2020-02-01',
+    });
+  });
+
   it('sets releasedAt to the SEC `filed` date, never the fiscal `end` — acceptance #1', () => {
     const companyFacts = {
       facts: {
@@ -316,6 +338,26 @@ describe('selectAnnualFundamentalsHistory — point-in-time contract', () => {
 });
 
 describe('selectQuarterlyFundamentalsHistory — point-in-time contract, acceptance #2/#3', () => {
+  it('carries the latest share count public by the 10-Q release date', () => {
+    const companyFacts = {
+      facts: {
+        dei: {
+          EntityCommonStockSharesOutstanding: { units: { shares: [
+            { val: 15_000_000, end: '2026-04-25', filed: '2026-05-01' },
+          ] } },
+        },
+        'us-gaap': {
+          Revenues: { units: { USD: [
+            { start: '2025-12-28', end: '2026-03-28', val: 1_000, form: '10-Q', fp: 'Q2', filed: '2026-05-01' },
+          ] } },
+        },
+      },
+    };
+    const { filings } = selectQuarterlyFundamentalsHistory('AAPL', companyFacts, { sic: '3571' });
+    expect(filings[0].metrics.sharesOutstanding).toBe(15_000_000);
+    expect(filings[0].metrics.sharesOutstandingFiledAt).toBe('2026-05-01');
+  });
+
   it('separates a DISCRETE quarter from its YTD cumulative sibling — real AAPL fact pair (FY2026 Q2 10-Q, filed 2026-05-01)', () => {
     // Confirmed live against SEC EDGAR CIK0000320193, accn 0000320193-26-000013: both facts share
     // form:'10-Q', fp:'Q2', end:'2026-03-28' — only `start` (hence span) distinguishes the 90-day
