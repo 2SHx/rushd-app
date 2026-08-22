@@ -146,10 +146,14 @@ import {
   simulateStrategyBook,
   type StrategyBookDailyPoint, type StrategyBookPolicy, type StrategyBookResult, type StrategyBookSeries,
 } from './portfolioEngine';
-import { computeMetrics, type BacktestMetrics, type EquityPoint } from './metrics';
+import {
+  computeBenchmarkEvidence, computeMetrics, computePathShapeEvidence,
+  type BacktestMetrics, type BenchmarkEvidence, type EquityPoint, type PathShapeEvidence,
+} from './metrics';
 import { summarizeDailyReturns, toDailyReturns, toIndependentPeriodReturns } from './distribution';
 import {
-  bootstrapMonthlyBlocks, bootstrapTradeOutcomes, signFlipPermutationTest, kellySizedDecision,
+  bootstrapMonthlyBlocks, bootstrapTradeOutcomes, maxDrawdownPathLengthSensitivity,
+  signFlipPermutationTest, kellySizedDecision, type BootstrapOpts,
 } from './monteCarlo';
 import { assembleReportCard, renderReportCard, type DataFeed, type ReportCard, type ShariaValidationState } from './reportCard';
 import { trialCountEvidence, type ConfirmatoryEvidenceInput } from './trialFamilies';
@@ -472,6 +476,113 @@ export function metricsForSetup(
     hitRate: inference.hitRate,
     implausible: inference.implausible,
   };
+}
+
+/**
+ * Observations per YEAR for the setup's frozen unit — the same 252 / (252÷5) split `metricsForSetup`
+ * applies, read from one place so the QDR-19 blocks can never annualize in a unit the gate did not.
+ */
+export function observationPeriodsPerYear(setupId: string, gateConfig?: unknown): number {
+  return resolveObservationUnit(setupId, gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT
+    ? 252 / 5
+    : 252;
+}
+
+/** Path lengths the max-DD p95 is re-measured at, as fractions of the BINDING length (QDR-19 B2). */
+export const MAX_DD_PATH_LENGTH_SENSITIVITY_FRACTIONS: readonly number[] = [0.5, 1, 2];
+
+/**
+ * QDR-19 PATH-SHAPE block for the FULL-run NAV curve. Reported, never gated.
+ *
+ * The curve is projected into the setup's frozen observation unit and annualized at that unit's
+ * rate, exactly as `metricsForSetup` does, so CVaR is "per observation" in the same unit the DSR
+ * test used. `cagr` is passed in (never inferred) and stays the calendar headline CAGR.
+ */
+export function pathShapeEvidenceForSetup(
+  setupId: string,
+  curve: readonly EquityPoint[],
+  opts: {
+    cagr: number;
+    /** The BINDING bootstrap's own observation returns and options, so the sensitivity re-seeds identically. */
+    bootstrapReturns: readonly number[];
+    bootstrapOpts: BootstrapOpts;
+    bootstrapUlcer?: { p50: number; p95: number };
+  },
+  gateConfig?: unknown,
+): PathShapeEvidence | undefined {
+  const unitCurve = resolveObservationUnit(setupId, gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT
+    ? fiveSessionMetricCurve(curve)
+    : curve;
+  if (unitCurve.length < 2) return undefined;
+  const bindingLength = opts.bootstrapReturns.length;
+  const sensitivity = bindingLength >= 2
+    ? maxDrawdownPathLengthSensitivity([...opts.bootstrapReturns], {
+      ...opts.bootstrapOpts,
+      referencePathLengths: MAX_DD_PATH_LENGTH_SENSITIVITY_FRACTIONS
+        .map((fraction) => Math.round(bindingLength * fraction))
+        .filter((length) => length > 0),
+    })
+    : undefined;
+  return computePathShapeEvidence(unitCurve.map((point) => point.equity), {
+    cagr: opts.cagr,
+    periodsPerYear: observationPeriodsPerYear(setupId, gateConfig),
+    ...(opts.bootstrapUlcer ? { bootstrapUlcer: opts.bootstrapUlcer } : {}),
+    ...(sensitivity ? { maxDrawdownPathLengthSensitivity: sensitivity } : {}),
+  });
+}
+
+/** The benchmark series the QDR-19 block is measured against; closes keyed by `sessionKey`. */
+export interface BenchmarkEvidenceSource {
+  benchmarkId: string;
+  benchmarkSource: string;
+  /**
+   * QDR-20: only a real, investable instrument may ever be DECLARED. A reconstructed equal-weight
+   * universe basket is survivor-conditioned and must be passed with `investable: false`, which
+   * pins `declarable: false` no matter how complete its coverage is.
+   */
+  investable: boolean;
+  closesBySession: ReadonlyMap<string, number>;
+}
+
+/**
+ * QDR-19 BENCHMARK block from MATCHED sessions only.
+ *
+ * Never synthesises, forward-fills or zero-pads a benchmark bar to force equal lengths: a session
+ * the benchmark did not trade is dropped from BOTH series, and if fewer than two observations
+ * survive the block is OMITTED rather than fabricated. Partial coverage (SPUS has no investable
+ * history before its 2019-12-18 inception) is published with `declarable: false`, which is what
+ * the renderer's non-declarable line exists to say out loud.
+ */
+export function benchmarkEvidenceForSetup(
+  setupId: string,
+  curve: readonly EquityPoint[],
+  source: BenchmarkEvidenceSource,
+  gateConfig?: unknown,
+): BenchmarkEvidence | undefined {
+  const matched: { ts: Date; strategy: number; benchmark: number }[] = [];
+  for (const point of curve) {
+    const close = source.closesBySession.get(sessionKey(point.ts));
+    if (close === undefined || !(close > 0) || !(point.equity > 0)) continue;
+    matched.push({ ts: point.ts, strategy: point.equity, benchmark: close });
+  }
+  if (matched.length < 2) return undefined;
+  let projected = matched;
+  if (resolveObservationUnit(setupId, gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT) {
+    // The projection `metricsForSetup` uses, run through the shared validator first so a malformed
+    // NAV cannot enter the block; the benchmark is taken at the SAME indices, never re-sampled.
+    fiveSessionMetricCurve(matched.map((row) => ({ ts: row.ts, equity: row.strategy })));
+    projected = matched.filter((_, index) => index % 5 === 0);
+  }
+  if (projected.length < 2) return undefined;
+  return computeBenchmarkEvidence({
+    benchmarkId: source.benchmarkId,
+    benchmarkSource: source.benchmarkSource,
+    // Full-window coverage of every strategy observation, and only for an investable instrument.
+    declarable: source.investable && matched.length === curve.length,
+    strategyEquity: projected.map((row) => row.strategy),
+    benchmarkEquity: projected.map((row) => row.benchmark),
+    periodsPerYear: observationPeriodsPerYear(setupId, gateConfig),
+  });
 }
 
 /** Shared risk evidence uses true book NAV; entry permutation remains position-trade based. */
@@ -2071,6 +2182,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
   // the book's own. Populated only from real persisted bars — if the fetch fails this stays empty
   // and a BETA run fails closed rather than scoring against a synthesized benchmark.
   const benchmarkCloseBySession = new Map<string, number>();
+  /** The persisted `source` values those closes actually came from; printed, never assumed. */
+  const benchmarkSources = new Set<string>();
   try {
     const { prisma } = await import('../../lib/prisma');
     const benchmarkRows = await prisma.marketBar.findMany({
@@ -2096,7 +2209,9 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     for (const row of benchmarkRows) {
       if (row.symbol !== BETA_BENCHMARK_SYMBOL) continue;
       const close = Number(row.close);
-      if (Number.isFinite(close) && close > 0) benchmarkCloseBySession.set(sessionKey(row.ts), close);
+      if (!Number.isFinite(close) || close <= 0) continue;
+      benchmarkCloseBySession.set(sessionKey(row.ts), close);
+      benchmarkSources.add(row.source);
     }
   } catch (err) {
     console.warn(`\x1b[33mHistorical benchmark comparison unavailable: ${(err as Error).message}\x1b[0m`);
@@ -2117,10 +2232,13 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     || validationReturns.observationUnit === 'book-day'
     ? ({ observationUnit: 'book-day' as const })
     : {};
-  const bootstrap = bootstrapTradeOutcomes(bootstrapReturns, {
+  // Named so the QDR-19 path-length sensitivity re-runs the SAME sampler, seed and unit as the
+  // binding figure; the binding call itself is byte-identical to what it was before.
+  const bootstrapOpts: BootstrapOpts = {
     resamples: 1000, seed, startEquity: Number(startingCash),
     ...bootstrapUnit,
-  });
+  };
+  const bootstrap = bootstrapTradeOutcomes(bootstrapReturns, bootstrapOpts);
   const bootstrapDisclosure = requiresBootstrapDisclosure(options.gateConfig)
     ? bootstrapTradeOutcomes(bootstrapReturns, {
       resamples: 1000, seed, startEquity: Number(startingCash),
@@ -2378,6 +2496,32 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
     }
   }
 
+  // ── QDR-19 published evidence. Both blocks are REPORTED and gate NOTHING — they cannot move the
+  // checklist or a rejection code. A missing input OMITS the block; no curve is ever synthesized.
+  const pathShapeEvidence = pathShapeEvidenceForSetup(setupId, curve, {
+    cagr: full.cagr,
+    bootstrapReturns,
+    bootstrapOpts,
+    ...(bootstrap.ulcerIndex
+      ? { bootstrapUlcer: { p50: bootstrap.ulcerIndex.p50, p95: bootstrap.ulcerIndex.p95 } }
+      : {}),
+  }, options.gateConfig);
+  const benchmarkEvidence = benchmarkEvidenceForSetup(setupId, curve, {
+    // QDR-20 verbatim: the declared benchmark is the investable SPUS fund. A reconstructed
+    // equal-weight universe basket may only ever be published as survivor-conditioned CONTEXT.
+    benchmarkId: BETA_BENCHMARK_SYMBOL,
+    benchmarkSource: benchmarkSources.size
+      ? `MarketBar DAY ${Array.from(benchmarkSources).sort().join('+')}`
+      : 'unavailable',
+    investable: true,
+    closesBySession: benchmarkCloseBySession,
+  }, options.gateConfig);
+  if (!benchmarkEvidence) {
+    console.warn('\x1b[33mQDR-19 BENCHMARK block OMITTED: no matched SPUS session in this window (never synthesized)\x1b[0m');
+  } else if (!benchmarkEvidence.declarable) {
+    console.warn(`\x1b[33mQDR-19 BENCHMARK block is CONTEXT only: SPUS matched ${benchmarkEvidence.matchedObservations}/${curve.length} observations\x1b[0m`);
+  }
+
   const card = {
     ...assembleReportCard({
       setup: setupId, symbols, universe: universeTag, periodPreset, from, to, dataFeed: feed, seed, gitSha: runGitSha,
@@ -2392,6 +2536,8 @@ export async function runLab(options: RunLabOptions): Promise<RunLabResult> {
       shariaState, walkForward, profitPlateau,
       dataQualityPitOk, reproducible,
       trialCount: validationTrialFamily,
+      ...(pathShapeEvidence ? { pathShapeEvidence } : {}),
+      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
     }),
     walkForwardEvidence,
     plateau: plateauEvaluation,
