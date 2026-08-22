@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { prisma } from '@/lib/prisma';
-import { databaseIsDisposable, isUnscopedBulkWrite } from './guardDestructiveWrites';
+import {
+  databaseIsDisposable,
+  destructiveWriteMiddleware,
+  isUnscopedBulkWrite,
+} from './guardDestructiveWrites';
 
 describe('destructive write guard', () => {
   it('treats an unrecognised or absent branch as production (fails closed)', () => {
@@ -37,23 +40,52 @@ describe('destructive write guard', () => {
   });
 
   /**
-   * The end-to-end proof. This is the exact call shape that emptied the User table; it must now be
-   * refused. The guard rejects BEFORE delegating to the driver, so running this test issues no
-   * statement and deletes nothing — that is why it is safe to assert against the live client.
-   * AutoRunClaim is the target because it is the smallest table with no inbound relations.
+   * The end-to-end proof: the exact call shape that emptied the User table is refused, and the
+   * write never reaches the driver. That second half is asserted against a stub `next` rather than
+   * a live connection — "next was not called" IS the property, where a real round-trip only infers
+   * it from an unchanged row count, and made this test fail on database latency under full-suite
+   * contention. AutoRunClaim is the model because it is the one the incident actually hit.
    */
-  it('refuses an unscoped deleteMany through the real client, without touching the database', async () => {
+  it('refuses an unscoped deleteMany and never delegates it to the driver', async () => {
     expect(databaseIsDisposable()).toBe(false); // guard is armed in this environment
-    const before = await prisma.autoRunClaim.count();
+    let delegated = 0;
+    const next = async () => {
+      delegated += 1;
+      return { count: 999 };
+    };
 
-    await expect(prisma.autoRunClaim.deleteMany({})).rejects.toThrow(
-      /Refusing AutoRunClaim\.deleteMany\(\{\}\)/,
-    );
-
-    expect(await prisma.autoRunClaim.count()).toBe(before);
-    // A scoped delete on the same model still works — the guard blocks breadth, not the operation.
     await expect(
-      prisma.autoRunClaim.deleteMany({ where: { key: '__guard-probe-nonexistent__' } }),
-    ).resolves.toEqual({ count: 0 });
-  }, 30_000);
+      destructiveWriteMiddleware({ action: 'deleteMany', model: 'AutoRunClaim', args: {} }, next),
+    ).rejects.toThrow(/Refusing AutoRunClaim\.deleteMany\(\{\}\)/);
+    expect(delegated).toBe(0);
+
+    // A scoped delete on the same model passes straight through — the guard blocks breadth,
+    // not the operation.
+    await expect(
+      destructiveWriteMiddleware(
+        { action: 'deleteMany', model: 'AutoRunClaim', args: { where: { key: 'k' } } },
+        next,
+      ),
+    ).resolves.toEqual({ count: 999 });
+    expect(delegated).toBe(1);
+  });
+
+  it('delegates every write once the database is explicitly marked disposable', async () => {
+    const previous = process.env.RUSHD_DISPOSABLE_TEST_DB;
+    process.env.RUSHD_DISPOSABLE_TEST_DB = '1';
+    try {
+      let delegated = 0;
+      const next = async () => {
+        delegated += 1;
+        return { count: 0 };
+      };
+      await expect(
+        destructiveWriteMiddleware({ action: 'deleteMany', model: 'User', args: {} }, next),
+      ).resolves.toEqual({ count: 0 });
+      expect(delegated).toBe(1);
+    } finally {
+      if (previous === undefined) delete process.env.RUSHD_DISPOSABLE_TEST_DB;
+      else process.env.RUSHD_DISPOSABLE_TEST_DB = previous;
+    }
+  });
 });

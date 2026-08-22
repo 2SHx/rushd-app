@@ -32,17 +32,35 @@ export function isUnscopedBulkWrite(action: string, args: unknown): boolean {
   return where === undefined || Object.keys(where).length === 0;
 }
 
+interface GuardParams {
+  action: string;
+  model?: string;
+  args?: unknown;
+}
+
+/**
+ * Exported so the refusal can be proven against a stub `next` rather than a live connection.
+ * The property that matters — the write never reaches the driver — is exactly "next was not
+ * called", which a stub observes directly and a round-trip only infers.
+ */
+export async function destructiveWriteMiddleware<T>(
+  params: GuardParams,
+  next: (params: GuardParams) => Promise<T>,
+): Promise<T> {
+  if (isUnscopedBulkWrite(params.action, params.args) && !databaseIsDisposable()) {
+    throw new Error(
+      `Refusing ${params.model ?? 'unknown'}.${params.action}({}) — an unscoped bulk write ` +
+        `against a database that is not marked disposable (NEON_BRANCH=` +
+        `${process.env.NEON_BRANCH ?? 'unset'}). Scope the write to rows this test created, or ` +
+        `point DATABASE_URL at a throwaway branch and set RUSHD_DISPOSABLE_TEST_DB=1. ` +
+        `See src/quant/testing/guardDestructiveWrites.ts.`,
+    );
+  }
+  return next(params);
+}
+
 export function installDestructiveWriteGuard(): void {
-  prisma.$use(async (params, next) => {
-    if (isUnscopedBulkWrite(params.action, params.args) && !databaseIsDisposable()) {
-      throw new Error(
-        `Refusing ${params.model ?? 'unknown'}.${params.action}({}) — an unscoped bulk write ` +
-          `against a database that is not marked disposable (NEON_BRANCH=` +
-          `${process.env.NEON_BRANCH ?? 'unset'}). Scope the write to rows this test created, or ` +
-          `point DATABASE_URL at a throwaway branch and set RUSHD_DISPOSABLE_TEST_DB=1. ` +
-          `See src/quant/testing/guardDestructiveWrites.ts.`,
-      );
-    }
-    return next(params);
-  });
+  prisma.$use((params, next) =>
+    destructiveWriteMiddleware(params, (checked) => next(checked as typeof params)),
+  );
 }
