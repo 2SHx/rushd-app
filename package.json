@@ -10,7 +10,8 @@
     "backtest": "tsx scripts/backtest.ts",
     "quant:experiment": "tsx scripts/quant-experiment.ts",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:warm": "KEEPALIVE_FORCE=1 node scripts/db-keepalive.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.28",
