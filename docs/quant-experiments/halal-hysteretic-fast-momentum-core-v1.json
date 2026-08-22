@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-hysteretic-fast-momentum-core",
+  "version": "v1",
+  "designRecord": "QDR-22 (2026-08-22); baseline corrected by QDR-21 (2026-08-22)",
+  "config": {
+    "setup": "halal-hysteretic-fast-momentum-core",
+    "from": "2018-01-02",
+    "to": "2026-07-17",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "shared",
+    "feed": "yahoo-daily",
+    "source": "db",
+    "market": "NASDAQ",
+    "universeMode": "c1_verified_dollar_volume_sleeve_max60",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-fast-momentum-core@v1",
+    "comparatorRunId": "218716ac-f692-4f0f-91f3-81045a159a62",
+    "comparatorGitSha": "000dea1",
+    "comparatorArtifact": "results/halal-fast-momentum-core-2018-01-02-2026-07-17-c1_verified_60.json",
+    "hypothesis": "Adding exactly one new SELECTION-time variable to halal-fast-momentum-core@v1 -- retainRank = 8, under which an incumbent already in the previous ISO-week DECIDED set is retained while its relative-momentum rank among the eligible names is <= 8 instead of being sold the moment it leaves the top 5 -- removes the ~48.71% of exits that are caused only by a name crossing the rank-5 boundary, cutting realised annual cost drag from 8.09%/yr to about 5.9%/yr and lifting OOS CAGR from 105.92% to about 108.0% and OOS DSR (N=9) from 0.874 to about 0.890, at an honestly predicted OOS CAGR give-back of about 3.5pp from holding names that have already weakened to rank 6-8; and it is DEAD if the treatment's realised annualised total cost drag does not fall by at least 1.20pp from the comparator's measured 8.09%/yr.",
+    "mechanism": "The comparator's binding gate is DSR, not the tail: QDR-19 established that all 18 DRAWDOWN_RISK_FAILURE verdicts also carry DSR_FAILURE, so no tail-only lane can promote anything and only a higher Sharpe moves the binding constraint. Sharpe rises from better signal or from lower cost. This engine's cost is not a rounding error: 27x notional turnover at 15 bps/side is a measured 8.09%/yr drag against a ~37% full-period CAGR, i.e. roughly a fifth of gross return. A pre-design measurement (scripts/measure-fast-momentum-turnover.ts, committed 99f392c, reconstructing the engine's weekly selection from 464,434 real MarketBar rows over 446 rebalances, 2018-01-02 -> 2026-07-17) located the causal defect: 321 of 659 exits (48.71%) fell only to rank 6-8, so nearly half of all selling is triggered by a name crossing an arbitrary boundary at rank 5 rather than by the name ceasing to have momentum, and 26.79% of exited names are re-bought within 2 weeks (31.10% within 3, 33.23% within 4), so much of that selling is a round trip paid for twice. A retain band converts those boundary crossings into holds. THE HONEST COUNTERWEIGHT, PREDICTED HERE AND NOT DISCOVERED LATER: hysteresis deliberately retains names that have already weakened to rank 6-8, and the ledger's own confirmed finding is that ROTATION VELOCITY is this engine's edge -- so this lane deliberately slows the exact mechanism that produces the return, and some of the cost saving is given back as signal quality. That trade is the whole experiment.",
+    "signalClassJustification": "This is the COST lever, not a signal lever, and it is the only queued lever whose primary effect is ALREADY MEASURED rather than hypothesised. A second return signal would re-run a falsified experiment (halal-fundamental-momentum-core@v1 lifted OOS CAGR to 127.99% while OOS DSR fell 0.874 -> 0.680). Sizing was attacked twice (Markowitz, risk-parity, both REJECTED) and exits once (catastrophic stop, measurably inert). Cost has never been attacked on this book.",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "retainRank": 8,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "validationTrials": 9
+    },
+    "newVariable": {
+      "name": "retainRank",
+      "value": 8,
+      "actsAt": "SELECTION",
+      "baselineEquivalence": "retainRank = topN recovers halal-fast-momentum-core@v1 EXACTLY: Retain = previousDecided INTERSECT eligible INTERSECT rank<=topN, then fill to topN by rank, and the union is precisely the top-topN eligible names, so weights are byte-identical. This perfect nesting is what makes retainRank a single nested variable rather than a new strategy.",
+      "everythingElseFrozen": "Sizing (inverseVolatilityWeights + capAndRedistribute, perNameCap 0.25), exits, ISO-week cadence, the absolute-momentum filter, cashFloor, the universe, and the dualMomentumMetrics rank formula are byte-identical to the comparator."
+    },
+    "selectionRule": {
+      "step0": "Unchanged from the comparator: build momentum-rankable names (>= lookbackDays+1 trailing bars ending exactly at asOf) via dualMomentumMetrics, defensively truncate to maxNames alphabetically, then apply the absolute filter absolute > absoluteThreshold.",
+      "step1_rank": "Sort the eligible set by relative momentum DESCENDING, ties by symbol ASCENDING -- selectTopNByMomentum's comparator, reused verbatim -- and assign 1-based ranks.",
+      "step2_retain": "Retain = { s in previousDecidedSet : s is eligible AND rank(s) <= retainRank }.",
+      "step3_moreThanTopNIncumbents": "PROVABLY UNREACHABLE: |previousDecidedSet| <= topN by construction, so |Retain| <= topN is a theorem, not a rule. The tie-break is frozen anyway for completeness: keep the topN best-ranked members of Retain by the same comparator (relative DESC, symbol ASC).",
+      "step4_fill": "Fill the topN - |Retain| free slots from the best-ranked eligible names NOT in Retain, in rank order, same tie-break.",
+      "step5_entryRankIsNotAParameter": "The j-th best non-retained name has rank <= j + |Retain|, so the last name admitted always has rank <= topN. 'Buy at rank <= 5' falls out of the fill rule and needs no parameter -- which is precisely why retainRank is the ONLY new variable.",
+      "step6_cashFloor": "Unchanged: if eligible.length < cashFloor the decision selects NONE, the whole book holds cash, and previousDecidedSet becomes empty for the next week.",
+      "step7_sizing": "Sizing runs on the selected set exactly as today (inverse-volatility over selected survivors, then perNameCap capping/redistribution). Untouched.",
+      "incumbencySource": "previousDecidedSet is the PRIOR WEEK-END DECISION's weights key set, computed recursively over the prepared universe's ordered weekEndTimes and memoised on the existing decisionCache (whose key MUST gain retainRank). It MUST NOT read ctx.positionQty: realised holdings are downstream of envelope clamps, ADV limits and fills, so keying selection off them would make the decision depend on execution, break determinism across plateau cells, and silently introduce a second variable.",
+      "dailyEvaluationResolution": "cadence stays 'daily' and targetWeight continues to return null on any non-week-end bar, exactly as the comparator does. The retain test is evaluated ONLY at ISO-week-end decision dates. A DAILY retain test would sell a name that drops below rank 8 mid-week -- that is a daily exit rule, a second variable, and a DIFFERENT STRATEGY from the weekly-decided baseline; it would confound the one thing this lane measures. Between week ends the book holds and exit() keeps returning hold_between_week_ends."
+    },
+    "noLookAheadArgument": "Every input to the retain test is a relative-momentum rank computed from closes at or before asOf, identical to the comparator's own ranks, and the recursion consumes only PRIOR week-end decisions. assertNoLookahead(ctx.bars, ctx.asOf, 'ts') is retained unchanged at every entry point. No new data source is read; retainRank consumes no data the comparator does not already consume.",
+    "plateau": {
+      "axes": [
+        "retainRank",
+        "topN"
+      ],
+      "grid": {
+        "retainRank": [
+          6,
+          8,
+          10
+        ],
+        "topN": [
+          4,
+          5,
+          6
+        ]
+      },
+      "center": {
+        "retainRank": 8,
+        "topN": 5
+      },
+      "trials": 9,
+      "validityConstraint": "retainRank >= topN; all nine cells satisfy it.",
+      "internalNullControl": "The cell {retainRank: 6, topN: 6} has band 0 and must reproduce the comparator engine at topN = 6 exactly. Divergence there is an implementation defect, not a result.",
+      "axisJustification": "Axis 1 is the ONE new variable and must be swept -- a plateau that does not perturb the new variable proves nothing about the new mechanism; the steps bracket the MEASURED 6-8 exit band on both sides (6 = barely any hysteresis, 10 = well past the band). Axis 2 is topN {4,5,6}, the comparator's OWN second plateau axis, reused unchanged so the two grids are directly comparable cell-for-cell (the same choice QDR-18 made). lookbackDays is DELIBERATELY NOT an axis: the comparator's plateau is SPIKY precisely because lookbackDays = 42 degrades, so keeping it would re-inherit a known pre-existing failure unrelated to hysteresis and would mask the new axis's own response."
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "The setup was designed AFTER inspecting halal-fast-momentum-core@v1's terminal card (105.92 / 66.55 corrected / 0.874) and AFTER a pre-design turnover measurement over the same already-inspected 2018-2026 window, so QDR-9 conditions (b) forward-only, (d) evidence boundary strictly after seal, and (e) every observation after that boundary cannot hold. EXPLORATORY is the fail-closed default and is correct. THIS LANE SCREENS AND CANNOT PROMOTE: at the derived family floor a ~2.55-year OOS window requires an annualised Sharpe near 2.9 to reach DSR > 0.95, which the Sharpe > 3.00 implausibility ceiling makes effectively unreachable, so REJECTED is the expected terminal label and is not the question being asked. The question is whether this engine's cost channel is worth MORE than the signal it costs -- a number nothing in the ledger currently contains. Its only legitimate output is a candidate for a separate, sealed, forward-only CONFIRMATORY manifest under QDR-9/QDR-16, which this manifest does not authorise.",
+      "familyCountRule": "HALAL_CORE_SETUP_IDS gains this id as the SEVENTEENTH setup and the family count must be DERIVED as HALAL_CORE_SETUP_IDS.length * 9 = 153, never the drifted hand-edited literal 126. A family count may rise, never fall.",
+      "plateauTrials": 9
+    },
+    "baseline": {
+      "source": "QDR-21 (2026-08-22) correction of record",
+      "mcBookDayP95DrawdownPct": 66.5473,
+      "mcBookDayP95Method": "moving-block",
+      "mcBookDayP95BlockLength": 20,
+      "mcBookDayP95Seed": 42,
+      "mcBookDayP95Resamples": 1000,
+      "supersededIidFigurePct": 68.4037,
+      "note": "The comparator artifact stores bootstrap.maxDrawdown.p95 = 0.6840370798481954 under observationUnit 'book-day' with no method/blockLength key; replayed through the engine's own bootstrapTradeOutcomes that value is an EXACT IID match, while moving-block-20 on the identical curve gives 0.665473. QDR-15/QDR-16 rule that moving-block-20 governs on mechanism (momentum drawdowns are built from runs of consecutive losing sessions that IID resampling destroys). The circulating 64.5% figure came from an independent reimplementation with an unrecorded RNG and is DISCARDED. Every threshold in this manifest is stated against 66.5473, never 68.4037.",
+      "oosCagrPct": 105.92,
+      "oosDsrAtN9": 0.874,
+      "fullSharpe": 1.046,
+      "fullSortino": 1.486,
+      "fullVolPct": 36.7,
+      "notionalTurnoverX": 27.0,
+      "costDragPctPerYr": 8.09,
+      "plateau": "SPIKY"
+    },
+    "turnoverMeasurement": {
+      "script": "scripts/measure-fast-momentum-turnover.ts",
+      "commit": "99f392c",
+      "window": "2018-01-02 -> 2026-07-17",
+      "bars": 464434,
+      "rebalances": 446,
+      "exitsFallingOnlyToRank6to8": 321,
+      "exitsFallingOnlyToRank6to8Pct": 48.71,
+      "exitsFallingBelowRank8OrUnranked": 338,
+      "reentryWithin2WeeksPct": 26.79,
+      "reentryWithin3WeeksPct": 31.1,
+      "reentryWithin4WeeksPct": 33.23,
+      "baselineExits": 659,
+      "baselineExitsPerYr": 77.27,
+      "baselineExitCountTurnoverX": 15.45,
+      "hysteresisExits": 403,
+      "hysteresisExitsPerYr": 47.25,
+      "hysteresisExitCountTurnoverX": 9.45,
+      "turnoverRemovedPct": 38.85,
+      "directCostRecoveredPctPerYr": 1.8,
+      "proportionalUpperCostRecoveredPctPerYr": 3.14,
+      "basesDifferWarning": "15.45x is an EXIT-COUNT basis; 27x is a NOTIONAL basis. They are not the same quantity and this manifest does not pretend otherwise. The honest recovery band is 1.80 to 3.14 %/yr, and the entire width of that band is the unmeasured question of whether the exit-count saving reaches the notional base."
+    },
+    "predictions": {
+      "oosCagrPct": {
+        "baseline": 105.92,
+        "point": 108.0,
+        "interval": [
+          96.0,
+          116.0
+        ],
+        "direction": "UP"
+      },
+      "oosCagrDecomposition": {
+        "costChannelPp": 5.6,
+        "signalGiveBackPp": -3.5,
+        "netPp": 2.1,
+        "note": "+5.6pp from 2.2%/yr cost recovered compounded on a book at this CAGR, MINUS a predicted 3.5pp give-back from holding names already weakened to rank 6-8."
+      },
+      "mcBookDayP95DrawdownPct": {
+        "baseline": 66.5473,
+        "point": 67.0,
+        "interval": [
+          63.5,
+          70.5
+        ],
+        "direction": "UP_i.e._SLIGHTLY_WORSE",
+        "note": "The book de-risks more slowly, but the UNCHANGED absolute-momentum filter still dumps a retained name the moment its absolute momentum turns negative, which caps the damage."
+      },
+      "oosDsrAtN9": {
+        "baseline": 0.874,
+        "point": 0.89,
+        "interval": [
+          0.84,
+          0.93
+        ],
+        "direction": "UP",
+        "note": "Stated at N = 9 for comparability with the comparator card ONLY. The terminal card's BINDING DSR is at the derived family floor of 153, where it will sit near 0.52-0.58 and cannot clear 0.95. DSR values across the ledger were computed at varying N and are NOT comparable."
+      },
+      "realisedAnnualNotionalTurnoverX": {
+        "baseline": 27.0,
+        "point": 18.5,
+        "interval": [
+          16.0,
+          22.0
+        ],
+        "direction": "DOWN",
+        "note": "A SMALLER relative cut than the 38.85% exit-count figure, because retained names are still re-weighted every week and that churn is untouched by hysteresis."
+      },
+      "realisedAnnualExitCountTurnoverX": {
+        "baseline": 15.45,
+        "point": 9.5,
+        "interval": [
+          9.0,
+          11.0
+        ],
+        "direction": "DOWN"
+      },
+      "costDragPctPerYr": {
+        "baseline": 8.09,
+        "point": 5.9,
+        "interval": [
+          5.0,
+          6.3
+        ],
+        "direction": "DOWN"
+      },
+      "netCostRecoveredPpPerYr": {
+        "point": 2.2,
+        "interval": [
+          1.8,
+          3.1
+        ],
+        "direction": "RECOVERED"
+      },
+      "fullAnnualisedSharpe": {
+        "baseline": 1.046,
+        "point": 1.08,
+        "interval": [
+          1.0,
+          1.13
+        ],
+        "direction": "UP"
+      },
+      "exchangeRate": {
+        "statement": "At 2.2pp/yr recovered on a book compounding at ~106% OOS, the trade pays iff the OOS CAGR give-back stays under about 4.5pp, i.e. <= 2.06pp of OOS CAGR forfeited per 1pp/yr of cost recovered.",
+        "worthwhileIfBelow": 2.06,
+        "note": "Above that ratio the cost lever is real but is bought at a worse price than the signal it destroys."
+      }
+    },
+    "inertAxis": {
+      "whyNotTurnover": "NEAR-TAUTOLOGICAL AND THEREFORE REFUSED AS THE KILL. The 38.85% exit-count turnover reduction was measured OFF-LINE, before this design existed, by reconstructing the same selection rule. An inertness test on turnover alone would pass by construction and would be testing the reconstruction, not the hypothesis.",
+      "whatActuallyDecides": "Whether the exit-count saving CONVERTS into notional saving. The entire 1.80-vs-3.14%/yr gap is exactly that uncertainty, and it is the quantity on which 'Sharpe rises through cost' stands or falls.",
+      "kill": "DEAD if the treatment's realised annualised total cost drag does not fall by at least 1.20pp from the comparator's measured 8.09%/yr -- i.e. if it lands at or above 6.89%/yr -- REGARDLESS of what CAGR does.",
+      "thresholdPpPerYr": 1.2,
+      "thresholdCeilingPctPerYr": 6.89,
+      "thresholdJustification": "1.20pp is two-thirds of the MOST PESSIMISTIC measured estimate (1.80), so the kill does not require the optimistic case; it only requires the pessimistic case to substantially materialise. Below 1.20pp the cost channel can move annualised Sharpe by at most 1.20/36.7 = 0.033, which is inside noise, and 'Sharpe through cost' is false on this book whatever else the card says."
+    },
+    "falsification": {
+      "F1_SHARPE_DID_NOT_RISE": "OOS DSR at N=9 <= 0.874, OR full-period annualised Sharpe <= 1.046. The premise is refuted directly.",
+      "F2_SIGNAL_GIVE_BACK_SWAMPS_COST": "OOS CAGR < 95.92pct (baseline 105.92 - 10.00pp). A give-back that large means signal loss is several times the entire cost channel and 'cost not signal' is false.",
+      "F3_INERT_COST_AXIS": "Realised annualised cost-drag reduction < 1.20pp/yr (i.e. cost drag >= 6.89%/yr). THIS IS THE KILL.",
+      "F4_TAIL_PAID_FOR_IT": "Moving-block-20 book-day MC p95 max drawdown > 71.55pct (corrected baseline 66.5473 + 5.00). Holding weakened names bought the cost saving out of the tail.",
+      "F5_OVERFIT_TO_RANK_8": "OOS expectancy changes sign, or degrades beyond the documented plateau bound, at BOTH retainRank = 6 AND retainRank = 10 while the centre passes. A one-cell spike at 8 is fitting, not a mechanism.",
+      "F6_VOID": "The selected set changes on any non-week-end bar; OR the decision reads ctx.positionQty; OR retainRank = topN fails to reproduce the comparator's decision set byte-for-byte over the full period."
+    },
+    "expectedVerdict": "REJECTED is expected at the exploratory floor and is not the question. The central predictions clear F1, F2 and F4 but the lane cannot reach DSR > 0.95 at 153 trials by arithmetic. What this run answers, and no prior experiment on this engine has answered, is how much of the 8.09%/yr cost drag is recoverable at selection time and what fraction of the recovery is handed straight back as lost rotation velocity.",
+    "requiredPublishedEvidence": {
+      "qdr7Card": "Full QDR-7 terminal evidence card, including trialTier, resolved trial count, familyId and the six confirmatory-condition outcomes.",
+      "qdr16BootstrapDisclosure": "BOTH p95 max-drawdown figures on the SAME realised curve, same seed, same resample count: the BINDING moving-block-20 book-day figure and the NON-BINDING IID (blockLength 1) figure. mcMaxDDWithinBreaker reads the moving-block figure only.",
+      "qdr19Blocks": "BENCHMARK and PATH-SHAPE blocks: Ulcer index, time underwater, CVaR(5%), Martin ratio, bootstrap Ulcer p50/p95, max-DD path-length sensitivity, IR t-statistic, psrVsBenchmark.",
+      "qdr19HelpersNotYetImplemented": "MEASURED, DISCLOSED, NOT WAIVED: src/quant/backtest/metrics.ts today exports only computeMetrics, computeCaptureRatios and computePortfolioMetrics. NONE of QDR-19's named pure helpers (ulcerIndex, timeUnderwater, conditionalValueAtRisk, martinRatio, sortinoRatio, psrVsBenchmark) exist yet. This lane cannot produce a QDR-19-complete card until they land. That is a prerequisite of the RUN, not of this preregistration.",
+      "benchmark": {
+        "benchmarkId": "SPUS",
+        "benchmarkRelativeClaim": false,
+        "reason": "SPUS has no investable history before ~2019-12, so a matched-date IR would cover only part of the window. The matched-window equal-weight buy-and-hold reconstruction (18.63% CAGR, Sharpe 0.924, Ulcer 7.15, Martin 2.606, versus the engine's 14.75 / 2.516) is survivor-conditioned and may be published as CONTEXT only, never as a declared claim."
+      },
+      "costEvidence": "Realised annualised total cost drag (%/yr of average NAV), realised annual notional turnover, and realised annual exit count, for BOTH arms on identical decision dates -- this is the lane's primary readout and F3 is computed from it.",
+      "noThresholdMayBeDerivedHere": "No result from this lane may be used to derive an Ulcer, CVaR or cost threshold, which QDR-19 forbids by name."
+    },
+    "reuseUnchanged": [
+      "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics (pure, momentum rank formula -- byte-identical)",
+      "src/quant/strategies/halalFastMomentumCore.ts :: selectTopNByMomentum (pure, exported; its comparator relative DESC / symbol ASC is the frozen ranking and tie-break)",
+      "src/quant/strategies/halalRiskParityCore.ts :: inverseVolatilityWeights, capAndRedistribute (pure sizing -- byte-identical)",
+      "src/quant/portfolio/frontier.ts :: dailyReturns (pure)",
+      "src/quant/data/pointInTime.ts :: assertNoLookahead",
+      "src/quant/backtest/monteCarlo.ts :: bootstrapTradeOutcomes (observationUnit 'book-day' -> moving-block-20; blockLength 1 for the non-binding IID disclosure). UNCHANGED.",
+      "src/quant/backtest/portfolioEngine.ts :: the shared-cash daily strategy-book engine. UNCHANGED.",
+      "src/quant/backtest/metrics.ts :: computeMetrics, computePortfolioMetrics, computeCaptureRatios. UNCHANGED outputs."
+    ],
+    "filesStrategistMayTouch": [
+      "src/quant/strategies/halalHystereticFastMomentumCore.ts (NEW -- the only new strategy file; copies the comparator's decision path and inserts steps 2-4 of selectionRule, adds retainRank to the params schema and to the decisionCache key)",
+      "src/quant/strategies/catalog.ts (register the new setup id -- one import + one map entry)",
+      "src/quant/backtest/trialFamilies.ts (append the id to HALAL_CORE_SETUP_IDS and DERIVE the count as HALAL_CORE_SETUP_IDS.length * 9; the count may rise, never fall)",
+      "src/quant/backtest/metrics.ts (ADDITIVE pure QDR-19 helpers only; computeMetrics/computePortfolioMetrics outputs must stay byte-identical)",
+      "src/quant/strategies/halalHystereticFastMomentumCore.test.ts (NEW -- must assert the retainRank = topN byte-identity, the week-end-only evaluation, and that ctx.positionQty is never read)"
+    ],
+    "filesForbidden": [
+      "src/quant/strategies/halalFastMomentumCore.ts (the comparator engine is frozen; do NOT parameterise it)",
+      "src/quant/backtest/monteCarlo.ts (no estimator change)",
+      "src/quant/backtest/portfolioEngine.ts (no engine change)",
+      "docs/STRATEGY_LAB.md (no card is edited by this lane)",
+      "any SEALED or CODIFIED manifest, and any threshold, breaker, reason code or gate"
+    ],
+    "terminalFence": "One diagnostic maximum and exactly one FULL run, per QDR-6/QDR-8. This manifest is DRAFT: it is not sealed, not runnable, and confers no authorisation. Sealing is a separate act by the quant-validation-auditor."
+  },
+  "configHash": null,
+  "state": "DRAFT",
+  "actors": {
+    "hypothesis": "quant-research-director",
+    "implementation": "quant-strategist",
+    "audit": "quant-validation-auditor",
+    "run": "quant-validation-auditor"
+  },
+  "diagnosticRuns": 0,
+  "fullRun": null,
+  "terminal": null
+}

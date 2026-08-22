@@ -241,6 +241,27 @@
       "whyThisChangedThePreregistration": "Two errors were corrected before any trial was spent. (1) The original a-priori rho prediction (0.62 -> 0.44, labelled AVERAGE) was reasoning about the MAXIMUM while labelling it the average; against a measured average of 0.334, 0.44 would have been an INCREASE. (2) The original F1 threshold of 0.10 absolute on the AVERAGE would have false-falsified a fully working mechanism: the ceiling acts on the maximum, and capping the max at 0.55 when the baseline max averages 0.629 moves the average only ~0.05-0.06. Both are recalibrated below. The 0.55 ceiling itself, F2, F3, F4, F5, F6 and F7 are UNCHANGED -- nothing was loosened to make passing easier.",
       "bindingConcernResolved": "The director's open risk that a weakly-binding ceiling would fire F1 on a true null is RESOLVED in the good direction: the max exceeds 0.55 in 69.3% of weeks, so the constraint binds hard and this is not a null experiment.",
       "uncomfortableFindingThatFollows": "2.14 effective bets out of 5 is NOT 'one bet'. Six terminal cards narrate this engine's 68.40% tail as a book 'concentrated into a correlated cluster that crashes together', and the measured average pairwise correlation of 0.334 only partly supports that narrative. Most of the tail must therefore come from single-name volatility and the 25% per-name cap rather than from pairwise redundancy. This is stated here, before the run, because it lowers the a-priori probability that this mechanism clears F2/F3/F4 and it must not be discovered afterwards."
+    },
+    "baselineCorrection_2026_08_22": {
+      "record": "QDR-21 (2026-08-22)",
+      "authoritativeBaselineMcBookDayP95Pct": 66.5473,
+      "supersededFigurePct": 68.4037,
+      "supersededFigureMethod": "iid (stored under an observationUnit 'book-day' LABEL with no method/blockLength key; replayed through the engine's own bootstrapTradeOutcomes it is an EXACT IID match, while moving-block-20 on the identical curve gives 0.665473)",
+      "governingMethod": "moving-block, blockLength 20, seed 42, resamples 1000 (QDR-15/QDR-16: momentum drawdowns are built from RUNS of consecutive losing sessions that IID resampling destroys, so IID OVERSTATES this tail)",
+      "discardedThirdFigurePct": 64.5,
+      "discardedReason": "independent reimplementation with an unrecorded RNG; only the engine's own two numbers count",
+      "shiftPp": -1.8564,
+      "ruleApplied": "every restated threshold PRESERVES ITS ORIGINAL ABSOLUTE MARGIN against the corrected baseline; each therefore moves DOWN by 1.8564pp and becomes HARDER",
+      "noThresholdBecameEasier": "CONFIRMED -- not one restatement in this manifest makes any test easier",
+      "authority": "quant-research-director (owner of the originating QDR record); manifest is DRAFT, configHash null, diagnosticRuns 0, no treatment result observed",
+      "supersedesClauses": [
+        "config.hypothesis: '68.40% to at or below 63.40%' => '66.55% to at or below 61.55%'",
+        "config.falsification F2: 'MC book-day p95 drawdown > 63.40pct' => '> 61.55pct' (68.4037 - 5.00 = 63.40 => 66.5473 - 5.00 = 61.5473). HARDER.",
+        "config.falsification F2 secondary bar: 'at or above 64.23pct' => 'at or above 62.38pct' (68.4037 - 4.17 => 66.5473 - 4.17). HARDER.",
+        "config.falsification F3 and config.requiredPublishedEvidence: exchange-rate denominator '(105.92 - oosCagr) / (68.40 - mcP95)' => '(105.92 - oosCagr) / (66.55 - mcP95)'. The denominator SHRINKS by 1.85pp, so the realised ratio RISES against the UNCHANGED 1.803 adoption bar. HARDER.",
+        "config.predictions.mcBookDayP95DrawdownPct.baseline: 68.4 => 66.5473; point 63.5 => 61.65; recalibration arithmetic band [62.2, 64.8] => [60.35, 62.95]; widened band [60.0, 66.0] => [58.15, 64.15]"
+      ],
+      "narrativeMentionsUnchanged": "Every remaining 68.40 in prose (mechanism, trialFamily.reason, expectedVerdict, uncomfortableFindingThatFollows) is a NARRATIVE reference to the comparator's diagnosed defect and is corrected BY REFERENCE to QDR-21; only thresholds are restated."
     }
   },
   "configHash": null,

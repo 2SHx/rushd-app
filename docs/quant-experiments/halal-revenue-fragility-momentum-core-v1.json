@@ -271,7 +271,27 @@
     "openRisks": [
       "The comparator's MC book-day p95 drawdown is 68.40% in its persisted artifact (bootstrap.maxDrawdown.p95 = 0.6840) but was quoted to this director as 64.5%. Every threshold in this manifest is stated against the ARTIFACT value 68.40%. Before the run the strategist must reconcile the two figures; if the reconciled baseline is 64.50%, the same ABSOLUTE deltas apply (F2 becomes 59.50%, and the exchangeRate denominator is recomputed against the reconciled baseline). No threshold is re-authored after seeing a treatment result.",
       "runLab.ts's existing loadPointInTimeFundamentals does not filter or carry `period`, so it returns ANNUAL and QUARTERLY rows mixed. If the quarterly backfill (2026-08-19) landed before halal-fundamental-momentum-core@v1's single diagnostic run, that run's 'annual' gate may have silently consumed quarterly rows, which would change how its falsification should be read. The strategist must check the ingest timestamp against the run timestamp and report the answer; it does not change this lane's design either way, because V4 makes an annual leak a VOID condition here."
-    ]
+    ],
+    "baselineCorrection_2026_08_22": {
+      "record": "QDR-21 (2026-08-22)",
+      "authoritativeBaselineMcBookDayP95Pct": 66.5473,
+      "supersededFigurePct": 68.4037,
+      "supersededFigureMethod": "iid (stored under an observationUnit 'book-day' LABEL with no method/blockLength key; replayed through the engine's own bootstrapTradeOutcomes it is an EXACT IID match, while moving-block-20 on the identical curve gives 0.665473)",
+      "governingMethod": "moving-block, blockLength 20, seed 42, resamples 1000 (QDR-15/QDR-16: momentum drawdowns are built from RUNS of consecutive losing sessions that IID resampling destroys, so IID OVERSTATES this tail)",
+      "discardedThirdFigurePct": 64.5,
+      "discardedReason": "independent reimplementation with an unrecorded RNG; only the engine's own two numbers count",
+      "shiftPp": -1.8564,
+      "ruleApplied": "every restated threshold PRESERVES ITS ORIGINAL ABSOLUTE MARGIN against the corrected baseline; each therefore moves DOWN by 1.8564pp and becomes HARDER",
+      "noThresholdBecameEasier": "CONFIRMED -- not one restatement in this manifest makes any test easier",
+      "authority": "quant-research-director (owner of the originating QDR record); manifest is DRAFT, configHash null, diagnosticRuns 0, no treatment result observed",
+      "supersedesClauses": [
+        "config.hypothesis: '68.40% to at or below 63.40%' => '66.55% to at or below 61.55%'",
+        "config.falsification F2: 'MC book-day p95 drawdown > 63.40pct' => '> 61.55pct' (66.5473 - 5.00 = 61.5473). HARDER.",
+        "config.predictions.mcBookDayP95DrawdownPct.baseline: 68.4 => 66.5473; point 57.0 (-11.40pp) => 55.15",
+        "exchange-rate denominator restated identically to E4: '(68.40 - mcP95)' => '(66.55 - mcP95)' against the UNCHANGED 1.803 adoption bar. HARDER."
+      ],
+      "resolvesOpenReconciliationClause": "This manifest's own clause 'if the reconciled baseline is 64.50%, the same ABSOLUTE deltas apply' is RESOLVED: the reconciled baseline is 66.5473%, NOT 64.50%. The 64.5% figure is discarded. The strategist has no reconciliation left to perform and must not re-author any threshold after seeing a treatment result."
+    }
   },
   "configHash": null,
   "state": "DRAFT",

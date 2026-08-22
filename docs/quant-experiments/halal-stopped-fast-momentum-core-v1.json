@@ -36,9 +36,26 @@
       "stopReentryCooldownDays": 0
     },
     "plateau": {
-      "axes": ["lookbackDays", "stopLossPct"],
-      "grid": { "lookbackDays": [42, 63, 84], "stopLossPct": [0.15, 0.2, 0.25] },
-      "center": { "lookbackDays": 63, "stopLossPct": 0.2 },
+      "axes": [
+        "lookbackDays",
+        "stopLossPct"
+      ],
+      "grid": {
+        "lookbackDays": [
+          42,
+          63,
+          84
+        ],
+        "stopLossPct": [
+          0.15,
+          0.2,
+          0.25
+        ]
+      },
+      "center": {
+        "lookbackDays": 63,
+        "stopLossPct": 0.2
+      },
       "trials": 9
     },
     "trialFamily": {
@@ -48,11 +65,45 @@
       "addedTrials": 9
     },
     "predictions": {
-      "oosCagrPct": { "baseline": 105.92, "point": 88.0, "interval": [75.0, 105.0], "direction": "DOWN" },
-      "mcBookDayP95DrawdownPct": { "baseline": 68.4, "point": 58.0, "interval": [52.0, 62.0], "direction": "DOWN" },
-      "oosDeflatedSharpe": { "baseline": 0.874, "interval": [0.83, 0.92], "direction": "FLAT_OR_UP" },
-      "tradesFull": { "baseline": 1390, "interval": [1600, 2300], "direction": "UP" },
-      "exchangeRateCagrPpPerTailPp": { "predicted": 1.73, "comparatorRealized": 1.803, "direction": "BETTER_THAN_COMPARATOR" },
+      "oosCagrPct": {
+        "baseline": 105.92,
+        "point": 88.0,
+        "interval": [
+          75.0,
+          105.0
+        ],
+        "direction": "DOWN"
+      },
+      "mcBookDayP95DrawdownPct": {
+        "baseline": 68.4,
+        "point": 58.0,
+        "interval": [
+          52.0,
+          62.0
+        ],
+        "direction": "DOWN"
+      },
+      "oosDeflatedSharpe": {
+        "baseline": 0.874,
+        "interval": [
+          0.83,
+          0.92
+        ],
+        "direction": "FLAT_OR_UP"
+      },
+      "tradesFull": {
+        "baseline": 1390,
+        "interval": [
+          1600,
+          2300
+        ],
+        "direction": "UP"
+      },
+      "exchangeRateCagrPpPerTailPp": {
+        "predicted": 1.73,
+        "comparatorRealized": 1.803,
+        "direction": "BETTER_THAN_COMPARATOR"
+      },
       "expectedVerdict": "REJECTED (DSR_FAILURE + DRAWDOWN_RISK_FAILURE + NO_PROFIT_PLATEAU_OVERFIT predicted to persist); this experiment measures an exchange rate, it does not claim promotion"
     },
     "falsification": {
@@ -72,6 +123,15 @@
       "pitMembershipRequired": true,
       "status": "BLOCKED",
       "note": "QDR-14: the id must be added to PIT_MEMBERSHIP_REQUIRED_SETUP_IDS at implementation time. Historical membership, lifecycle/delisting and independent per-name Sharia evidence do not exist, so any run of this version is unverified-diagnostic-only and cannot produce a terminal card."
+    },
+    "baselineCorrection_2026_08_22": {
+      "record": "QDR-21 (2026-08-22)",
+      "authoritativeBaselineMcBookDayP95Pct": 66.5473,
+      "supersededFigurePct": 68.4037,
+      "thresholdsRestated": false,
+      "whyNotRestated": "This lane's treatment result is ALREADY OBSERVED. Re-authoring a threshold after seeing a treatment result is forbidden by this manifest's own terms, and a 'correction' that moved them would be indistinguishable from one. Every F-clause stands BYTE-IDENTICAL. No verdict is reopened.",
+      "readingGuidance": "Read this lane's 68.40-anchored comparisons as METHOD-MIXED: the comparator figure is IID and any treatment figure produced by today's engine on observationUnit 'book-day' is moving-block-20.",
+      "substantiveReadingRecordedNotLatent": "This lane reported the tail moving 68.40% -> 67.13%. IF 67.13% was produced by today's engine on observationUnit 'book-day' (i.e. moving-block-20 -- the quant-validation-auditor must CONFIRM this from the artifact; it is NOT asserted here), then method-consistently the tail went 66.5473% -> 67.13%, a 0.58pp WORSENING, not the 1.27pp improvement the raw numbers appear to show. That STRENGTHENS the existing falsification (stopLossPct was already measurably inert) and reopens nothing."
     }
   },
   "configHash": null,

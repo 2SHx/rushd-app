@@ -47,9 +47,26 @@
     ],
     "fallbackNoLookAheadArgument": "ADMIT_UNCONDITIONED branches on whether the PIT read returned two usable filings at this decision close, using the same releasedAt <= asOf filter as the value itself. A filing that exists in the table today but was filed after the decision date is invisible to both the value and the branch, so a name is 'missing' exactly when it was missing to a real decision-maker standing at that close. The branch therefore carries no information dated after asOf. ADMIT (not EXCLUDE) is chosen so the rule can never become a covert bet on filing coverage: a name is never removed for a data gap, and total inertness of the fundamental collapses the book exactly onto the comparator, which is what makes falsification condition F1 detectable.",
     "plateau": {
-      "axes": ["minRevenueGrowthPercentile", "topN"],
-      "grid": { "minRevenueGrowthPercentile": [0.35, 0.5, 0.65], "topN": [4, 5, 6] },
-      "center": { "minRevenueGrowthPercentile": 0.5, "topN": 5 },
+      "axes": [
+        "minRevenueGrowthPercentile",
+        "topN"
+      ],
+      "grid": {
+        "minRevenueGrowthPercentile": [
+          0.35,
+          0.5,
+          0.65
+        ],
+        "topN": [
+          4,
+          5,
+          6
+        ]
+      },
+      "center": {
+        "minRevenueGrowthPercentile": 0.5,
+        "topN": 5
+      },
       "trials": 9,
       "note": "lookbackDays stays frozen at 63 and skipRecentDays at 2. The comparator's own plateau already established that 42d is where the price signal turns noisy; re-sweeping it here would guarantee a plateau failure driven by the OLD axis and would mask the NEW one."
     },
@@ -60,10 +77,41 @@
       "addedTrials": 9
     },
     "predictions": {
-      "oosCagrPct": { "baseline": 105.92, "point": 98.0, "interval": [80.0, 125.0], "direction": "FLAT" },
-      "mcBookDayP95DrawdownPct": { "baseline": 68.4, "point": 60.0, "interval": [54.0, 65.0], "direction": "DOWN" },
-      "oosDeflatedSharpe": { "baseline": 0.874, "point": 0.905, "interval": [0.88, 0.93], "direction": "UP" },
-      "tradesFull": { "baseline": 1390, "interval": [1250, 1500], "direction": "FLAT" },
+      "oosCagrPct": {
+        "baseline": 105.92,
+        "point": 98.0,
+        "interval": [
+          80.0,
+          125.0
+        ],
+        "direction": "FLAT"
+      },
+      "mcBookDayP95DrawdownPct": {
+        "baseline": 68.4,
+        "point": 60.0,
+        "interval": [
+          54.0,
+          65.0
+        ],
+        "direction": "DOWN"
+      },
+      "oosDeflatedSharpe": {
+        "baseline": 0.874,
+        "point": 0.905,
+        "interval": [
+          0.88,
+          0.93
+        ],
+        "direction": "UP"
+      },
+      "tradesFull": {
+        "baseline": 1390,
+        "interval": [
+          1250,
+          1500
+        ],
+        "direction": "FLAT"
+      },
       "expectedVerdict": "REJECTED is expected and is not the question: DSR 0.95 is structurally unreachable at 108 exploratory trials over a 2.55-year OOS window. This experiment measures whether a point-in-time fundamental improves SELECTION quality over pure price momentum; it makes no promotion claim."
     },
     "falsification": {
@@ -98,7 +146,7 @@
         "2026-01-02": "58 of 60",
         "2026-07-17": "57 of 60"
       },
-      "stalenessDaysAtDecisionDate": "median 300-345, max 1,570 in 2019 falling to 352 by 2026 — annual 10-K cadence, so the variable is deliberately slow and is used as a slow structural filter, never as a fast signal",
+      "stalenessDaysAtDecisionDate": "median 300-345, max 1,570 in 2019 falling to 352 by 2026 \u2014 annual 10-K cadence, so the variable is deliberately slow and is used as a slow structural filter, never as a fast signal",
       "sufficiencyJudgement": "SUFFICIENT for the OOS window that decides the verdict (55-58 of 60 names conditioned, ~95%) and INSUFFICIENT for 2018-2019 (18-28 of 60). The first ~2 IS years are largely unconditioned; that dilution biases the full-period MC drawdown toward 'no change' and therefore makes F3 conservative, not generous. No claim about 2018-2019 may be drawn from this run."
     },
     "terminalFence": {
@@ -125,11 +173,23 @@
       "src/quant/strategies/halalFastMomentumCore.ts (the comparator is frozen)",
       "src/quant/backtest/portfolioEngine.ts, src/quant/backtest/metrics.ts, src/quant/backtest/experimentProtocol.ts (no gate or estimator may move)",
       "docs/quant-experiments/halal-fast-momentum-cash-core-v1.json and every other sealed or CODIFIED manifest"
-    ]
+    ],
+    "baselineCorrection_2026_08_22": {
+      "record": "QDR-21 (2026-08-22)",
+      "authoritativeBaselineMcBookDayP95Pct": 66.5473,
+      "supersededFigurePct": 68.4037,
+      "thresholdsRestated": false,
+      "whyNotRestated": "This lane's treatment result is ALREADY OBSERVED. Re-authoring a threshold after seeing a treatment result is forbidden by this manifest's own terms, and a 'correction' that moved them would be indistinguishable from one. Every F-clause stands BYTE-IDENTICAL. No verdict is reopened.",
+      "readingGuidance": "Read this lane's 68.40-anchored comparisons as METHOD-MIXED: the comparator figure is IID and any treatment figure produced by today's engine on observationUnit 'book-day' is moving-block-20.",
+      "note": "This lane was falsified 2026-08-19 on OOS DSR (0.874 -> 0.680 while CAGR rose to 127.99%), not on the tail, so the corrected baseline does not bear on its verdict at all."
+    }
   },
   "configHash": null,
   "state": "DRAFT",
-  "actors": { "director": "quant-research-director", "implementer": "quant-strategist" },
+  "actors": {
+    "director": "quant-research-director",
+    "implementer": "quant-strategist"
+  },
   "diagnosticRuns": 1,
   "fullRun": null,
   "terminal": null
