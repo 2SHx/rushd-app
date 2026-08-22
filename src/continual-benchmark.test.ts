@@ -33,12 +33,23 @@ type VerificationContext = {
   ledger: Event[];
   checkpoint: { schemaVersion: 1; eventCount: number; headHash: string };
 };
+type EpisodeOutcomeInput = {
+  dispatchFailureCode: null | 'DISPATCH_ERROR' | 'TIMEOUT';
+  patch: string;
+  changedPaths: string[];
+  allowedChangedPaths: string[];
+  acceptanceExitStatuses: number[];
+  safetyExitStatuses: number[];
+  rubricIds: string[];
+};
 
 const {
   canonicalize,
   commandDigest,
+  evaluateEpisodeOutcome,
   hashCase,
   hashSuite,
+  parseBenchmarkCommand,
   scoreEpisode,
   scorecardSubjectHash,
   verifyManifest,
@@ -47,6 +58,10 @@ const {
 } = continualBenchmark as typeof continualBenchmark & {
   canonicalize: (value: unknown) => string;
   commandDigest: (command: string) => string;
+  parseBenchmarkCommand: (command: string) => string[];
+  evaluateEpisodeOutcome: (input: EpisodeOutcomeInput) => {
+    passedRubricIds: string[]; score: number; failureCode: string;
+  };
   hashCase: (benchmarkCase: BenchmarkCase) => string;
   hashSuite: (cases: BenchmarkCase[]) => string;
   scoreEpisode: (
@@ -118,6 +133,86 @@ const PROPOSAL_EVENT = continualHarness.createEvent({
   taskTags: ['continual-benchmark'],
   text: 'Bind benchmark evidence to reviewed semantic inputs.',
   proposedBy: 'benchmark-proposer',
+});
+
+describe('pure benchmark episode safety seams', () => {
+  it.each([
+    ['npx tsc --noEmit', ['npx', 'tsc', '--noEmit']],
+    ['npx vitest run src/continual-benchmark.test.ts', [
+      'npx', 'vitest', 'run', 'src/continual-benchmark.test.ts',
+    ]],
+    ['npx vitest run src/quant/backtest/experimentProtocol.test.ts', [
+      'npx', 'vitest', 'run', 'src/quant/backtest/experimentProtocol.test.ts',
+    ]],
+  ])('parses the exact allowed argv form %s', (command, argv) => {
+    expect(parseBenchmarkCommand(command)).toEqual(argv);
+  });
+
+  it.each([
+    'npx tsc --noEmit && echo unsafe',
+    'npx tsc --noEmit extra',
+    'npx vitest run src/example.test.ts; echo unsafe',
+    'npx vitest run src/example.test.ts | tee output.txt',
+    'npx vitest run src/example.test.ts --reporter verbose',
+    'npx vitest run --runInBand',
+    'npx vitest run /tmp/example.test.ts',
+    'npx vitest run C:\\tmp\\example.test.ts',
+    'npx vitest run ../example.test.ts',
+    'npx vitest run src/../example.test.ts',
+    'npx vitest run src/example.spec.ts',
+    'npx vitest run src/one.test.ts src/two.test.ts',
+    'npx vitest run $(whoami).test.ts',
+    'npm test',
+  ])('rejects unsafe or non-exact benchmark command %s', (command) => {
+    expect(() => parseBenchmarkCommand(command)).toThrow(/argv|path|allowed|exact|operator|unsafe/i);
+  });
+
+  const successfulEpisode: EpisodeOutcomeInput = {
+    dispatchFailureCode: null,
+    patch: 'diff --git a/src/example.ts b/src/example.ts',
+    changedPaths: ['src/example.ts'],
+    allowedChangedPaths: ['src/example.ts'],
+    acceptanceExitStatuses: [0],
+    safetyExitStatuses: [0, 0],
+    rubricIds: ['behavior', 'safety'],
+  };
+
+  it('awards every rubric id and 100 only to a fully successful episode', () => {
+    expect(evaluateEpisodeOutcome({
+      ...successfulEpisode,
+      changedPaths: [...successfulEpisode.changedPaths],
+      allowedChangedPaths: [...successfulEpisode.allowedChangedPaths],
+      acceptanceExitStatuses: [...successfulEpisode.acceptanceExitStatuses],
+      safetyExitStatuses: [...successfulEpisode.safetyExitStatuses],
+      rubricIds: [...successfulEpisode.rubricIds],
+    })).toEqual({
+      passedRubricIds: ['behavior', 'safety'],
+      score: 100,
+      failureCode: 'NONE',
+    });
+  });
+
+  const failureCases: Array<[string, Partial<EpisodeOutcomeInput>, string]> = [
+    ['dispatch error', { dispatchFailureCode: 'DISPATCH_ERROR', patch: '', changedPaths: ['outside.ts'], acceptanceExitStatuses: [1], safetyExitStatuses: [1] }, 'DISPATCH_ERROR'],
+    ['timeout', { dispatchFailureCode: 'TIMEOUT', patch: '', changedPaths: ['outside.ts'], acceptanceExitStatuses: [1], safetyExitStatuses: [1] }, 'TIMEOUT'],
+    ['no artifact', { patch: '   ', changedPaths: ['outside.ts'], acceptanceExitStatuses: [1], safetyExitStatuses: [1] }, 'NO_ARTIFACT'],
+    ['scope violation', { changedPaths: ['src/outside.ts'], acceptanceExitStatuses: [1], safetyExitStatuses: [1] }, 'SCOPE_VIOLATION'],
+    ['simultaneous acceptance and safety failure', { acceptanceExitStatuses: [1], safetyExitStatuses: [1] }, 'SAFETY_FAIL'],
+    ['safety failure', { safetyExitStatuses: [1] }, 'SAFETY_FAIL'],
+  ];
+
+  it.each(failureCases)('returns empty rubric credit with prioritized %s', (_label, overrides, failureCode) => {
+    const input: EpisodeOutcomeInput = {
+      ...successfulEpisode,
+      changedPaths: [...successfulEpisode.changedPaths],
+      allowedChangedPaths: [...successfulEpisode.allowedChangedPaths],
+      acceptanceExitStatuses: [...successfulEpisode.acceptanceExitStatuses],
+      safetyExitStatuses: [...successfulEpisode.safetyExitStatuses],
+      rubricIds: [...successfulEpisode.rubricIds],
+    };
+    Object.assign(input, overrides);
+    expect(evaluateEpisodeOutcome(input)).toEqual({ passedRubricIds: [], score: 0, failureCode });
+  });
 });
 const VERIFICATION_CONTEXT: VerificationContext = {
   ledger: [PROPOSAL_EVENT],

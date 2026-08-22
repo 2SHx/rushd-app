@@ -403,6 +403,16 @@ export function renderProposedContext({
   if (proposed.lessonId !== lessonId || proposed.lessonVersion !== lessonVersion) {
     throw new Error('Candidate lesson id/version does not match the exact proposal');
   }
+  // The overlay states "status: UNADMITTED" as fact. Once this exact lesson version carries an
+  // ADMIT or a REVOKE it is no longer an inactive candidate, and rendering it would put a false
+  // claim in the prompt — either understating an admitted lesson's authority, or resurrecting a
+  // revoked one as if still under consideration.
+  const terminal = events.find((event) => (event.action === 'ADMIT' || event.action === 'REVOKE')
+    && event.lessonId === proposed.lessonId
+    && event.lessonVersion === proposed.lessonVersion);
+  if (terminal) {
+    throw new Error(`Candidate is not unadmitted: a later ${terminal.action} event exists for ${proposed.lessonId}@${proposed.lessonVersion}`);
+  }
   const queryPath = normalizedQueryPath(path);
   if (queryPath === null || targetsKernel(queryPath)) return '';
   if (!dimensionMatches(proposed.roles, role, (value, query) => value === query)
@@ -418,16 +428,18 @@ export function renderProposedContext({
   const close = '\n</continual-benchmark-candidate>';
   const fixedBytes = Buffer.byteLength(`${open}${prefix}${close}`, 'utf8');
   if (fixedBytes > available) throw new Error('Proposed candidate does not fit the combined context bound');
+  // REJECT, never truncate. `evaluateLedger` was called with `oversizedProposalHash` so that an
+  // oversized candidate does not invalidate the whole ledger — but that exemption must not become
+  // a licence to silently shorten it here. A lesson is an instruction: cutting it at a byte
+  // boundary can invert its meaning ("never do X unless Y" becomes "never do X"), and the result
+  // would still be presented as the proposer's exact verified text.
   const escapedText = xmlEscape(proposed.text);
-  let boundedText = '';
-  let used = 0;
-  for (const character of escapedText) {
-    const bytes = Buffer.byteLength(character, 'utf8');
-    if (used + bytes > available - fixedBytes) break;
-    boundedText += character;
-    used += bytes;
+  const textBudget = available - fixedBytes;
+  if (Buffer.byteLength(escapedText, 'utf8') > textBudget) {
+    throw new Error(`Proposed candidate exceeds the ${MAX_CONTEXT_BYTES.toLocaleString('en-US')}-byte context bound by `
+      + `${Buffer.byteLength(escapedText, 'utf8') - textBudget} bytes and is rejected rather than truncated`);
   }
-  return `${open}${prefix}${boundedText}${close}`;
+  return `${open}${prefix}${escapedText}${close}`;
 }
 
 function readLedger(path, allowMissing = false) {
