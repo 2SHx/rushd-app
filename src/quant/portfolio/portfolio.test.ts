@@ -5,6 +5,7 @@ import { getHalalUniverse } from '../data/universe';
 import { constructHalalPortfolio } from './construction';
 import { computePortfolioMetrics } from '../backtest/portfolioEngine';
 import { executePortfolioRebalance } from './rebalancer';
+import { userExecutionLockKey } from '../execution/userLock';
 
 vi.mock('@/services/marketData', () => ({
   registry: { getScreener: () => ({ name: 'PortfolioTestScreener' }) },
@@ -66,19 +67,43 @@ describe('Halal Quant Portfolio Tests', () => {
     return rows;
   };
 
+  /**
+   * Remove ONLY this suite's own rows.
+   *
+   * This used to be six unconditional `deleteMany({})` calls, which on 2026-08-22 deleted every
+   * User row in the shared database — including the one named by QUANT_INCUBATION_OWNER_USER_ID —
+   * because the local .env points at NEON_BRANCH=production. Commit 1e0fdd1 had already fixed the
+   * MarketBar half of this hazard (see `cleanupMarketBarFixtures`); the User half was left open.
+   *
+   * Every delete below is keyed to a constant this file owns. Nothing here may ever match a row
+   * this suite did not create: User cascades to PurificationEntry, PortfolioItem and Strategy,
+   * PortfolioSnapshot carries `userId` but no cascade, and every AutoRunClaim key embeds
+   * `strategyId` (rebalancer.ts:297,404,494).
+   */
+  /**
+   * Both claim shapes this suite can leave behind: the per-pass/per-order keys built from
+   * `strategyId` (rebalancer.ts:297,404,494) AND the per-user execution lock `money-user-<id>`
+   * (userLock.ts:11), which carries no strategyId and so is invisible to a strategy-scoped filter.
+   */
+  const clearFixtureClaims = () =>
+    prisma.autoRunClaim.deleteMany({
+      where: { OR: [{ key: { contains: strategyId } }, { key: userExecutionLockKey(userId) }] },
+    });
+
+  const resetFixtureState = async () => {
+    await prisma.portfolioSnapshot.deleteMany({ where: { userId } });
+    await clearFixtureClaims();
+    await prisma.user.deleteMany({ where: { id: userId } });
+    await prisma.strategy.deleteMany({ where: { id: strategyId } });
+  };
+
   afterEach(async () => {
     await cleanupMarketBarFixtures(createdMarketBarIds);
     createdMarketBarIds.length = 0;
   });
 
   beforeEach(async () => {
-    // Clear and clean DB for testing
-    await prisma.purificationEntry.deleteMany({});
-    await prisma.portfolioSnapshot.deleteMany({});
-    await prisma.portfolioItem.deleteMany({});
-    await prisma.user.deleteMany({});
-    await prisma.strategy.deleteMany({});
-    await prisma.autoRunClaim.deleteMany({});
+    await resetFixtureState();
 
     // Create user and strategy
     await prisma.user.create({
@@ -278,8 +303,8 @@ describe('Halal Quant Portfolio Tests', () => {
         source: 'MOCK'
     });
 
-    // Clean autoRunClaim
-    await prisma.autoRunClaim.deleteMany({});
+    // Clean this strategy's claims only — never the shared table.
+    await clearFixtureClaims();
 
     // First rebalance
     const firstResult = await executePortfolioRebalance(userId, strategyId, now);
@@ -324,8 +349,8 @@ describe('Halal Quant Portfolio Tests', () => {
         source: 'MOCK'
     });
 
-    await prisma.autoRunClaim.deleteMany({});
-    await prisma.purificationEntry.deleteMany({});
+    await clearFixtureClaims();
+    await prisma.purificationEntry.deleteMany({ where: { userId } });
 
     const res = await executePortfolioRebalance(userId, strategyId, now);
     expect(res.rebalanced).toBe(true);
