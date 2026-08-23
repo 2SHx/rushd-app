@@ -111,6 +111,9 @@ describe('QDR-19 evidence reaches the report card', () => {
     });
     expect(evidence?.declarable).toBe(false);
     expect(evidence?.matchedObservations).toBe(300);
+    if (!evidence || evidence.declarable) throw new Error('expected non-declarable evidence');
+    expect(evidence.nonDeclarableReason).toBe('PARTIAL_COVERAGE');
+    expect(evidence.strategyObservations).toBe(curve.length);
 
     const rendered = renderReportCard(
       assembleReportCard(cardArgs(curve, { benchmarkEvidence: evidence })), false,
@@ -118,6 +121,8 @@ describe('QDR-19 evidence reaches the report card', () => {
     expect(rendered).toContain('QDR-19 BENCHMARK');
     expect(rendered).toContain('Benchmark:            SPUS');
     expect(rendered).toContain('Information Ratio');
+    expect(rendered).toContain('covers only 300 of 505 strategy observations (205 uncovered)');
+    expect(rendered).not.toContain('survivor-conditioned equal-weight basket');
   });
 
   it('declares only a fully covered investable benchmark, and never a reconstructed basket', () => {
@@ -127,9 +132,12 @@ describe('QDR-19 evidence reaches the report card', () => {
       benchmarkId: 'SPUS', benchmarkSource: 'MarketBar DAY YAHOO', investable: true, closesBySession,
     })?.declarable).toBe(true);
     // QDR-20: a survivor-conditioned equal-weight basket is CONTEXT even at full coverage.
-    expect(benchmarkEvidenceForSetup('qdr19-fixture', curve, {
+    const basket = benchmarkEvidenceForSetup('qdr19-fixture', curve, {
       benchmarkId: 'UNIVERSE-EW', benchmarkSource: 'reconstructed', investable: false, closesBySession,
-    })?.declarable).toBe(false);
+    });
+    expect(basket?.declarable).toBe(false);
+    if (!basket || basket.declarable) throw new Error('expected non-declarable basket evidence');
+    expect(basket.nonDeclarableReason).toBe('NOT_INVESTABLE');
   });
 
   it('omits the benchmark block when nothing matches, rather than fabricating a curve', () => {
@@ -167,6 +175,15 @@ describe('QDR-19 evidence reaches the report card', () => {
 
     const shape = pathShape(curve, FIVE_SESSION_GATE);
     expect(shape?.observations).toBe(101);
+
+    const partial = benchmarkEvidenceForSetup('qdr19-fixture', curve, {
+      benchmarkId: 'SPUS', benchmarkSource: 'MarketBar DAY YAHOO', investable: true,
+      closesBySession: benchmarkCloses(curve, 300),
+    }, FIVE_SESSION_GATE);
+    if (!partial || partial.declarable) throw new Error('expected partial five-session evidence');
+    expect(partial.nonDeclarableReason).toBe('PARTIAL_COVERAGE');
+    expect(partial.matchedObservations).toBe(60);
+    expect(partial.strategyObservations).toBe(101);
   });
 
   it('cannot move the checklist or a rejection code (reported, never gated)', () => {

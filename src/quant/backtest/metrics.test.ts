@@ -294,11 +294,16 @@ describe('QDR-19 benchmark evidence', () => {
       benchmarkId: 'equal-weight-universe-reconstruction',
       benchmarkSource: 'MarketBar reconstruction',
       declarable: false,
+      nonDeclarableReason: 'NOT_INVESTABLE',
+      strategyObservations: strategyEquity.length,
       strategyEquity,
       benchmarkEquity,
       periodsPerYear,
     });
     expect(ev.declarable).toBe(false);
+    if (ev.declarable) throw new Error('expected non-declarable benchmark evidence');
+    expect(ev.nonDeclarableReason).toBe('NOT_INVESTABLE');
+    expect(ev.strategyObservations).toBe(strategyEquity.length);
     expect(ev.matchedObservations).toBe(strategyEquity.length);
     expect(ev.benchmark.cagr).toBeCloseTo(Math.pow(1.01, periodsPerYear) - 1, 12);
     expect(ev.benchmark.ulcerIndex).toBe(0); // a monotone benchmark is never underwater
@@ -311,6 +316,23 @@ describe('QDR-19 benchmark evidence', () => {
       benchmarkEquity: benchmarkEquity.slice(1),
       periodsPerYear,
     })).toThrow(/matched-date/);
+    expect(() => computeBenchmarkEvidence({
+      benchmarkId: 'SPUS',
+      benchmarkSource: 'test fixture',
+      declarable: false,
+      strategyEquity,
+      benchmarkEquity,
+      periodsPerYear,
+    })).toThrow(/must name its reason/);
+    expect(() => computeBenchmarkEvidence({
+      benchmarkId: 'SPUS',
+      benchmarkSource: 'test fixture',
+      declarable: false,
+      nonDeclarableReason: 'PARTIAL_COVERAGE',
+      strategyEquity,
+      benchmarkEquity,
+      periodsPerYear,
+    })).toThrow(/strategyObservations greater than matched observations/);
   });
 
   it('psrVsBenchmark falls as the benchmark Sharpe rises and reduces to PSR(0) at SR* = 0', () => {

@@ -425,7 +425,13 @@ describe('QDR-19 published evidence', () => {
 
   it('marks a reconstructed basket as CONTEXT ONLY and never as a declared benchmark', () => {
     const rendered = renderReportCard(assembleReportCard(args({
-      benchmarkEvidence: { ...benchmarkEvidence, declarable: false, benchmarkId: 'EQW-UNIVERSE' },
+      benchmarkEvidence: {
+        ...benchmarkEvidence,
+        declarable: false,
+        benchmarkId: 'EQW-UNIVERSE',
+        nonDeclarableReason: 'NOT_INVESTABLE',
+        strategyObservations: benchmarkEvidence.matchedObservations,
+      },
     })), false);
     expect(rendered).toContain(QDR19_NON_DECLARABLE_BENCHMARK_LINE);
   });

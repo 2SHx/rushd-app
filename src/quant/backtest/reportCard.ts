@@ -93,6 +93,34 @@ export const QDR19_REPORTED_NEVER_GATED_ANNOTATION =
 export const QDR19_NON_DECLARABLE_BENCHMARK_LINE =
   'CONTEXT ONLY — a reconstructed equal-weight universe basket is survivor-conditioned by the same '
   + 'bias QDR-15 haircuts at -0.16 Sharpe and may never be a DECLARED benchmark';
+
+/**
+ * The coverage line for a REAL investable instrument whose history is shorter than the backtest
+ * window — SPUS has none before its 2019-12-18 inception, so a 2018-start run matches only part of
+ * the window. Printing the basket line here would state, in a published terminal card, that a real
+ * fund is a survivor-conditioned reconstruction: a fabricated claim. It names the actual shortfall
+ * instead, and the word "basket" must never appear in it.
+ */
+export function qdr19PartialCoverageBenchmarkLine(
+  matchedObservations: number,
+  strategyObservations: number,
+): string {
+  const uncovered = Math.max(strategyObservations - matchedObservations, 0);
+  return 'CONTEXT ONLY — the benchmark instrument is investable, but its matched history covers only '
+    + `${matchedObservations} of ${strategyObservations} strategy observations (${uncovered} `
+    + 'uncovered); every figure below is measured on the MATCHED window alone and is NOT a declared '
+    + 'benchmark for the full backtest window';
+}
+
+/** The one place that chooses between the two reasons; `declarable` blocks never reach it. */
+export function qdr19NonDeclarableBenchmarkLine(
+  evidence: Extract<BenchmarkEvidence, { declarable: false }>,
+): string {
+  // NOT_INVESTABLE first: it is the stronger disqualification and survives any coverage fix.
+  return evidence.nonDeclarableReason === 'NOT_INVESTABLE'
+    ? QDR19_NON_DECLARABLE_BENCHMARK_LINE
+    : qdr19PartialCoverageBenchmarkLine(evidence.matchedObservations, evidence.strategyObservations);
+}
 /** Printed beside the binding max-DD p95 whenever the sensitivity disclosure is present. */
 export const QDR19_PATH_LENGTH_SENSITIVITY_LINE =
   'max drawdown is a divergent extreme-value statistic: its p95 grows with path length by '
@@ -492,7 +520,7 @@ export function renderReportCard(c: ReportCard, color = true): string {
     const b = c.benchmarkEvidence;
     L.push('──── QDR-19 BENCHMARK (published evidence; the IR is NOT a pass/fail gate) ────');
     L.push(`  Benchmark:            ${b.benchmarkId}  (${b.benchmarkSource})`);
-    if (!b.declarable) L.push(paint(`                        ${QDR19_NON_DECLARABLE_BENCHMARK_LINE}`, YELLOW));
+    if (!b.declarable) L.push(paint(`                        ${qdr19NonDeclarableBenchmarkLine(b)}`, YELLOW));
     L.push(`  Matched dates:        ${b.matchedObservations} observations (${b.years.toFixed(3)} yr)`);
     L.push(`  Benchmark CAGR/vol:   ${pct(b.benchmark.cagr)} / ${pct(b.benchmark.annualVolatility)}`
       + `   Sharpe ${b.benchmark.sharpe.toFixed(3)}`);

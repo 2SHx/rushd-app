@@ -567,18 +567,26 @@ export function benchmarkEvidenceForSetup(
   }
   if (matched.length < 2) return undefined;
   let projected = matched;
+  let strategyObservations = curve.length;
   if (resolveObservationUnit(setupId, gateConfig) === FIVE_SESSION_BOOK_OBSERVATION_UNIT) {
     // The projection `metricsForSetup` uses, run through the shared validator first so a malformed
     // NAV cannot enter the block; the benchmark is taken at the SAME indices, never re-sampled.
+    strategyObservations = fiveSessionMetricCurve(curve).length;
     fiveSessionMetricCurve(matched.map((row) => ({ ts: row.ts, equity: row.strategy })));
     projected = matched.filter((_, index) => index % 5 === 0);
   }
   if (projected.length < 2) return undefined;
+  const declarable = source.investable && matched.length === curve.length;
   return computeBenchmarkEvidence({
     benchmarkId: source.benchmarkId,
     benchmarkSource: source.benchmarkSource,
     // Full-window coverage of every strategy observation, and only for an investable instrument.
-    declarable: source.investable && matched.length === curve.length,
+    declarable,
+    ...(!declarable ? {
+      // QDR-20's investability veto dominates a simultaneous coverage shortfall.
+      nonDeclarableReason: source.investable ? 'PARTIAL_COVERAGE' as const : 'NOT_INVESTABLE' as const,
+      strategyObservations,
+    } : {}),
     strategyEquity: projected.map((row) => row.strategy),
     benchmarkEquity: projected.map((row) => row.benchmark),
     periodsPerYear: observationPeriodsPerYear(setupId, gateConfig),

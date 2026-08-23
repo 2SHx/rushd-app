@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-23 — QDR-19 benchmark context reasons completed ✅
+Shipped: completed Claude's QDR-19 reporting handoff so non-declarable benchmark evidence names `PARTIAL_COVERAGE` for a real short-history instrument and `NOT_INVESTABLE` for a reconstructed basket, with like-for-like observation counts in daily and five-session units.
+Decisions: lazy-dev rung 2 reused the existing evidence/renderer seams; QDR-20's investability veto dominates simultaneous partial coverage, missing or contradictory partial-coverage metadata fails closed, and no terminal/FULL experiment was run.
+Verify: focused metrics/report-card/runLab 56/56; lint, TypeScript, and diff-check clean; zero-key full suite 2,015 pass / 6 known production-Neon timeouts (`quant-eval` + five portfolio cases), with no changed-scope failure.
+Open: the journal's pre-existing disposable-test-DB requirement still blocks a fully green DB-bound suite; generated `results/` artifacts were preserved and remain outside this commit.
+
 ## 2026-08-22 — Data-loss incident, destructive-write interlock, three lesson-governance defects ✅
 Shipped: activity-gated Neon keepalive (autosuspend measured at ~2.5min; 3656ms cold vs 329ms warm, ~240ms of which is TCP RTT); a Prisma `$use` interlock refusing unscoped bulk writes against any database not explicitly marked disposable; scoped fixture deletes in portfolio.test.ts; three real defects in the lesson-governance path; QDR-21/QDR-22 and the four restated manifests.
 INCIDENT: a full-suite run DELETED EVERY User ROW, including QUANT_INCUBATION_OWNER_USER_ID — `beforeEach` called `deleteMany({})` on six models and .env points at NEON_BRANCH=production. MarketBar (529,718) and Fundamentals (12,212) survived only because 1e0fdd1 had already scoped the MarketBar cleanup by id. RULE: running the test suite IS a production write. Neon PITR for the owner row is still owner-side and time-boxed.

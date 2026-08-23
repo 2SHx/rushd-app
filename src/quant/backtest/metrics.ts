@@ -628,15 +628,24 @@ export function computePathShapeEvidence(
   };
 }
 
+/**
+ * WHY a block is not declarable. The two conditions are independent and can co-occur:
+ *  - `NOT_INVESTABLE`: a reconstructed basket rather than an instrument — survivor-conditioned,
+ *    disqualified at ANY coverage (QDR-20).
+ *  - `PARTIAL_COVERAGE`: a real investable instrument whose matched history is shorter than the
+ *    strategy window (SPUS has none before its 2019-12-18 inception).
+ * When both hold the answer is `NOT_INVESTABLE`: it is the stronger disqualification and survives
+ * any coverage fix. Naming the reason is what stops a card from claiming a real fund is a basket.
+ */
+export type BenchmarkNonDeclarableReason = 'NOT_INVESTABLE' | 'PARTIAL_COVERAGE';
+
 /** QDR-19 BENCHMARK block. Every field is published; none is read by any gate — IR is NOT a gate. */
-export interface BenchmarkEvidence {
+interface BenchmarkEvidenceFields {
   /** MUST name an investable instrument at seal (SPUS is the default). A reconstructed */
   /** equal-weight universe basket may be published as CONTEXT but never DECLARED — it is */
   /** survivor-conditioned by the same bias QDR-15 haircuts at −0.16 Sharpe. */
   benchmarkId: string;
   benchmarkSource: string;
-  /** True only for a declared investable benchmark; false marks survivor-conditioned context. */
-  declarable: boolean;
   matchedObservations: number;
   years: number;
   strategy: CurveSummary;
@@ -655,6 +664,21 @@ export interface BenchmarkEvidence {
 }
 
 /**
+ * A non-declarable block MUST carry its reason, so the union makes the reason unconstructible-by-
+ * omission: there is no way to build `declarable: false` without saying which condition failed.
+ * `declarable` itself is unchanged — this names the reason, it does not change who qualifies.
+ */
+export type BenchmarkEvidence =
+  | (BenchmarkEvidenceFields & { declarable: true })
+  | (BenchmarkEvidenceFields & {
+    declarable: false;
+    nonDeclarableReason: BenchmarkNonDeclarableReason;
+    /** Strategy observations in the window, in the SAME unit as `matchedObservations`, so the
+     * published shortfall is a like-for-like count rather than a vague "partial". */
+    strategyObservations: number;
+  });
+
+/**
  * Assemble the benchmark block from two MATCHED-DATE equity curves.
  *
  * The IR estimator is deliberately the SAME arithmetic `computePortfolioMetrics` already uses for
@@ -665,6 +689,10 @@ export function computeBenchmarkEvidence(args: {
   benchmarkId: string;
   benchmarkSource: string;
   declarable: boolean;
+  /** REQUIRED whenever `declarable` is false; omitting it throws rather than guessing a reason. */
+  nonDeclarableReason?: BenchmarkNonDeclarableReason;
+  /** Strategy observations in the same unit as the matched curves; defaults to the matched count. */
+  strategyObservations?: number;
   strategyEquity: readonly number[];
   benchmarkEquity: readonly number[];
   periodsPerYear?: number;
@@ -690,7 +718,21 @@ export function computeBenchmarkEvidence(args: {
   const informationRatio = trackingError > 0 ? activeReturn / trackingError : 0;
   const years = strategyReturns.length / periodsPerYear;
   const tStat = informationRatio * Math.sqrt(Math.max(years, 0));
-  return {
+  // Fail closed: a block that cannot say WHY it is context is not published at all. Guessing the
+  // reason is how a partial-coverage SPUS window ends up described as a reconstructed basket.
+  if (!args.declarable && !args.nonDeclarableReason) {
+    throw new Error(
+      'A non-declarable benchmark block must name its reason (NOT_INVESTABLE | PARTIAL_COVERAGE)',
+    );
+  }
+  if (!args.declarable && args.nonDeclarableReason === 'PARTIAL_COVERAGE'
+    && (!Number.isInteger(args.strategyObservations)
+      || (args.strategyObservations ?? 0) <= args.strategyEquity.length)) {
+    throw new Error(
+      'PARTIAL_COVERAGE requires strategyObservations greater than matched observations',
+    );
+  }
+  const base = {
     benchmarkId: args.benchmarkId,
     benchmarkSource: args.benchmarkSource,
     declarable: args.declarable,
@@ -709,4 +751,14 @@ export function computeBenchmarkEvidence(args: {
       periodsPerYear,
     }),
   };
+  // Re-stating `declarable` keeps its original key position; the reason fields append LAST, so a
+  // declarable block serializes byte-identically to what it did before this record.
+  return args.declarable
+    ? { ...base, declarable: true }
+    : {
+      ...base,
+      declarable: false,
+      nonDeclarableReason: args.nonDeclarableReason as BenchmarkNonDeclarableReason,
+      strategyObservations: args.strategyObservations ?? base.matchedObservations,
+    };
 }
