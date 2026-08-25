@@ -47,13 +47,13 @@ function knownPositiveCurve(): EquityPoint[] {
 }
 
 describe('terminal DSR trial-family registry', () => {
-  it('uses all 126 related halal-core trials and never falls below the local plateau', () => {
+  it('uses all 135 related halal-core trials and never falls below the local plateau', () => {
     const evidence = trialCountEvidence('halal-residual-fast-momentum-core', 9);
-    const raisedPlateau = trialCountEvidence('halal-fast-momentum-core', 130);
+    const raisedPlateau = trialCountEvidence('halal-fast-momentum-core', 140);
 
-    expect(evidence.familyTrials).toBe(126);
+    expect(evidence.familyTrials).toBe(135);
     expect(evidence.familyTrials).toBeGreaterThan(evidence.plateauTrials);
-    expect(raisedPlateau.familyTrials).toBe(130);
+    expect(raisedPlateau.familyTrials).toBe(140);
     expect(raisedPlateau.familyTrials).toBeGreaterThanOrEqual(raisedPlateau.plateauTrials);
   });
 
@@ -73,8 +73,8 @@ describe('two-tier trial deflation (QDR-9)', () => {
       const evidence = trialCountEvidence(setupId, 9);
       expect(evidence).toMatchObject({
         familyId: 'halal-core-2026q3-v1',
-        familyTrials: 126,
-        relatedSetups: 14,
+        familyTrials: 135,
+        relatedSetups: 15,
         tier: 'EXPLORATORY',
       });
     }
@@ -84,7 +84,7 @@ describe('two-tier trial deflation (QDR-9)', () => {
       relatedSetups: 1,
       tier: 'EXPLORATORY',
     });
-    expect(trialCountEvidence('halal-fast-momentum-core', 130).familyTrials).toBe(130);
+    expect(trialCountEvidence('halal-fast-momentum-core', 140).familyTrials).toBe(140);
   });
 
   it('grants N=1 only when all six structural conditions are proved', () => {
@@ -124,7 +124,7 @@ describe('two-tier trial deflation (QDR-9)', () => {
     expect(evidence.familyTrials).toBe(108);
     expect(evidence.confirmatoryFailures).toContain(condition);
     expect(core.tier).toBe('EXPLORATORY');
-    expect(core.familyTrials).toBe(126);
+    expect(core.familyTrials).toBe(135);
   });
 
   it('treats absent evidence and a bare self-assertion as proof of nothing', () => {

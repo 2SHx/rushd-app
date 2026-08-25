@@ -338,7 +338,7 @@ describe('halal-fast-momentum-cash-core v1 — harness registration', () => {
     expect(requiresPointInTimeMembership(HALAL_FAST_MOMENTUM_CASH_CORE_ID)).toBe(true);
     expect(validationTrialsForSetup(HALAL_FAST_MOMENTUM_CASH_CORE_ID, P)).toBe(9);
     expect(trialCountEvidence(HALAL_FAST_MOMENTUM_CASH_CORE_ID, 9)).toMatchObject({
-      familyId: 'halal-core-2026q3-v1', familyTrials: 126, relatedSetups: 14, tier: 'EXPLORATORY',
+      familyId: 'halal-core-2026q3-v1', familyTrials: 135, relatedSetups: 15, tier: 'EXPLORATORY',
     });
   });
 

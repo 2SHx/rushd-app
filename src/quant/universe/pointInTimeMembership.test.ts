@@ -209,7 +209,7 @@ describe('terminal C1 membership preflight', () => {
     // which is a DIFFERENT guarantee from historical membership and point-in-time Sharia evidence —
     // neither of which exists yet. Every id here is fenced on purpose; a new lane that inherits an
     // audited C1 sleeve MUST be added, or the survivorship fence silently relaxes for it (QDR-14).
-    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(17);
+    expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toHaveLength(18);
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-fundamental-momentum-core');
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-fast-momentum-cash-core');
     expect(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS).toContain('halal-stopped-fast-momentum-core');

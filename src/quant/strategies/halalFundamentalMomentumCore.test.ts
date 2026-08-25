@@ -140,8 +140,8 @@ describe('halal-fundamental-momentum-core v1 — frozen manifest params, not a r
     expect(requiresPointInTimeMembership(HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID)).toBe(true);
     const trials = trialCountEvidence(HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID, P.validationTrials);
     expect(trials.tier).toBe('EXPLORATORY');
-    expect(trials.familyTrials).toBe(126);
-    expect(trials.relatedSetups).toBe(14);
+    expect(trials.familyTrials).toBe(135);
+    expect(trials.relatedSetups).toBe(15);
     expect(halalFundamentalMomentumCoreBookPolicy(P))
       .toEqual({ maxGrossFraction: 1, maxOpenPositions: 60, decisionHistoryBars: 68 });
   });

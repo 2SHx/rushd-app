@@ -85,6 +85,11 @@ import {
   type HalalFundamentalMomentumCoreParams,
 } from '../strategies/halalFundamentalMomentumCore';
 import {
+  HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID,
+  halalHystereticFastMomentumCoreBookPolicy,
+  type HalalHystereticFastMomentumCoreParams,
+} from '../strategies/halalHystereticFastMomentumCore';
+import {
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_UNIVERSE,
   HALAL_SPUS_FORWARD_START,
@@ -239,6 +244,7 @@ export const SHARED_BOOK_SETUP_IDS: ReadonlySet<string> = new Set([
   HALAL_STOPPED_FAST_MOMENTUM_CORE_ID,
   HALAL_FAST_MOMENTUM_CASH_CORE_ID,
   HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
+  HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID,
   HALAL_SPUS_VOL_MANAGED_BETA_ID,
 ]);
 
@@ -270,6 +276,9 @@ const C1_VERIFIED_SLEEVE_SETUP_IDS: ReadonlySet<string> = new Set([
   // ISOLATED fundamental-gate A/B on `halal-fast-momentum-core`: inherits the same audited C1
   // sleeve, because the revenue-growth gate must be the ONLY new variable.
   HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID,
+  // QDR-22 ISOLATED selection-time hysteresis A/B on `halal-fast-momentum-core`: retainRank is the
+  // ONLY new variable, so it inherits the baseline's audited C1 sleeve unchanged.
+  HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID,
 ]);
 
 /** Per-setup sleeve-size override for C1_VERIFIED_SLEEVE_SETUP_IDS; default 100 (QDR-8 "~100"). A
@@ -321,6 +330,10 @@ const C1_VERIFIED_SLEEVE_MAX_NAMES: ReadonlyMap<string, number> = new Map([
   // new variable, so the ranking-pool breadth MUST equal the baseline's 60 (manifest
   // universeMode `c1_verified_dollar_volume_sleeve_max60`) -- a different sleeve size is a confound.
   [HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID, 60],
+  // QDR-22 ISOLATED selection-time hysteresis A/B on `halal-fast-momentum-core`: the retain band is
+  // the ONLY new variable, so the ranking-pool breadth MUST equal the baseline's 60 (manifest
+  // universeMode `c1_verified_dollar_volume_sleeve_max60`) -- a different sleeve size is a confound.
+  [HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID, 60],
 ]);
 
 /**
@@ -871,6 +884,9 @@ export function strategyBookPolicyForSetup(setupId: string, params: unknown): St
   }
   if (setupId === HALAL_FUNDAMENTAL_MOMENTUM_CORE_ID) {
     return halalFundamentalMomentumCoreBookPolicy(params as HalalFundamentalMomentumCoreParams | undefined);
+  }
+  if (setupId === HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID) {
+    return halalHystereticFastMomentumCoreBookPolicy(params as HalalHystereticFastMomentumCoreParams | undefined);
   }
   if (setupId === HALAL_SPUS_VOL_MANAGED_BETA_ID) {
     return halalSpusVolManagedBetaBookPolicy(params as HalalSpusVolManagedBetaParams | undefined);

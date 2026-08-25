@@ -28,9 +28,21 @@ const HALAL_CORE_SETUP_IDS = Object.freeze([
   'halal-stopped-fast-momentum-core',
   'halal-fast-momentum-cash-core',
   'halal-fundamental-momentum-core',
+  // QDR-22 cost-lever A/B on `halal-fast-momentum-core`: retainRank is the ONE new selection-time
+  // variable, so the lane joins the SAME family and raises its floor.
+  'halal-hysteretic-fast-momentum-core',
 ] as const);
 
-const HALAL_CORE_REGISTERED_TRIALS = 126; // fourteen related setups × nine frozen plateau trials
+const HALAL_CORE_PLATEAU_TRIALS_PER_SETUP = 9;
+
+/**
+ * DERIVED from the list above, never hand-edited: every member setup carries a frozen 3x3 (9-cell)
+ * plateau, so the family floor is exactly `members x 9`. It replaced a hand-maintained literal
+ * (`126`, correct for the then-fourteen members) that had to be re-derived by hand on every
+ * registration and would silently UNDER-deflate a new member if anyone forgot. A family count may
+ * rise as setups are registered; it may never fall.
+ */
+const HALAL_CORE_REGISTERED_TRIALS = HALAL_CORE_SETUP_IDS.length * HALAL_CORE_PLATEAU_TRIALS_PER_SETUP;
 
 export type TrialTier = 'EXPLORATORY' | 'CONFIRMATORY';
 

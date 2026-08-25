@@ -164,6 +164,12 @@ export const PIT_MEMBERSHIP_REQUIRED_SETUP_IDS = Object.freeze([
   // QDR-15: the allocation-transport lane runs the SAME frozen engine over the SAME audited C1
   // sleeve. Only the book share changes, so it inherits the survivorship fence unchanged.
   'halal-fast-momentum-cash-core',
+  // QDR-22: the selection-time hysteresis A/B runs the SAME weekly engine over the SAME audited C1
+  // sleeve; only retainRank changes, so it inherits the survivorship fence unchanged. Omitting the
+  // id would silently relax that fence for a NEW lane, which is exactly what this allowlist exists
+  // to prevent -- so every run of this version is unverified-diagnostic-only and no terminal card
+  // can be produced until genuine historical membership coverage exists.
+  'halal-hysteretic-fast-momentum-core',
 ] as const);
 
 const PIT_MEMBERSHIP_REQUIRED_SET: ReadonlySet<string> = new Set(PIT_MEMBERSHIP_REQUIRED_SETUP_IDS);

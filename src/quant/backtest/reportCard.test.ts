@@ -126,7 +126,7 @@ describe('terminal validation report card', () => {
     const trialCount = trialCountEvidence('halal-fast-momentum-core', 9);
     const rendered = renderReportCard(assembleReportCard(args({ trialCount })), false);
 
-    expect(rendered).toContain('DSR trial count:      126 family-wide (9 local plateau');
+    expect(rendered).toContain('DSR trial count:      135 family-wide (9 local plateau');
     expect(rendered).toContain('DSR trial tier:       EXPLORATORY (fail-closed) — unproved: SEALED_CONFIG_HASH_VERIFIED');
   });
 

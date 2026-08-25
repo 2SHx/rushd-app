@@ -85,8 +85,9 @@
     "trialFamily": {
       "tier": "EXPLORATORY",
       "reason": "The setup was designed AFTER inspecting halal-fast-momentum-core@v1's terminal card (105.92 / 66.55 corrected / 0.874) and AFTER a pre-design turnover measurement over the same already-inspected 2018-2026 window, so QDR-9 conditions (b) forward-only, (d) evidence boundary strictly after seal, and (e) every observation after that boundary cannot hold. EXPLORATORY is the fail-closed default and is correct. THIS LANE SCREENS AND CANNOT PROMOTE: at the derived family floor a ~2.55-year OOS window requires an annualised Sharpe near 2.9 to reach DSR > 0.95, which the Sharpe > 3.00 implausibility ceiling makes effectively unreachable, so REJECTED is the expected terminal label and is not the question being asked. The question is whether this engine's cost channel is worth MORE than the signal it costs -- a number nothing in the ledger currently contains. Its only legitimate output is a candidate for a separate, sealed, forward-only CONFIRMATORY manifest under QDR-9/QDR-16, which this manifest does not authorise.",
-      "familyCountRule": "HALAL_CORE_SETUP_IDS gains this id as the SEVENTEENTH setup and the family count must be DERIVED as HALAL_CORE_SETUP_IDS.length * 9 = 153, never the drifted hand-edited literal 126. A family count may rise, never fall.",
-      "plateauTrials": 9
+      "familyCountRule": "HALAL_CORE_SETUP_IDS gains this id as the FIFTEENTH setup and the family count is DERIVED as HALAL_CORE_SETUP_IDS.length * 9 = 135, never a hand-edited literal. `halal-decorrelated-risk-parity-core` and `halal-spus-vol-managed-beta` are NOT members and their absence does not under-deflate this family: membership requires an ALPHA return claim, the shared 2018-2026 C1-verified halal sleeve, and a 9-cell expectancy plateau over that evidence. The first is a DIVERSIFICATION universe-rule lane gated on effective bets whose nine cells are sleeve formations with no engine runs; the second trades the single ETF SPUS on forward-only sessions after 2026-08-08 in a five-session unit. Both are DRAFT/CODIFIED with zero diagnostic and zero terminal runs, so neither has ever produced a Sharpe on this evidence, and both already self-deflate at 108 (the then-99 family floor plus their own 9) under the QDR-15 convention. STANDING TRIGGER: if either lane ever produces any return or expectancy observation on the shared 2018-2026 halal sleeve — including the decorrelated lane's D2 comparator arm — it joins this family at that moment and the floor rises to 144. A family count may rise; it may never fall.",
+      "plateauTrials": 9,
+      "familyCountRuling": "QDR-22 amendment, quant-research-director, 2026-08-25. Direction disclosed: 135 < 153 makes this lane EASIER than its own draft asserted (E[max z] ~2.63 vs ~2.68). It creates no acceptance set under the Sharpe>3.00 ceiling, and the opposite choice would have made the card contradict its own published familyTrials. No published card is affected."
     },
     "baseline": {
       "source": "QDR-21 (2026-08-22) correction of record",
@@ -102,7 +103,7 @@
       "fullSharpe": 1.046,
       "fullSortino": 1.486,
       "fullVolPct": 36.7,
-      "notionalTurnoverX": 27.0,
+      "notionalTurnoverX": 27,
       "costDragPctPerYr": 8.09,
       "plateau": "SPIKY"
     },
@@ -132,10 +133,10 @@
     "predictions": {
       "oosCagrPct": {
         "baseline": 105.92,
-        "point": 108.0,
+        "point": 108,
         "interval": [
-          96.0,
-          116.0
+          96,
+          116
         ],
         "direction": "UP"
       },
@@ -147,7 +148,7 @@
       },
       "mcBookDayP95DrawdownPct": {
         "baseline": 66.5473,
-        "point": 67.0,
+        "point": 67,
         "interval": [
           63.5,
           70.5
@@ -166,11 +167,11 @@
         "note": "Stated at N = 9 for comparability with the comparator card ONLY. The terminal card's BINDING DSR is at the derived family floor of 153, where it will sit near 0.52-0.58 and cannot clear 0.95. DSR values across the ledger were computed at varying N and are NOT comparable."
       },
       "realisedAnnualNotionalTurnoverX": {
-        "baseline": 27.0,
+        "baseline": 27,
         "point": 18.5,
         "interval": [
-          16.0,
-          22.0
+          16,
+          22
         ],
         "direction": "DOWN",
         "note": "A SMALLER relative cut than the 38.85% exit-count figure, because retained names are still re-weighted every week and that churn is untouched by hysteresis."
@@ -179,8 +180,8 @@
         "baseline": 15.45,
         "point": 9.5,
         "interval": [
-          9.0,
-          11.0
+          9,
+          11
         ],
         "direction": "DOWN"
       },
@@ -188,7 +189,7 @@
         "baseline": 8.09,
         "point": 5.9,
         "interval": [
-          5.0,
+          5,
           6.3
         ],
         "direction": "DOWN"
@@ -205,7 +206,7 @@
         "baseline": 1.046,
         "point": 1.08,
         "interval": [
-          1.0,
+          1,
           1.13
         ],
         "direction": "UP"
@@ -237,14 +238,14 @@
       "qdr7Card": "Full QDR-7 terminal evidence card, including trialTier, resolved trial count, familyId and the six confirmatory-condition outcomes.",
       "qdr16BootstrapDisclosure": "BOTH p95 max-drawdown figures on the SAME realised curve, same seed, same resample count: the BINDING moving-block-20 book-day figure and the NON-BINDING IID (blockLength 1) figure. mcMaxDDWithinBreaker reads the moving-block figure only.",
       "qdr19Blocks": "BENCHMARK and PATH-SHAPE blocks: Ulcer index, time underwater, CVaR(5%), Martin ratio, bootstrap Ulcer p50/p95, max-DD path-length sensitivity, IR t-statistic, psrVsBenchmark.",
-      "qdr19HelpersNotYetImplemented": "MEASURED, DISCLOSED, NOT WAIVED: src/quant/backtest/metrics.ts today exports only computeMetrics, computeCaptureRatios and computePortfolioMetrics. NONE of QDR-19's named pure helpers (ulcerIndex, timeUnderwater, conditionalValueAtRisk, martinRatio, sortinoRatio, psrVsBenchmark) exist yet. This lane cannot produce a QDR-19-complete card until they land. That is a prerequisite of the RUN, not of this preregistration.",
       "benchmark": {
         "benchmarkId": "SPUS",
         "benchmarkRelativeClaim": false,
         "reason": "SPUS has no investable history before ~2019-12, so a matched-date IR would cover only part of the window. The matched-window equal-weight buy-and-hold reconstruction (18.63% CAGR, Sharpe 0.924, Ulcer 7.15, Martin 2.606, versus the engine's 14.75 / 2.516) is survivor-conditioned and may be published as CONTEXT only, never as a declared claim."
       },
       "costEvidence": "Realised annualised total cost drag (%/yr of average NAV), realised annual notional turnover, and realised annual exit count, for BOTH arms on identical decision dates -- this is the lane's primary readout and F3 is computed from it.",
-      "noThresholdMayBeDerivedHere": "No result from this lane may be used to derive an Ulcer, CVaR or cost threshold, which QDR-19 forbids by name."
+      "noThresholdMayBeDerivedHere": "No result from this lane may be used to derive an Ulcer, CVaR or cost threshold, which QDR-19 forbids by name.",
+      "qdr19HelpersClosed": "CLOSED, VERIFIED 2026-08-25: `src/quant/backtest/metrics.ts` already exports every QDR-19 pure helper — `ulcerIndex` (:408), `timeUnderwater` (:423), `conditionalValueAtRisk` (:439), `martinRatio` (:452), `sortinoRatio` (:466), `psrVsBenchmark` (:489) — and `runLab` publishes both the PATH-SHAPE and BENCHMARK blocks (`runLab.ts:501`, `:2509-2547`; commits 8be2781, 0f05af2). This is no longer a prerequisite of the run."
     },
     "reuseUnchanged": [
       "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics (pure, momentum rank formula -- byte-identical)",
@@ -260,17 +261,31 @@
       "src/quant/strategies/halalHystereticFastMomentumCore.ts (NEW -- the only new strategy file; copies the comparator's decision path and inserts steps 2-4 of selectionRule, adds retainRank to the params schema and to the decisionCache key)",
       "src/quant/strategies/catalog.ts (register the new setup id -- one import + one map entry)",
       "src/quant/backtest/trialFamilies.ts (append the id to HALAL_CORE_SETUP_IDS and DERIVE the count as HALAL_CORE_SETUP_IDS.length * 9; the count may rise, never fall)",
-      "src/quant/backtest/metrics.ts (ADDITIVE pure QDR-19 helpers only; computeMetrics/computePortfolioMetrics outputs must stay byte-identical)",
-      "src/quant/strategies/halalHystereticFastMomentumCore.test.ts (NEW -- must assert the retainRank = topN byte-identity, the week-end-only evaluation, and that ctx.positionQty is never read)"
+      "src/quant/strategies/halalHystereticFastMomentumCore.test.ts (NEW -- must assert the retainRank = topN byte-identity, the week-end-only evaluation, and that ctx.positionQty is never read)",
+      "src/quant/backtest/runLab.ts (REGISTRATION ONLY, exactly four symbols: add `HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID` to `SHARED_BOOK_SETUP_IDS`; add it to `C1_VERIFIED_SLEEVE_SETUP_IDS`; add `[HALAL_HYSTERETIC_FAST_MOMENTUM_CORE_ID, 60]` to `C1_VERIFIED_SLEEVE_MAX_NAMES` — 60 exactly, because a different sleeve size is a confound against the comparator; and one `strategyBookPolicyForSetup` branch returning `halalHystereticFastMomentumCoreBookPolicy(params)`. EVERYTHING ELSE IN THIS FILE IS FORBIDDEN: no gate, breaker, threshold, reason code, estimator, observation-unit routing, period/universe resolution, benchmark or card-assembly line may be touched.)",
+      "src/quant/universe/pointInTimeMembership.ts (ONE symbol: append `halal-hysteretic-fast-momentum-core` to `PIT_MEMBERSHIP_REQUIRED_SETUP_IDS` with a QDR-22 comment. `assertPointInTimeMembershipCoverage`, the per-record `LIFECYCLE_UNKNOWN` check, the failure codes and the waiver path are FORBIDDEN.)"
     ],
     "filesForbidden": [
       "src/quant/strategies/halalFastMomentumCore.ts (the comparator engine is frozen; do NOT parameterise it)",
       "src/quant/backtest/monteCarlo.ts (no estimator change)",
       "src/quant/backtest/portfolioEngine.ts (no engine change)",
       "docs/STRATEGY_LAB.md (no card is edited by this lane)",
-      "any SEALED or CODIFIED manifest, and any threshold, breaker, reason code or gate"
+      "any SEALED or CODIFIED manifest, and any threshold, breaker, reason code or gate",
+      "src/quant/backtest/metrics.ts (the QDR-19 helpers already exist; any edit here is an estimator change under a lane that may not move estimators)"
     ],
-    "terminalFence": "One diagnostic maximum and exactly one FULL run, per QDR-6/QDR-8. This manifest is DRAFT: it is not sealed, not runnable, and confers no authorisation. Sealing is a separate act by the quant-validation-auditor."
+    "terminalFence": "QDR-14 fence, disclosed not lifted. This id enters `PIT_MEMBERSHIP_REQUIRED_SETUP_IDS`, so every run of this version is unverified-diagnostic-only and CANNOT produce a terminal card until genuine historical membership, delisting-lifecycle and per-name PIT Sharia evidence exist; QDR-14's survivorship waiver is DIVERSIFICATION-only and is not available to this ALPHA lane. The authorisation is therefore EXACTLY ONE non-terminal diagnostic run under `--manifest`, which is sufficient for this lane's primary readout (realised cost drag, notional turnover, exit count for both arms). No FULL run may be claimed. This manifest is DRAFT: not sealed, not runnable, and conferring no authorisation. Sealing is a separate act by the quant-validation-auditor.",
+    "runConfig": {
+      "setup": "halal-hysteretic-fast-momentum-core",
+      "from": "2018-01-02",
+      "to": "2026-07-17",
+      "symbols": null,
+      "confirmFull": false,
+      "seed": 42,
+      "oosFraction": 0.3,
+      "engine": "shared",
+      "feed": "yahoo-daily",
+      "source": "db"
+    }
   },
   "configHash": null,
   "state": "DRAFT",
