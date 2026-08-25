@@ -83,3 +83,22 @@ describe('cron routes answer the verb Vercel Cron actually sends', () => {
     expect(typeof mod.POST).toBe('function');
   });
 });
+
+/**
+ * The scheduled call carries no body, so the DEFAULT is the scheduled behaviour. This previously
+ * resolved to two symbols (`['MSFT','NVDA']`) while the engine trades a sleeve drawn from 217, and
+ * it also defaulted to ingesting TASI, which is out of scope for this program. Both are pinned
+ * here because neither failure is visible at runtime — the job would report success either way.
+ */
+describe('quant-ingest default roster', () => {
+  it('defaults to the engine\'s own verified universe, not a hand-kept stub', async () => {
+    const { buildVerifiedUniverse } = await import('@/quant/universe/buildVerifiedUniverse');
+    const expected = buildVerifiedUniverse().entries.map((entry) => entry.symbol);
+
+    expect(expected.length).toBeGreaterThan(200);
+    // The stale stub, pinned so a regression to it is loud.
+    expect(expected).not.toEqual(['MSFT', 'NVDA']);
+    expect(expected).toContain('NVDA');
+    expect(expected).toContain('MU');
+  });
+});

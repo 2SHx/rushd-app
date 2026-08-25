@@ -4,9 +4,25 @@ import { z } from 'zod';
 import type { Market } from '@prisma/client';
 import { ingestBars } from '@/quant/data/ingest';
 import { rejectUnauthorizedCron } from '@/lib/cronAuth';
+import { buildVerifiedUniverse } from '@/quant/universe/buildVerifiedUniverse';
+
+/**
+ * The engine's OWN universe, not a hand-kept list.
+ *
+ * This was `['MSFT','NVDA']` — a two-symbol stub — so a scheduled bodyless call ingested two names
+ * while the momentum engine trades a sleeve drawn from 217. `buildVerifiedUniverse()` is the exact
+ * function `runLab` uses to resolve that sleeve (runLab.ts:1701), so deriving from it means the
+ * ingest roster cannot drift from what the strategy actually consumes.
+ *
+ * TASI is deliberately absent from the scheduled default: this program is NASDAQ-only by owner
+ * directive. The `market` body field still accepts it for explicit manual invocation.
+ */
+function defaultNasdaqSymbols(): string[] {
+  return buildVerifiedUniverse().entries.map((entry) => entry.symbol);
+}
 
 const DEFAULT_SYMBOLS: Record<Market, string[]> = {
-  NASDAQ: ['MSFT', 'NVDA'],
+  get NASDAQ() { return defaultNasdaqSymbols(); },
   TASI: ['2222', '1120'],
 };
 
@@ -29,7 +45,10 @@ async function handle(req: Request, rawBody: string) {
       return NextResponse.json({ error: 'invalid_body', details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const markets: Market[] = parsed.data.market ? [parsed.data.market] : ['NASDAQ', 'TASI'];
+    // NASDAQ-only when unspecified: TASI is out of scope for this program and a scheduled call
+    // carries no body, so the default IS the scheduled behaviour.
+    const markets: Market[] = parsed.data.market ? [parsed.data.market] : ['NASDAQ'];
+    const startedAt = Date.now();
     let processed = 0;
     let upserted = 0;
 
@@ -42,7 +61,9 @@ async function handle(req: Request, rawBody: string) {
       }
     }
 
-    return NextResponse.json({ processed, upserted });
+    // Duration is reported so the Vercel function-duration limit is measured, not assumed:
+    // 217 symbols is a large step up from the previous two.
+    return NextResponse.json({ processed, upserted, durationMs: Date.now() - startedAt });
   } catch (err) {
     console.error('Quant ingestion cron failed:', err);
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });

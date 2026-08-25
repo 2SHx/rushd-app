@@ -42,10 +42,14 @@ Vercel sends `Authorization: Bearer $CRON_SECRET` automatically once `CRON_SECRE
 
 Vercel's Hobby tier restricts both the number of cron jobs and their frequency, and function execution has a duration cap. Three daily jobs is deliberately modest, but **confirm the account's tier allows all three and that each job finishes inside the duration limit.** A job killed mid-write is worse than one that never ran.
 
-## Known gap — `quant-ingest` defaults are not the halal universe
+## Ingest roster — resolved
 
-`DEFAULT_SYMBOLS` in `src/app/api/cron/quant-ingest/route.ts` is `NASDAQ: ['MSFT','NVDA']` plus a TASI list. Scheduled with no body, the job therefore ingests **two** NASDAQ symbols, not the ~216-name halal universe the engine trades — and TASI, which is explicitly out of scope for this program.
+`quant-ingest` now derives its default NASDAQ roster from `buildVerifiedUniverse()`, **the same function `runLab` uses to resolve the engine's sleeve** (`runLab.ts:1701`), currently **217 symbols**. The roster cannot drift from what the strategy consumes, because it is the same call.
 
-This is left unchanged deliberately: choosing the ingest universe is a design decision on a money-adjacent path, not a mechanical fix. **It must be resolved before these schedules carry the forward lane**, or the lane will run on two symbols' worth of data.
+It previously read `['MSFT','NVDA']` — a two-symbol stub — so a scheduled bodyless call ingested two names while the engine trades a sleeve drawn from 217. It also defaulted to ingesting TASI, which is out of scope by owner directive; the scheduled default is now NASDAQ-only, while the `market` body field still accepts TASI for explicit manual invocation.
+
+Both failures are pinned in `src/lib/cronAuth.test.ts`, because neither is visible at runtime: the job reports success either way.
+
+**Open risk — duration.** 217 symbols is a large step up from two, and each is a network fetch. The route now returns `durationMs` so the Vercel function-duration limit is *measured* rather than assumed. Check it on the first scheduled run: a job killed mid-write is worse than one that never ran. If it does not fit, chunk it — do not lower the roster.
 
 `/api/cron/quant-intraday` is intentionally unscheduled: the intraday family was measured and closed (six strategies, ~2,040 trades, all negative).
