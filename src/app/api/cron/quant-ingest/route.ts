@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { Market } from '@prisma/client';
 import { ingestBars } from '@/quant/data/ingest';
+import { rejectUnauthorizedCron } from '@/lib/cronAuth';
 
 const DEFAULT_SYMBOLS: Record<Market, string[]> = {
   NASDAQ: ['MSFT', 'NVDA'],
@@ -14,22 +15,16 @@ const bodySchema = z.object({
   market: z.enum(['TASI', 'NASDAQ']).optional(),
 });
 
-export async function POST(req: Request) {
+/**
+ * Shared by both verbs. `rawBody` is empty for GET: Vercel Cron issues GET and carries no body, and
+ * every field of `bodySchema` is optional, so the scheduled call takes the defaults.
+ */
+async function handle(req: Request, rawBody: string) {
   try {
-    const authHeader = req.headers.get('Authorization');
-    const secret = process.env.CRON_SECRET;
+    const rejection = rejectUnauthorizedCron(req);
+    if (rejection) return rejection;
 
-    if (!secret) {
-      console.error('CRON_SECRET environment variable is missing.');
-      return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 });
-    }
-
-    if (authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    }
-
-    const raw = await req.text();
-    const parsed = bodySchema.safeParse(raw ? JSON.parse(raw) : {});
+    const parsed = bodySchema.safeParse(rawBody ? JSON.parse(rawBody) : {});
     if (!parsed.success) {
       return NextResponse.json({ error: 'invalid_body', details: parsed.error.flatten() }, { status: 400 });
     }
@@ -52,4 +47,13 @@ export async function POST(req: Request) {
     console.error('Quant ingestion cron failed:', err);
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
+}
+
+export async function POST(req: Request) {
+  return handle(req, await req.text());
+}
+
+/** Vercel Cron's verb. Same auth, same handler, no body. */
+export async function GET(req: Request) {
+  return handle(req, '');
 }
