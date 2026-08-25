@@ -46,7 +46,7 @@ Formation time is the SEC acceptance date. Each row was selected with `latestAva
 
 ## M2 unclassified permanent removals
 
-These 107 symbols appear in at least one captured snapshot and never appear in a later captured snapshot. They remain ordinary/unclassified fund removals unless pinned Form 25 evidence proves otherwise. No row below contributes to a confirmed-delisting count.
+These 107 symbols appear in at least one captured snapshot and never appear in a later captured snapshot. They remain ordinary/unclassified fund removals unless pinned Form 25 evidence proves otherwise. No row below contributes to a confirmed-delisting count. Fund weight denominators and ranks include every positive-value position, including unresolved holdings; unresolved holdings never become classified symbols.
 
 | Symbol | Last-seen report | Last-seen formation | Final fund weight | Weight rank | Top-60 weight proxy |
 |---|---|---|---:|---:|---|
@@ -56,8 +56,8 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | ALK | 2020-05-31 | 2020-07-28 | 0.0346% | 174 | no |
 | ALXN | 2020-11-30 | 2021-01-29 | 0.1759% | 103 | no |
 | AME | 2025-02-28 | 2025-04-29 | 0.1380% | 101 | no |
-| AMGN | 2023-05-31 | 2023-07-28 | 0.6358% | 32 | yes |
-| AMT | 2021-05-31 | 2021-07-29 | 0.7154% | 35 | yes |
+| AMGN | 2023-05-31 | 2023-07-28 | 0.5712% | 35 | yes |
+| AMT | 2021-05-31 | 2021-07-29 | 0.6251% | 38 | yes |
 | AMZN | 2025-05-31 | 2025-07-29 | 6.2463% | 4 | yes |
 | ANSS | 2025-05-31 | 2025-07-29 | 0.0909% | 132 | no |
 | APH | 2025-02-28 | 2025-04-29 | 0.2549% | 61 | no |
@@ -65,7 +65,7 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | ATVI | 2020-11-30 | 2021-01-29 | 0.4037% | 51 | yes |
 | AVB | 2026-02-28 | 2026-04-27 | 0.0758% | 152 | no |
 | BALL | 2025-05-31 | 2025-07-29 | 0.0517% | 182 | no |
-| BAX | 2022-02-28 | 2022-04-26 | 0.2340% | 78 | no |
+| BAX | 2022-02-28 | 2022-04-26 | 0.2069% | 86 | no |
 | BIO | 2024-08-31 | 2024-10-25 | 0.0223% | 230 | no |
 | BKR | 2026-02-28 | 2026-04-27 | 0.1984% | 85 | no |
 | BMY | 2024-05-31 | 2024-07-26 | 0.2934% | 54 | yes |
@@ -83,11 +83,11 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | DAY | 2024-02-29 | 2024-04-26 | 0.0452% | 183 | no |
 | DGX | 2024-08-31 | 2024-10-25 | 0.0576% | 194 | no |
 | DLTR | 2023-11-30 | 2024-01-29 | 0.1158% | 118 | no |
-| DOC | 2021-11-30 | 2022-01-26 | 0.0901% | 154 | no |
+| DOC | 2021-11-30 | 2022-01-26 | 0.0790% | 174 | no |
 | DRE | 2020-11-30 | 2021-01-29 | 0.0927% | 157 | no |
 | ENPH | 2025-02-28 | 2025-04-29 | 0.0243% | 223 | no |
 | EQR | 2025-08-31 | 2025-10-29 | 0.0758% | 148 | no |
-| ESS | 2023-05-31 | 2023-07-28 | 0.0792% | 156 | no |
+| ESS | 2023-05-31 | 2023-07-28 | 0.0712% | 170 | no |
 | ETN | 2025-02-28 | 2025-04-29 | 0.3677% | 45 | yes |
 | ETSY | 2024-08-31 | 2024-10-25 | 0.0208% | 233 | no |
 | FANG | 2024-08-31 | 2024-10-25 | 0.1152% | 123 | no |
@@ -96,8 +96,8 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | FLS | 2020-08-31 | 2020-10-28 | 0.0255% | 177 | no |
 | FMC | 2025-02-28 | 2025-04-29 | 0.0146% | 228 | no |
 | FTV | 2025-02-28 | 2025-04-29 | 0.0873% | 142 | no |
-| GAP | 2021-11-30 | 2022-01-26 | 0.0180% | 181 | no |
-| GEN | 2022-11-30 | 2023-01-26 | 0.0788% | 160 | no |
+| GAP | 2021-11-30 | 2022-01-26 | 0.0158% | 210 | no |
+| GEN | 2022-11-30 | 2023-01-26 | 0.0708% | 176 | no |
 | GIS | 2025-02-28 | 2025-04-29 | 0.1074% | 124 | no |
 | GOOG | 2025-05-31 | 2025-07-29 | 2.6414% | 9 | yes |
 | HES | 2025-05-31 | 2025-07-29 | 0.1181% | 111 | no |
@@ -106,9 +106,9 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | HPQ | 2025-05-31 | 2025-07-29 | 0.0755% | 147 | no |
 | HSIC | 2025-11-30 | 2026-01-28 | 0.0272% | 207 | no |
 | ILMN | 2024-05-31 | 2024-07-26 | 0.0580% | 188 | no |
-| INTC | 2023-05-31 | 2023-07-28 | 0.7110% | 26 | yes |
-| INTU | 2021-08-31 | 2021-10-27 | 0.8560% | 26 | yes |
-| IPGP | 2022-05-31 | 2022-07-28 | 0.0210% | 183 | no |
+| INTC | 2023-05-31 | 2023-07-28 | 0.6389% | 29 | yes |
+| INTU | 2021-08-31 | 2021-10-27 | 0.7435% | 30 | yes |
+| IPGP | 2022-05-31 | 2022-07-28 | 0.0185% | 212 | no |
 | J | 2025-02-28 | 2025-04-29 | 0.0510% | 192 | no |
 | JNPR | 2025-05-31 | 2025-07-29 | 0.0385% | 201 | no |
 | K | 2025-11-30 | 2026-01-28 | 0.0684% | 148 | no |
@@ -121,7 +121,7 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | LKQ | 2024-11-30 | 2025-01-29 | 0.0325% | 216 | no |
 | LUV | 2020-05-31 | 2020-07-28 | 0.1257% | 124 | no |
 | LW | 2025-02-28 | 2025-04-29 | 0.0231% | 225 | no |
-| MCD | 2021-05-31 | 2021-07-29 | 1.0678% | 22 | yes |
+| MCD | 2021-05-31 | 2021-07-29 | 0.9330% | 24 | yes |
 | META | 2025-05-31 | 2025-07-29 | 4.5854% | 5 | yes |
 | MHK | 2025-11-30 | 2026-01-28 | 0.0184% | 212 | no |
 | MOH | 2025-02-28 | 2025-04-29 | 0.0515% | 191 | no |
@@ -131,9 +131,9 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | MXIM | 2020-11-30 | 2021-01-29 | 0.1458% | 115 | no |
 | NLOK | 2020-11-30 | 2021-01-29 | 0.0710% | 170 | no |
 | NOV | 2020-05-31 | 2020-07-28 | 0.0345% | 175 | no |
-| NVR | 2023-05-31 | 2023-07-28 | 0.0824% | 150 | no |
+| NVR | 2023-05-31 | 2023-07-28 | 0.0740% | 164 | no |
 | NWS | 2024-05-31 | 2024-07-26 | 0.0111% | 238 | no |
-| OGN | 2021-08-31 | 2021-10-27 | 0.0470% | 172 | no |
+| OGN | 2021-08-31 | 2021-10-27 | 0.0408% | 197 | no |
 | PAYC | 2025-02-28 | 2025-04-29 | 0.0325% | 216 | no |
 | PFE | 2024-02-29 | 2024-04-26 | 0.6240% | 30 | yes |
 | PH | 2025-02-28 | 2025-04-29 | 0.2718% | 56 | yes |
@@ -144,15 +144,15 @@ These 107 symbols appear in at least one captured snapshot and never appear in a
 | QRVO | 2024-11-30 | 2025-01-29 | 0.0206% | 225 | no |
 | RHI | 2024-05-31 | 2024-07-26 | 0.0234% | 235 | no |
 | SBUX | 2023-11-30 | 2024-01-29 | 0.5231% | 34 | yes |
-| SEDG | 2022-11-30 | 2023-01-26 | 0.0980% | 143 | no |
-| SWK | 2022-05-31 | 2022-07-28 | 0.1080% | 136 | no |
+| SEDG | 2022-11-30 | 2023-01-26 | 0.0880% | 157 | no |
+| SWK | 2022-05-31 | 2022-07-28 | 0.0951% | 155 | no |
 | TFX | 2025-02-28 | 2025-04-29 | 0.0187% | 226 | no |
 | TIF | 2020-11-30 | 2021-01-29 | 0.0932% | 154 | no |
 | TWTR | 2020-11-30 | 2021-01-29 | 0.2421% | 77 | no |
 | UA | 2020-11-30 | 2021-01-29 | 0.0184% | 184 | no |
 | UAA | 2020-11-30 | 2021-01-29 | 0.0202% | 183 | no |
 | VAR | 2020-11-30 | 2021-01-29 | 0.1039% | 144 | no |
-| VFC | 2022-11-30 | 2023-01-26 | 0.0671% | 173 | no |
+| VFC | 2022-11-30 | 2023-01-26 | 0.0603% | 189 | no |
 | VLO | 2025-02-28 | 2025-04-29 | 0.1309% | 108 | no |
 | WBA | 2024-08-31 | 2024-10-25 | 0.0218% | 232 | no |
 | XRAY | 2024-02-29 | 2024-04-26 | 0.0288% | 194 | no |

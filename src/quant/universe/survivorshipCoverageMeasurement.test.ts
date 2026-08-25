@@ -12,6 +12,7 @@ function snapshot(
   reportDate: string,
   availableAt: string,
   holdings: readonly [symbol: string, valueUsd: string][],
+  unresolvedValues: readonly string[] = [],
 ): SpusNportSnapshot {
   return {
     accession,
@@ -36,7 +37,17 @@ function snapshot(
       assetCategory: 'EC',
       issuerCategory: 'CORP',
     })),
-    unresolvedHoldings: [],
+    unresolvedHoldings: unresolvedValues.map((valueUsd, index) => ({
+      isin: `US00000000${index.toString().padStart(2, '0')}`,
+      name: `Unresolved ${index}`,
+      title: 'Common Stock',
+      cusip: `00000000${index}`,
+      balance: '1',
+      valueUsd,
+      assetCategory: 'EC',
+      issuerCategory: 'CORP',
+      reason: 'NOT_IN_CROSSWALK',
+    })),
     membershipUnknownSymbols: [],
     unidentifiedHoldings: [],
   };
@@ -65,6 +76,20 @@ describe('offline survivorship coverage measurement', () => {
     expect(result.m2.reasonCodes).toContain(UNAVAILABLE_REASONS.lifecycle);
     expect(result.m3.confirmedDelistingExposureLowerBound).toBeNull();
     expect(result.m3.confirmedDelistingExposureUpperBound).toBeNull();
+  });
+
+  it('includes unresolved positions in fund weight and rank but never in symbol classification', () => {
+    const snapshots = [
+      snapshot('first', '2020-01-31', '2020-03-31', [['DEADCO', '60'], ['KEEP', '40']], ['100']),
+      snapshot('second', '2020-04-30', '2020-06-30', [['KEEP', '100']]),
+    ];
+    const result = measureSurvivorshipCoverage(snapshots);
+    const removal = result.m2.unclassifiedPermanentRemovals[0];
+
+    expect(result.historicalIdentifiedSymbolCount).toBe(2);
+    expect(result.formationDates[0].unresolvedMemberCount).toBe(1);
+    expect(result.m2.unclassifiedPermanentRemovals).toHaveLength(1);
+    expect(removal).toMatchObject({ symbol: 'DEADCO', finalFundWeight: '30.0000%', finalFundWeightRank: 2 });
   });
 
   it('renders byte-identical output without prohibited corrected performance metrics', () => {

@@ -10,6 +10,12 @@ Decisions: <key choices made, one line>
 Open: <risks/next, one line>
 ```
 
+## 2026-08-25 — Offline survivorship-exposure measurement completed ✅
+Shipped: a deterministic, keyless N-PORT measurement over all 25 committed PIT formations, covering 320 identified historical symbols and 107 explicitly unclassified permanent fund removals.
+Decisions: M1/M2/M3 remain unavailable rather than coerced to zero; the 18–107 top-60-weight proxy is not delisting or performance evidence, so the data purchase decision is DEFER.
+Verify: two cold renders matched SHA-256 `9d62fcd696040d6828f9251f10a229da3263e65c6e9c6ff6ffa0f90a442c0176`; focused 5/5, DB-writer-excluded repository suite 2,036/2,036, TypeScript and lint clean; fresh QA passed after unresolved holdings were added to fund-weight denominators/ranks.
+Open: exact M1 requires a committed date-keyed MarketBar inventory; M2/M3 require pinned Form 25 lifecycle evidence, exact 63-trading-day resolution, unresolved N-PORT identities, and dollar-volume sleeve inputs.
+
 ## 2026-08-23 — QDR-19 benchmark context reasons completed ✅
 Shipped: completed Claude's QDR-19 reporting handoff so non-declarable benchmark evidence names `PARTIAL_COVERAGE` for a real short-history instrument and `NOT_INVESTABLE` for a reconstructed basket, with like-for-like observation counts in daily and five-session units.
 Decisions: lazy-dev rung 2 reused the existing evidence/renderer seams; QDR-20's investability veto dominates simultaneous partial coverage, missing or contradictory partial-coverage metadata fails closed, and no terminal/FULL experiment was run.

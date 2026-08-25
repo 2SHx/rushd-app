@@ -4,7 +4,6 @@ import {
   latestAvailableSpusNportSnapshot,
   loadCapturedSpusNportSnapshots,
   toPointInTimeUniverseSnapshot,
-  type SpusNportHolding,
   type SpusNportSnapshot,
 } from '../src/quant/universe/spusNport';
 
@@ -67,6 +66,12 @@ interface ExactDecimal {
   readonly scale: number;
 }
 
+interface FundPosition {
+  readonly key: string;
+  readonly symbol: string | null;
+  readonly valueUsd: string;
+}
+
 const BIG_ZERO = BigInt(0);
 const BIG_ONE = BigInt(1);
 const BIG_TWO = BigInt(2);
@@ -119,10 +124,22 @@ function percentageOf(value: string, values: readonly string[], places = 4): str
   return `${whole}.${fraction}%`;
 }
 
-function rankedHoldings(snapshot: SpusNportSnapshot): readonly SpusNportHolding[] {
-  return [...snapshot.holdings].sort((a, b) => {
+function rankedFundPositions(snapshot: SpusNportSnapshot): readonly FundPosition[] {
+  const positions: FundPosition[] = [
+    ...snapshot.holdings.map((holding) => ({
+      key: `identified:${holding.symbol}`,
+      symbol: holding.symbol,
+      valueUsd: holding.valueUsd,
+    })),
+    ...snapshot.unresolvedHoldings.map((holding, index) => ({
+      key: `unresolved:${index}:${holding.isin}:${holding.cusip}`,
+      symbol: null,
+      valueUsd: holding.valueUsd,
+    })),
+  ];
+  return positions.sort((a, b) => {
     const byValue = compareDecimal(b.valueUsd, a.valueUsd);
-    return byValue || compareText(a.symbol, b.symbol);
+    return byValue || compareText(a.key, b.key);
   });
 }
 
@@ -159,17 +176,17 @@ export function measureSurvivorshipCoverage(
     .map((symbol): UnclassifiedRemoval => {
       const last = [...selected].reverse().find(({ identifiedSymbols }) => identifiedSymbols.includes(symbol));
       if (!last) throw new Error(`missing last-seen snapshot for ${symbol}`);
-      const ranking = rankedHoldings(last.snapshot);
-      const rank = ranking.findIndex((holding) => holding.symbol === symbol) + 1;
-      const holding = ranking[rank - 1];
-      if (!holding || rank < 1) throw new Error(`missing last-seen holding for ${symbol}`);
+      const ranking = rankedFundPositions(last.snapshot);
+      const rank = ranking.findIndex((position) => position.symbol === symbol) + 1;
+      const position = ranking[rank - 1];
+      if (!position || rank < 1) throw new Error(`missing last-seen holding for ${symbol}`);
       return Object.freeze({
         symbol,
         lastSeenReportDate: isoDate(last.snapshot.reportDate),
         lastSeenFormationAt: isoDate(last.snapshot.availableAt),
         finalFundWeight: percentageOf(
-          holding.valueUsd,
-          last.snapshot.holdings.map((item) => item.valueUsd),
+          position.valueUsd,
+          ranking.map((item) => item.valueUsd),
         ),
         finalFundWeightRank: rank,
         top60FundWeightProxy: rank <= 60,
@@ -235,7 +252,7 @@ export function renderSurvivorshipMemo(result: SurvivorshipMeasurement): string 
     `| Formation | Report date | Accession | Identified members | Unresolved positive-value members | Available members | Coverage |\n` +
     `|---|---|---|---:|---:|---:|---:|\n${rows.join('\n')}\n\n` +
     `## M2 unclassified permanent removals\n\n` +
-    `These ${result.m2.unclassifiedPermanentRemovals.length} symbols appear in at least one captured snapshot and never appear in a later captured snapshot. They remain ordinary/unclassified fund removals unless pinned Form 25 evidence proves otherwise. No row below contributes to a confirmed-delisting count.\n\n` +
+    `These ${result.m2.unclassifiedPermanentRemovals.length} symbols appear in at least one captured snapshot and never appear in a later captured snapshot. They remain ordinary/unclassified fund removals unless pinned Form 25 evidence proves otherwise. No row below contributes to a confirmed-delisting count. Fund weight denominators and ranks include every positive-value position, including unresolved holdings; unresolved holdings never become classified symbols.\n\n` +
     `| Symbol | Last-seen report | Last-seen formation | Final fund weight | Weight rank | Top-60 weight proxy |\n` +
     `|---|---|---|---:|---:|---|\n${removals.join('\n')}\n\n` +
     `## Reproduction and limits\n\n` +
