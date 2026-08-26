@@ -23,6 +23,10 @@ const h = vi.hoisted(() => ({
   portfolioSnapshotFindFirst: vi.fn(),
   portfolioSnapshotCreate: vi.fn(),
   portfolioItemFindMany: vi.fn(),
+  // QDR-23: purification now reads investee income from Fundamentals instead of deriving from
+  // realized capital gain. Default null = no covering filing, which exercises the disclosed
+  // dividend-floor fallback rather than silently returning zero.
+  fundamentalsFindFirst: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
   decisionFindFirst: vi.fn(),
   orderUpdate: vi.fn(),
   transactionFn: vi.fn(),
@@ -66,6 +70,7 @@ vi.mock('@/lib/prisma', () => ({
       create: (...args: any[]) => h.portfolioSnapshotCreate(...args),
     },
     portfolioItem: { findMany: (...args: any[]) => h.portfolioItemFindMany(...args) },
+    fundamentals: { findFirst: (...args: any[]) => h.fundamentalsFindFirst(...args) },
     $transaction: (callback: any) => h.transactionFn(callback),
   },
 }));
@@ -298,7 +303,18 @@ describe('executePortfolioRebalance execution safety', () => {
   });
 
   it('reconciles a filled Order after DB settlement failure without a second broker submit', async () => {
-    h.userFindUnique.mockResolvedValue(user([portfolioItem('MSFT', 'NASDAQ')]));
+    // Purification must actually fire for the "TRADE + purification in ONE transaction" assertion
+    // below to mean anything. Under QDR-23 that needs attributable income and a real holding
+    // period — with neither, the correct amount is zero and no purification row is written at all.
+    h.userFindUnique.mockResolvedValue(user([
+      portfolioItem('MSFT', 'NASDAQ', {
+        createdAt: new Date(AS_OF.getTime() - 365 * 24 * 3600 * 1000),
+      }),
+    ]));
+    h.fundamentalsFindFirst.mockResolvedValue({
+      period: 'ANNUAL',
+      metrics: { totalRevenueUsd: 1_000_000, sharesOutstanding: 1_000 },
+    });
     h.tx.transaction.create.mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF))
@@ -378,20 +394,40 @@ describe('executePortfolioRebalance execution safety', () => {
     expect(h.portfolioSnapshotCreate).toHaveBeenCalledTimes(1);
   });
 
-  it('uses Decimal fill values for realized profit and purification audit', async () => {
+  /**
+   * QDR-23 (R4): the amount is the investor's share of the investee's non-permissible INCOME over
+   * the holding period (AAOIFI SS 21), NOT ratio x realized capital gain. This test previously
+   * asserted `amount == profit * ratio` — exactly the formula the record overturned.
+   *
+   * Hand-checkable: revenue 1,000,000 x ratio 0.005 x (10 / 1,000 shares) x full period = 50.
+   * The old formula on the identical trade gives 1000 x 0.005 = 5, so the two are unambiguously
+   * distinguishable and a regression could not pass silently.
+   */
+  it('purifies attributed income, not realized gain, and still records the gain', async () => {
     h.userFindUnique.mockResolvedValue(user([
-      portfolioItem('MSFT', 'NASDAQ', { shares: new D(10), costBasis: new D(200) }),
+      portfolioItem('MSFT', 'NASDAQ', {
+        shares: new D(10),
+        costBasis: new D(200),
+        // Held a full reported period; the levy is prorated by holding time, so the fixture's
+        // default (createdAt = AS_OF) would correctly attribute zero income.
+        createdAt: new Date(AS_OF.getTime() - 365 * 24 * 3600 * 1000),
+      }),
     ]));
     h.submitOrder.mockResolvedValue(filled('10', '300'));
+    h.fundamentalsFindFirst.mockResolvedValue({
+      period: 'ANNUAL',
+      metrics: { totalRevenueUsd: 1_000_000, sharesOutstanding: 1_000 },
+    });
 
     const result = await executePortfolioRebalance(USER_ID, STRATEGY_ID, AS_OF);
 
-    expect(result.purificationOwed).toBe(5);
-    expect(h.tx.purificationEntry.create.mock.calls[0][0].data).toMatchObject({
-      userId: USER_ID,
-      symbol: 'MSFT',
-    });
-    expect(h.tx.purificationEntry.create.mock.calls[0][0].data.profit.toString()).toBe('1000');
-    expect(h.tx.purificationEntry.create.mock.calls[0][0].data.amount.toString()).toBe('5');
+    expect(result.purificationOwed).toBeCloseTo(50, 6);
+    const entry = h.tx.purificationEntry.create.mock.calls[0][0].data;
+    expect(entry).toMatchObject({ userId: USER_ID, symbol: 'MSFT' });
+    // Realized gain is still RECORDED as a fact about the trade...
+    expect(entry.profit.toString()).toBe('1000');
+    // ...but it no longer drives the amount. 5 would be the overturned gain-based answer.
+    expect(Number(entry.amount.toString())).toBeCloseTo(50, 6);
+    expect(entry.amount.toString()).not.toBe('5');
   });
 });

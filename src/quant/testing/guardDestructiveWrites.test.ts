@@ -47,7 +47,15 @@ describe('destructive write guard', () => {
    * contention. AutoRunClaim is the model because it is the one the incident actually hit.
    */
   it('refuses an unscoped deleteMany and never delegates it to the driver', async () => {
-    expect(databaseIsDisposable()).toBe(false); // guard is armed in this environment
+    // Arm the guard EXPLICITLY rather than relying on ambient env. Tests now run against a local
+    // disposable database (.env.test), where `databaseIsDisposable()` is correctly true — so a
+    // precondition asserting otherwise would fail for the right reason and hide the real test.
+    const previousBranch = process.env.NEON_BRANCH;
+    const previousOptIn = process.env.RUSHD_DISPOSABLE_TEST_DB;
+    process.env.NEON_BRANCH = 'production';
+    delete process.env.RUSHD_DISPOSABLE_TEST_DB;
+    expect(databaseIsDisposable()).toBe(false);
+
     let delegated = 0;
     const next = async () => {
       delegated += 1;
@@ -68,6 +76,10 @@ describe('destructive write guard', () => {
       ),
     ).resolves.toEqual({ count: 999 });
     expect(delegated).toBe(1);
+
+    if (previousBranch === undefined) delete process.env.NEON_BRANCH;
+    else process.env.NEON_BRANCH = previousBranch;
+    if (previousOptIn !== undefined) process.env.RUSHD_DISPOSABLE_TEST_DB = previousOptIn;
   });
 
   it('delegates every write once the database is explicitly marked disposable', async () => {

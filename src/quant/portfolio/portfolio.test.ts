@@ -331,7 +331,11 @@ describe('Halal Quant Portfolio Tests', () => {
         shares: 100.0,
         market: 'NASDAQ',
         currency: 'USD',
-        costBasis: 200.0 // bought at 200; large enough that rebalancing must realize a gain
+        costBasis: 200.0, // bought at 200; large enough that rebalancing must realize a gain
+        // Held for ~180 days. Under QDR-23 the obligation is prorated by HOLDING PERIOD, so a
+        // position created moments before the sale is correctly attributed ~zero company income —
+        // the default `now()` would make this test assert against a same-day flip.
+        createdAt: new Date(Date.now() - 180 * 24 * 3600 * 1000),
       }
     });
 
@@ -352,23 +356,48 @@ describe('Halal Quant Portfolio Tests', () => {
     await clearFixtureClaims();
     await prisma.purificationEntry.deleteMany({ where: { userId } });
 
-    const res = await executePortfolioRebalance(userId, strategyId, now);
-    expect(res.rebalanced).toBe(true);
+    // QDR-23 (R4): purification is the investor's share of the investee's non-permissible INCOME
+    // over the holding period (AAOIFI SS 21), so the calculation needs a filing to attribute from.
+    // Without one it correctly falls back to the disclosed dividend floor and owes nothing here.
+    const fundamentalsFixture = await prisma.fundamentals.create({
+      data: {
+        symbol: 'MSFT',
+        market: 'NASDAQ',
+        asOf: new Date(now.getTime() - 120 * 24 * 3600 * 1000),
+        releasedAt: new Date(now.getTime() - 60 * 24 * 3600 * 1000),
+        period: 'ANNUAL',
+        source: 'MOCK',
+        metrics: { totalRevenueUsd: 200_000_000_000, sharesOutstanding: 7_500_000_000 },
+      },
+    });
 
-    const entries = await prisma.purificationEntry.findMany({ where: { userId } });
-    expect(entries.length).toBeGreaterThan(0);
+    try {
+      const res = await executePortfolioRebalance(userId, strategyId, now);
+      expect(res.rebalanced).toBe(true);
 
-    // Verification of exact purification math:
-    // The exact sold quantity is determined by target weights; every realized-profit entry must
-    // still apply the screened MSFT purification ratio exactly.
-    const msftEntry = entries.find(e => e.symbol === 'MSFT');
-    expect(msftEntry).toBeDefined();
-    
-    const profitNum = Number(msftEntry!.profit.toString());
-    const amountNum = Number(msftEntry!.amount.toString());
-    const ratioNum = Number(msftEntry!.ratio.toString());
+      const entries = await prisma.purificationEntry.findMany({ where: { userId } });
+      expect(entries.length).toBeGreaterThan(0);
 
-    expect(profitNum).toBeGreaterThan(0);
-    expect(amountNum).toBeCloseTo(profitNum * ratioNum, 4);
+      const msftEntry = entries.find(e => e.symbol === 'MSFT');
+      expect(msftEntry).toBeDefined();
+
+      const profitNum = Number(msftEntry!.profit.toString());
+      const amountNum = Number(msftEntry!.amount.toString());
+      const ratioNum = Number(msftEntry!.ratio.toString());
+
+      // `profit` is still RECORDED as a fact about the trade...
+      expect(profitNum).toBeGreaterThan(0);
+      // ...but it must NO LONGER drive the amount. This is the exact assertion QDR-23 overturned:
+      // charging ratio x realized capital gain treated a price movement as company income, and was
+      // measured as a 30-80x overstatement.
+      expect(amountNum).not.toBeCloseTo(profitNum * ratioNum, 4);
+
+      // The amount is income attribution: revenue x ratio x ownership x holding-period fraction.
+      // Every input is a property of the COMPANY and the holding — none is a price.
+      expect(amountNum).toBeGreaterThan(0);
+      expect(amountNum).toBeLessThan(profitNum * ratioNum);
+    } finally {
+      await prisma.fundamentals.delete({ where: { id: fundamentalsFixture.id } });
+    }
   }, 30_000);
 });

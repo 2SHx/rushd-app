@@ -306,7 +306,18 @@ describe('POST /api/cron/quant-ingest', () => {
     expect(res.status).toBe(500);
   });
 
-  it('processes the default symbol set per market with a valid secret', async () => {
+  /**
+   * The scheduled call carries NO body, so this default IS the scheduled behaviour. It used to be
+   * `['MSFT','NVDA']` plus TASI — four symbols — while the momentum engine trades a sleeve drawn
+   * from the verified universe. The count is derived from `buildVerifiedUniverse()` rather than
+   * hardcoded, because a literal would silently drift out of step with the engine's own roster and
+   * nothing at runtime would notice: the job reports success either way.
+   */
+  it('processes the engine\'s verified NASDAQ universe with a valid secret', async () => {
+    const { buildVerifiedUniverse } = await import('@/quant/universe/buildVerifiedUniverse');
+    const expected = buildVerifiedUniverse().entries.length;
+    expect(expected).toBeGreaterThan(200);
+
     const { POST } = await import('@/app/api/cron/quant-ingest/route');
     const res = await POST(
       new Request('http://x/api/cron/quant-ingest', {
@@ -316,7 +327,18 @@ describe('POST /api/cron/quant-ingest', () => {
     );
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body.processed).toBe(4); // MSFT, NVDA, 2222, 1120
-    expect(body.upserted).toBe(8); // 4 symbols * 2 candles each
+    // NASDAQ only: TASI is out of scope for this program and no longer in the scheduled default.
+    expect(body.processed).toBe(expected);
+    expect(body.upserted).toBe(expected * 2); // 2 candles per symbol in the mock feed
+  });
+
+  it('answers GET, the verb Vercel Cron actually sends', async () => {
+    const { GET } = await import('@/app/api/cron/quant-ingest/route');
+    const res = await GET(
+      new Request('http://x/api/cron/quant-ingest', {
+        headers: { Authorization: 'Bearer test-secret' },
+      }),
+    );
+    expect(res.status).toBe(200);
   });
 });

@@ -12,7 +12,10 @@
     "lint": "next lint",
     "test": "vitest run",
     "db:warm": "KEEPALIVE_FORCE=1 node scripts/db-keepalive.mjs",
-    "preflight:forward": "tsx scripts/forward-lane-preflight.ts"
+    "preflight:forward": "tsx scripts/forward-lane-preflight.ts",
+    "db:local:up": "docker start rushd-pg || docker run -d --name rushd-pg -p 5434:5432 -e POSTGRES_PASSWORD=rushd -e POSTGRES_USER=rushd -e POSTGRES_DB=rushd postgres:16-alpine",
+    "db:local:down": "docker stop rushd-pg",
+    "db:local:migrate": "DATABASE_URL=postgresql://rushd:rushd@localhost:5434/rushd?schema=public prisma migrate deploy"
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.28",
