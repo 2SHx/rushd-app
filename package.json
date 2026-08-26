@@ -11,7 +11,8 @@
     "quant:experiment": "tsx scripts/quant-experiment.ts",
     "lint": "next lint",
     "test": "vitest run",
-    "db:warm": "KEEPALIVE_FORCE=1 node scripts/db-keepalive.mjs"
+    "db:warm": "KEEPALIVE_FORCE=1 node scripts/db-keepalive.mjs",
+    "preflight:forward": "tsx scripts/forward-lane-preflight.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.28",
