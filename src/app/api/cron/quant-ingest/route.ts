@@ -5,6 +5,7 @@ import type { Market } from '@prisma/client';
 import { ingestBars } from '@/quant/data/ingest';
 import { rejectUnauthorizedCron } from '@/lib/cronAuth';
 import { buildVerifiedUniverse } from '@/quant/universe/buildVerifiedUniverse';
+import { captureUniverseMembership } from '@/quant/universe/captureMembership';
 
 /**
  * The engine's OWN universe, not a hand-kept list.
@@ -61,9 +62,22 @@ async function handle(req: Request, rawBody: string) {
       }
     }
 
+    // Forward point-in-time membership capture. Unbackfillable: a day not captured is permanently
+    // absent from the record, which is exactly the gap the survivorship measurement found for
+    // 2018-2020 and could not close at any price. Deliberately NON-FATAL — a capture failure must
+    // never abort bar ingestion, because losing today's bars to fix tomorrow's evidence is a bad
+    // trade. The failure is reported in the response rather than swallowed.
+    let membership: unknown = null;
+    try {
+      membership = await captureUniverseMembership();
+    } catch (err) {
+      console.error('Universe membership capture failed:', err);
+      membership = { error: err instanceof Error ? err.message : 'unknown' };
+    }
+
     // Duration is reported so the Vercel function-duration limit is measured, not assumed:
     // 217 symbols is a large step up from the previous two.
-    return NextResponse.json({ processed, upserted, durationMs: Date.now() - startedAt });
+    return NextResponse.json({ processed, upserted, membership, durationMs: Date.now() - startedAt });
   } catch (err) {
     console.error('Quant ingestion cron failed:', err);
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });

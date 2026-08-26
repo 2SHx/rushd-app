@@ -704,3 +704,57 @@ model PurificationEntry {
 
   @@index([userId, createdAt])
 }
+
+/// Append-only point-in-time record of the eligible halal universe, captured daily going forward.
+///
+/// WHY THIS EXISTS: the survivorship measurement found 108 of 320 historical symbols absent from
+/// the current fixture, and historical membership for 2018-2020 may be unbuyable at any price
+/// (docs/quant-experiments/survivorship-coverage-measurement.md ruled DEFER). Nothing can recover
+/// that history — but from today forward it is free, and only if capture starts now. A day not
+/// captured is permanently absent from the record.
+///
+/// APPEND-ONLY BY CONTRACT. There is no update or delete path: a mutable membership row is
+/// worthless as point-in-time evidence. Idempotency is enforced by the @@unique on
+/// (captureDate, symbol, market) plus `skipDuplicates`, never by overwriting.
+///
+/// EXCLUDED NAMES ARE RECORDED TOO. An excluded symbol at date D is itself evidence — it proves
+/// the screen ran and rejected the name, which is a different fact from the name being absent
+/// because data was missing.
+///
+/// IDENTITY CAVEAT: `buildVerifiedUniverse()` does not expose a CIK, so rows are symbol-keyed and
+/// `cik` is reserved for later enrichment. Each row is unambiguous on its own because `capturedAt`
+/// stamps it, but a FUTURE CONSUMER JOINING ON `symbol` ACROSS TIME could merge two different
+/// companies if a ticker is reused. Join on (symbol, captureDate) windows, or backfill `cik`
+/// first. This is the same defect class already identified in MarketBar.
+model UniverseMembershipCapture {
+  id                   String   @id @default(uuid())
+  /// The calendar day this capture represents; the idempotency key.
+  captureDate          DateTime @db.Date
+  /// Server-assigned wall clock at capture. The point-in-time key. Never client-supplied.
+  capturedAt           DateTime @default(now())
+  symbol               String
+  /// Reserved for later enrichment; null today because the universe source does not carry it.
+  cik                  String?
+  market               Market
+  /// true = eligible member at captureDate, false = screened and rejected. Never null.
+  included             Boolean
+  /// Provenance tier from UniverseEntry, e.g. 'index-provider-screened'.
+  tier                 String?
+  /// Human-readable source citation, e.g. "SPUS holdings fixture (2026-07-17)".
+  provenance           String?
+  /// ISO date of the underlying source snapshot, distinct from captureDate.
+  sourceAsOf           String?
+  /// AAOIFI purification ratio in bps; null when the source does not disclose one (never faked).
+  purificationRatioBps Int?
+  /// Informational codes carried even for an included name; never hides a caveat.
+  reasonCodes          String[]
+  /// Populated only when included = false.
+  exclusionReason      String?
+  /// Hash of the captured payload so a row cannot be silently swapped after the fact.
+  contentHash          String
+  createdAt            DateTime @default(now())
+
+  @@unique([captureDate, symbol, market])
+  @@index([captureDate])
+  @@index([symbol, capturedAt])
+}
