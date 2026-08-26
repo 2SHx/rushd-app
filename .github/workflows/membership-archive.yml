@@ -1,0 +1,64 @@
+name: membership archive
+
+# Durable archive of the one thing that cannot be re-created.
+#
+# The forward lane must survive ten years unattended, and no free managed database reliably does —
+# free tiers pause, expire, or change terms. This makes the DATABASE DISPOSABLE: bars are
+# re-ingestable from the price feed, fundamentals from SEC EDGAR, but universe membership is
+# UNBACKFILLABLE. A day not observed is gone permanently.
+#
+# Vercel's filesystem is read-only, so its cron cannot commit. This runs where a commit is possible.
+#
+# SELF-SUSTAINING BY DESIGN: GitHub disables scheduled workflows after 60 days of repository
+# inactivity. Because this workflow commits on the days membership changes, it keeps the repository
+# active and therefore keeps itself enabled. On a long quiet stretch with no changes it still runs;
+# if it ever is disabled, the preflight's membership-freshness check is what surfaces it.
+
+on:
+  schedule:
+    # 23:40 UTC weekdays — after quant-ingest at 23:00 has captured the day (see docs/CRON.md for
+    # why 23:00 UTC clears the US close under both EST and EDT).
+    - cron: '40 23 * * 1-5'
+  workflow_dispatch: {}
+
+# Least privilege: this job commits data files and nothing else.
+permissions:
+  contents: write
+
+concurrency:
+  group: membership-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Export today's membership snapshot
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npx tsx scripts/export-membership.ts
+
+      - name: Commit if the archive changed
+        run: |
+          if [ -z "$(git status --porcelain data/membership)" ]; then
+            echo "No new membership snapshot — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/membership
+          git commit -m "chore(archive): membership snapshot $(date -u +%Y-%m-%d)"
+          git push

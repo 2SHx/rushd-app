@@ -15,7 +15,8 @@
     "preflight:forward": "tsx scripts/forward-lane-preflight.ts",
     "db:local:up": "docker start rushd-pg || docker run -d --name rushd-pg -p 5434:5432 -e POSTGRES_PASSWORD=rushd -e POSTGRES_USER=rushd -e POSTGRES_DB=rushd postgres:16-alpine",
     "db:local:down": "docker stop rushd-pg",
-    "db:local:migrate": "DATABASE_URL=postgresql://rushd:rushd@localhost:5434/rushd?schema=public prisma migrate deploy"
+    "db:local:migrate": "DATABASE_URL=postgresql://rushd:rushd@localhost:5434/rushd?schema=public prisma migrate deploy",
+    "membership:export": "tsx scripts/export-membership.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.28",
