@@ -6,10 +6,50 @@ import { validateOrderFill, type BrokerAdapter, type OrderResult } from '../exec
 import { selectBroker } from '../execution/registry';
 import { acquireUserExecutionLock, releaseUserExecutionLock } from '../execution/userLock';
 import { constructHalalPortfolio } from './construction';
+import {
+  PERIOD_DAYS, heldDaysBetween, purificationOwed, type PurificationResult,
+} from './purification';
 
 const D = Prisma.Decimal;
 const MAX_MARK_AGE_MS = 5 * 24 * 60 * 60 * 1000;
 const MAX_BUY_SLIPPAGE = new D('1.01');
+
+/**
+ * Loads the point-in-time fundamentals backing one holding's purification and applies AAOIFI SS 21
+ * income attribution. `releasedAt` gates visibility so a filing published after `asOf` can never
+ * inform a decision made at `asOf`.
+ *
+ * Falls back to the disclosed dividend floor when no covering filing exists; the caller records
+ * which basis was used rather than presenting the two as equivalent.
+ */
+async function computeHoldingPurification(args: {
+  symbol: string;
+  ratio: number;
+  heldShares: number;
+  openedAt: Date;
+  asOf: Date;
+}): Promise<PurificationResult> {
+  const row = await prisma.fundamentals.findFirst({
+    where: { symbol: args.symbol, market: 'NASDAQ', releasedAt: { lte: args.asOf } },
+    orderBy: { releasedAt: 'desc' },
+    select: { metrics: true, period: true },
+  });
+
+  const metrics = (row?.metrics ?? {}) as Record<string, unknown>;
+  const numeric = (key: string): number | null => {
+    const value = metrics[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  };
+
+  return purificationOwed({
+    ratio: args.ratio,
+    totalRevenueUsd: numeric('totalRevenueUsd'),
+    sharesOutstanding: numeric('sharesOutstanding'),
+    heldShares: args.heldShares,
+    heldDays: heldDaysBetween(args.openedAt, args.asOf),
+    periodDays: row?.period === 'QUARTERLY' ? PERIOD_DAYS.QUARTERLY : PERIOD_DAYS.ANNUAL,
+  });
+}
 
 export interface RebalanceLog {
   rebalanced: boolean;
@@ -421,10 +461,27 @@ async function runRebalancePass(
     if (!fill) continue;
 
     const notional = fill.filledQty.mul(fill.avgFillPrice);
+    const ratio = target?.ratio ?? 0.005;
+    // QDR-23 (R4): purification is the investor's share of the investee's non-permissible INCOME
+    // over the holding period (AAOIFI SS 21 §3/4) — NOT a levy on realized capital gain. The
+    // previous `max(0, avgFillPrice - costBasis) x filledQty x ratio` charged a price movement and
+    // floored losses away; QDR-23 measured that base as a 30-80x overstatement. Price, cost basis
+    // and gain are deliberately no longer inputs here.
+    const purificationResult = await computeHoldingPurification({
+      symbol: item.symbol,
+      ratio,
+      heldShares: fill.filledQty.toNumber(),
+      openedAt: item.createdAt,
+      asOf,
+    });
+    const purification = new D(purificationResult.amountUsd.toFixed(8));
+    // Realized gain is still RECORDED — it is a true fact about the trade — but it is no longer the
+    // purification base. `PurificationEntry.profit` is a required column whose name now describes
+    // its provenance rather than its role; repurposing it to hold the attributed income base would
+    // make historical rows and new rows mean different things in the same column. Adding a `basis`
+    // column so the two are distinguishable is a separate migration on a live money table.
     const costBasis = item.costBasis ?? price;
     const profit = D.max(0, fill.avgFillPrice.minus(costBasis).mul(fill.filledQty));
-    const ratio = target?.ratio ?? 0.005;
-    const purification = profit.mul(ratio.toString());
 
     await prisma.$transaction(async (tx) => {
       await tx.transaction.create({
@@ -466,7 +523,7 @@ async function runRebalancePass(
             amount: purification,
             currency: 'USD',
             type: 'PROFIT_SHARE',
-            description: `Purification fee logged for realized gains on ${item.symbol}`,
+            description: `Purification logged for non-compliant income attributable to ${item.symbol}`,
           },
         });
       }
