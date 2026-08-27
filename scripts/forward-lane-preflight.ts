@@ -92,8 +92,12 @@ async function main() {
     ok: Boolean(owner),
     detail: !ownerId ? 'QUANT_INCUBATION_OWNER_USER_ID unset'
       : owner ? `${owner.email}` : `id ${ownerId} NOT FOUND (deleted by the 2026-08-22 test wipe)`,
-    remedy: 'Restore from a Neon point-in-time branch, or recreate and update '
-      + 'QUANT_INCUBATION_OWNER_USER_ID. Do not guess the original fields.',
+    // NOT a manual restore. `assertIncubationOwner` requires only PARENT + ULTRA, and the id is
+    // referenced nowhere but .env — so any owner satisfying those two facts works. Checked before
+    // asserting this: the previously "lost" id appeared in no source file.
+    remedy: 'Run `node scripts/seed-dev.mjs` then `node scripts/set-incubation-owner.mjs`, and set '
+      + 'QUANT_INCUBATION_OWNER_USER_ID to the id it prints. No point-in-time restore is needed: '
+      + 'the owner is an identity, not history, and the forward lane starts flat.',
   });
 
   // 5. Forward membership capture — unbackfillable, so a stall is urgent.
