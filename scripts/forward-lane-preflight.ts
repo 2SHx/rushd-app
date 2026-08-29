@@ -10,6 +10,8 @@
 // It is READ-ONLY: it places no order, writes no row, and runs no migration.
 import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
+import { INCUBATION_SYMBOLS } from '../src/quant/automation/incubationBooks';
+import { nasdaqIngestRoster } from '../src/quant/universe/ingestRoster';
 
 interface Check {
   name: string;
@@ -39,6 +41,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function main() {
   const env = { ...loadEnv(), ...process.env } as Record<string, string | undefined>;
+  // Apply the file's values to process.env before any check that resolves a provider or screener
+  // from it. Those read `process.env` directly, so without this the preflight would evaluate a
+  // DIFFERENT environment than the app — reporting a healthy gate while the app runs on mocks, or
+  // the reverse. Real process.env still wins; this only fills gaps.
+  for (const [key, value] of Object.entries(loadEnv())) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
   const url = env.DATABASE_URL_UNPOOLED || env.DATABASE_URL;
   if (!url) {
     console.error('FATAL: no DATABASE_URL');
@@ -119,8 +128,11 @@ async function main() {
   });
 
   // 6. Bars. The engine consumes daily bars; stale bars mean stale decisions.
+  //    Source filter is load-bearing: three MOCK rows dated 2026-08-22 were reporting the feed as
+  //    fresh while real YAHOO coverage ended 2026-08-21. A fixture must never satisfy a liveness
+  //    check — that is the same masking class as the two-symbol ingest roster.
   const latestBar = await prisma.marketBar.findFirst({
-    where: { market: 'NASDAQ', interval: 'DAY' },
+    where: { market: 'NASDAQ', interval: 'DAY', source: { in: ['YAHOO', 'ALPACA'] } },
     orderBy: { ts: 'desc' },
     select: { ts: true, symbol: true },
   });
@@ -132,6 +144,73 @@ async function main() {
       ? `latest ${latestBar.ts.toISOString().slice(0, 10)} (${barAgeDays.toFixed(1)}d old)`
       : 'NO BARS',
     remedy: 'Confirm the quant-ingest cron is scheduled and CRON_SECRET is set in Vercel.',
+  });
+
+  // 6b. THE SECOND SILENT NO-OP, and the one that is already firing every night.
+  //
+  //     `runDailyIncubationBooks` resolves its as-of date through `completeUniverseAsOf`, which
+  //     returns null unless EVERY symbol in the charter books has a bar. Three of the four books
+  //     use `NASDAQ_HALAL_UNIVERSE`, a hand-curated list that predates the SPUS-derived verified
+  //     universe the ingest cron actually fetches. Nine of its names (AMZN, META, NFLX, COST,
+  //     SBUX, AMGN, CMCSA, HON, INTU) are not in that roster, so ingest will never fetch them and
+  //     they can never acquire a bar. The result is `{processed:false, reason:
+  //     'no_incubation_market_day'}` returned with HTTP 200 — forever. AllocationDecision and
+  //     BookEvaluation both hold zero rows, which is what a permanent structural no-op looks like.
+  //
+  //     This check is deliberately NOT "are the bars recent". It is "is the roster satisfiable at
+  //     all", because a stale roster is a permanent defect and a stale feed is a transient one.
+  const ingestable = new Set(nasdaqIngestRoster());
+  const unreachable = INCUBATION_SYMBOLS.filter((symbol) => !ingestable.has(symbol));
+  checks.push({
+    name: 'incubation roster is ingestable',
+    ok: unreachable.length === 0,
+    detail: unreachable.length === 0
+      ? `all ${INCUBATION_SYMBOLS.length} charter symbols are in the ${ingestable.size}-name ingest roster`
+      : `${unreachable.length}/${INCUBATION_SYMBOLS.length} charter symbols are NOT ingestable (${unreachable.join(', ')})`
+        + ' — latestAsOf returns null and every run is a silent no-op',
+    remedy: 'Do NOT "fix" this by making latestAsOf tolerate missing symbols: silently shrinking a '
+      + "book's universe to whatever happens to have data is a covert coverage bet, the exact defect "
+      + 'that falsified halal-fundamental-momentum-core@v1 (QDR-17). The charter books\' universe '
+      + 'and the ingest roster must be reconciled by an owner decision, because changing a book\'s '
+      + 'universe changes the strategy and invalidates its frozen validation prior.',
+  });
+
+  // 6c. THE SHARIA GATE'S EVIDENCE SOURCE — the no-op that would have cost the whole window.
+  //
+  //     `registry.getScreener()` returns `CompositeShariaScreener` only when SHARIA_SOURCE is
+  //     'composite' (or ZoyaAdapter with a live key); otherwise it returns `MockScreener`. A mock
+  //     verdict carries `source: 'mock'`, which is not in the gate's VERIFIED_EXECUTION_SOURCES, so
+  //     the strict gate fails closed with `unverified_source_fail_closed` and rewrites EVERY BUY to
+  //     HOLD. Measured 2026-08-27: with the default env, 20 of 20 symbols returned HOLD while the
+  //     committee had proposed a real 304-share BUY; with SHARIA_SOURCE=composite the same run
+  //     executed and settled an order end to end.
+  //
+  //     This asserts the OUTCOME, not the variable. Checking `SHARIA_SOURCE` alone would still pass
+  //     with a missing snapshot file, an empty holdings list, or evidence aged past the gate's 135-day
+  //     limit — each of which produces the same silent all-HOLD behaviour.
+  let gateDetail: string;
+  let gateOk = false;
+  try {
+    const { registry } = await import('../src/services/marketData');
+    const { evaluateShariaGate } = await import('../src/quant/gates/sharia');
+    const screener = registry.getScreener();
+    // A name the authorised ETF-holdings source should cover. If the largest constituent of the
+    // Sharia index cannot clear the gate, nothing will.
+    const gate = await evaluateShariaGate('AAPL', 'NASDAQ', screener, 'strict');
+    gateOk = gate.compliant;
+    gateDetail = `${screener.constructor.name} -> source=${gate.source} compliant=${gate.compliant}`
+      + (gate.compliant ? '' : ` reason=${gate.reason}`);
+  } catch (error) {
+    gateDetail = `gate check threw: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  checks.push({
+    name: 'sharia gate can clear a trade',
+    ok: gateOk,
+    detail: gateOk ? gateDetail : `${gateDetail} — EVERY BUY WILL BECOME HOLD`,
+    remedy: 'Set SHARIA_SOURCE=composite so registry.getScreener() returns CompositeShariaScreener '
+      + '(free, keyless, cites SPUS published holdings) instead of MockScreener. If it is already set, '
+      + 'the snapshot is stale or empty: refresh it with scripts/refresh-sharia-snapshots.ts — the gate '
+      + 'rejects evidence older than 135 days.',
   });
 
   // 7. Broker credentials and the account pin. Paper only — the pin is what stops a live account

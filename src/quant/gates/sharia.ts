@@ -129,3 +129,30 @@ export function gateAllowsAction(gate: ShariaGate, action: 'BUY' | 'SELL' | 'HOL
   if (gate.compliant) return true;
   return action === 'SELL' || action === 'HOLD';
 }
+
+/**
+ * Whether an EXISTING position must be divested because the name is no longer compliant.
+ *
+ * `gateAllowsAction` answers "may I do this?" and correctly permits HOLD — a permission check has no
+ * business inventing an order. But permission is not the whole obligation, and nothing was asking
+ * the other question: a holding that becomes non-compliant was never sold. The gate blocked further
+ * BUYs and the position sat there indefinitely.
+ *
+ * NOT HYPOTHETICAL. The owner held ASTS, its debt went from $148M to $2,963M in eighteen months, it
+ * ceased to be permissible, and it had to be sold. Run through this engine as it stood, that
+ * position would still be open: `finalAction === 'BUY'` is the only branch the veto in pm.ts
+ * examines, so a HOLD on a non-compliant name passes through untouched.
+ *
+ * AAOIFI requires divestment; continuing to hold is not a neutral default. The GRACE PERIOD is a
+ * scholarly question (AAOIFI-aligned providers rescreen quarterly, and views differ on whether one
+ * may hold until the next rescreen or must exit promptly) and is deliberately NOT decided here.
+ * Divesting at the next decision cycle is the conservative reading: no opinion requires holding
+ * LONGER, so acting sooner cannot be less compliant than any admissible ruling.
+ *
+ * Fail-closed by construction: `compliant` is already false for an UNKNOWN verdict, so a name the
+ * screener cannot see is divested rather than held on the strength of evidence nobody has. That is
+ * the same direction this file's existing doctrine takes for BUYs.
+ */
+export function requiresDivestment(gate: ShariaGate, hasPosition: boolean): boolean {
+  return !gate.compliant && hasPosition;
+}

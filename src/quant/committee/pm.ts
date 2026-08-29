@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { CommitteeResult } from './collect';
 import { applyEnvelope, type PortfolioState, type MarketState, type RiskLimits, type ProposedDecision } from '../risk/envelope';
-import { gateAllowsAction } from '../gates/sharia';
+import { gateAllowsAction, requiresDivestment } from '../gates/sharia';
 import { agentModel } from '../llm/client';
 import { runDebate, type DebateTurn } from './debate';
 import { surrogateProposal } from '../backtest/pmSurrogate';
@@ -138,12 +138,40 @@ export async function runPortfolioManager(
   const proposedAction = proposal.action;
   const proposedQty = new D(proposal.qty);
 
-  const decision: ProposedDecision = { action: proposedAction, qty: proposedQty };
+  // MANDATORY DIVESTMENT, applied BEFORE the envelope.
+  //
+  // A holding that has become non-compliant must be sold, not merely left un-topped-up. This is
+  // rewritten ahead of `applyEnvelope` rather than after it for two reasons, both safety ones:
+  //
+  //   • the kill switch and the drawdown breaker live INSIDE the envelope. A post-envelope rewrite
+  //     would silently override a halt that exists to stop the engine trading at all. Compliance
+  //     does not outrank a safety stop — if trading is halted the position is reported, not dumped.
+  //   • the envelope's SELL branch already clamps quantity to what is actually owned, so a stale or
+  //     over-large position figure cannot produce a short.
+  //
+  // The whole position is targeted: a partial sale does not discharge the obligation. Where the
+  // envelope clamps, the next cycle re-issues the remainder, because this check runs every cycle for
+  // as long as the position exists and the verdict stands.
+  const owned = inp.portfolio.positions.find((p) => p.symbol === inp.market.symbol)?.qty ?? new D(0);
+  const divesting = requiresDivestment(inp.result.shariaGate, owned.gt(0));
+
+  const decision: ProposedDecision = divesting
+    ? { action: 'SELL', qty: owned }
+    : { action: proposedAction, qty: proposedQty };
   const envelopeResult = applyEnvelope(decision, inp.portfolio, inp.market, inp.limits, inp.killSwitch);
 
   let finalAction = envelopeResult.action;
   let finalQty = envelopeResult.qty;
   const adjustments = [...envelopeResult.adjustments];
+
+  // Recorded whether or not the envelope let it through. A divestment the kill switch blocked is
+  // precisely the case a human needs to see: the obligation exists and the engine could not act on
+  // it, which is a different state from "nothing happened today".
+  if (divesting) {
+    adjustments.push(envelopeResult.action === 'SELL'
+      ? 'sharia_divestment_required'
+      : 'sharia_divestment_required_but_blocked');
+  }
 
   // Belt-and-suspenders Sharia veto: the envelope has no notion of the gate, so re-check
   // here even though `result.tradeable` already excluded non-compliant BUYs upstream.

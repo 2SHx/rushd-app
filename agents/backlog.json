@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-29",
+  "note": "The work queue the swarm pulls from. Every item carries an `accept` COMMAND that must exit 0 \u2014 'done' is a check, not an opinion. Agents may APPEND proposed items with state 'proposed'; only the orchestrator or the owner moves an item to 'ready'.",
+  "states": {
+    "ready": "eligible for dispatch now",
+    "proposed": "an agent suggested it; needs promotion before it runs",
+    "blocked": "cannot proceed \u2014 `blockedBy` names what is missing",
+    "owner": "only the owner can do it; the swarm must surface and stop",
+    "done": "accept command passed"
+  },
+  "items": [
+    {
+      "id": "T-1",
+      "title": "Re-prove the unattended path end to end after the divestment change",
+      "why": "pm.ts now rewrites decisions to a forced SELL before the risk envelope. Unit tests pass (11/11) and tsc is clean, but Docker was down so no persisted-row proof exists. OBJ-1 is unverified until it does.",
+      "agent": "qa-reviewer",
+      "objective": "OBJ-1",
+      "priority": 1,
+      "state": "blocked",
+      "blockedBy": "local Postgres unreachable (PrismaClientInitializationError)",
+      "accept": "npx tsx scripts/prove-unattended-path.ts"
+    },
+    {
+      "id": "T-2",
+      "title": "Give the incubation/automation path the same mandatory divestment as the committee path",
+      "why": "incubationBooks.ts draws targets from the FROZEN NASDAQ_HALAL_UNIVERSE, so a name that goes non-compliant keeps its target weight and is never sold. The gate only blocks BUYs. This is the path that actually runs unattended, so OBJ-2 is unmet there.",
+      "agent": "quant-strategist",
+      "objective": "OBJ-2",
+      "priority": 2,
+      "state": "owner",
+      "blockedBy": "Owner decision: does a compliance-forced exit invalidate a book's frozen validation prior? Recommendation on file: treat it as an external event like a delisting, so priors survive and the run is annotated.",
+      "accept": "npx vitest run src/quant/automation/incubationBooks.test.ts"
+    },
+    {
+      "id": "T-3",
+      "title": "Close the remaining 13 unscoreable names in the compliance watchlist",
+      "why": "Coverage is 94% after the dual-class share fallback and the total-liabilities bound. The residue is mostly stale quarters and filers whose debt concepts sit outside the queried aliases. Each unscoreable name is treated as non-buyable, so coverage gaps cost real universe breadth.",
+      "agent": "data-engineer",
+      "objective": "OBJ-3",
+      "priority": 3,
+      "state": "done",
+      "accept": "npx tsx scripts/swarm-checks/unscoreable-count.ts"
+    },
+    {
+      "id": "T-4",
+      "title": "Retrofit anchor() into every existing measurement script",
+      "why": "research-assertions.ts exists and is wired into compliance-early-warning only. Every other measure-*.ts still reports numbers with no independent check \u2014 the exact condition under which three wrong results were published.",
+      "agent": "test-engineer",
+      "objective": "OBJ-4",
+      "priority": 4,
+      "state": "done",
+      "accept": "npx tsx scripts/swarm-checks/anchors-present.ts"
+    },
+    {
+      "id": "T-5",
+      "title": "Schedule the compliance watchlist so drift is observed, not remembered",
+      "why": "OBJ-3 requires a diffable quarterly snapshot. Today it only exists because someone ran a script by hand. A trend is the whole signal \u2014 ASTS's breach was legible four quarters early and invisible in any single scan.",
+      "agent": "backend-expert",
+      "objective": "OBJ-3",
+      "priority": 5,
+      "state": "done",
+      "accept": "npx tsx scripts/swarm-checks/watchlist-is-scheduled.ts"
+    },
+    {
+      "id": "T-6",
+      "title": "Authorise a strategy version by name for AUTO_PAPER",
+      "why": "Forward-lane preflight FAILs 'at least one enabled AUTO_PAPER strategy'. Without it the scheduled run reports success and trades nothing \u2014 the silent no-op this program keeps finding.",
+      "agent": null,
+      "objective": "OBJ-1",
+      "priority": 1,
+      "state": "owner",
+      "blockedBy": "QDR-8 requires the owner to authorise the strategy VERSION by name. No agent may do this.",
+      "accept": "npx tsx scripts/forward-lane-preflight.ts"
+    },
+    {
+      "id": "T-7",
+      "title": "Decide the nine disputed charter symbols",
+      "why": "Blocks the ingest roster. Evidence now on file: only HON (44.4%), AMGN (29.3/35.2%) and CMCSA (96.1%) fail on LEVERAGE. META, AMZN, COST, INTU, NFLX and SBUX pass the ratios, so their exclusion is a business-activity judgment.",
+      "agent": null,
+      "objective": "OBJ-2",
+      "priority": 2,
+      "state": "owner",
+      "blockedBy": "Charter change + Sharia business-activity judgment. Recommendation on file: remove business-activity exclusions permanently; handle leverage failures through the divestment gate, since leverage is reversible.",
+      "accept": "npx tsx scripts/forward-lane-preflight.ts"
+    },
+    {
+      "id": "T-8",
+      "title": "Set SHARIA_SOURCE=composite in production",
+      "why": "Set locally; absent in Vercel. Without it registry.getScreener() returns MockScreener, the gate refuses its verdicts as unverified, and EVERY BUY silently becomes HOLD.",
+      "agent": null,
+      "objective": "OBJ-1",
+      "priority": 1,
+      "state": "owner",
+      "blockedBy": "Production environment variable \u2014 owner-only per objective.json.",
+      "accept": "manual: confirm in Vercel dashboard"
+    },
+    {
+      "id": "T-9",
+      "title": "Give measure-cadence-phase.ts a genuine external anchor",
+      "why": "It is the only measurement script with no EXTERNAL anchor \u2014 it has a regression check against QDR-24's own prior 17.27% figure, which is this same pipeline checking itself. A systematic bug would reproduce identically and pass. A subagent added it as anchor() despite being warned; the fix was to relabel it regressionCheck(), which is honest but leaves the script unanchored.",
+      "agent": "quant-strategist",
+      "objective": "OBJ-4",
+      "priority": 6,
+      "state": "done",
+      "accept": "npx tsx scripts/swarm-checks/anchors-present.ts",
+      "note": "Do NOT fabricate an anchor to satisfy the check. If no external fact exists for what this script computes, say so and propose removing the item instead."
+    },
+    {
+      "id": "T-10",
+      "title": "Verify SPUS_CAGR against the fund's PUBLISHED NAV total return",
+      "why": "Eight measurement scripts anchor on SPUS CAGR = 0.176 and cited agents/objective.json, which did not contain the figure. The number matches our own measurement, so those eight anchors are currently checking this pipeline against this pipeline \u2014 the exact defect T-9 existed to fix, eight more times. The constant is now recorded in objective.json with its provenance and an explicit VERIFICATION_OWED flag. Someone must compare it to SP Funds' published NAV total return for the same window and either confirm the value or correct it.",
+      "agent": "explorer",
+      "objective": "OBJ-4",
+      "priority": 3,
+      "state": "done",
+      "accept": "manual: objective.json externalAnchors.SPUS_CAGR must cite a published figure and drop VERIFICATION_OWED",
+      "note": "If the published figure disagrees materially with 17.6-18.3%, that is a finding about our price archive, not a reason to adjust the anchor to match us. Report the disagreement; do not tune the constant."
+    },
+    {
+      "id": "T-11",
+      "title": "Set ALPACA_API_KEY / ALPACA_API_SECRET as GitHub repository secrets",
+      "why": "The monthly compliance-watchlist workflow rebuilds data/bars-raw from Alpaca, because that cache is not committed (0 tracked files) and a fresh CI checkout has none of it. Without the secrets the workflow still runs and still commits \u2014 but every name comes back INSUFFICIENT, which is honest and useless. Market cap needs UNADJUSTED prices, so the adjusted archive cannot substitute.",
+      "agent": null,
+      "objective": "OBJ-3",
+      "priority": 4,
+      "state": "owner",
+      "blockedBy": "Repository secrets are owner-only per objective.json. An agent cannot and must not set them.",
+      "accept": "manual: first scheduled run produces a snapshot with fewer than 20 INSUFFICIENT rows"
+    },
+    {
+      "id": "T-12",
+      "title": "Audit every benchmark-relative result for window parity",
+      "why": "measure-nasdaq-wide-momentum.ts compared strategies spanning 116 months against a SPUS benchmark covering only 81, because benchmark() silently restricts itself to months the benchmark has and SPUS did not exist before 2019-12-18. Nothing in the output disclosed it. A guard now aborts that script, but the SAME shape may exist in measure-hysteresis.ts, measure-slow-cadence.ts, measure-gross-profitability.ts, measure-survivorship-bias.ts and the owner-basket scripts, all of which compare something to a benchmark series.",
+      "agent": "quant-validation-auditor",
+      "objective": "OBJ-4",
+      "priority": 2,
+      "state": "done",
+      "accept": "manual: each benchmark-relative script either asserts window parity or documents why its windows legitimately differ",
+      "note": "The qualitative verdict survived a common-window re-run of the momentum script (it still loses at every concentration). Do NOT assume the same holds elsewhere \u2014 re-run each one.",
+      "result": "Audited all 7 benchmark-relative scripts. ONLY measure-nasdaq-wide-momentum.ts had the defect (116 strategy months vs 81 benchmark months), and it is fixed. The six PIT scripts are clean BY CONSTRUCTION: their calendar is bounded by SPUS N-PORT membership (first public 2020-07-28), which begins later than SPUS's 2019-12-18 listing, so the benchmark covers every session measured. That is structural, not asserted \u2014 recorded in each file so a future change to the universe source does not silently reintroduce it. assertWindowParity() is in scripts/lib/research-assertions.ts for when it does."
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { prisma } from '../src/lib/prisma';
 import { dualMomentumMetrics } from '../src/quant/strategies/dualMomentumRotation';
 import { selectTopNByMomentum } from '../src/quant/strategies/halalFastMomentumCore';
 import { buildVerifiedUniverse } from '../src/quant/universe/buildVerifiedUniverse';
+import { anchor, declareBasis } from './lib/research-assertions';
 
 const FROM = new Date('2018-01-02T00:00:00.000Z');
 const TO = new Date('2026-07-17T23:59:59.999Z');
@@ -187,6 +188,20 @@ async function main(): Promise<void> {
   }
 
   const weeks = weeklySelections(seriesBySymbol);
+  const metrics = mainMetrics(weeks);
+
+  declareBasis({
+    prices: "DB marketBar rows, source IN ('YAHOO','ALPACA') — mixed source, adjustment convention "
+      + 'not asserted equal between them; a vendor switch mid-series is a basis risk this query does not detect',
+    universe: 'buildVerifiedUniverse() NASDAQ entries only (C1-verified), not the full ever-listed set',
+    costs: '15bps per side, hardcoded — the repo-wide flat assumption, not the measured NBBO figure',
+  });
+  // The measurement window (FROM..TO, hardcoded above) spans a fixed, known calendar interval —
+  // roughly 8.5 years between 2018-01-02 and 2026-07-17 — independent of anything this query returns.
+  // A miss here is a units bug in the ISO-week/year arithmetic (the same defect class that once made
+  // a wrong drift threshold look clean elsewhere in this program), not a finding about turnover.
+  anchor('measurement window length', metrics.period.years, 8.54, 0.3);
+
   console.log(JSON.stringify({
     methodology: {
       sourceRows: rows.length,
@@ -199,7 +214,7 @@ async function main(): Promise<void> {
       absoluteFilter: '> 0',
       selectedNames: TOP_N,
     },
-    ...mainMetrics(weeks),
+    ...metrics,
   }, null, 2));
 }
 

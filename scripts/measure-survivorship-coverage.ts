@@ -6,6 +6,7 @@ import {
   toPointInTimeUniverseSnapshot,
   type SpusNportSnapshot,
 } from '../src/quant/universe/spusNport';
+import { anchor, declareBasis } from './lib/research-assertions';
 
 export const SURVIVORSHIP_MEMO_PATH = fileURLToPath(
   new URL('../docs/quant-experiments/survivorship-coverage-measurement.md', import.meta.url),
@@ -285,6 +286,21 @@ function main(): void {
   const result = shouldWrite ? writeSurvivorshipMemo() : buildSurvivorshipMeasurement();
   process.stdout.write(`${summary(result)}\n`);
   if (shouldWrite) process.stdout.write(`memo=${SURVIVORSHIP_MEMO_PATH}\n`);
+
+  // Anchored only in the CLI entry point, never inside measureSurvivorshipCoverage() itself — that
+  // function is exercised directly by survivorshipCoverageMeasurement.test.ts with SYNTHETIC
+  // snapshots, which have no reason to land near SPUS's real holding count.
+  declareBasis({
+    holdings: 'SEC N-PORT, FROZEN/committed fixtures — not a live filing fetch',
+    membership: 'availableAt <= formation date (point-in-time); reportDate is never used as the PIT key',
+  });
+  // The union of SPUS's disclosed holdings across all captured formation dates was already documented
+  // independently, in a DIFFERENT script's header, before this measurement ran (measure-nasdaq-wide-
+  // momentum.ts: "the SPUS-ever-held universe — ~320 large and mid caps"). Both single-snapshot counts
+  // (~160-240) and this union should sit in the low hundreds; three-to-four digits off means the PIT
+  // membership logic broke, not that SPUS suddenly holds a different market.
+  anchor('historical identified symbol count (union across formations)',
+    result.historicalIdentifiedSymbolCount, 320, 0.3);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll, afterEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/prisma', () => ({
@@ -21,6 +21,7 @@ vi.mock('@/services/marketData', async () => {
 import { prisma } from '@/lib/prisma';
 import { MockProvider, registry, YahooFinanceProvider } from '@/services/marketData';
 import { ingestBars, ingestBarsBackfill, repairBarsRange } from './ingest';
+import { nasdaqIngestRoster, BENCHMARK_SYMBOLS } from '@/quant/universe/ingestRoster';
 
 const D = Prisma.Decimal;
 const candles = [
@@ -315,8 +316,13 @@ describe('POST /api/cron/quant-ingest', () => {
    */
   it('processes the engine\'s verified NASDAQ universe with a valid secret', async () => {
     const { buildVerifiedUniverse } = await import('@/quant/universe/buildVerifiedUniverse');
-    const expected = buildVerifiedUniverse().entries.length;
+    // The scheduled default is the INGEST ROSTER, not the screened universe alone: it adds the
+    // benchmark ETFs (SPUS, HLAL), without which no benchmark-relative result can be computed at
+    // all. Comparing against `buildVerifiedUniverse().entries.length` omitted those two and left
+    // this test asserting 216 against a correct 218.
+    const expected = nasdaqIngestRoster().length;
     expect(expected).toBeGreaterThan(200);
+    expect(expected).toBe(buildVerifiedUniverse().entries.length + BENCHMARK_SYMBOLS.length);
 
     const { POST } = await import('@/app/api/cron/quant-ingest/route');
     const res = await POST(
@@ -340,5 +346,60 @@ describe('POST /api/cron/quant-ingest', () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * SYNTHETIC BARS MUST NEVER REACH THE DATABASE.
+ *
+ * `MockProvider` fabricates candles instead of failing, so a caller with no credentials visible
+ * receives plausible prices and a success response. The original guard only fired when bars ALREADY
+ * existed for the symbol — it stopped an existing series being overwritten, but a symbol with no
+ * bars yet was seeded entirely with invented data.
+ *
+ * That hole was exercised on 2026-08-29: a direct `npx tsx -e` call (which does NOT load `.env`, so
+ * the registry fell back to MockProvider) wrote 61 fabricated INOD bars at ~$381 for a stock trading
+ * near $50, reporting `{"upserted":61,"source":"MOCK"}`. It was the SECOND occurrence of this exact
+ * incident in this repository — the first left 64 MOCK rows that had already defeated the preflight's
+ * own freshness check.
+ *
+ * A 503 guard exists in the quant-ingest cron route, but that protects ONE caller. These tests pin
+ * the refusal at the only place that writes, so routes, scripts, tests and shell one-offs all
+ * inherit it.
+ */
+describe('ingestBars refuses to persist fabricated candles', () => {
+  const saved = process.env.ALLOW_SYNTHETIC_BARS;
+  // This is a SIBLING describe, so the outer block's clearAllMocks does not run for it. Without
+  // this the $transaction spy still carries the 218 calls from the route test above, and
+  // "did not write" assertions silently inherit another test's history.
+  beforeEach(() => { vi.clearAllMocks(); });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ALLOW_SYNTHETIC_BARS;
+    else process.env.ALLOW_SYNTHETIC_BARS = saved;
+  });
+
+  it('throws for a symbol with NO existing bars — the case the old guard missed', async () => {
+    delete process.env.ALLOW_SYNTHETIC_BARS;
+    (registry.getProvider as any).mockReturnValue(new MockProvider());
+    (prisma.marketBar.findFirst as any).mockResolvedValue(null); // the hole: no bars yet
+    await expect(ingestBars('ZZZZ_NEW_SYMBOL', 'NASDAQ')).rejects.toThrow(/Refusing to write synthetic bars/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('names the remedy, including the `npx tsx -e` trap that caused both incidents', async () => {
+    delete process.env.ALLOW_SYNTHETIC_BARS;
+    (registry.getProvider as any).mockReturnValue(new MockProvider());
+    (prisma.marketBar.findFirst as any).mockResolvedValue(null);
+    await expect(ingestBars('ZZZZ_NEW_SYMBOL', 'NASDAQ')).rejects.toThrow(/ALPACA_API_KEY|MARKET_DATA_MODE/);
+    await expect(ingestBars('ZZZZ_NEW_SYMBOL', 'NASDAQ')).rejects.toThrow(/does NOT load \.env/);
+  });
+
+  it('permits synthetic candles only when explicitly opted in', async () => {
+    process.env.ALLOW_SYNTHETIC_BARS = '1';
+    const mock = new MockProvider();
+    mock.getCandles = vi.fn().mockResolvedValue(candles);
+    (registry.getProvider as any).mockReturnValue(mock);
+    (prisma.marketBar.findFirst as any).mockResolvedValue(null);
+    await expect(ingestBars('ZZZZ_NEW_SYMBOL', 'NASDAQ')).resolves.toBeDefined();
   });
 });

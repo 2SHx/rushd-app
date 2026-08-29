@@ -108,7 +108,33 @@ export function tier1EntriesFromSpus(opts: { filePath?: string } = {}): {
   excluded: ExclusionReason[];
 } {
   const { rows, excluded } = loadSpusTier1(opts);
-  const entries: UniverseEntry[] = rows.map((r) => ({
+
+  /**
+   * An ETF holdings file lists everything the fund holds, and not all of it is a security. SPUS
+   * discloses a `CASH&OTHER` line for its cash and accrued balances, and it was flowing straight
+   * through into the tradeable universe: 217 "symbols", one of which cannot be bought.
+   *
+   * Two concrete harms, both of the silent-no-op class this program keeps finding:
+   *   • the scheduled ingest called ingestBars('CASH&OTHER') on every run and took an HTTP 400;
+   *   • any equal-weight sleeve drawn from this universe could allocate a slot to it, and the
+   *     allocation would then die at execution with `no_market_data` — a position that reports
+   *     success and never exists.
+   *
+   * Removing it is a data-artefact fix, not a universe change: a cash line was never a holding
+   * decision, so no strategy's frozen prior depends on it. The exclusion is RECORDED rather than
+   * silently dropped, so the count is reconcilable against the source file.
+   *
+   * Shape rule: tickers are uppercase alphanumerics, optionally with a dot or hyphen for class
+   * shares (BRK.B, BF-B). Anything else is a line item, not a security.
+   */
+  const TICKER_SHAPE = /^[A-Z][A-Z0-9]*(?:[.-][A-Z0-9]+)?$/;
+  const tradeable = rows.filter((r) => {
+    if (TICKER_SHAPE.test(r.symbol)) return true;
+    excluded.push({ symbol: r.symbol, reasonCode: 'not_a_tradeable_security' });
+    return false;
+  });
+
+  const entries: UniverseEntry[] = tradeable.map((r) => ({
     symbol: r.symbol,
     name: r.name,
     market: 'NASDAQ',

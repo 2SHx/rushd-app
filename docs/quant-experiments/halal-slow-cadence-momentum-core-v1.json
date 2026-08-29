@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "setupId": "halal-slow-cadence-momentum-core",
+  "version": "v1",
+  "designRecord": "QDR-24",
+  "config": {
+    "setup": "halal-slow-cadence-momentum-core",
+    "from": "2020-11-10",
+    "to": "2026-08-26",
+    "symbols": null,
+    "confirmFull": false,
+    "seed": 42,
+    "oosFraction": 0.3,
+    "engine": "pit-archive-harness",
+    "feed": "ALPACA_SIP",
+    "source": "data/bars + SEC Form N-PORT-P membership",
+    "market": "NASDAQ",
+    "universeMode": "point_in_time_nport_available_at",
+    "costModelBps": 15,
+    "comparatorVersionId": "halal-hysteretic-fast-momentum-core@v1 centre cell {retainRank:8, topN:5}",
+    "comparatorRunId": "pit-hysteresis-2026-08-27",
+    "comparatorArtifact": "scripts/measure-hysteresis.ts",
+    "comparatorMeasured": {
+      "cagrPct": 10.23,
+      "maxDrawdownPct": 43.67,
+      "sharpe": 0.46,
+      "turnoverPerMonthPct": 193,
+      "costDragPctPerYear": 3.47,
+      "note": "Measured on the POINT-IN-TIME universe, not the survivor-only universe QDR-22 was calibrated against. QDR-22's own numeric predictions (baseline 105.92% OOS CAGR) are void here; only its mechanism carried over."
+    },
+    "hypothesis": "The binding constraint on this engine is DECISION CADENCE, not retention width. Weekly re-ranking is not merely expensive, it is actively harmful: it sells names into short-horizon mean reversion, which is a distinct and opposite-signed effect from the 63-day momentum the book is trying to harvest. Slowing the decision to a monthly cadence should therefore improve the book on BOTH channels at once -- lower turnover AND better signal -- rather than trading one for the other.",
+    "mechanism": "The decision date set changes from ISO-week-end to calendar-month-end. Nothing else changes: the 63d/skip2 dualMomentumMetrics formula, the absolute filter at 0, inverse-volatility sizing at a 25% per-name cap, cashFloor 2, the 60-name dollar-volume sleeve, and the retain-then-fill selection rule are all carried over byte-identical from the hysteresis arm.",
+    "signalClassJustification": "This is a CADENCE lever, and it is the only untested axis whose primary effect is already measured rather than hypothesised. Evidence, in order: (1) turnover at the hysteresis centre cell is still 193%/month against the ~50%/month level above which Novy-Marx & Velikov (RFS 2016) find anomalies stop surviving costs -- the previous lane moved in the right direction and stopped roughly 4x short; (2) a RETURN-side signal was falsified on this engine by halal-fundamental-momentum-core@v1; (3) sizing was attacked twice (Markowitz, risk-parity, both REJECTED); (4) exits once (catastrophic stop, measurably inert); (5) retention width was attacked by QDR-22 and its grid is exhausted -- widening retainRank beyond 10 after seeing that grid would be a retune of a lane just run, and QDR-19 already ruled that a retune is not a mechanism.",
+    "theAnomalyThisLaneExistsToExplain": "At the hysteresis centre cell, CAGR rose +6.72pp while realised cost drag fell only 2.05pp. The cost channel therefore explains under a third of the improvement; roughly 4.67pp came from HOLDING DIFFERENT NAMES. QDR-22 predicted the opposite sign -- an explicit 3.5pp signal GIVE-BACK from retaining weakened names. That prediction was wrong in direction, not just magnitude. The most parsimonious explanation is short-horizon reversal: at a weekly cadence the book systematically sells names that are about to bounce. If that is true, cadence should dominate retention width, and this lane tests exactly that.",
+    "params": {
+      "version": "v1",
+      "lookbackDays": 63,
+      "skipRecentDays": 2,
+      "absoluteThreshold": 0,
+      "topN": 5,
+      "retainRank": 8,
+      "cashFloor": 2,
+      "perNameCap": 0.25,
+      "maxNames": 60,
+      "cadence": "MONTH_END",
+      "validationTrials": 9
+    },
+    "newVariable": {
+      "name": "cadence",
+      "from": "ISO_WEEK_END",
+      "to": "MONTH_END",
+      "whyThisIsOneVariable": "The decision RULE is unchanged; only the set of dates on which it is evaluated changes. retainRank stays frozen at its QDR-22 centre value of 8 and topN at 5, so retention width is held constant and cannot be confounded with cadence.",
+      "baselineEquivalence": "There is no cadence value that reproduces the comparator, so unlike retainRank this variable does not nest. The comparator is therefore run explicitly as its own arm rather than recovered from a grid cell, and the null control is structural instead: at MONTH_END with retainRank == topN the arm must equal a plain monthly top-N book, which is checked before any grid number is reported."
+    },
+    "plateau": {
+      "axes": [
+        "cadence",
+        "retainRank"
+      ],
+      "grid": {
+        "cadence": [
+          "ISO_WEEK_END",
+          "BIWEEKLY",
+          "MONTH_END"
+        ],
+        "retainRank": [
+          6,
+          8,
+          10
+        ]
+      },
+      "center": {
+        "cadence": "MONTH_END",
+        "retainRank": 8
+      },
+      "trials": 9,
+      "validityConstraint": "retainRank >= topN; topN frozen at 5, so the retainRank 6 column is valid throughout.",
+      "whyBiweeklyIsIncluded": "A three-point cadence axis makes the surface readable as a plateau or a ridge. Two points could only ever draw a line, and the previous lane's failure mode was precisely a spiky surface read as a result: adjacent cells there differed by 4.4pp (retainRank 10 at topN 4 gave 13.74% while topN 5 gave 9.33%)."
+    },
+    "trialFamily": {
+      "tier": "EXPLORATORY",
+      "reason": "The hypothesis was formed AFTER inspecting the hysteresis grid on this same window, so QDR-9 conditions (b) forward-only and (d) evidence boundary strictly after seal cannot hold. EXPLORATORY is the honest tier and this lane CANNOT PROMOTE.",
+      "plateauTrials": 9,
+      "cumulativeFamilyTrialsBefore": 48,
+      "note": "39 recorded runs in the ledger plus QDR-22's 9 plateau cells. These 9 take the family to 57, which raises the deflation bar for every lane in it. That cost is accepted deliberately and is the reason no additional axis is swept here."
+    },
+    "predictions": {
+      "turnoverPerMonthPct": {
+        "comparator": 193,
+        "point": 55,
+        "interval": [
+          35,
+          80
+        ],
+        "direction": "DOWN"
+      },
+      "costDragPctPerYear": {
+        "comparator": 3.47,
+        "point": 1.05,
+        "interval": [
+          0.6,
+          1.6
+        ],
+        "direction": "DOWN"
+      },
+      "cagrPct": {
+        "comparator": 10.23,
+        "point": 14.5,
+        "interval": [
+          11.0,
+          18.0
+        ],
+        "direction": "UP",
+        "decomposition": "+2.4pp from the recovered cost channel, plus a predicted +1.9pp from no longer selling into short-horizon reversal. The second term is the actual claim of this lane and the first is nearly arithmetic."
+      },
+      "benchmarkToBeat": {
+        "name": "buy-and-hold SPUS",
+        "cagrPct": 17.72,
+        "maxDrawdownPct": 28.06
+      }
+    },
+    "falsification": {
+      "F1_CADENCE_AXIS_INERT": "Realised turnover does not fall below 80%/month. The lever did not move the quantity it exists to move, and cadence is not the binding constraint.",
+      "F2_COST_RECOVERED_BUT_RETURN_DID_NOT_FOLLOW": "Turnover falls below 80%/month AND CAGR does not exceed the comparator's 10.23%. This falsifies the reversal explanation directly: cost was recovered and the book got no better, so the +4.67pp at the hysteresis cell was not reversal avoidance and is most likely noise.",
+      "F3_NO_PLATEAU": "The nine cells span more than 6.0pp of CAGR, or the MONTH_END row is not monotone in the direction of lower turnover. A spiky surface here means the same overfit the previous lane showed and no cell may be quoted.",
+      "F4_STILL_LOSES_TO_BENCHMARK": "The centre cell's CAGR does not exceed 17.72% after costs. This does NOT falsify the mechanism, but it does end the programme's search: three families and two cost levers will have failed to clear a passive halal ETF, and the honest recommendation becomes hold SPUS."
+    },
+    "quotationRule": "ONLY the centre cell {cadence: MONTH_END, retainRank: 8} may be quoted as the lane's result. Selecting a better-performing cell after seeing the grid is the exact selection bias that produced halal-fundamental-momentum-core@v1's 127.99%, and the previous lane's best cell (13.74%) is already an example of a number that must not be quoted.",
+    "noLookAheadArgument": "Universe membership resolves through SEC Form N-PORT-P with `availableAt <= asOf`, never `reportDate <= asOf` -- filings are accepted roughly 60 days after the period they describe. Prices come from the Alpaca SIP archive, which includes delisted names through their true final session, so the candidate set at every past date excludes nothing on the grounds that it later ceased to exist. Month-end decision dates are resolved from the trading calendar present in the archive, never from a forward calendar.",
+    "expectedVerdict": "REJECTED is the expected terminal label and is not the question. The lane cannot promote: it is EXPLORATORY, the window carries roughly 5.8 years with a 30% OOS slice, and at a 57-trial family floor that window cannot reach DSR > 0.95. The question is whether the mechanism is real and whether it closes the 7.49pp gap to the benchmark.",
+    "reuseUnchanged": [
+      "src/quant/strategies/dualMomentumRotation.ts :: dualMomentumMetrics",
+      "src/quant/strategies/halalRiskParityCore.ts :: inverseVolatilityWeights, capAndRedistribute",
+      "src/quant/strategies/halalFastMomentumCore.ts :: selectTopNByMomentum",
+      "scripts/backfill-alpaca-sip.ts :: readArchive",
+      "src/quant/universe/spusNport.ts :: loadCapturedSpusNportSnapshots"
+    ],
+    "filesForbidden": [
+      "src/quant/strategies/halalFastMomentumCore.ts",
+      "src/quant/strategies/halalHystereticFastMomentumCore.ts",
+      "src/quant/backtest/portfolioEngine.ts"
+    ],
+    "terminalFence": "QDR-14 still fences terminal cards for every alpha lane. This lane produces a DIAGNOSTIC only. It does not preregister, deflate, or promote anything, and its numbers may not be quoted as a strategy result."
+  },
+  "configHash": null,
+  "state": "FALSIFIED",
+  "actors": {
+    "hypothesis": "orchestrator 2026-08-27",
+    "implementation": "orchestrator 2026-08-27 (scripts/measure-slow-cadence.ts)",
+    "audit": "pending",
+    "run": "orchestrator 2026-08-27"
+  },
+  "diagnosticRuns": 1,
+  "fullRun": null,
+  "terminal": null,
+  "diagnostic": {
+    "ranAt": "2026-08-27",
+    "structuralNullControl": "PASS - drift 0.000000pp at MONTH_END with retainRank==topN.",
+    "centreCell": {
+      "cagrPct": 17.27,
+      "maxDrawdownPct": 34.31,
+      "sharpe": 0.66,
+      "turnoverPerMonthPct": 107,
+      "costDragPctPerYear": 1.92,
+      "decisions": 70
+    },
+    "comparator": {
+      "cagrPct": 10.23,
+      "turnoverPerMonthPct": 193,
+      "costDragPctPerYear": 3.47
+    },
+    "benchmark": {
+      "name": "buy-and-hold SPUS",
+      "cagrPct": 17.72,
+      "maxDrawdownPct": 28.06,
+      "sharpe": 0.95
+    },
+    "falsification": {
+      "F1_CADENCE_AXIS_INERT": "TRIGGERED AS WRITTEN, BUT THE THRESHOLD WAS MIS-SPECIFIED. Turnover fell 193%->107%/mo, a 45% reduction, so the lever plainly moved the quantity it exists to move. F1's prose says 'the lever did not move' but its test demanded a LEVEL (<80%). Those are different claims and I conflated them when writing it. Recorded as triggered; not treated as evidence the axis is inert.",
+      "F2_COST_RECOVERED_BUT_RETURN_DID_NOT_FOLLOW": "SURVIVES. CAGR 17.27% vs comparator 10.23%. Return followed the cost recovery, consistent with the short-horizon-reversal explanation.",
+      "F3_NO_PLATEAU": "TRIGGERED. Grid spans 10.33pp against a 6.0pp ceiling. PARTLY mis-specified -- most of the span is ACROSS the cadence axis under test, which is the effect rather than noise. But a real defect survives that correction: BIWEEKLY (7.60-9.25%) is WORSE than both ISO_WEEK_END (8.63-10.23%) and MONTH_END (10.84-17.93%). A clean monotone cadence effect would place it between them. It does not, and that non-monotonicity is unexplained.",
+      "F4_STILL_LOSES_TO_BENCHMARK": "TRIGGERED, CLEANLY, AND THIS IS THE ONE THAT DECIDES. Centre cell 17.27% vs SPUS 17.72% (-0.46pp). The CAGR gap is inside noise on a 5.8-year window, but the RISK gap is not: Sharpe 0.66 vs 0.95 and max drawdown 34.31% vs 28.06%. At CAGR parity with materially worse risk, the benchmark wins."
+    },
+    "verdict": "FALSIFIED on F4 as preregistered. The mechanism is real and produced the largest improvement of the programme (3.51% -> 10.23% -> 17.27%, drawdown 50.88% -> 34.31%, cost 5.52 -> 1.92pp/yr), and it still does not clear a passive halal ETF on a risk-adjusted basis. ROBUSTNESS CHECK SUPERSEDES THIS: the 17.27% is phase-luck, not mechanism -- see robustnessCheck.",
+    "quotationCompliance": "Only the centre cell {MONTH_END, retainRank 8} is quoted. MONTH_END retain 10 scored higher (17.93%) and is deliberately NOT quoted as the lane's result."
+  },
+  "robustnessCheck": {
+    "ranAt": "2026-08-27",
+    "artifact": "scripts/measure-cadence-phase.ts",
+    "design": "Monthly FREQUENCY held fixed, decision PHASE varied across seven trading-day offsets. Decision count (69-70), turnover (104-112%/mo) and cost are near-identical by construction, so the only variable is which day of the month the decision lands on.",
+    "result": {
+      "phasesCagrPct": {
+        "day1": 9.71,
+        "day5": 10.95,
+        "day10": 16.43,
+        "day15": 12.37,
+        "last4": 15.33,
+        "last2": 7.73,
+        "monthEnd": 17.27
+      },
+      "meanPct": 12.83,
+      "sdPp": 3.62,
+      "spreadPp": 9.54,
+      "phasesBeatingBenchmark": "0 of 7"
+    },
+    "finding": "The centre cell's 17.27% is NOT robust. An identical rule at identical frequency and turnover scores anywhere from 7.73% to 17.27% depending only on an arbitrary phase choice -- a 9.54pp spread, sd 3.62pp. A single-phase estimate carries a 95% interval of roughly [5.7%, 19.9%], which contains the benchmark. The book is statistically indistinguishable from buy-and-hold SPUS.",
+    "calendarHypothesisAlsoRejected": "The month-end premium is NOT a clean calendar effect either. A calendar gradient would rank phases near month-end near month-end; instead last-2 (7.73%) is the WORST of all seven while last-4 (15.33%) and month-end (17.27%) are among the best. Adjacent phases swing 9.5pp. That pattern is noise, not a calendar anomaly.",
+    "correctionToMyOwnAutomatedRead": "scripts/measure-cadence-phase.ts printed the 'calendar effect' branch because its heuristic only compared month-end against the mean of the others. Reading the full phase ordering rejects that branch too. The automated verdict was too simple and is superseded by this entry.",
+    "consequenceForQDR24": "F4 stands and is strengthened: 0 of 7 phases beat the benchmark. QDR-24's mechanism claim (reversal avoidance) is NOT supported -- with 70 decisions the window cannot distinguish it from noise. The 17.27% figure must not be quoted anywhere as a strategy result.",
+    "consequenceForTheLedger": "This phase sensitivity is a property of the WINDOW, not of this lane. Any result on ~70 monthly or ~300 weekly decisions over 5.8 years carries a comparable error bar, which retroactively weakens every point estimate measured on this window today, including the hysteresis lane's 10.23%."
+  }
+}

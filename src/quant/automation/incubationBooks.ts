@@ -64,7 +64,9 @@ export const INCUBATION_BOOKS: readonly IncubationBook[] = Object.freeze([
   },
 ]);
 
-const INCUBATION_SYMBOLS = Object.freeze(Array.from(new Set(INCUBATION_BOOKS.flatMap(book => [...book.universe]))));
+/** Every symbol the charter books require. `latestAsOf` demands a bar for ALL of them, so the
+ * preflight must be able to read this list to detect a permanently unsatisfiable roster. */
+export const INCUBATION_SYMBOLS = Object.freeze(Array.from(new Set(INCUBATION_BOOKS.flatMap(book => [...book.universe]))));
 
 export interface IncubationEvaluation {
   nav: Prisma.Decimal;

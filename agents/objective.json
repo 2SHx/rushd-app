@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-29",
+  "note": "THE STANDING GOAL. Agents read this instead of being told what to do each time. Anything not derivable from this file plus the backlog is out of scope and must be proposed, not assumed.",
+  "mission": "Automated, unattended, halal NASDAQ-only investing that a person can live on, funded by ~3,000 SAR/month contributions from a ~1,000 SAR start.",
+  "whatIsAlreadySettled": {
+    "note": "Do NOT re-litigate these. They were measured, not assumed. Re-opening one requires NEW evidence, named in the proposal.",
+    "noSelectionAlpha": "Six pre-registered signals were tested on all 6,786 ever-listed NASDAQ symbols with measured costs: spinoffs, 12-1 momentum, reversal, revenue growth, revenue acceleration, and a random null. ALL lost to buying SPUS. Momentum lost to the random control. See docs/JOURNAL.md 2026-08-27..29.",
+    "concentrationIsTheOnlyLever": "Buying the largest names by dollar volume beat SPUS by 15.95pp at top-5 \u2014 at Sharpe 1.03 against SPUS's 1.04. That is beta, not alpha. Return came from concentration, which is a risk choice.",
+    "costsAreNotBinding": "Measured NBBO half-spreads are 0.13-3.6bps for liquid names, not the 15bps long assumed. 307%/month turnover costs 0.74%/yr. Do not reject a design on turnover grounds without measuring the spread of the names it trades.",
+    "theOwnersEdgeIsBehavioural": "The owner held through a 54% drawdown and a 34.7% shortfall against contributed capital for 11 months, and kept contributing. That tolerance is rarer than stock-picking skill and is what the system should be built around."
+  },
+  "primaryObjectives": [
+    {
+      "id": "OBJ-1",
+      "title": "The unattended path must actually trade, and be provable",
+      "rationale": "Four silent no-ops have been found in this program, each returning HTTP 200 while doing nothing. A scheduler that looks configured and never runs is the dominant failure mode here, not a bad strategy.",
+      "measurable": "scripts/prove-unattended-path.ts exits 0 having persisted a Decision, an Order and a PortfolioItem from a real committee pass."
+    },
+    {
+      "id": "OBJ-2",
+      "title": "No holding is ever non-compliant for longer than one decision cycle",
+      "rationale": "The owner held ASTS through a compliance flip and had to sell on someone else's schedule. AAOIFI requires divestment; holding is not a neutral default.",
+      "measurable": "For every held symbol, either the live gate reports compliant, or a divestment decision exists dated within one cycle of the verdict changing."
+    },
+    {
+      "id": "OBJ-3",
+      "title": "Compliance drift is warned about before it forces a sale",
+      "rationale": "ASTS's breach was legible four quarters early as a trend and unremarkable in any single snapshot.",
+      "measurable": "data/compliance/watchlist-*.json is regenerated at least quarterly and diffable; any held name crossing 80% of a limit is surfaced."
+    },
+    {
+      "id": "OBJ-4",
+      "title": "Every reported number survives an independent check",
+      "rationale": "Three results this program reported were wrong and looked right: a 15bps cost assumption 5-100x too high, a screen that was buying leveraged ETFs, and market caps off by 4x from a units mismatch.",
+      "measurable": "Every measurement script calls anchor() from scripts/lib/research-assertions.ts and aborts on failure; every ranking rule prints its holdings and is compared to a random null."
+    }
+  ],
+  "hardConstraints": {
+    "market": "NASDAQ only. TASI is out of scope by owner directive.",
+    "shariaAuthority": "AAOIFI + Al-Rajhi + S&P Shariah (Ratings Intelligence) only. Egyptian Fatwa Authority is EXCLUDED by owner decision.",
+    "cost": "Free or near-free. Any proposal with a recurring fee must state the fee and what it buys that free sources cannot.",
+    "keylessOperation": "Every feature must keep working with no API keys set. Mocks must never be presented as real verdicts or real prices.",
+    "moneyFields": "Money is Float in places \u2014 known debt. Flag it, never compound it.",
+    "bilingual": "Every user-facing string lands in BOTH messages/en.json and messages/ar.json in the same change."
+  },
+  "ownerOnly": {
+    "note": "Agents must NEVER do these, and must not simulate having done them. Surface them and stop.",
+    "items": [
+      "Authorising a strategy VERSION by name for AUTO_PAPER (QDR-8).",
+      "Charter changes to NASDAQ_HALAL_UNIVERSE, which invalidate frozen validation priors.",
+      "Any Sharia RULING \u2014 including grace periods, business-activity judgments, and purification.",
+      "Setting production environment variables.",
+      "Moving real money, or enabling a live (non-paper) broker."
+    ]
+  },
+  "definitionOfBetter": {
+    "note": "Ranked. A change that improves a lower item at the cost of a higher one is a regression.",
+    "order": [
+      "1. Correctness of what we claim \u2014 a wrong number is worse than no number.",
+      "2. Compliance \u2014 an unscreened holding is treated exactly as a failing one.",
+      "3. The unattended path works without a human.",
+      "4. Risk-adjusted return, measured against SPUS as the benchmark, net of costs and zakat.",
+      "5. Raw return."
+    ]
+  },
+  "externalAnchors": {
+    "note": "Constants used by anchor() across measurement scripts. An anchor is only as good as its PROVENANCE CHAIN, so each entry states where the number comes from and whether that source has actually been checked. A figure cited to this file must exist in this file \u2014 eight scripts anchored on SPUS_CAGR citing agents/objective.json while the file did not contain it, which turned eight anchors into regression checks wearing anchor()'s name.",
+    "SPUS_CAGR": {
+      "value": 0.176,
+      "tolerance": 0.3,
+      "meaning": "Buy-and-hold CAGR of SPUS (SP Funds S&P 500 Sharia Industry Exclusions ETF) over the windows this program backtests, roughly 2017-2026.",
+      "measuredHere": "17.64%/yr over 2020-11-24..2026-08-26; 18.34%/yr over 2017-01..2026-08, from Alpaca SIP adjustment=all bars by first/last close division.",
+      "externalSource": "SP Funds published Performance Statistics, sp-funds.com/spus, table dated 2026-07-31: NAV total return since inception 18.08%/yr, 5-year annualised 14.55%/yr, expense ratio 0.45%.",
+      "verifiedAgainstPublished": "2026-08-29. Our 18.43%/yr over 2020-01..2026-08 agrees with the fund's 18.08% since-inception at the magnitude level. Windows differ, so this confirms units, price basis and NAV-loop indexing \u2014 NOT precision. That is exactly what an anchor is for.",
+      "unresolved": "The fund page states inception 2020-12-29, but the Alpaca SIP archive returns SPUS bars from 2019-12-18. The archive is the authority for what was tradeable in a backtest, and the discrepancy is recorded rather than silently reconciled. It does not affect windows starting 2020-01."
+    },
+    "TRADING_DAYS_PER_YEAR": {
+      "value": 252,
+      "tolerance": 0.03,
+      "meaning": "Sessions per calendar year on US exchanges.",
+      "externalSource": "Published NYSE/Nasdaq holiday calendars: 252/251/250/252 for 2021-2024. Genuinely external and already confirmed."
+    },
+    "SPY_HALF_SPREAD_BPS": {
+      "value": 0.13,
+      "tolerance": 0.6,
+      "meaning": "SPY median quoted half-spread, mid-session.",
+      "externalSource": "Common market knowledge that SPY's spread is well under one basis point; measured here at 0.27bps full spread, which is what validated the NBBO sample."
+    }
+  }
+}

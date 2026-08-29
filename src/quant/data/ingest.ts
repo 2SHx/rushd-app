@@ -41,10 +41,40 @@ export async function ingestBars(
     orderBy: { ts: 'desc' },
     select: { ts: true },
   });
-  // Bundled candles are synthetic. Once seeded, avoid regenerating and rewriting
-  // them on every scheduled run.
-  if (latest && provider instanceof MockProvider) {
-    return { upserted: 0, source };
+  // SYNTHETIC BARS MUST NOT REACH THE DATABASE. `MockProvider` FABRICATES candles rather than
+  // failing, so a caller with no credentials visible gets plausible-looking prices and a success
+  // response — indistinguishable from a healthy run.
+  //
+  // The previous guard was `if (latest && provider instanceof MockProvider)`: it protected an
+  // EXISTING series from being overwritten, but a symbol with no bars yet sailed straight through
+  // and was seeded entirely with invented data. That hole was exercised on 2026-08-29 — a direct
+  // `npx tsx -e` call (which does not load `.env`, so the registry fell back to MockProvider)
+  // wrote 61 fabricated INOD bars at ~$381 for a stock trading near $50, and reported
+  // `{"upserted":61,"source":"MOCK"}` as success. It was the SECOND time this exact incident
+  // occurred in this repository.
+  //
+  // A 503 guard already exists in the quant-ingest cron route, but that protects one CALLER. The
+  // refusal belongs HERE, at the only place that writes, so every caller inherits it — routes,
+  // scripts, tests and one-off shell invocations alike.
+  //
+  // Throwing rather than returning `{upserted: 0}` is deliberate: a silent zero is itself a silent
+  // no-op, and this program has found nine of those. Local seeding that genuinely wants synthetic
+  // candles must say so with ALLOW_SYNTHETIC_BARS=1.
+  if (provider instanceof MockProvider) {
+    // Bars already exist: return the documented no-op rather than throwing. That path WRITES
+    // NOTHING, was deliberate (do not regenerate bundled seed data on every scheduled run), and is
+    // not the hole. Throwing here would break local dev seeding for no integrity gain — the fix
+    // must be exactly as wide as the defect.
+    if (latest) return { upserted: 0, source };
+    if (process.env.ALLOW_SYNTHETIC_BARS !== '1') {
+      throw new Error(
+        `Refusing to write synthetic bars for ${symbol} (${market}): the resolved market-data provider `
+        + 'is MockProvider, which fabricates candles. No real data source is visible — check that '
+        + 'ALPACA_API_KEY/ALPACA_API_SECRET are set, or MARKET_DATA_MODE=keyless for Yahoo. Note that '
+        + '`npx tsx -e` does NOT load .env. If you genuinely want synthetic candles for local seeding, '
+        + 'set ALLOW_SYNTHETIC_BARS=1 explicitly.',
+      );
+    }
   }
   const elapsedDays = latest
     ? Math.max(0, Math.floor(Date.now() / 86_400_000) - Math.floor(latest.ts.getTime() / 86_400_000))

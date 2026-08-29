@@ -49,3 +49,26 @@ __pycache__/
 *.py[cod]
 .venv*/
 .env.test
+
+# Regenerable market-data and fundamentals caches. NOT committed — 172MB of them, and every byte
+# is reproducible from Alpaca SIP and SEC XBRL by the backfill scripts. This mirrors the stance
+# already taken in .github/workflows/membership-archive.yml: the DATABASE is disposable and the
+# irreplaceable data goes in git. Bars are not irreplaceable; point-in-time MEMBERSHIP is, which is
+# why data/membership IS tracked.
+#
+# Deliberately NOT ignored, because they are small and expensive to rebuild:
+#   data/compliance/  — dated Shariah watchlist snapshots; drift is only visible by diffing two
+#   data/events/      — the EDGAR spinoff calendar (40 quarterly index sweeps)
+#   data/fund-symbols.txt / .json — the 16,325-name ETF exclusion list
+#   data/nasdaq-ever-roster.txt   — the survivorship-free NASDAQ roster
+data/bars/
+data/bars-raw/
+data/fundamentals/
+
+# Backtest output. Regenerable by re-running the measure-* scripts, and large. The DURABLE record
+# of a result belongs in docs/quant-experiments/ (the preregistration + terminal card) and in
+# docs/JOURNAL.md, not in a 13MB pile of run artefacts.
+results/*.json
+results/*.log
+results/per-symbol/
+results/experiments/

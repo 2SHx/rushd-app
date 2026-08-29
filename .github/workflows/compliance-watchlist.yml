@@ -1,0 +1,88 @@
+name: compliance watchlist
+
+# Regenerates the Shariah compliance drift snapshot (data/compliance/watchlist-YYYY-MM-DD.json) so
+# that DRIFT is observed, not remembered.
+#
+# WHY THIS EXISTS: the owner held ASTS through a compliance flip and had to sell on someone else's
+# schedule. Reconstructing it after the fact showed the breach was legible as a TREND four quarters
+# early and unremarkable in any single scan (scripts/compliance-early-warning.ts). A script that only
+# runs when a human remembers to run it produces exactly one snapshot forever, which carries zero
+# drift information no matter how good the ratios inside it are. See agents/objective.json OBJ-3.
+#
+# WHY GITHUB ACTIONS, NOT A VERCEL CRON: same reasoning as membership-archive.yml — Vercel's
+# filesystem is read-only, so a Vercel cron cannot commit the snapshot it produces. This runs where a
+# commit is possible.
+#
+# WHY MONTHLY: the SEC filings behind these ratios (10-Q/10-K) change quarterly at most. Monthly
+# gives 3x the sampling the underlying data can actually move, without spending Actions minutes
+# rebuilding a multi-year SEC frames sweep more often than the input changes.
+#
+# ADVISORY ONLY, same posture as the script it runs: nothing here writes to Postgres and nothing here
+# is wired into `evaluateShariaGate`. It only regenerates a file for a human, or
+# scripts/compliance-watchlist-diff.ts, to read.
+#
+# KEYLESS-SAFE: the SEC frames refresh needs no key. The raw-price refresh needs an Alpaca
+# entitlement (ALPACA_API_KEY / ALPACA_API_SECRET repo secrets) and is skipped without one — the
+# generator still runs and correctly reports INSUFFICIENT for names it cannot price, which is the
+# same fail-closed behaviour it has everywhere else, not a fabricated result.
+
+on:
+  schedule:
+    - cron: '0 6 1 * *' # 06:00 UTC on the 1st of each month
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: compliance-watchlist
+  cancel-in-progress: false
+
+jobs:
+  watchlist:
+    runs-on: ubuntu-latest
+    # Unverified on a real run — this sweeps ~44 quarters x ~19 SEC XBRL concepts with a mandatory
+    # 140ms spacing per request (backfill-balance-frames.ts). Check the actual duration on the first
+    # scheduled run and shrink this once known, per the convention in docs/CRON.md.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # Balance-sheet inputs (SEC XBRL frames). Network: SEC only, no key required. Safe to re-run —
+      # see the file's own header for why it merges into the existing panel rather than overwriting.
+      - name: Refresh balance-sheet frames (SEC, keyless)
+        run: npx tsx scripts/backfill-balance-frames.ts
+
+      # Unadjusted price archive, scoped to exactly the symbols compliance-early-warning.ts defaults
+      # to (its own --symbols default, kept in sync here). Needed for the market-cap denominator —
+      # see backfill-alpaca-sip.ts's header for why adjusted prices under-/overstate it.
+      - name: Refresh raw price archive (Alpaca SIP)
+        if: ${{ vars.ALPACA_API_KEY != '' || secrets.ALPACA_API_KEY != '' }}
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        run: >
+          BAR_ARCHIVE_DIR=data/bars-raw npx tsx scripts/backfill-alpaca-sip.ts --adjustment raw
+          --symbols=AMD,GOOGL,RKLB,MU,HIMS,MRVL,NVDA,INOD,ASTS,SNDK,AAPL,MSFT,TSLA,MSTR
+
+      - name: Generate watchlist snapshot
+        run: npx tsx scripts/compliance-early-warning.ts --json=data/compliance/watchlist-$(date -u +%F).json
+
+      - name: Commit if the snapshot changed
+        run: |
+          if [ -z "$(git status --porcelain data/compliance)" ]; then
+            echo "No new compliance snapshot — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/compliance
+          git commit -m "chore(compliance): watchlist snapshot $(date -u +%Y-%m-%d)"
+          git push

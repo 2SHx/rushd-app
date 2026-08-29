@@ -102,3 +102,62 @@ describe('quant-ingest default roster', () => {
     expect(expected).toContain('MU');
   });
 });
+
+/**
+ * `registry.getProvider` returns `MockProvider` whenever no market-data credentials are visible, and
+ * MockProvider FABRICATES candles rather than failing. That makes a misconfigured deployment
+ * indistinguishable from a healthy one: HTTP 200, a non-zero `upserted`, bars that look fresh, and an
+ * engine trading on invented prices.
+ *
+ * Not hypothetical — 64 MOCK rows were found in the research database on 2026-08-27, three of them
+ * predating that session, and their presence had already defeated the preflight's own bar-freshness
+ * check. Failing closed costs one day of bars, which the next run backfills; writing fabricated
+ * prices costs the integrity of every decision made afterwards.
+ */
+describe('quant-ingest refuses to write synthetic bars', () => {
+  const saved: Record<string, string | undefined> = {};
+  const keys = ['MARKET_DATA_MODE', 'ALPACA_API_KEY', 'ALPACA_API_SECRET', 'CRON_SECRET'];
+
+  beforeEach(() => {
+    for (const k of keys) saved[k] = process.env[k];
+    // No credentials of any kind -> the registry falls back to MockProvider.
+    delete process.env.MARKET_DATA_MODE;
+    delete process.env.ALPACA_API_KEY;
+    delete process.env.ALPACA_API_SECRET;
+    process.env.CRON_SECRET = 'test-secret-for-synthetic-guard';
+  });
+  afterEach(() => {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it('answers 503 instead of ingesting when the provider is MockProvider', async () => {
+    const { registry, MockProvider } = await import('@/services/marketData');
+    // Guard the guard: if this stops being MockProvider the test is no longer exercising the path.
+    expect(registry.getProvider('NASDAQ')).toBeInstanceOf(MockProvider);
+
+    const res = await ingestRoute.GET(
+      new Request('https://example.test/api/cron/quant-ingest', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer test-secret-for-synthetic-guard' },
+      }),
+    );
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe('synthetic_provider_refused');
+    // The remedy has to name what to set, or the 503 is just a different silent failure.
+    expect(body.detail).toMatch(/MARKET_DATA_MODE|ALPACA_API_KEY/);
+  });
+
+  it('refuses BEFORE authorising, so an unauthenticated caller still gets 401 not 503', async () => {
+    // Ordering matters: auth must remain the first gate, or the route would leak configuration
+    // state to anyone who can reach it.
+    const res = await ingestRoute.GET(
+      new Request('https://example.test/api/cron/quant-ingest', { method: 'GET' }),
+    );
+    expect(res.status).toBe(401);
+  });
+});
